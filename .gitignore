@@ -1,0 +1,33 @@
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.build/
+
+# Virtual environments & tooling
+.venv/
+.env
+.env.*
+!.env.example
+.python-version
+
+# Logs & temp files
+logs/*
+!logs/.gitkeep
+*.log
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Test & coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Docker
+volumes/

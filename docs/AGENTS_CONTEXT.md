@@ -1,0 +1,15 @@
+# Contexte fonctionnel
+
+- **Objectif** : détecter la création de nouveaux établissements de restauration en France (NAF 56.10A) grâce à l’API Sirene officielle.
+- **Cible** : établissements actifs (`etatAdministratifEtablissement = A`) ; les SIRET sont utilisés comme identifiant principal.
+- **Workflow** :
+  1. Synchronisation complète initiale (collecte de tout l’historique pertinent).
+  2. Exécutions incrémentales quotidiennes après la mise à jour Sirene (`service informations`).
+  3. Détection des nouveaux SIRET pour alertes internes (mail + logs).
+  4. Supervision et pilotage via une API admin sécurisée (déclenchement manuel, métriques, audit).
+- **Contraintes clés** :
+  - Respect du quota (30 appels/minute) et du paramètre `curseur` pour paginer de manière stable.
+  - Capacité à reprendre un run interrompu (stockage des curseurs + métadonnées de run).
+  - Stockage minimaliste mais suffisant : nom + fallbacks, adresse complète, dates clés, NAF, état administratif.
+  - Accès API limité par jeton administrateur configurable (`X-Admin-Token`).
+- **Prochaines évolutions envisagées** : enrichir les alertes (cartographie, scoring), exposer un dashboard public ou des intégrations externes.

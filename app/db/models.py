@@ -1,0 +1,118 @@
+"""Database models."""
+from __future__ import annotations
+
+import uuid
+from datetime import datetime, date
+
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.db.base import Base
+
+
+class Establishment(Base):
+    """Restaurant establishment tracked by the system."""
+
+    __tablename__ = "establishments"
+
+    siret: Mapped[str] = mapped_column(String(14), primary_key=True)
+    siren: Mapped[str] = mapped_column(String(9), nullable=False, index=True)
+    nic: Mapped[str | None] = mapped_column(String(5), nullable=True)
+    naf_code: Mapped[str | None] = mapped_column(String(10), index=True)
+    naf_libelle: Mapped[str | None] = mapped_column(String(255))
+    etat_administratif: Mapped[str | None] = mapped_column(String(1), index=True)
+    date_creation: Mapped[date | None] = mapped_column(Date)
+    date_debut_activite: Mapped[date | None] = mapped_column(Date)
+    date_dernier_traitement_etablissement: Mapped[datetime | None] = mapped_column(DateTime)
+    date_dernier_traitement_unite_legale: Mapped[datetime | None] = mapped_column(DateTime)
+
+    name: Mapped[str | None] = mapped_column(String(255), index=True)
+    denomination_unite_legale: Mapped[str | None] = mapped_column(String(255))
+    denomination_usuelle_unite_legale: Mapped[str | None] = mapped_column(String(255))
+    denomination_usuelle_etablissement: Mapped[str | None] = mapped_column(String(255))
+    enseigne1: Mapped[str | None] = mapped_column(String(255))
+    enseigne2: Mapped[str | None] = mapped_column(String(255))
+    enseigne3: Mapped[str | None] = mapped_column(String(255))
+    nom_usage: Mapped[str | None] = mapped_column(String(255))
+    nom: Mapped[str | None] = mapped_column(String(255))
+    prenom1: Mapped[str | None] = mapped_column(String(255))
+
+    complement_adresse: Mapped[str | None] = mapped_column(String(255))
+    numero_voie: Mapped[str | None] = mapped_column(String(10))
+    indice_repetition: Mapped[str | None] = mapped_column(String(5))
+    type_voie: Mapped[str | None] = mapped_column(String(50))
+    libelle_voie: Mapped[str | None] = mapped_column(String(255))
+    distribution_speciale: Mapped[str | None] = mapped_column(String(255))
+    code_postal: Mapped[str | None] = mapped_column(String(10), index=True)
+    libelle_commune: Mapped[str | None] = mapped_column(String(255))
+    libelle_commune_etranger: Mapped[str | None] = mapped_column(String(255))
+    code_commune: Mapped[str | None] = mapped_column(String(10), index=True)
+    code_cedex: Mapped[str | None] = mapped_column(String(10))
+    libelle_cedex: Mapped[str | None] = mapped_column(String(255))
+    code_pays: Mapped[str | None] = mapped_column(String(10))
+    libelle_pays: Mapped[str | None] = mapped_column(String(255))
+
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    alerts: Mapped[list["Alert"]] = relationship("Alert", back_populates="establishment")
+
+
+class SyncRun(Base):
+    """Track each execution of the synchronization pipeline."""
+
+    __tablename__ = "sync_runs"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    scope_key: Mapped[str] = mapped_column(String(255), index=True)
+    run_type: Mapped[str] = mapped_column(String(50), index=True)
+    status: Mapped[str] = mapped_column(String(50), index=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime)
+    last_cursor: Mapped[str | None] = mapped_column(Text)
+    query_checksum: Mapped[str | None] = mapped_column(String(64))
+    api_call_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    fetched_records: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_records: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    resumed_from_run_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("sync_runs.id"), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text)
+
+    previous_run: Mapped["SyncRun" | None] = relationship(remote_side=[id], backref="resumed_runs")
+    alerts: Mapped[list["Alert"]] = relationship("Alert", back_populates="run")
+
+
+class SyncState(Base):
+    """Persist last known state for each synchronization scope."""
+
+    __tablename__ = "sync_state"
+
+    scope_key: Mapped[str] = mapped_column(String(255), primary_key=True)
+    last_successful_run_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("sync_runs.id"))
+    last_cursor: Mapped[str | None] = mapped_column(Text)
+    cursor_completed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    last_synced_at: Mapped[datetime | None] = mapped_column(DateTime)
+    last_total: Mapped[int | None] = mapped_column(Integer)
+    last_treated_max: Mapped[datetime | None] = mapped_column(DateTime)
+    query_checksum: Mapped[str | None] = mapped_column(String(64))
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    run: Mapped[SyncRun | None] = relationship("SyncRun")
+
+
+class Alert(Base):
+    """Alert emitted when a new establishment is detected."""
+
+    __tablename__ = "alerts"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    run_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("sync_runs.id"), nullable=False)
+    siret: Mapped[str] = mapped_column(String(14), ForeignKey("establishments.siret"), nullable=False)
+    recipients: Mapped[list[str]] = mapped_column(JSONB, default=list)
+    payload: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+    run: Mapped[SyncRun] = relationship("SyncRun", back_populates="alerts")
+    establishment: Mapped[Establishment] = relationship("Establishment", back_populates="alerts")
