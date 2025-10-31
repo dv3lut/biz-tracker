@@ -18,23 +18,31 @@ cli = typer.Typer(help="Outils de synchronisation avec l'API Sirene.")
 @cli.command("init-db")
 def init_db() -> None:
     """Créer les tables nécessaires dans la base de données."""
-
+    
     settings = get_settings()
     configure_logging()
-    typer.echo(f"Initialisation de la base de données sur {settings.database.url}")
+    typer.echo(f"Initialisation de la base de données sur {settings.database.sqlalchemy_url}")
     engine = get_engine()
     Base.metadata.create_all(engine)
     typer.echo("Tables créées (si nécessaire).")
 
 
 @cli.command("sync-full")
-def sync_full(resume: bool = typer.Option(True, help="Reprendre le curseur précédent si disponible.")) -> None:
+def sync_full(
+    resume: bool = typer.Option(True, help="Reprendre le curseur précédent si disponible."),
+    max_records: Optional[int] = typer.Option(
+        None,
+        "--max-records",
+        "-m",
+        help="Nombre maximal d'établissements à traiter (ignorer pour la synchro complète).",
+    ),
+) -> None:
     """Lancer une synchronisation complète des restaurants."""
 
     configure_logging()
     service = SyncService()
     with session_scope() as session:
-        run = service.run_full_sync(session, resume=resume)
+        run = service.run_full_sync(session, resume=resume, max_records=max_records)
         typer.echo(f"Synchronisation complète terminée: run={run.id} status={run.status}")
 
 

@@ -9,6 +9,7 @@
 - **Initiale** : `python -m app sync-full` (reprend automatiquement si un run précédent a échoué).
 - **Récurrente** : `python -m app sync-incremental` après vérification du `service informations` (script l’appel par défaut).
 - **API admin** : `python -m app serve` (ou `make serve`) pour exposer les endpoints FastAPI. Vérifier que le reverse proxy ou le pare-feu restreint l’accès et que l’en-tête `X-Admin-Token` est fourni côté client.
+- **Console web** : lancer `npm run dev` dans le projet `../biz-tracker-admin-ui` après `npm install`. L'URL par défaut `http://localhost:5173` doit être déclarée dans `API__ALLOWED_ORIGINS`.
 - Les runs sont tracés dans `sync_runs` (status, métriques). Les curseurs et dates sont dans `sync_state`.
 - Les logs applicatifs sont dans `logs/app.log`, les alertes dans `logs/alerts.log`.
 - Les statistiques et états sont consultables via l’API (`GET /admin/stats/summary`, `/admin/sync-runs`, `/admin/sync-state`, `/admin/alerts/recent`).
@@ -23,4 +24,5 @@
   - Le quota API (réponses 429/503) dans `logs/app.log`.
   - La taille des tables (index sur `siret`, `code_postal`).
   - Le contenu des alertes (`alerts` + fichier) pour éviter les doublons.
+- Vérifier les erreurs front (console navigateur) en cas de problème CORS ; ajuster `API__ALLOWED_ORIGINS` le cas échéant.
 - TODO futur : brancher un système d’alerting externe (Prometheus/Grafana, Sentry, etc.).

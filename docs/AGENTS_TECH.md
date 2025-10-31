@@ -15,5 +15,11 @@
   - Logging dédié (`logging_config` définit un logger `alerts` -> `logs/alerts.log`).
   - Envoi SMTP optionnel (classe `EmailService`, désactivée si `EMAIL__ENABLED=false`).
 - **API** : FastAPI (`app/api`) exposant des routes d’admin sécurisées par jeton (`X-Admin-Token` configurable). Les dépendances gèrent les sessions SQLAlchemy et les contrôles d’accès.
+- **CORS** : middleware FastAPI activé. La liste des origines autorisées est configurable via `API__ALLOWED_ORIGINS` (liste JSON ou chaîne séparée par des virgules, valeur par défaut `http://localhost:5173`).
 - **CLI** : Typer (`python -m app …`). Commandes `init-db`, `sync-full`, `sync-incremental`, `serve` (lance Uvicorn).
 - **Tests & QA** : placeholder `make lint` (compileall). Prévoir pytest/ruff ultérieurement.
+
+## UI d’administration
+
+- Projet React + Vite (`biz-tracker-admin-ui`) placé hors du dépôt backend (dossier parent). S’appuie sur React Query pour appeler les endpoints `/admin/*`.
+- Configuration via `.env` côté UI (`VITE_API_BASE_URL`). Build `npm run build`, dev `npm run dev` (port 5173).

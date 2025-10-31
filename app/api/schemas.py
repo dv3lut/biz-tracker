@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class SyncRunOut(BaseModel):
@@ -24,6 +24,11 @@ class SyncRunOut(BaseModel):
     query_checksum: str | None
     resumed_from_run_id: UUID | None
     notes: str | None
+    max_records: int | None
+    total_expected_records: int | None = None
+    progress: float | None = None
+    estimated_remaining_seconds: float | None = None
+    estimated_completion_at: datetime | None = None
 
 
 class SyncStateOut(BaseModel):
@@ -62,3 +67,4 @@ class StatsSummary(BaseModel):
 
 class SyncRequest(BaseModel):
     resume: bool = True
+    max_records: int | None = Field(default=None, ge=1, description="Nombre maximal d'enregistrements à traiter.")

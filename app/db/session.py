@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+import os
 from typing import Iterator
 
 from sqlalchemy import create_engine
@@ -18,8 +19,10 @@ def _initialize() -> None:
     global _engine, _SessionFactory
     if _engine is None or _SessionFactory is None:
         settings = get_settings().database
+        if settings.password:
+            os.environ["PGPASSWORD"] = settings.password
         _engine = create_engine(
-            settings.url,
+            settings.sqlalchemy_url,
             echo=settings.echo,
             pool_size=settings.pool_size,
             pool_timeout=settings.pool_timeout,

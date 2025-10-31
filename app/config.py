@@ -1,11 +1,12 @@
 """Application settings loaded from the environment."""
 from __future__ import annotations
 
+import json
 from functools import lru_cache
-from typing import List, Optional
-
+from typing import Any, List, Optional
 from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy.engine import URL, make_url
 
 
 class SireneSettings(BaseModel):
@@ -34,10 +35,32 @@ class SireneSettings(BaseModel):
 
 
 class DatabaseSettings(BaseModel):
-    url: str = Field(description="SQLAlchemy URL for the PostgreSQL database.")
+    host: str = Field(default="localhost", description="Hostname for the PostgreSQL server.")
+    port: int = Field(default=5432, ge=1, le=65535, description="Port for the PostgreSQL server.")
+    name: str = Field(default="biz_tracker_db", description="Database name used by the application.")
+    user: str = Field(default="sirene_user", description="Database user for connections.")
+    password: str = Field(default="sirene_password", description="Database user password.")
+    url: Optional[str] = Field(
+        default=None,
+        description="Optional SQLAlchemy URL overriding host-based configuration when provided.",
+    )
     echo: bool = Field(default=False)
     pool_size: int = Field(default=5, ge=1)
     pool_timeout: int = Field(default=30, ge=1)
+
+    @property
+    def sqlalchemy_url(self) -> URL:
+        if self.url:
+            return make_url(self.url)
+
+        return URL.create(
+            "postgresql+psycopg",
+            username=self.user or None,
+            password=None,
+            host=self.host,
+            port=self.port,
+            database=self.name,
+        )
 
 
 class EmailSettings(BaseModel):
@@ -84,6 +107,41 @@ class ApiSettings(BaseModel):
     admin_token: str = Field(default="change-me", min_length=8)
     admin_header_name: str = Field(default="X-Admin-Token")
     docs_enabled: bool = Field(default=False)
+    allowed_origins: List[str] = Field(default_factory=lambda: ["http://localhost:5173"])
+
+    @field_validator("allowed_origins", mode="before")
+    @classmethod
+    def _split_allowed_origins(cls, value: object) -> List[str] | object:
+        if value is None:
+            return value
+        if isinstance(value, str):
+            stripped = value.strip()
+            if not stripped:
+                return []
+            return [item.strip() for item in stripped.split(",") if item.strip()]
+        return value
+
+
+def _permissive_json_loads(value: str) -> Any:
+    trimmed = value.strip()
+    if not trimmed:
+        return value
+
+    lowered = trimmed.lower()
+    should_attempt = trimmed[0] in "[{" or trimmed[0] == '"' or lowered in {"true", "false", "null"}
+
+    if not should_attempt:
+        # Attempt to parse numeric values but ignore other free-form strings.
+        if trimmed.replace(".", "", 1).isdigit() or (trimmed[0] == "-" and trimmed[1:].replace(".", "", 1).isdigit()):
+            should_attempt = True
+
+    if not should_attempt:
+        return value
+
+    try:
+        return json.loads(trimmed)
+    except json.JSONDecodeError:
+        return value
 
 
 class Settings(BaseSettings):
@@ -92,6 +150,7 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         case_sensitive=False,
         env_nested_delimiter="__",
+        json_loads=_permissive_json_loads,
         extra="allow",
     )
 

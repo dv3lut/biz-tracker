@@ -31,7 +31,7 @@ class SireneClient:
         self._session.headers.update(
             {
                 "Accept": "application/json",
-                "Authorization": f"Bearer {settings.api_token}",
+                "X-INSEE-Api-Key-Integration": settings.api_token,
             }
         )
         self._rate_limiter = RateLimiter(settings.max_calls_per_minute)

@@ -34,14 +34,24 @@ class SyncService:
     def __init__(self) -> None:
         self._settings = get_settings()
 
-    def run_full_sync(self, session: Session, *, resume: bool = True) -> models.SyncRun:
+    def run_full_sync(
+        self,
+        session: Session,
+        *,
+        resume: bool = True,
+        max_records: Optional[int] = None,
+    ) -> models.SyncRun:
         scope_key = self._settings.sync.full_scope_key
         run = self._start_run(session, scope_key=scope_key, run_type="full", resume=resume)
+        if max_records is not None:
+            if max_records < 1:
+                raise ValueError("max_records must be a positive integer when provided.")
+            run.max_records = max_records
         client = SireneClient()
         state = self._get_or_create_state(session, scope_key)
         context = SyncContext(session=session, run=run, state=state, client=client, settings=self._settings)
         try:
-            self._collect_full(context, resume=resume)
+            self._collect_full(context, resume=resume, max_records=max_records)
             self._finish_run(run, state)
             session.flush()
         except Exception:
@@ -117,7 +127,7 @@ class SyncService:
             session.flush()
         return state
 
-    def _collect_full(self, context: SyncContext, *, resume: bool) -> None:
+    def _collect_full(self, context: SyncContext, *, resume: bool, max_records: Optional[int]) -> None:
         state = context.state
         query = self._build_restaurant_query()
         checksum = sha256_digest(query)
@@ -139,9 +149,16 @@ class SyncService:
         new_entities_total: list[models.Establishment] = []
 
         while True:
+            page_size = self._settings.sirene.page_size
+            if max_records is not None:
+                remaining = max_records - context.run.fetched_records
+                if remaining <= 0:
+                    break
+                page_size = min(page_size, remaining)
+
             payload = context.client.search_establishments(
                 query=query,
-                nombre=self._settings.sirene.page_size,
+                nombre=page_size,
                 curseur=cursor_value,
                 champs=champs,
             )
@@ -157,9 +174,17 @@ class SyncService:
 
             cursor_value = header.get("curseurSuivant")
             state.last_cursor = cursor_value
-            state.last_total = header.get("total")
+            total_value = header.get("total")
+            try:
+                state.last_total = int(total_value) if total_value is not None else state.last_total
+            except (TypeError, ValueError):
+                _LOGGER.debug("Valeur 'total' non exploitable: %s", total_value)
             state.last_synced_at = datetime.utcnow()
             context.session.flush()
+
+            if max_records is not None and context.run.fetched_records >= max_records:
+                state.cursor_completed = False
+                break
 
             if not etablissements or not cursor_value or cursor_value == header.get("curseur"):
                 state.cursor_completed = True
@@ -204,7 +229,11 @@ class SyncService:
 
             cursor_value = header.get("curseurSuivant")
             state.last_cursor = cursor_value
-            state.last_total = header.get("total")
+            total_value = header.get("total")
+            try:
+                state.last_total = int(total_value) if total_value is not None else state.last_total
+            except (TypeError, ValueError):
+                _LOGGER.debug("Valeur 'total' non exploitable: %s", total_value)
             state.last_synced_at = datetime.utcnow()
             context.session.flush()
 
@@ -259,7 +288,6 @@ class SyncService:
             "nomUsageUniteLegale",
             "nomUniteLegale",
             "prenom1UniteLegale",
-            "libelleActivitePrincipaleEtablissement",
         }
         return ",".join(sorted(fields))
 

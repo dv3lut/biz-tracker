@@ -62,6 +62,19 @@ Des cibles `Makefile` équivalentes existent (`make init-db`, `make sync-full`, 
 
 Un fichier Postman de référence est disponible (`docs/postman_collection.json`). Pensez à définir la variable `baseUrl` et l'en-tête `X-Admin-Token` dans votre environnement Postman avant utilisation.
 
+## Interface web d'administration
+
+- Un projet React dédié (`biz-tracker-admin-ui`) vit à la racine du dossier parent du dépôt backend. Il consomme les endpoints `/admin/*` mentionnés ci-dessus.
+- Installation côté UI :
+   ```bash
+   cd ../biz-tracker-admin-ui
+   npm install
+   cp .env.example .env  # adapter VITE_API_BASE_URL si besoin
+   npm run dev
+   ```
+- L'interface écoute par défaut sur `http://localhost:5173`. Vérifiez que `API__ALLOWED_ORIGINS` dans `.env` côté backend contient cette origine (valeur par défaut fournie).
+- Toute autre origine (hébergement distant, tunnel) peut être ajoutée à `API__ALLOWED_ORIGINS` sous forme de liste JSON ou de chaîne séparée par des virgules.
+
 ## Planification recommandée
 - Exécuter `sync-full` une seule fois pour amorcer la base.
 - Programmer `sync-incremental` quotidiennement **après** la publication des mises à jour Sirene (cf. `Service informations`).

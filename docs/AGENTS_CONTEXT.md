@@ -6,7 +6,7 @@
   1. Synchronisation complète initiale (collecte de tout l’historique pertinent).
   2. Exécutions incrémentales quotidiennes après la mise à jour Sirene (`service informations`).
   3. Détection des nouveaux SIRET pour alertes internes (mail + logs).
-  4. Supervision et pilotage via une API admin sécurisée (déclenchement manuel, métriques, audit).
+  4. Supervision et pilotage via une API admin sécurisée et un front React dédié (`biz-tracker-admin-ui`).
 - **Contraintes clés** :
   - Respect du quota (30 appels/minute) et du paramètre `curseur` pour paginer de manière stable.
   - Capacité à reprendre un run interrompu (stockage des curseurs + métadonnées de run).

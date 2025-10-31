@@ -34,9 +34,19 @@ class Establishment(Base):
     enseigne1: Mapped[str | None] = mapped_column(String(255))
     enseigne2: Mapped[str | None] = mapped_column(String(255))
     enseigne3: Mapped[str | None] = mapped_column(String(255))
+    categorie_juridique: Mapped[str | None] = mapped_column(String(10))
+    categorie_entreprise: Mapped[str | None] = mapped_column(String(10))
+    tranche_effectifs: Mapped[str | None] = mapped_column(String(10))
+    annee_effectifs: Mapped[int | None] = mapped_column(Integer)
     nom_usage: Mapped[str | None] = mapped_column(String(255))
     nom: Mapped[str | None] = mapped_column(String(255))
     prenom1: Mapped[str | None] = mapped_column(String(255))
+    prenom2: Mapped[str | None] = mapped_column(String(255))
+    prenom3: Mapped[str | None] = mapped_column(String(255))
+    prenom4: Mapped[str | None] = mapped_column(String(255))
+    prenom_usuel: Mapped[str | None] = mapped_column(String(255))
+    pseudonyme: Mapped[str | None] = mapped_column(String(255))
+    sexe: Mapped[str | None] = mapped_column(String(1))
 
     complement_adresse: Mapped[str | None] = mapped_column(String(255))
     numero_voie: Mapped[str | None] = mapped_column(String(10))
@@ -78,8 +88,11 @@ class SyncRun(Base):
     created_records: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     resumed_from_run_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("sync_runs.id"), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text)
+    max_records: Mapped[int | None] = mapped_column(Integer)
+    reset_state: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    truncate_before_run: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
-    previous_run: Mapped["SyncRun" | None] = relationship(remote_side=[id], backref="resumed_runs")
+    previous_run: Mapped[SyncRun | None] = relationship(remote_side=[id], backref="resumed_runs")
     alerts: Mapped[list["Alert"]] = relationship("Alert", back_populates="run")
 
 

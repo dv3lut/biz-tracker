@@ -14,9 +14,28 @@ def _select_current_period(periods: list[dict[str, Any]]) -> dict[str, Any]:
     return periods[0] if periods else {}
 
 
+def _select_current_unite_legale_period(periods: list[dict[str, Any]]) -> dict[str, Any]:
+    for period in periods:
+        if period.get("dateFin") in (None, ""):
+            return period
+    return periods[0] if periods else {}
+
+
+def _parse_int(value: Optional[str]) -> Optional[int]:
+    if value in (None, ""):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def extract_name(payload: dict[str, Any]) -> str | None:
     unite_legale = payload.get("uniteLegale", {})
-    current_period = _select_current_period(payload.get("periodesEtablissement", []))
+    periods_etablissement = payload.get("periodesEtablissement", [])
+    current_period = _select_current_period(periods_etablissement)
+    periods_unite_legale = unite_legale.get("periodesUniteLegale", [])
+    current_unite_legale_period = _select_current_unite_legale_period(periods_unite_legale)
 
     candidates = [
         current_period.get("denominationUsuelleEtablissement"),
@@ -48,13 +67,18 @@ def extract_name(payload: dict[str, Any]) -> str | None:
 
 def extract_fields(payload: dict[str, Any]) -> Dict[str, Any]:
     unite_legale = payload.get("uniteLegale", {})
-    current_period = _select_current_period(payload.get("periodesEtablissement", []))
+    periods_etablissement = payload.get("periodesEtablissement", [])
+    current_period = _select_current_period(periods_etablissement)
+    periods_unite_legale = unite_legale.get("periodesUniteLegale", [])
+    current_unite_legale_period = _select_current_unite_legale_period(periods_unite_legale)
     adresse = payload.get("adresseEtablissement", payload)
+
     return {
         "siret": payload.get("siret"),
         "siren": payload.get("siren"),
         "nic": payload.get("nic"),
-        "naf_code": current_period.get("activitePrincipaleEtablissement") or payload.get("activitePrincipaleEtablissement"),
+        "naf_code": current_period.get("activitePrincipaleEtablissement")
+        or payload.get("activitePrincipaleEtablissement"),
         "naf_libelle": current_period.get("libelleActivitePrincipaleEtablissement")
         or payload.get("libelleActivitePrincipaleEtablissement"),
         "etat_administratif": current_period.get("etatAdministratifEtablissement")
@@ -70,23 +94,36 @@ def extract_fields(payload: dict[str, Any]) -> Dict[str, Any]:
         "enseigne1": _clean(current_period.get("enseigne1Etablissement")),
         "enseigne2": _clean(current_period.get("enseigne2Etablissement")),
         "enseigne3": _clean(current_period.get("enseigne3Etablissement")),
+        "categorie_juridique": _clean(
+            unite_legale.get("categorieJuridiqueUniteLegale")
+            or current_unite_legale_period.get("categorieJuridiqueUniteLegale")
+        ),
+        "categorie_entreprise": _clean(unite_legale.get("categorieEntreprise")),
+        "tranche_effectifs": _clean(unite_legale.get("trancheEffectifsUniteLegale")),
+        "annee_effectifs": _parse_int(unite_legale.get("anneeEffectifsUniteLegale")),
         "nom_usage": _clean(unite_legale.get("nomUsageUniteLegale")),
         "nom": _clean(unite_legale.get("nomUniteLegale")),
         "prenom1": _clean(unite_legale.get("prenom1UniteLegale")),
-    "complement_adresse": _clean(adresse.get("complementAdresseEtablissement")),
-    "numero_voie": _clean(adresse.get("numeroVoieEtablissement")),
-    "indice_repetition": _clean(adresse.get("indiceRepetitionEtablissement")),
-    "type_voie": _clean(adresse.get("typeVoieEtablissement")),
-    "libelle_voie": _clean(adresse.get("libelleVoieEtablissement")),
-    "distribution_speciale": _clean(adresse.get("distributionSpecialeEtablissement")),
-    "code_postal": _clean(adresse.get("codePostalEtablissement")),
-    "libelle_commune": _clean(adresse.get("libelleCommuneEtablissement")),
-    "libelle_commune_etranger": _clean(adresse.get("libelleCommuneEtrangerEtablissement")),
-    "code_commune": _clean(adresse.get("codeCommuneEtablissement")),
-    "code_cedex": _clean(adresse.get("codeCedexEtablissement")),
-    "libelle_cedex": _clean(adresse.get("libelleCedexEtablissement")),
-    "code_pays": _clean(adresse.get("codePaysEtrangerEtablissement")),
-    "libelle_pays": _clean(adresse.get("libellePaysEtrangerEtablissement")),
+        "prenom2": _clean(unite_legale.get("prenom2UniteLegale")),
+        "prenom3": _clean(unite_legale.get("prenom3UniteLegale")),
+        "prenom4": _clean(unite_legale.get("prenom4UniteLegale")),
+        "prenom_usuel": _clean(unite_legale.get("prenomUsuelUniteLegale")),
+        "pseudonyme": _clean(current_unite_legale_period.get("pseudonymeUniteLegale")),
+        "sexe": _clean(unite_legale.get("sexeUniteLegale")),
+        "complement_adresse": _clean(adresse.get("complementAdresseEtablissement")),
+        "numero_voie": _clean(adresse.get("numeroVoieEtablissement")),
+        "indice_repetition": _clean(adresse.get("indiceRepetitionEtablissement")),
+        "type_voie": _clean(adresse.get("typeVoieEtablissement")),
+        "libelle_voie": _clean(adresse.get("libelleVoieEtablissement")),
+        "distribution_speciale": _clean(adresse.get("distributionSpecialeEtablissement")),
+        "code_postal": _clean(adresse.get("codePostalEtablissement")),
+        "libelle_commune": _clean(adresse.get("libelleCommuneEtablissement")),
+        "libelle_commune_etranger": _clean(adresse.get("libelleCommuneEtrangerEtablissement")),
+        "code_commune": _clean(adresse.get("codeCommuneEtablissement")),
+        "code_cedex": _clean(adresse.get("codeCedexEtablissement")),
+        "libelle_cedex": _clean(adresse.get("libelleCedexEtablissement")),
+        "code_pays": _clean(adresse.get("codePaysEtrangerEtablissement")),
+        "libelle_pays": _clean(adresse.get("libellePaysEtrangerEtablissement")),
     }
 
 
