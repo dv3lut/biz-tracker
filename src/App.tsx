@@ -17,10 +17,11 @@ import { SyncRunsTable } from "./components/SyncRunsTable";
 import { SyncStateTable } from "./components/SyncStateTable";
 import { AlertsList } from "./components/AlertsList";
 import { EstablishmentsSection } from "./components/EstablishmentsSection";
-import { SyncRequestPayload } from "./types";
+import { SyncRequestPayload, SyncRun } from "./types";
 
 const REFRESH_LONG = 60_000;
 const REFRESH_SHORT = 30_000;
+const REFRESH_ACTIVE = 5_000;
 
 const isUnauthorizedError = (error: unknown): error is ApiError => {
   return error instanceof ApiError && error.status === 403;
@@ -87,25 +88,34 @@ const App = () => {
     setErrorMessage(null);
   }, [setAdminTokenState, setTokenError, setFeedbackMessage, setErrorMessage]);
 
+  const syncRunsQuery = useQuery<SyncRun[]>({
+    queryKey: ["sync-runs", syncRunsLimit],
+    queryFn: () => adminApi.getSyncRuns(syncRunsLimit),
+    enabled: isAuthenticated,
+    refetchInterval: (query) => {
+      if (!isAuthenticated) {
+        return false;
+      }
+      const runs = (query.state.data as SyncRun[] | undefined) ?? [];
+      const active = runs.some((run) => run.status === "running" || run.status === "pending");
+      return active ? REFRESH_ACTIVE : REFRESH_SHORT;
+    },
+  });
+
+  const hasActiveRun = syncRunsQuery.data?.some((run) => run.status === "running" || run.status === "pending") ?? false;
+
   const statsQuery = useQuery({
     queryKey: ["stats-summary"],
     queryFn: adminApi.getStatsSummary,
     enabled: isAuthenticated,
-    refetchInterval: isAuthenticated ? REFRESH_LONG : false,
-  });
-
-  const syncRunsQuery = useQuery({
-    queryKey: ["sync-runs", syncRunsLimit],
-    queryFn: () => adminApi.getSyncRuns(syncRunsLimit),
-    enabled: isAuthenticated,
-    refetchInterval: isAuthenticated ? REFRESH_SHORT : false,
+    refetchInterval: isAuthenticated ? (hasActiveRun ? REFRESH_ACTIVE : REFRESH_LONG) : false,
   });
 
   const syncStateQuery = useQuery({
     queryKey: ["sync-state"],
     queryFn: adminApi.getSyncState,
     enabled: isAuthenticated,
-    refetchInterval: isAuthenticated ? REFRESH_LONG : false,
+    refetchInterval: isAuthenticated ? (hasActiveRun ? REFRESH_ACTIVE : REFRESH_LONG) : false,
   });
 
   const alertsQuery = useQuery({
@@ -170,8 +180,13 @@ const App = () => {
   const fullSyncMutation = useMutation<TriggerSyncResult, unknown, SyncRequestPayload>({
     mutationFn: (payload: SyncRequestPayload) => adminApi.triggerFullSync(payload),
     onSuccess: (result: TriggerSyncResult) => {
-      const { run } = result;
-      setFeedbackMessage(`Synchro complète déclenchée (scope ${run?.scopeKey ?? "?"}).`);
+      const { run, status, detail } = result;
+      if (run) {
+        const label = status === 202 ? "programmée" : "déclenchée";
+        setFeedbackMessage(`Synchro complète ${label} (scope ${run.scopeKey}).`);
+      } else {
+        setFeedbackMessage(detail ?? "Synchro complète acceptée.");
+      }
       setErrorMessage(null);
       statsQuery.refetch();
       syncRunsQuery.refetch();
@@ -187,10 +202,11 @@ const App = () => {
       if (!run) {
         setFeedbackMessage(detail ?? "Aucune mise à jour disponible.");
       } else {
-        setFeedbackMessage(`Synchro incrémentale déclenchée (scope ${run.scopeKey}).`);
+        const label = status === 202 ? "programmée" : "déclenchée";
+        setFeedbackMessage(`Synchro incrémentale ${label} (scope ${run.scopeKey}).`);
       }
       setErrorMessage(null);
-      if (status !== 202) {
+      if (run) {
         statsQuery.refetch();
         syncRunsQuery.refetch();
         syncStateQuery.refetch();

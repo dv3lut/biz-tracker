@@ -236,6 +236,10 @@ export interface TriggerSyncResult {
   detail?: string;
 }
 
+const isSyncRunResponse = (payload: unknown): payload is SyncRunResponse => {
+  return Boolean(payload) && typeof payload === "object" && "id" in (payload as Record<string, unknown>);
+};
+
 export const adminApi = {
   async getStatsSummary(): Promise<StatsSummary> {
     const { data } = await request<StatsSummaryResponse>("/admin/stats/summary");
@@ -258,14 +262,18 @@ export const adminApi = {
   },
 
   async triggerFullSync(payload: SyncRequestPayload): Promise<TriggerSyncResult> {
-    const { data, status } = await request<SyncRunResponse>("/admin/sync/full", {
+    const { data, status } = await request<SyncRunResponse | { detail?: string }>("/admin/sync/full", {
       method: "POST",
       body: JSON.stringify({
         resume: payload.resume,
         max_records: payload.maxRecords,
       }),
     });
-    return { run: toSyncRun(data), status };
+    if (isSyncRunResponse(data)) {
+      return { run: toSyncRun(data), status };
+    }
+    const detail = typeof data === "object" && data !== null && "detail" in data ? String((data as { detail?: string }).detail) : undefined;
+    return { run: null, status, detail };
   },
 
   async triggerIncrementalSync(): Promise<TriggerSyncResult> {
@@ -273,13 +281,13 @@ export const adminApi = {
       method: "POST",
     });
 
-    if (status === 202) {
-      const detail =
-        typeof data === "object" && data !== null && "detail" in data ? String((data as { detail?: string }).detail) : undefined;
-      return { run: null, status, detail };
+    if (isSyncRunResponse(data)) {
+      return { run: toSyncRun(data), status };
     }
 
-    return { run: toSyncRun(data as SyncRunResponse), status };
+    const detail =
+      typeof data === "object" && data !== null && "detail" in data ? String((data as { detail?: string }).detail) : undefined;
+    return { run: null, status, detail };
   },
 
   async getEstablishments(params: { limit?: number; offset?: number; q?: string } = {}): Promise<Establishment[]> {
