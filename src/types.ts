@@ -48,6 +48,7 @@ export interface Alert {
 export interface StatsSummary {
   totalEstablishments: number;
   totalAlerts: number;
+  databaseSizePretty: string | null;
   lastFullRun: SyncRun | null;
   lastIncrementalRun: SyncRun | null;
   lastAlert: Alert | null;
@@ -56,4 +57,20 @@ export interface StatsSummary {
 export interface SyncRequestPayload {
   resume: boolean;
   maxRecords: number | null;
+}
+
+export interface Establishment {
+  siret: string;
+  siren: string;
+  name: string;
+  nafCode: string | null;
+  nafLibelle: string | null;
+  etatAdministratif: string | null;
+  codePostal: string | null;
+  libelleCommune: string | null;
+  dateCreation: string | null;
+  dateDebutActivite: string | null;
+  firstSeenAt: string | null;
+  lastSeenAt: string | null;
+  updatedAt: string | null;
 }

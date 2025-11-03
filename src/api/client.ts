@@ -1,4 +1,4 @@
-import { SyncRequestPayload, SyncRun, SyncState, Alert, StatsSummary } from "../types";
+import { SyncRequestPayload, SyncRun, SyncState, Alert, StatsSummary, Establishment } from "../types";
 
 export class ApiError extends Error {
   status: number;
@@ -57,9 +57,26 @@ interface AlertResponse {
 interface StatsSummaryResponse {
   total_establishments: number;
   total_alerts: number;
+  database_size_pretty?: string | null;
   last_full_run: SyncRunResponse | null;
   last_incremental_run: SyncRunResponse | null;
   last_alert: AlertResponse | null;
+}
+
+interface EstablishmentResponse {
+  siret: string;
+  siren: string;
+  name: string;
+  naf_code: string | null;
+  naf_libelle: string | null;
+  etat_administratif: string | null;
+  code_postal: string | null;
+  libelle_commune: string | null;
+  date_creation: string | null;
+  date_debut_activite: string | null;
+  first_seen_at: string | null;
+  last_seen_at: string | null;
+  updated_at: string | null;
 }
 
 interface RequestResult<T> {
@@ -135,9 +152,26 @@ const toAlert = (payload: AlertResponse): Alert => ({
 const toStatsSummary = (payload: StatsSummaryResponse): StatsSummary => ({
   totalEstablishments: payload.total_establishments,
   totalAlerts: payload.total_alerts,
+  databaseSizePretty: payload.database_size_pretty ?? null,
   lastFullRun: payload.last_full_run ? toSyncRun(payload.last_full_run) : null,
   lastIncrementalRun: payload.last_incremental_run ? toSyncRun(payload.last_incremental_run) : null,
   lastAlert: payload.last_alert ? toAlert(payload.last_alert) : null,
+});
+
+const toEstablishment = (payload: EstablishmentResponse): Establishment => ({
+  siret: payload.siret,
+  siren: payload.siren,
+  name: payload.name,
+  nafCode: payload.naf_code,
+  nafLibelle: payload.naf_libelle,
+  etatAdministratif: payload.etat_administratif,
+  codePostal: payload.code_postal,
+  libelleCommune: payload.libelle_commune,
+  dateCreation: payload.date_creation,
+  dateDebutActivite: payload.date_debut_activite,
+  firstSeenAt: payload.first_seen_at,
+  lastSeenAt: payload.last_seen_at,
+  updatedAt: payload.updated_at,
 });
 
 const readPayload = async (response: Response): Promise<unknown> => {
@@ -234,5 +268,36 @@ export const adminApi = {
     }
 
     return { run: toSyncRun(data as SyncRunResponse), status };
+  },
+
+  async getEstablishments(params: { limit?: number; offset?: number; q?: string } = {}): Promise<Establishment[]> {
+    const query = new URLSearchParams();
+    if (typeof params.limit === "number") {
+      query.set("limit", String(params.limit));
+    }
+    if (typeof params.offset === "number") {
+      query.set("offset", String(params.offset));
+    }
+    if (params.q) {
+      query.set("q", params.q);
+    }
+    const queryString = query.toString();
+    const path = `/admin/establishments${queryString ? `?${queryString}` : ""}`;
+    const { data } = await request<EstablishmentResponse[]>(path);
+    return data.map(toEstablishment);
+  },
+
+  async deleteEstablishment(siret: string): Promise<void> {
+    await request(`/admin/establishments/${encodeURIComponent(siret)}`, {
+      method: "DELETE",
+    });
+  },
+
+  async deleteAllEstablishments(confirmPhrase: string): Promise<{ deleted: number }> {
+    const { data } = await request<{ deleted: number }>("/admin/establishments", {
+      method: "DELETE",
+      body: JSON.stringify({ confirm_phrase: confirmPhrase }),
+    });
+    return data;
   },
 };

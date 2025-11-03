@@ -106,6 +106,12 @@ export const StatsSummaryCard = ({ summary, isLoading, error, onRefresh }: Props
           <h3>Alertes générées</h3>
           <p className="big">{formatNumber(summary.totalAlerts)}</p>
         </article>
+        {summary.databaseSizePretty ? (
+          <article>
+            <h3>Taille base</h3>
+            <p className="big">{summary.databaseSizePretty}</p>
+          </article>
+        ) : null}
         <article>
           <h3>Dernière alerte</h3>
           <p>{formatDateTime(summary.lastAlert?.createdAt ?? null)}</p>

@@ -80,7 +80,40 @@ select {
 
 .app-grid {
   display: grid;
+  gap: 2.5rem;
+}
+
+.dashboard-section {
+  display: grid;
   gap: 1.5rem;
+}
+
+.section-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.section-header h2 {
+  margin: 0;
+}
+
+.section-grid {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.section-grid-two {
+  display: grid;
+  gap: 1.5rem;
+}
+
+@media (min-width: 900px) {
+  .section-grid-two {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .card {
@@ -139,6 +172,15 @@ button.ghost {
 button.ghost:hover:not(:disabled) {
   border-color: #2563eb;
   color: #2563eb;
+}
+
+button.danger {
+  background-color: #dc2626;
+  color: #fff;
+}
+
+button.danger:hover:not(:disabled) {
+  background-color: #b91c1c;
 }
 
 .summary-grid {
@@ -350,6 +392,43 @@ table td {
   padding: 0.75rem;
   border-radius: 6px;
   font-size: 0.85rem;
+}
+
+.establishments-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.establishments-controls input[type="search"] {
+  flex: 1 1 240px;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #d0d5dd;
+  font-size: 1rem;
+}
+
+.establishments-pagination {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.establishments-danger {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid #fee2e2;
+  border-radius: 12px;
+  background: #fef2f2;
+}
+
+.establishments-danger input[type="text"] {
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #fca5a5;
+  font-size: 1rem;
 }
 
 .token-prompt {
