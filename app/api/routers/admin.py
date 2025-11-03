@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
@@ -255,24 +255,66 @@ def delete_establishment(
     session.flush()
 
 
-@router.post("/sync/full", response_model=SyncRunOut, summary="Déclencher une synchronisation complète")
+@router.post(
+    "/sync/full",
+    response_model=SyncRunOut,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Déclencher une synchronisation complète",
+)
 def trigger_full_sync(
     payload: SyncRequest,
+    background_tasks: BackgroundTasks,
     session: Session = Depends(get_db_session),
 ) -> SyncRunOut:
-    run = SyncService().run_full_sync(session, resume=payload.resume, max_records=payload.max_records)
+    service = SyncService()
+    scope_key = service.settings.sync.full_scope_key
+    if service.has_active_run(session, scope_key):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Une synchronisation complète est déjà en cours.")
+
+    run = service.prepare_full_run(session, resume=payload.resume, max_records=payload.max_records)
+    session.commit()
     session.refresh(run)
     state = session.get(models.SyncState, run.scope_key)
+
+    background_tasks.add_task(
+        service.execute_full_run,
+        run.id,
+        resume=payload.resume,
+        max_records=payload.max_records,
+    )
     return _serialize_run(run, state=state)
 
-
-@router.post("/sync/incremental", response_model=SyncRunOut, summary="Déclencher une synchronisation incrémentale")
+@router.post(
+    "/sync/incremental",
+    response_model=SyncRunOut,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Déclencher une synchronisation incrémentale",
+)
 def trigger_incremental_sync(
+    background_tasks: BackgroundTasks,
     session: Session = Depends(get_db_session),
 ) -> SyncRunOut:
-    run = SyncService().run_incremental_sync(session)
-    if run is None:
+    service = SyncService()
+    scope_key = service.settings.sync.incremental_scope_key
+    if service.has_active_run(session, scope_key):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Une synchronisation incrémentale est déjà en cours.",
+        )
+
+    prepared = service.prepare_incremental_run(session)
+    if prepared is None:
         raise HTTPException(status_code=status.HTTP_202_ACCEPTED, detail="Aucune mise à jour disponible.")
+
+    run, latest_treated, creation_floor = prepared
+    session.commit()
     session.refresh(run)
     state = session.get(models.SyncState, run.scope_key)
+
+    background_tasks.add_task(
+        service.execute_incremental_run,
+        run.id,
+        latest_treated=latest_treated,
+        creation_floor=creation_floor,
+    )
     return _serialize_run(run, state=state)

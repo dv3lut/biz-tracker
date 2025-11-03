@@ -6,8 +6,12 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.logging_config import configure_logging
+from app.services.incremental_scheduler import IncrementalScheduler
 
 from .routers import admin, health
+
+
+_INCREMENTAL_SCHEDULER = IncrementalScheduler()
 
 
 def create_app() -> FastAPI:
@@ -35,6 +39,14 @@ def create_app() -> FastAPI:
 
     app.include_router(health.router)
     app.include_router(admin.router)
+
+    @app.on_event("startup")
+    async def _start_scheduler() -> None:
+        _INCREMENTAL_SCHEDULER.start()
+
+    @app.on_event("shutdown")
+    async def _stop_scheduler() -> None:
+        _INCREMENTAL_SCHEDULER.stop()
 
     return app
 

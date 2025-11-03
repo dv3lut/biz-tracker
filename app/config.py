@@ -99,6 +99,18 @@ class SyncSettings(BaseModel):
         default=1440,
         description="Default minimum delay between sync runs when no guidance is provided by the informations service.",
     )
+    full_sync_months_back: int = Field(
+        default=6,
+        ge=1,
+        description="Number of months to look back when issuing a full synchronization.",
+    )
+    incremental_creation_window_days: int = Field(
+        default=3,
+        ge=1,
+        description="Number of days around the latest known creation date to include in incremental searches.",
+    )
+    auto_incremental_enabled: bool = Field(default=True)
+    auto_incremental_poll_minutes: int = Field(default=15, ge=1)
 
 
 class LoggingSettings(BaseModel):

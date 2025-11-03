@@ -2,22 +2,39 @@
 from __future__ import annotations
 
 import logging
+import unicodedata
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Iterable, Optional, Sequence
 from uuid import UUID
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.clients.sirene_client import SireneClient
 from app.config import Settings, get_settings
 from app.db import models
+from app.db.session import session_scope
 from app.services.alert_service import AlertService
 from app.services.establishment_mapper import extract_fields
-from app.utils.dates import parse_datetime
+from app.utils.dates import parse_datetime, subtract_months
 from app.utils.hashing import sha256_digest
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _log_and_print(level: int, message: str, *args: object) -> None:
+    """Log the message and mirror it to stdout for realtime visibility."""
+
+    rendered = message % args if args else message
+    print(rendered, flush=True)
+    _LOGGER.log(level, message, *args)
+
+
+def _normalize_text(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value)
+    stripped = "".join(char for char in normalized if not unicodedata.combining(char))
+    return stripped.lower()
 
 
 @dataclass
@@ -35,6 +52,12 @@ class SyncService:
     def __init__(self) -> None:
         self._settings = get_settings()
 
+    @property
+    def settings(self) -> Settings:
+        """Expose cached settings (useful for orchestrator helpers)."""
+
+        return self._settings
+
     def run_full_sync(
         self,
         session: Session,
@@ -42,14 +65,14 @@ class SyncService:
         resume: bool = True,
         max_records: Optional[int] = None,
     ) -> models.SyncRun:
-        scope_key = self._settings.sync.full_scope_key
-        run = self._start_run(session, scope_key=scope_key, run_type="full", resume=resume)
-        if max_records is not None:
-            if max_records < 1:
-                raise ValueError("max_records must be a positive integer when provided.")
-            run.max_records = max_records
+        run, state = self._initialize_full_run(
+            session,
+            resume=resume,
+            max_records=max_records,
+            status="running",
+        )
+
         client = SireneClient()
-        state = self._get_or_create_state(session, scope_key)
         context = SyncContext(session=session, run=run, state=state, client=client, settings=self._settings)
         try:
             self._collect_full(context, resume=resume, max_records=max_records)
@@ -65,34 +88,15 @@ class SyncService:
         return run
 
     def run_incremental_sync(self, session: Session) -> Optional[models.SyncRun]:
-        scope_key = self._settings.sync.incremental_scope_key
+        prepared = self._prepare_incremental_run(session, status="running")
+        if not prepared:
+            return None
+
+        run, state, latest_treated, creation_floor = prepared
         client = SireneClient()
-        state = self._get_or_create_state(session, scope_key)
-        infos = client.get_informations()
-        collection = self._extract_collection_info(infos, "etablissements")
-        if not collection:
-            _LOGGER.warning("Impossible de récupérer les métadonnées 'etablissements' depuis le service informations.")
-            client.close()
-            return None
-
-        latest_treated = parse_datetime(collection.get("dateDernierTraitementMaximum"))
-        if not latest_treated:
-            _LOGGER.warning("dateDernierTraitementMaximum absente ou invalide dans le service informations.")
-            client.close()
-            return None
-
-        if state.last_treated_max and latest_treated <= state.last_treated_max:
-            _LOGGER.info("Aucune mise à jour détectée depuis la dernière exécution (%s).", state.last_treated_max)
-            client.close()
-            return None
-
-        run = self._start_run(session, scope_key=scope_key, run_type="incremental", resume=True)
-        run.notes = f"dateDernierTraitementMaximum: {latest_treated.isoformat()}"
-        run.query_checksum = self._incremental_query_checksum(state)
-
         context = SyncContext(session=session, run=run, state=state, client=client, settings=self._settings)
         try:
-            self._collect_incremental(context, latest_treated)
+            self._collect_incremental(context, latest_treated, creation_floor)
             state.last_treated_max = latest_treated
             self._finish_run(run, state)
             session.flush()
@@ -105,8 +109,204 @@ class SyncService:
         client.close()
         return run
 
-    def _start_run(self, session: Session, *, scope_key: str, run_type: str, resume: bool) -> models.SyncRun:
-        run = models.SyncRun(scope_key=scope_key, run_type=run_type, status="running")
+    def prepare_full_run(
+        self,
+        session: Session,
+        *,
+        resume: bool = True,
+        max_records: Optional[int] = None,
+    ) -> models.SyncRun:
+        run, _state = self._initialize_full_run(
+            session,
+            resume=resume,
+            max_records=max_records,
+            status="pending",
+        )
+        return run
+
+    def prepare_incremental_run(self, session: Session) -> Optional[tuple[models.SyncRun, datetime, date]]:
+        prepared = self._prepare_incremental_run(session, status="pending")
+        if not prepared:
+            return None
+        run, _state, latest_treated, creation_floor = prepared
+        return run, latest_treated, creation_floor
+
+    def execute_full_run(self, run_id: UUID, *, resume: bool, max_records: Optional[int]) -> None:
+        try:
+            with session_scope() as session:
+                run = session.get(models.SyncRun, run_id)
+                if not run:
+                    _log_and_print(logging.WARNING, "Run %s introuvable pour la synchronisation complète.", run_id)
+                    return
+                state = self._get_or_create_state(session, run.scope_key)
+                run.status = "running"
+                run.started_at = datetime.utcnow()
+                session.flush()
+
+                _log_and_print(logging.INFO, "Synchronisation complète démarrée (run=%s)", run.id)
+
+                client = SireneClient()
+                context = SyncContext(session=session, run=run, state=state, client=client, settings=self._settings)
+                try:
+                    effective_max_records = max_records if max_records is not None else run.max_records
+                    self._collect_full(context, resume=resume, max_records=effective_max_records)
+                    self._finish_run(run, state)
+                    session.flush()
+                    _log_and_print(logging.INFO, "Synchronisation complète terminée (run=%s, créés=%s)", run.id, run.created_records)
+                finally:
+                    client.close()
+        except Exception:
+            _LOGGER.exception("Synchronisation complète asynchrone échouée (run=%s)", run_id)
+            print(f"Synchronisation complète asynchrone échouée (run={run_id})", flush=True)
+            with session_scope() as session:
+                run = session.get(models.SyncRun, run_id)
+                if run:
+                    run.status = "failed"
+                    run.finished_at = datetime.utcnow()
+                    session.flush()
+
+    def execute_incremental_run(self, run_id: UUID, *, latest_treated: datetime, creation_floor: date) -> None:
+        try:
+            with session_scope() as session:
+                run = session.get(models.SyncRun, run_id)
+                if not run:
+                    _log_and_print(logging.WARNING, "Run %s introuvable pour la synchronisation incrémentale.", run_id)
+                    return
+                state = self._get_or_create_state(session, run.scope_key)
+                run.status = "running"
+                run.started_at = datetime.utcnow()
+                session.flush()
+
+                _log_and_print(logging.INFO, "Synchronisation incrémentale démarrée (run=%s)", run.id)
+
+                client = SireneClient()
+                context = SyncContext(session=session, run=run, state=state, client=client, settings=self._settings)
+                try:
+                    self._collect_incremental(context, latest_treated, creation_floor)
+                    state.last_treated_max = latest_treated
+                    self._finish_run(run, state)
+                    session.flush()
+                    _log_and_print(logging.INFO, "Synchronisation incrémentale terminée (run=%s, créés=%s)", run.id, run.created_records)
+                finally:
+                    client.close()
+        except Exception:
+            _LOGGER.exception("Synchronisation incrémentale asynchrone échouée (run=%s)", run_id)
+            print(f"Synchronisation incrémentale asynchrone échouée (run={run_id})", flush=True)
+            with session_scope() as session:
+                run = session.get(models.SyncRun, run_id)
+                if run:
+                    run.status = "failed"
+                    run.finished_at = datetime.utcnow()
+                    session.flush()
+
+    def has_active_run(self, session: Session, scope_key: str) -> bool:
+        active_statuses = ("running", "pending")
+        existing = (
+            session.query(models.SyncRun.id)
+            .filter(models.SyncRun.scope_key == scope_key, models.SyncRun.status.in_(active_statuses))
+            .first()
+        )
+        return existing is not None
+
+    def _initialize_full_run(
+        self,
+        session: Session,
+        *,
+        resume: bool,
+        max_records: Optional[int],
+        status: str,
+    ) -> tuple[models.SyncRun, models.SyncState]:
+        scope_key = self._settings.sync.full_scope_key
+        run = self._start_run(
+            session,
+            scope_key=scope_key,
+            run_type="full",
+            resume=resume,
+            initial_status=status,
+        )
+        if max_records is not None:
+            if max_records < 1:
+                raise ValueError("max_records must be a positive integer when provided.")
+            run.max_records = max_records
+        state = self._get_or_create_state(session, scope_key)
+        session.flush()
+        return run, state
+
+    def _determine_creation_floor(self, session: Session) -> date:
+        buffer_days = max(self._settings.sync.incremental_creation_window_days, 1)
+        buffer_delta = timedelta(days=buffer_days)
+        today = datetime.utcnow().date()
+        floor = today - buffer_delta
+
+        max_creation = session.query(func.max(models.Establishment.date_creation)).scalar()
+        if max_creation:
+            capped_max = min(max_creation, today)
+            candidate = capped_max - buffer_delta
+            if candidate > floor:
+                floor = candidate
+
+        full_window_floor = subtract_months(today, self._settings.sync.full_sync_months_back)
+        if full_window_floor > today:
+            full_window_floor = today
+        if full_window_floor > floor:
+            floor = full_window_floor
+
+        if floor > today:
+            floor = today
+
+        return floor
+
+    def _prepare_incremental_run(
+        self,
+        session: Session,
+        *,
+        status: str,
+    ) -> Optional[tuple[models.SyncRun, models.SyncState, datetime, date]]:
+        scope_key = self._settings.sync.incremental_scope_key
+        state = self._get_or_create_state(session, scope_key)
+        creation_floor = self._determine_creation_floor(session)
+        client = SireneClient()
+        try:
+            infos = client.get_informations()
+        finally:
+            client.close()
+
+        collection = self._extract_collection_info(infos, "etablissements")
+        if not collection:
+            _LOGGER.warning("Impossible de récupérer les métadonnées 'etablissements' depuis le service informations.")
+            return None
+
+        latest_treated = parse_datetime(collection.get("dateDernierTraitementMaximum"))
+        if not latest_treated:
+            _LOGGER.warning("dateDernierTraitementMaximum absente ou invalide dans le service informations.")
+            return None
+
+        if state.last_treated_max and latest_treated <= state.last_treated_max:
+            _LOGGER.info("Aucune mise à jour détectée depuis la dernière exécution (%s).", state.last_treated_max)
+            return None
+
+        run = self._start_run(
+            session,
+            scope_key=scope_key,
+            run_type="incremental",
+            resume=True,
+            initial_status=status,
+        )
+        run.notes = f"dateDernierTraitementMaximum: {latest_treated.isoformat()}"
+        run.query_checksum = self._incremental_query_checksum(state)
+        session.flush()
+        return run, state, latest_treated, creation_floor
+
+    def _start_run(
+        self,
+        session: Session,
+        *,
+        scope_key: str,
+        run_type: str,
+        resume: bool,
+        initial_status: str,
+    ) -> models.SyncRun:
+        run = models.SyncRun(scope_key=scope_key, run_type=run_type, status=initial_status)
         session.add(run)
         if resume:
             last_run = (
@@ -130,7 +330,9 @@ class SyncService:
 
     def _collect_full(self, context: SyncContext, *, resume: bool, max_records: Optional[int]) -> None:
         state = context.state
-        query = self._build_restaurant_query()
+        months_back = max(self._settings.sync.full_sync_months_back, 1)
+        since_creation = subtract_months(datetime.utcnow().date(), months_back)
+        query = self._build_restaurant_query(since_creation=since_creation)
         checksum = sha256_digest(query)
         context.run.query_checksum = checksum
 
@@ -146,6 +348,7 @@ class SyncService:
 
         champs = self._build_fields_parameter()
         cursor_value = state.last_cursor if state.last_cursor and not state.cursor_completed else "*"
+        tri = "dateCreationEtablissement desc"
 
         new_entities_total: list[models.Establishment] = []
 
@@ -163,6 +366,7 @@ class SyncService:
                 curseur=cursor_value,
                 champs=champs,
                 date=self._settings.sirene.current_period_date,
+                tri=tri,
             )
             header = payload.get("header", {})
             etablissements = payload.get("etablissements", [])
@@ -196,7 +400,7 @@ class SyncService:
         if new_entities_total and context.run.run_type != "full":
             AlertService(context.session, context.run).create_alerts(new_entities_total)
 
-    def _collect_incremental(self, context: SyncContext, latest_treated: datetime) -> None:
+    def _collect_incremental(self, context: SyncContext, latest_treated: datetime, creation_floor: date) -> None:
         state = context.state
         champs = self._build_fields_parameter()
         start = state.last_treated_max or (latest_treated - timedelta(days=1))
@@ -204,7 +408,7 @@ class SyncService:
         start_value = (start - timedelta(minutes=5)).isoformat() if start else None
         end_value = (latest_treated + timedelta(seconds=1)).isoformat()
 
-        query = self._build_incremental_query(start_value, end_value)
+        query = self._build_incremental_query(start_value, end_value, creation_floor)
         checksum = sha256_digest(query)
         context.run.query_checksum = checksum
 
@@ -253,14 +457,18 @@ class SyncService:
         run.finished_at = datetime.utcnow()
         state.last_successful_run_id = run.id
 
-    def _build_restaurant_query(self) -> str:
+    def _build_restaurant_query(self, *, since_creation: Optional[date] = None) -> str:
         naf_terms = [f"activitePrincipaleEtablissement:{code}" for code in self._settings.sirene.restaurant_naf_codes]
         naf_query = " OR ".join(naf_terms)
         if len(naf_terms) > 1:
             naf_query = f"({naf_query})"
-        return f"periode({naf_query} AND etatAdministratifEtablissement:A)"
+        period_clause = f"periode({naf_query} AND etatAdministratifEtablissement:A)"
+        if since_creation:
+            creation_clause = f"dateCreationEtablissement:[{since_creation.isoformat()} TO *]"
+            return f"{period_clause} AND {creation_clause}"
+        return period_clause
 
-    def _build_incremental_query(self, start_iso: Optional[str], end_iso: str) -> str:
+    def _build_incremental_query(self, start_iso: Optional[str], end_iso: str, creation_floor: Optional[date]) -> str:
         clauses = []
         if start_iso:
             clauses.append(
@@ -273,7 +481,7 @@ class SyncService:
             clauses.append(f"dateDernierTraitementEtablissement:[* TO {end_iso}]")
             clauses.append(f"dateDernierTraitementUniteLegale:[* TO {end_iso}]")
         treated_clause = " OR ".join(clauses)
-        return f"({treated_clause}) AND {self._build_restaurant_query()}"
+        return f"({treated_clause}) AND {self._build_restaurant_query(since_creation=creation_floor)}"
 
     def _build_fields_parameter(self) -> str:
         fields = {
@@ -330,17 +538,27 @@ class SyncService:
     def _extract_collection_info(self, payload: dict[str, object], name: str) -> Optional[dict[str, object]]:
         if not isinstance(payload, dict):
             return None
+        normalized_target = _normalize_text(name)
+
+        def matches(candidate: object) -> bool:
+            if not isinstance(candidate, str):
+                return False
+            return _normalize_text(candidate) == normalized_target
+
+        dates_updates = payload.get("datesDernieresMisesAJourDesDonnees")
+        if isinstance(dates_updates, list):
+            for item in dates_updates:
+                if isinstance(item, dict) and matches(item.get("collection")):
+                    return item
+
         possible_keys = ["collections", "collection", "datasets", "data"]
         for key in possible_keys:
             value = payload.get(key)
             if isinstance(value, list):
                 for item in value:
-                    if isinstance(item, dict) and item.get("nom") == name:
-                        return item
-                    if isinstance(item, dict) and item.get("name") == name:
-                        return item
-                    if isinstance(item, dict) and item.get("collection") == name:
-                        return item
+                    if isinstance(item, dict):
+                        if any(matches(item.get(field)) for field in ("nom", "name", "collection")):
+                            return item
                     nested = self._extract_collection_info(item, name)
                     if nested:
                         return nested
@@ -348,8 +566,9 @@ class SyncService:
                 nested = self._extract_collection_info(value, name)
                 if nested:
                     return nested
-        if name in payload and isinstance(payload[name], dict):
-            return payload[name]
+        for key, nested_value in payload.items():
+            if matches(key) and isinstance(nested_value, dict):
+                return nested_value
         for item in payload.values():
             if isinstance(item, dict):
                 nested = self._extract_collection_info(item, name)

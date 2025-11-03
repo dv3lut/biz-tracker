@@ -49,6 +49,12 @@ class SireneClient:
                 if not response.content:
                     return {}
                 return response.json()
+
+            if response.status_code == 404:
+                fallback = self._handle_not_found_response(response)
+                if fallback is not None:
+                    _LOGGER.info("Sirene API: aucune donnée pour la requête (404).")
+                    return fallback
             if response.status_code not in _RETRYABLE_STATUS:
                 self._log_error(response)
                 response.raise_for_status()
@@ -92,6 +98,7 @@ class SireneClient:
         curseur: Optional[str] = None,
         champs: Optional[str] = None,
         date: Optional[str] = None,
+        tri: Optional[str] = None,
     ) -> Dict[str, Any]:
         params: Dict[str, Any] = {"q": query, "nombre": nombre}
         if curseur is not None:
@@ -100,4 +107,27 @@ class SireneClient:
             params["champs"] = champs
         if date:
             params["date"] = date
+        if tri:
+            params["tri"] = tri
         return self._request("GET", "siret", params=params)
+
+    def _handle_not_found_response(self, response: Response) -> Dict[str, Any] | None:
+        try:
+            payload = response.json()
+        except json.JSONDecodeError:
+            return None
+
+        if not isinstance(payload, dict):
+            return None
+
+        header = payload.get("header")
+        message = ""
+        if isinstance(header, dict):
+            message = str(header.get("message") or "")
+
+        if "Aucun élément trouvé" not in message:
+            return None
+
+        payload.setdefault("header", {})
+        payload.setdefault("etablissements", [])
+        return payload
