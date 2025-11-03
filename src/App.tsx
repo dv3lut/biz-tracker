@@ -5,6 +5,7 @@ import {
   adminApi,
   ApiError,
   type TriggerSyncResult,
+  type DeleteRunResponse,
   getAdminToken,
   setAdminToken,
   clearAdminToken,
@@ -221,14 +222,20 @@ const App = () => {
     onError: showEstablishmentsError,
   });
 
-  const deleteAllEstablishmentsMutation = useMutation<{ deleted: number }, unknown, string>({
-    mutationFn: (phrase: string) => adminApi.deleteAllEstablishments(phrase),
-    onSuccess: (result) => {
-      setEstablishmentsFeedback(`${result.deleted} établissements supprimés.`);
-      setEstablishmentsError(null);
+  const deleteRunMutation = useMutation<DeleteRunResponse, unknown, string>({
+    mutationFn: (runId: string) => adminApi.deleteRun(runId),
+    onSuccess: (result, runId) => {
+      setFeedbackMessage(
+        `Run ${runId} supprimé (${result.establishments_deleted} établissements, ${result.alerts_deleted} alertes).`
+      );
+      setErrorMessage(null);
+      statsQuery.refetch();
+      syncRunsQuery.refetch();
+      syncStateQuery.refetch();
+      alertsQuery.refetch();
       establishmentsQueryResult.refetch();
     },
-    onError: showEstablishmentsError,
+    onError: showError,
   });
 
   const handleTriggerFull = (payload: SyncRequestPayload) => {
@@ -269,13 +276,15 @@ const App = () => {
     deleteEstablishmentMutation.mutate(siret);
   };
 
-  const handleDeleteAllEstablishments = (phrase: string) => {
+  const handleDeleteRun = (runId: string) => {
     if (!isAuthenticated) {
       setTokenError("Merci de saisir un jeton administrateur.");
       return;
     }
-    deleteAllEstablishmentsMutation.mutate(phrase);
+    deleteRunMutation.mutate(runId);
   };
+
+  const deletingRunId = deleteRunMutation.isPending ? deleteRunMutation.variables ?? null : null;
 
   const handleTokenSubmit = useCallback(
     (token: string) => {
@@ -345,6 +354,9 @@ const App = () => {
               limit={syncRunsLimit}
               onLimitChange={setSyncRunsLimit}
               onRefresh={() => syncRunsQuery.refetch()}
+              onDeleteRun={handleDeleteRun}
+              deletingRunId={deletingRunId}
+              isDeletingRun={deleteRunMutation.isPending}
             />
 
             <SyncStateTable
@@ -396,14 +408,12 @@ const App = () => {
               onQueryChange={handleEstablishmentsQueryChange}
               onRefresh={() => establishmentsQueryResult.refetch()}
               onDeleteEstablishment={handleDeleteEstablishment}
-              onDeleteAll={handleDeleteAllEstablishments}
               deletingSiret={
                 deleteEstablishmentMutation.isPending
                   ? (deleteEstablishmentMutation.variables as string | null | undefined) ?? null
                   : null
               }
               isDeletingOne={deleteEstablishmentMutation.isPending}
-              isDeletingAll={deleteAllEstablishmentsMutation.isPending}
               feedbackMessage={establishmentsFeedback}
               errorMessage={establishmentsError}
             />

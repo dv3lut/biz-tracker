@@ -73,4 +73,6 @@ export interface Establishment {
   firstSeenAt: string | null;
   lastSeenAt: string | null;
   updatedAt: string | null;
+  createdRunId: string | null;
+  lastRunId: string | null;
 }

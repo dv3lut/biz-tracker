@@ -10,6 +10,9 @@ type Props = {
   limit: number;
   onLimitChange: (limit: number) => void;
   onRefresh: () => void;
+  onDeleteRun: (runId: string) => void;
+  deletingRunId: string | null;
+  isDeletingRun: boolean;
 };
 
 const truncate = (value: string | null, length = 16): string => {
@@ -22,9 +25,28 @@ const truncate = (value: string | null, length = 16): string => {
   return `${value.slice(0, length)}...`;
 };
 
-export const SyncRunsTable = ({ runs, isLoading, error, limit, onLimitChange, onRefresh }: Props) => {
+export const SyncRunsTable = ({
+  runs,
+  isLoading,
+  error,
+  limit,
+  onLimitChange,
+  onRefresh,
+  onDeleteRun,
+  deletingRunId,
+  isDeletingRun,
+}: Props) => {
   const handleLimitChange = (event: ChangeEvent<HTMLSelectElement>) => {
     onLimitChange(Number(event.target.value));
+  };
+
+  const handleDeleteRun = (runId: string) => {
+    const confirmed = window.confirm(
+      "Supprimer ce run et toutes les données associées (établissements, alertes) ?"
+    );
+    if (confirmed) {
+      onDeleteRun(runId);
+    }
   };
 
   return (
@@ -69,6 +91,7 @@ export const SyncRunsTable = ({ runs, isLoading, error, limit, onLimitChange, on
                 <th>Paramètres</th>
                 <th>Temps</th>
                 <th>Détails</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -111,6 +134,16 @@ export const SyncRunsTable = ({ runs, isLoading, error, limit, onLimitChange, on
                     {run.notes ? <span>{run.notes}</span> : <span className="muted">—</span>}
                     <br />
                     <span className="small muted">Curseur: {truncate(run.lastCursor)}</span>
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={() => handleDeleteRun(run.id)}
+                      disabled={isDeletingRun && deletingRunId === run.id}
+                    >
+                      {isDeletingRun && deletingRunId === run.id ? "Suppression..." : "Supprimer les données"}
+                    </button>
                   </td>
                 </tr>
               ))}

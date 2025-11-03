@@ -77,6 +77,16 @@ interface EstablishmentResponse {
   first_seen_at: string | null;
   last_seen_at: string | null;
   updated_at: string | null;
+  created_run_id: string | null;
+  last_run_id: string | null;
+}
+
+export interface DeleteRunResponse {
+  establishments_deleted: number;
+  alerts_deleted: number;
+  states_reset: number;
+  runs_updated: number;
+  sync_run_deleted: boolean;
 }
 
 interface RequestResult<T> {
@@ -172,6 +182,8 @@ const toEstablishment = (payload: EstablishmentResponse): Establishment => ({
   firstSeenAt: payload.first_seen_at,
   lastSeenAt: payload.last_seen_at,
   updatedAt: payload.updated_at,
+  createdRunId: payload.created_run_id,
+  lastRunId: payload.last_run_id,
 });
 
 const readPayload = async (response: Response): Promise<unknown> => {
@@ -293,10 +305,9 @@ export const adminApi = {
     });
   },
 
-  async deleteAllEstablishments(confirmPhrase: string): Promise<{ deleted: number }> {
-    const { data } = await request<{ deleted: number }>("/admin/establishments", {
+  async deleteRun(runId: string): Promise<DeleteRunResponse> {
+    const { data } = await request<DeleteRunResponse>(`/admin/sync-runs/${encodeURIComponent(runId)}`, {
       method: "DELETE",
-      body: JSON.stringify({ confirm_phrase: confirmPhrase }),
     });
     return data;
   },

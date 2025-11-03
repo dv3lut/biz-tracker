@@ -1,4 +1,4 @@
-import { ChangeEvent, FormEvent, useEffect, useState } from "react";
+import { ChangeEvent } from "react";
 
 import { Establishment } from "../types";
 import { formatDateTime } from "../utils/format";
@@ -16,15 +16,11 @@ interface EstablishmentsSectionProps {
   onQueryChange: (query: string) => void;
   onRefresh: () => void;
   onDeleteEstablishment: (siret: string) => void;
-  onDeleteAll: (confirmPhrase: string) => void;
   deletingSiret: string | null;
   isDeletingOne: boolean;
-  isDeletingAll: boolean;
   feedbackMessage: string | null;
   errorMessage: string | null;
 }
-
-const DELETE_ALL_PHRASE = "DELETE ALL ESTABLISHMENTS";
 
 export const EstablishmentsSection = ({
   establishments,
@@ -39,21 +35,11 @@ export const EstablishmentsSection = ({
   onQueryChange,
   onRefresh,
   onDeleteEstablishment,
-  onDeleteAll,
   deletingSiret,
   isDeletingOne,
-  isDeletingAll,
   feedbackMessage,
   errorMessage,
 }: EstablishmentsSectionProps) => {
-  const [confirmPhrase, setConfirmPhrase] = useState("");
-
-  useEffect(() => {
-    if (feedbackMessage) {
-      setConfirmPhrase("");
-    }
-  }, [feedbackMessage]);
-
   const handleSearchChange = (event: ChangeEvent<HTMLInputElement>) => {
     onQueryChange(event.target.value);
   };
@@ -69,12 +55,12 @@ export const EstablishmentsSection = ({
     }
   };
 
-  const handleDeleteAll = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    onDeleteAll(confirmPhrase);
+  const formatRunId = (value: string | null) => {
+    if (!value) {
+      return "—";
+    }
+    return `${value.slice(0, 8)}…`;
   };
-
-  const disableDeleteAll = confirmPhrase !== DELETE_ALL_PHRASE || isDeletingAll;
 
   return (
     <section className="card">
@@ -137,6 +123,7 @@ export const EstablishmentsSection = ({
                 <th>Nom</th>
                 <th>Localisation</th>
                 <th>Dates</th>
+                <th>Synchronisations</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -170,6 +157,11 @@ export const EstablishmentsSection = ({
                     <span className="small muted">Dernière vue: {formatDateTime(establishment.lastSeenAt)}</span>
                   </td>
                   <td>
+                    <span className="small muted">Créé par: {formatRunId(establishment.createdRunId)}</span>
+                    <br />
+                    <span className="small muted">Dernier run: {formatRunId(establishment.lastRunId)}</span>
+                  </td>
+                  <td>
                     <button
                       type="button"
                       className="ghost"
@@ -186,21 +178,13 @@ export const EstablishmentsSection = ({
         </div>
       )}
 
-      <form className="establishments-danger" onSubmit={handleDeleteAll}>
-        <h3>Suppression complète des établissements</h3>
+      <div className="establishments-danger">
+        <h3>Purger une synchronisation</h3>
         <p className="muted small">
-          Tapez exactement <code>{DELETE_ALL_PHRASE}</code> pour confirmer la suppression de toutes les entrées.
+          Utilisez l&apos;historique des synchronisations pour supprimer un run : l&apos;API effacera les établissements
+          créés par cette exécution ainsi que les alertes associées.
         </p>
-        <input
-          type="text"
-          value={confirmPhrase}
-          onChange={(event) => setConfirmPhrase(event.target.value)}
-          placeholder={DELETE_ALL_PHRASE}
-        />
-        <button type="submit" className="danger" disabled={disableDeleteAll}>
-          {isDeletingAll ? "Suppression..." : "Supprimer tous les établissements"}
-        </button>
-      </form>
+      </div>
 
       {feedbackMessage && <p className="feedback success">{feedbackMessage}</p>}
       {errorMessage && <p className="feedback error">{errorMessage}</p>}
