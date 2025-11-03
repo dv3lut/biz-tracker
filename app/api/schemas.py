@@ -87,15 +87,13 @@ class EstablishmentOut(BaseModel):
     first_seen_at: datetime
     last_seen_at: datetime
     updated_at: datetime
+    created_run_id: UUID | None
+    last_run_id: UUID | None
 
 
-class BulkDeleteEstablishmentsRequest(BaseModel):
-    confirm_phrase: str = Field(
-        ...,
-        description="Phrase de confirmation requise pour supprimer l'ensemble des établissements.",
-        json_schema_extra={"examples": ["DELETE ALL ESTABLISHMENTS"]},
-    )
-
-
-class DeleteEstablishmentsResult(BaseModel):
-    deleted: int = Field(description="Nombre de lignes supprimées.")
+class DeleteRunResult(BaseModel):
+    establishments_deleted: int = Field(description="Nombre d'établissements supprimés.")
+    alerts_deleted: int = Field(description="Nombre d'alertes supprimées.")
+    states_reset: int = Field(description="Nombre d'états de synchronisation remis à zéro.")
+    runs_updated: int = Field(description="Nombre de runs mis à jour (liens de reprise supprimés).")
+    sync_run_deleted: bool = Field(description="Indique si le run a été supprimé.")

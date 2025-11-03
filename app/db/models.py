@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime, date
 
 from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -46,7 +46,19 @@ class Establishment(Base):
     prenom4: Mapped[str | None] = mapped_column(String(255))
     prenom_usuel: Mapped[str | None] = mapped_column(String(255))
     pseudonyme: Mapped[str | None] = mapped_column(String(255))
-    sexe: Mapped[str | None] = mapped_column(String(1))
+    sexe: Mapped[str | None] = mapped_column(String(10))
+    created_run_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("sync_runs.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+    last_run_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("sync_runs.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
 
     complement_adresse: Mapped[str | None] = mapped_column(String(255))
     numero_voie: Mapped[str | None] = mapped_column(String(10))

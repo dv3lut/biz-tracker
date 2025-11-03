@@ -23,6 +23,13 @@ class SireneSettings(BaseModel):
     page_size: int = Field(default=1000, ge=1, le=1000)
     restaurant_naf_codes: List[str] = Field(default_factory=lambda: ["56.10A"])
     request_timeout_seconds: int = Field(default=30, ge=1)
+    current_period_date: str = Field(
+        default="2100-01-01",
+        description=(
+            "Date passed to Sirene searches so historized fields such as etatAdministratifEtablissement are "
+            "evaluated on their current value."
+        ),
+    )
 
     @field_validator("restaurant_naf_codes", mode="before")
     @classmethod

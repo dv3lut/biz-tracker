@@ -5,6 +5,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Iterable, Optional, Sequence
+from uuid import UUID
 
 from sqlalchemy.orm import Session
 
@@ -161,13 +162,14 @@ class SyncService:
                 nombre=page_size,
                 curseur=cursor_value,
                 champs=champs,
+                date=self._settings.sirene.current_period_date,
             )
             header = payload.get("header", {})
             etablissements = payload.get("etablissements", [])
             context.run.api_call_count += 1
             context.run.fetched_records += len(etablissements)
 
-            new_entities = self._upsert_establishments(context.session, etablissements)
+            new_entities = self._upsert_establishments(context.session, etablissements, context.run.id)
             context.run.created_records += len(new_entities)
             if context.run.run_type != "full":
                 new_entities_total.extend(new_entities)
@@ -217,13 +219,14 @@ class SyncService:
                 nombre=self._settings.sirene.page_size,
                 curseur=cursor_value,
                 champs=champs,
+                date=self._settings.sirene.current_period_date,
             )
             header = payload.get("header", {})
             etablissements = payload.get("etablissements", [])
             context.run.api_call_count += 1
             context.run.fetched_records += len(etablissements)
 
-            new_entities = self._upsert_establishments(context.session, etablissements)
+            new_entities = self._upsert_establishments(context.session, etablissements, context.run.id)
             context.run.created_records += len(new_entities)
             new_entities_total.extend(new_entities)
 
@@ -251,13 +254,11 @@ class SyncService:
         state.last_successful_run_id = run.id
 
     def _build_restaurant_query(self) -> str:
-        naf_query = " OR ".join(
-            f"activitePrincipaleEtablissement:{code}" for code in self._settings.sirene.restaurant_naf_codes
-        )
-        if len(self._settings.sirene.restaurant_naf_codes) > 1:
+        naf_terms = [f"activitePrincipaleEtablissement:{code}" for code in self._settings.sirene.restaurant_naf_codes]
+        naf_query = " OR ".join(naf_terms)
+        if len(naf_terms) > 1:
             naf_query = f"({naf_query})"
-        base = f"periode(({naf_query}) AND etatAdministratifEtablissement:A)"
-        return f"{base} AND etatAdministratifEtablissement:A"
+        return f"periode({naf_query} AND etatAdministratifEtablissement:A)"
 
     def _build_incremental_query(self, start_iso: Optional[str], end_iso: str) -> str:
         clauses = []
@@ -291,7 +292,12 @@ class SyncService:
         }
         return ",".join(sorted(fields))
 
-    def _upsert_establishments(self, session: Session, etablissements: Sequence[dict[str, object]]) -> list[models.Establishment]:
+    def _upsert_establishments(
+        self,
+        session: Session,
+        etablissements: Sequence[dict[str, object]],
+        run_id: UUID,
+    ) -> list[models.Establishment]:
         new_entities: list[models.Establishment] = []
         now = datetime.utcnow()
         for payload in etablissements:
@@ -309,7 +315,10 @@ class SyncService:
                 for key, value in fields.items():
                     setattr(entity, key, value)
                 entity.last_seen_at = now
+                entity.last_run_id = run_id
             else:
+                fields["created_run_id"] = run_id
+                fields["last_run_id"] = run_id
                 entity = models.Establishment(**fields)
                 entity.first_seen_at = now
                 entity.last_seen_at = now

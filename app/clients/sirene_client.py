@@ -91,10 +91,13 @@ class SireneClient:
         nombre: int,
         curseur: Optional[str] = None,
         champs: Optional[str] = None,
+        date: Optional[str] = None,
     ) -> Dict[str, Any]:
         params: Dict[str, Any] = {"q": query, "nombre": nombre}
         if curseur is not None:
             params["curseur"] = curseur
         if champs:
             params["champs"] = champs
+        if date:
+            params["date"] = date
         return self._request("GET", "siret", params=params)

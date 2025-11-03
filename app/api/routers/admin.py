@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_, select
@@ -10,8 +11,7 @@ from sqlalchemy.orm import Session
 from app.api.dependencies import get_db_session, require_admin
 from app.api.schemas import (
     AlertOut,
-    BulkDeleteEstablishmentsRequest,
-    DeleteEstablishmentsResult,
+    DeleteRunResult,
     EstablishmentOut,
     StatsSummary,
     SyncRequest,
@@ -22,8 +22,6 @@ from app.db import models
 from app.services.sync_service import SyncService
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)])
-
-DELETE_ALL_CONFIRMATION_PHRASE = "DELETE ALL ESTABLISHMENTS"
 
 def _serialize_run(run: models.SyncRun | None, *, state: models.SyncState | None = None) -> SyncRunOut | None:
     if run is None:
@@ -178,19 +176,67 @@ def list_establishments(
 
 
 @router.delete(
-    "/establishments",
-    response_model=DeleteEstablishmentsResult,
-    summary="Supprimer tous les établissements",
+    "/sync-runs/{run_id}",
+    response_model=DeleteRunResult,
+    summary="Supprimer un run et les données associées",
 )
-def delete_all_establishments(
-    payload: BulkDeleteEstablishmentsRequest,
+def delete_sync_run(
+    run_id: UUID,
     session: Session = Depends(get_db_session),
-) -> DeleteEstablishmentsResult:
-    if payload.confirm_phrase != DELETE_ALL_CONFIRMATION_PHRASE:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Phrase de confirmation invalide.")
-    deleted = session.query(models.Establishment).delete(synchronize_session=False)
+) -> DeleteRunResult:
+    run = session.get(models.SyncRun, run_id)
+    if run is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run introuvable.")
+
+    alerts_deleted = (
+        session.query(models.Alert)
+        .filter(models.Alert.run_id == run_id)
+        .delete(synchronize_session=False)
+    )
+
+    establishments_deleted = (
+        session.query(models.Establishment)
+        .filter(models.Establishment.created_run_id == run_id)
+        .delete(synchronize_session=False)
+    )
+
+    session.query(models.Establishment).filter(models.Establishment.last_run_id == run_id).update(
+        {models.Establishment.last_run_id: None}, synchronize_session=False
+    )
+
+    states_reset = (
+        session.query(models.SyncState)
+        .filter(models.SyncState.last_successful_run_id == run_id)
+        .update(
+            {
+                models.SyncState.last_successful_run_id: None,
+                models.SyncState.last_cursor: None,
+                models.SyncState.cursor_completed: False,
+                models.SyncState.last_synced_at: None,
+                models.SyncState.last_total: None,
+                models.SyncState.last_treated_max: None,
+                models.SyncState.query_checksum: None,
+            },
+            synchronize_session=False,
+        )
+    )
+
+    runs_updated = (
+        session.query(models.SyncRun)
+        .filter(models.SyncRun.resumed_from_run_id == run_id)
+        .update({models.SyncRun.resumed_from_run_id: None}, synchronize_session=False)
+    )
+
+    session.delete(run)
     session.flush()
-    return DeleteEstablishmentsResult(deleted=deleted)
+
+    return DeleteRunResult(
+        establishments_deleted=establishments_deleted,
+        alerts_deleted=alerts_deleted,
+        states_reset=states_reset,
+        runs_updated=runs_updated,
+        sync_run_deleted=True,
+    )
 
 
 @router.delete(

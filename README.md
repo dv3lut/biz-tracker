@@ -13,6 +13,8 @@ Solution de veille sur les nouveaux établissements de restauration (NAF 56.10A)
 - Python 3.11+
 - Docker et Docker Compose pour la base PostgreSQL.
 - Un token d’accès à l’API Sirene (`api.insee.fr`).
+- (Optionnel) Ajuster `SIRENE__CURRENT_PERIOD_DATE` si vous devez rejouer l’historique à une date donnée. La
+   valeur par défaut (`2100-01-01`) force l’API à retourner les valeurs courantes des champs historisés.
 
 ## Mise en route
 
@@ -59,6 +61,7 @@ Des cibles `Makefile` équivalentes existent (`make init-db`, `make sync-full`, 
    - `GET /admin/sync-runs` / `GET /admin/sync-state` / `GET /admin/alerts/recent` : monitoring détaillé.
    - `POST /admin/sync/full` (body `{ "resume": true }`) : lance une collecte complète.
    - `POST /admin/sync/incremental` : lance un run incrémental (202 Accepted si aucune mise à jour disponible).
+   - `DELETE /admin/sync-runs/{run_id}` : purge un run donné, supprime les établissements créés et les alertes associées, et réinitialise l’état de synchronisation lié.
 
 Un fichier Postman de référence est disponible (`docs/postman_collection.json`). Pensez à définir la variable `baseUrl` et l'en-tête `X-Admin-Token` dans votre environnement Postman avant utilisation.
 
