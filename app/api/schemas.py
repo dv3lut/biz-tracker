@@ -1,7 +1,7 @@
 """Pydantic response schemas for the API layer."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, date
 from typing import Any
 from uuid import UUID
 
@@ -63,8 +63,39 @@ class StatsSummary(BaseModel):
     last_full_run: SyncRunOut | None
     last_incremental_run: SyncRunOut | None
     last_alert: AlertOut | None
+    database_size_pretty: str
 
 
 class SyncRequest(BaseModel):
     resume: bool = True
     max_records: int | None = Field(default=None, ge=1, description="Nombre maximal d'enregistrements à traiter.")
+
+
+class EstablishmentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    siret: str
+    siren: str
+    name: str | None
+    naf_code: str | None
+    naf_libelle: str | None
+    etat_administratif: str | None
+    code_postal: str | None
+    libelle_commune: str | None
+    date_creation: date | None
+    date_debut_activite: date | None
+    first_seen_at: datetime
+    last_seen_at: datetime
+    updated_at: datetime
+
+
+class BulkDeleteEstablishmentsRequest(BaseModel):
+    confirm_phrase: str = Field(
+        ...,
+        description="Phrase de confirmation requise pour supprimer l'ensemble des établissements.",
+        json_schema_extra={"examples": ["DELETE ALL ESTABLISHMENTS"]},
+    )
+
+
+class DeleteEstablishmentsResult(BaseModel):
+    deleted: int = Field(description="Nombre de lignes supprimées.")

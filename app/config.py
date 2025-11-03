@@ -107,7 +107,7 @@ class ApiSettings(BaseModel):
     admin_token: str = Field(default="change-me", min_length=8)
     admin_header_name: str = Field(default="X-Admin-Token")
     docs_enabled: bool = Field(default=False)
-    allowed_origins: List[str] = Field(default_factory=lambda: ["http://localhost:5173"])
+    allowed_origins: List[str] = Field(default_factory=lambda: ["http://localhost:5173", "http://localhost:5174"])
 
     @field_validator("allowed_origins", mode="before")
     @classmethod

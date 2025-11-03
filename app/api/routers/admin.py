@@ -4,15 +4,26 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db_session, require_admin
-from app.api.schemas import AlertOut, StatsSummary, SyncRequest, SyncRunOut, SyncStateOut
+from app.api.schemas import (
+    AlertOut,
+    BulkDeleteEstablishmentsRequest,
+    DeleteEstablishmentsResult,
+    EstablishmentOut,
+    StatsSummary,
+    SyncRequest,
+    SyncRunOut,
+    SyncStateOut,
+)
 from app.db import models
 from app.services.sync_service import SyncService
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)])
+
+DELETE_ALL_CONFIRMATION_PHRASE = "DELETE ALL ESTABLISHMENTS"
 
 def _serialize_run(run: models.SyncRun | None, *, state: models.SyncState | None = None) -> SyncRunOut | None:
     if run is None:
@@ -67,6 +78,9 @@ def _compute_run_metrics(
 def get_stats_summary(session: Session = Depends(get_db_session)) -> StatsSummary:
     total_establishments = session.execute(select(func.count(models.Establishment.siret))).scalar_one()
     total_alerts = session.execute(select(func.count(models.Alert.id))).scalar_one()
+    database_size_pretty = session.execute(
+        select(func.pg_size_pretty(func.pg_database_size(func.current_database())))
+    ).scalar_one()
 
     last_full_stmt = (
         select(models.SyncRun)
@@ -95,6 +109,7 @@ def get_stats_summary(session: Session = Depends(get_db_session)) -> StatsSummar
         last_full_run=_serialize_run(last_full, state=last_full_state),
         last_incremental_run=_serialize_run(last_incremental, state=last_incremental_state),
         last_alert=_serialize_alert(last_alert),
+        database_size_pretty=database_size_pretty,
     )
 
 
@@ -127,6 +142,71 @@ def list_recent_alerts(
     stmt = select(models.Alert).order_by(models.Alert.created_at.desc()).limit(limit)
     alerts = session.execute(stmt).scalars().all()
     return [AlertOut.model_validate(alert) for alert in alerts]
+
+
+@router.get(
+    "/establishments",
+    response_model=list[EstablishmentOut],
+    summary="Lister les établissements actifs",
+)
+def list_establishments(
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    search: str | None = Query(None, alias="q", description="Filtre sur SIRET, nom ou code postal"),
+    session: Session = Depends(get_db_session),
+) -> list[EstablishmentOut]:
+    query = session.query(models.Establishment).filter(models.Establishment.etat_administratif == "A")
+    if search:
+        pattern = f"%{search.strip()}%"
+        query = query.filter(
+            or_(
+                models.Establishment.siret.ilike(pattern),
+                models.Establishment.name.ilike(pattern),
+                models.Establishment.code_postal.ilike(pattern),
+            )
+        )
+    establishments = (
+        query.order_by(
+            models.Establishment.date_creation.desc(),
+            models.Establishment.last_seen_at.desc(),
+        )
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+    return [EstablishmentOut.model_validate(item) for item in establishments]
+
+
+@router.delete(
+    "/establishments",
+    response_model=DeleteEstablishmentsResult,
+    summary="Supprimer tous les établissements",
+)
+def delete_all_establishments(
+    payload: BulkDeleteEstablishmentsRequest,
+    session: Session = Depends(get_db_session),
+) -> DeleteEstablishmentsResult:
+    if payload.confirm_phrase != DELETE_ALL_CONFIRMATION_PHRASE:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Phrase de confirmation invalide.")
+    deleted = session.query(models.Establishment).delete(synchronize_session=False)
+    session.flush()
+    return DeleteEstablishmentsResult(deleted=deleted)
+
+
+@router.delete(
+    "/establishments/{siret}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Supprimer un établissement",
+)
+def delete_establishment(
+    siret: str,
+    session: Session = Depends(get_db_session),
+) -> None:
+    entity = session.get(models.Establishment, siret)
+    if entity is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Établissement introuvable.")
+    session.delete(entity)
+    session.flush()
 
 
 @router.post("/sync/full", response_model=SyncRunOut, summary="Déclencher une synchronisation complète")

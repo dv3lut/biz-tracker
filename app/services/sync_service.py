@@ -257,7 +257,7 @@ class SyncService:
         if len(self._settings.sirene.restaurant_naf_codes) > 1:
             naf_query = f"({naf_query})"
         base = f"periode(({naf_query}) AND etatAdministratifEtablissement:A)"
-        return base
+        return f"{base} AND etatAdministratifEtablissement:A"
 
     def _build_incremental_query(self, start_iso: Optional[str], end_iso: str) -> str:
         clauses = []
@@ -298,6 +298,11 @@ class SyncService:
             fields = extract_fields(payload)
             siret = fields.get("siret")
             if not siret:
+                continue
+            if fields.get("etat_administratif") != "A":
+                existing = session.get(models.Establishment, siret)
+                if existing:
+                    session.delete(existing)
                 continue
             entity = session.get(models.Establishment, siret)
             if entity:
