@@ -8,17 +8,17 @@
   - Les objets sont créés via `app/db/models.py`; exécution des migrations simplifiée via `Base.metadata.create_all`.
 - **Transformation** : `app/services/establishment_mapper.extract_fields` applique les règles métiers (fallbacks de nom, parsing dates/ISO).
 - **Synchronisation** : `SyncService`
-  - Pleine collecte utilisant `curseur` (`nombre=1000` max JSON) et limitée aux établissements créés dans les `sync.full_sync_months_back` derniers mois (tri `dateCreationEtablissement desc`).
+  - Collecte unifiée utilisant le curseur Sirene (`nombre=1000`) et limitée aux établissements créés dans les `sync.months_back` derniers mois (tri `dateCreationEtablissement desc`).
   - Déclenchements API exécutés en tâche de fond (FastAPI `BackgroundTasks`) avec un statut `pending` renvoyé immédiatement au front.
-  - Incrémental basé sur `dateDernierTraitement*` + `service informations`, limité aux établissements dont `dateCreationEtablissement` est récente (fenêtre configurable `sync.incremental_creation_window_days`).
-  - Scheduler interne (`IncrementalScheduler`) démarré avec l’API pour déclencher automatiquement les incrémentales selon `sync.auto_incremental_poll_minutes` et `sync.minimum_delay_minutes`.
-  - Reprise via `SyncState.last_cursor` et `SyncState.last_treated_max`.
+  - Possibilité de vérifier le `service informations` avant de lancer (`check_for_updates`) afin d’éviter un run s’il n’y a pas de nouveautés.
+  - Scheduler interne (`SyncScheduler`) démarré avec l’API : scrute périodiquement les mises à jour (`sync.auto_poll_minutes`) et respecte un délai minimum `sync.minimum_delay_minutes` avant de relancer.
+  - Reprise via `SyncState.last_cursor` et suivi des traitements via `SyncState.last_treated_max`.
 - **Alertes** :
   - Logging dédié (`logging_config` définit un logger `alerts` -> `logs/alerts.log`).
   - Envoi SMTP optionnel (classe `EmailService`, désactivée si `EMAIL__ENABLED=false`).
 - **API** : FastAPI (`app/api`) exposant des routes d’admin sécurisées par jeton (`X-Admin-Token` configurable). Les dépendances gèrent les sessions SQLAlchemy et les contrôles d’accès.
 - **CORS** : middleware FastAPI activé. La liste des origines autorisées est configurable via `API__ALLOWED_ORIGINS` (liste JSON ou chaîne séparée par des virgules, valeur par défaut `http://localhost:5173`).
-- **CLI** : Typer (`python -m app …`). Commandes `init-db`, `sync-full`, `sync-incremental`, `serve` (lance Uvicorn).
+- **CLI** : Typer (`python -m app …`). Commandes `init-db`, `sync`, `serve` (lance Uvicorn). Aliases historiques `sync-full` et `sync-incremental` redirigent vers `sync`.
 - **Tests & QA** : placeholder `make lint` (compileall). Prévoir pytest/ruff ultérieurement.
 
 ## UI d’administration

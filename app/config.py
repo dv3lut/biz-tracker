@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from functools import lru_cache
 from typing import Any, List, Optional
-from pydantic import BaseModel, Field, field_validator
+from pydantic import AliasChoices, BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import URL, make_url
 
@@ -93,24 +93,32 @@ class EmailSettings(BaseModel):
 
 
 class SyncSettings(BaseModel):
-    full_scope_key: str = Field(default="restaurants_full")
-    incremental_scope_key: str = Field(default="restaurants_incremental")
+    scope_key: str = Field(
+        default="restaurants",
+        validation_alias=AliasChoices("scope_key", "full_scope_key"),
+        description="Scope identifier used to persist sync state and runs.",
+    )
     minimum_delay_minutes: int = Field(
         default=1440,
         description="Default minimum delay between sync runs when no guidance is provided by the informations service.",
     )
-    full_sync_months_back: int = Field(
+    months_back: int = Field(
         default=6,
         ge=1,
-        description="Number of months to look back when issuing a full synchronization.",
+        validation_alias=AliasChoices("months_back", "full_sync_months_back"),
+        description="Number of months to look back when issuing a synchronisation run.",
     )
-    incremental_creation_window_days: int = Field(
-        default=3,
+    auto_enabled: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("auto_enabled", "auto_incremental_enabled"),
+        description="Enable the background scheduler that can trigger sync runs automatically.",
+    )
+    auto_poll_minutes: int = Field(
+        default=15,
         ge=1,
-        description="Number of days around the latest known creation date to include in incremental searches.",
+        validation_alias=AliasChoices("auto_poll_minutes", "auto_incremental_poll_minutes"),
+        description="Polling interval (in minutes) for the background sync scheduler.",
     )
-    auto_incremental_enabled: bool = Field(default=True)
-    auto_incremental_poll_minutes: int = Field(default=15, ge=1)
 
 
 class LoggingSettings(BaseModel):

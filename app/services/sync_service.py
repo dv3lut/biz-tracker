@@ -4,11 +4,10 @@ from __future__ import annotations
 import logging
 import unicodedata
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
-from typing import Iterable, Optional, Sequence
+from datetime import date, datetime
+from typing import Optional, Sequence
 from uuid import UUID
 
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.clients.sirene_client import SireneClient
@@ -47,7 +46,7 @@ class SyncContext:
 
 
 class SyncService:
-    """Run full and incremental synchronizations against the Sirene API."""
+    """Run Sirene synchronisations and persist new establishments and alerts."""
 
     def __init__(self) -> None:
         self._settings = get_settings()
@@ -58,146 +57,100 @@ class SyncService:
 
         return self._settings
 
-    def run_full_sync(
+    def run_sync(
         self,
         session: Session,
         *,
         resume: bool = True,
-        max_records: Optional[int] = None,
     ) -> models.SyncRun:
-        run, state = self._initialize_full_run(
+        run, state = self._initialize_sync_run(
             session,
             resume=resume,
-            max_records=max_records,
             status="running",
         )
 
         client = SireneClient()
         context = SyncContext(session=session, run=run, state=state, client=client, settings=self._settings)
         try:
-            self._collect_full(context, resume=resume, max_records=max_records)
-            self._finish_run(run, state)
-            session.flush()
+            last_treated = self._collect_sync(context, resume=resume)
+            self._finish_run(run, state, last_treated_max=last_treated)
+            session.commit()
         except Exception:
+            session.rollback()
             run.status = "failed"
             run.finished_at = datetime.utcnow()
-            session.flush()
-            client.close()
+            session.commit()
             raise
-        client.close()
+        finally:
+            client.close()
         return run
 
-    def run_incremental_sync(self, session: Session) -> Optional[models.SyncRun]:
-        prepared = self._prepare_incremental_run(session, status="running")
-        if not prepared:
-            return None
-
-        run, state, latest_treated, creation_floor = prepared
-        client = SireneClient()
-        context = SyncContext(session=session, run=run, state=state, client=client, settings=self._settings)
-        try:
-            self._collect_incremental(context, latest_treated, creation_floor)
-            state.last_treated_max = latest_treated
-            self._finish_run(run, state)
-            session.flush()
-        except Exception:
-            run.status = "failed"
-            run.finished_at = datetime.utcnow()
-            session.flush()
-            client.close()
-            raise
-        client.close()
-        return run
-
-    def prepare_full_run(
+    def prepare_sync_run(
         self,
         session: Session,
         *,
         resume: bool = True,
-        max_records: Optional[int] = None,
-    ) -> models.SyncRun:
-        run, _state = self._initialize_full_run(
+        check_informations: bool = False,
+    ) -> Optional[models.SyncRun]:
+        state = self._get_or_create_state(session, self._settings.sync.scope_key)
+        latest_treated: datetime | None = None
+        if check_informations:
+            latest_treated = self._fetch_latest_treated()
+            if latest_treated and state.last_treated_max and latest_treated <= state.last_treated_max:
+                _LOGGER.info(
+                    "Aucune mise à jour détectée depuis la dernière exécution (%s).",
+                    state.last_treated_max,
+                )
+                return None
+
+        run, _state = self._initialize_sync_run(
             session,
             resume=resume,
-            max_records=max_records,
             status="pending",
+            state=state,
         )
+        if latest_treated:
+            run.notes = f"dateDernierTraitementMaximum: {latest_treated.isoformat()}"
         return run
 
-    def prepare_incremental_run(self, session: Session) -> Optional[tuple[models.SyncRun, datetime, date]]:
-        prepared = self._prepare_incremental_run(session, status="pending")
-        if not prepared:
-            return None
-        run, _state, latest_treated, creation_floor = prepared
-        return run, latest_treated, creation_floor
-
-    def execute_full_run(self, run_id: UUID, *, resume: bool, max_records: Optional[int]) -> None:
+    def execute_sync_run(self, run_id: UUID, *, resume: bool) -> None:
         try:
             with session_scope() as session:
                 run = session.get(models.SyncRun, run_id)
                 if not run:
-                    _log_and_print(logging.WARNING, "Run %s introuvable pour la synchronisation complète.", run_id)
+                    _log_and_print(logging.WARNING, "Run %s introuvable pour la synchronisation.", run_id)
                     return
                 state = self._get_or_create_state(session, run.scope_key)
                 run.status = "running"
                 run.started_at = datetime.utcnow()
-                session.flush()
+                session.commit()
 
-                _log_and_print(logging.INFO, "Synchronisation complète démarrée (run=%s)", run.id)
+                _log_and_print(logging.INFO, "Synchronisation démarrée (run=%s)", run.id)
 
                 client = SireneClient()
                 context = SyncContext(session=session, run=run, state=state, client=client, settings=self._settings)
                 try:
-                    effective_max_records = max_records if max_records is not None else run.max_records
-                    self._collect_full(context, resume=resume, max_records=effective_max_records)
-                    self._finish_run(run, state)
-                    session.flush()
-                    _log_and_print(logging.INFO, "Synchronisation complète terminée (run=%s, créés=%s)", run.id, run.created_records)
+                    last_treated = self._collect_sync(context, resume=resume)
+                    self._finish_run(run, state, last_treated_max=last_treated)
+                    session.commit()
+                    _log_and_print(logging.INFO, "Synchronisation terminée (run=%s, créés=%s)", run.id, run.created_records)
+                except Exception:
+                    session.rollback()
+                    run.status = "failed"
+                    run.finished_at = datetime.utcnow()
+                    session.commit()
+                    raise
                 finally:
                     client.close()
         except Exception:
-            _LOGGER.exception("Synchronisation complète asynchrone échouée (run=%s)", run_id)
-            print(f"Synchronisation complète asynchrone échouée (run={run_id})", flush=True)
+            _LOGGER.exception("Synchronisation asynchrone échouée (run=%s)", run_id)
+            print(f"Synchronisation asynchrone échouée (run={run_id})", flush=True)
             with session_scope() as session:
                 run = session.get(models.SyncRun, run_id)
                 if run:
                     run.status = "failed"
                     run.finished_at = datetime.utcnow()
-                    session.flush()
-
-    def execute_incremental_run(self, run_id: UUID, *, latest_treated: datetime, creation_floor: date) -> None:
-        try:
-            with session_scope() as session:
-                run = session.get(models.SyncRun, run_id)
-                if not run:
-                    _log_and_print(logging.WARNING, "Run %s introuvable pour la synchronisation incrémentale.", run_id)
-                    return
-                state = self._get_or_create_state(session, run.scope_key)
-                run.status = "running"
-                run.started_at = datetime.utcnow()
-                session.flush()
-
-                _log_and_print(logging.INFO, "Synchronisation incrémentale démarrée (run=%s)", run.id)
-
-                client = SireneClient()
-                context = SyncContext(session=session, run=run, state=state, client=client, settings=self._settings)
-                try:
-                    self._collect_incremental(context, latest_treated, creation_floor)
-                    state.last_treated_max = latest_treated
-                    self._finish_run(run, state)
-                    session.flush()
-                    _log_and_print(logging.INFO, "Synchronisation incrémentale terminée (run=%s, créés=%s)", run.id, run.created_records)
-                finally:
-                    client.close()
-        except Exception:
-            _LOGGER.exception("Synchronisation incrémentale asynchrone échouée (run=%s)", run_id)
-            print(f"Synchronisation incrémentale asynchrone échouée (run={run_id})", flush=True)
-            with session_scope() as session:
-                run = session.get(models.SyncRun, run_id)
-                if run:
-                    run.status = "failed"
-                    run.finished_at = datetime.utcnow()
-                    session.flush()
+                    session.commit()
 
     def has_active_run(self, session: Session, scope_key: str) -> bool:
         active_statuses = ("running", "pending")
@@ -208,94 +161,42 @@ class SyncService:
         )
         return existing is not None
 
-    def _initialize_full_run(
-        self,
-        session: Session,
-        *,
-        resume: bool,
-        max_records: Optional[int],
-        status: str,
-    ) -> tuple[models.SyncRun, models.SyncState]:
-        scope_key = self._settings.sync.full_scope_key
-        run = self._start_run(
-            session,
-            scope_key=scope_key,
-            run_type="full",
-            resume=resume,
-            initial_status=status,
-        )
-        if max_records is not None:
-            if max_records < 1:
-                raise ValueError("max_records must be a positive integer when provided.")
-            run.max_records = max_records
-        state = self._get_or_create_state(session, scope_key)
-        session.flush()
-        return run, state
-
-    def _determine_creation_floor(self, session: Session) -> date:
-        buffer_days = max(self._settings.sync.incremental_creation_window_days, 1)
-        buffer_delta = timedelta(days=buffer_days)
-        today = datetime.utcnow().date()
-        floor = today - buffer_delta
-
-        max_creation = session.query(func.max(models.Establishment.date_creation)).scalar()
-        if max_creation:
-            capped_max = min(max_creation, today)
-            candidate = capped_max - buffer_delta
-            if candidate > floor:
-                floor = candidate
-
-        full_window_floor = subtract_months(today, self._settings.sync.full_sync_months_back)
-        if full_window_floor > today:
-            full_window_floor = today
-        if full_window_floor > floor:
-            floor = full_window_floor
-
-        if floor > today:
-            floor = today
-
-        return floor
-
-    def _prepare_incremental_run(
-        self,
-        session: Session,
-        *,
-        status: str,
-    ) -> Optional[tuple[models.SyncRun, models.SyncState, datetime, date]]:
-        scope_key = self._settings.sync.incremental_scope_key
-        state = self._get_or_create_state(session, scope_key)
-        creation_floor = self._determine_creation_floor(session)
-        client = SireneClient()
+    def _fetch_latest_treated(self, client: Optional[SireneClient] = None) -> datetime | None:
+        owned_client = client is None
+        client = client or SireneClient()
         try:
             infos = client.get_informations()
         finally:
-            client.close()
+            if owned_client:
+                client.close()
 
-        collection = self._extract_collection_info(infos, "etablissements")
+        collection = self._extract_collection_info(infos, "etablissements") if isinstance(infos, dict) else None
         if not collection:
-            _LOGGER.warning("Impossible de récupérer les métadonnées 'etablissements' depuis le service informations.")
             return None
 
         latest_treated = parse_datetime(collection.get("dateDernierTraitementMaximum"))
         if not latest_treated:
-            _LOGGER.warning("dateDernierTraitementMaximum absente ou invalide dans le service informations.")
             return None
+        return latest_treated
 
-        if state.last_treated_max and latest_treated <= state.last_treated_max:
-            _LOGGER.info("Aucune mise à jour détectée depuis la dernière exécution (%s).", state.last_treated_max)
-            return None
-
+    def _initialize_sync_run(
+        self,
+        session: Session,
+        *,
+        resume: bool,
+        status: str,
+        state: Optional[models.SyncState] = None,
+    ) -> tuple[models.SyncRun, models.SyncState]:
+        scope_key = self._settings.sync.scope_key
+        state = state or self._get_or_create_state(session, scope_key)
         run = self._start_run(
             session,
             scope_key=scope_key,
-            run_type="incremental",
-            resume=True,
+            run_type="sync",
+            resume=resume,
             initial_status=status,
         )
-        run.notes = f"dateDernierTraitementMaximum: {latest_treated.isoformat()}"
-        run.query_checksum = self._incremental_query_checksum(state)
-        session.flush()
-        return run, state, latest_treated, creation_floor
+        return run, state
 
     def _start_run(
         self,
@@ -328,9 +229,9 @@ class SyncService:
             session.flush()
         return state
 
-    def _collect_full(self, context: SyncContext, *, resume: bool, max_records: Optional[int]) -> None:
+    def _collect_sync(self, context: SyncContext, *, resume: bool) -> datetime | None:
         state = context.state
-        months_back = max(self._settings.sync.full_sync_months_back, 1)
+        months_back = max(self._settings.sync.months_back, 1)
         since_creation = subtract_months(datetime.utcnow().date(), months_back)
         query = self._build_restaurant_query(since_creation=since_creation)
         checksum = sha256_digest(query)
@@ -346,19 +247,20 @@ class SyncService:
             state.last_cursor = None
             state.cursor_completed = False
 
+        latest_treated = self._fetch_latest_treated(context.client)
+        if latest_treated:
+            context.run.notes = f"dateDernierTraitementMaximum: {latest_treated.isoformat()}"
+
         champs = self._build_fields_parameter()
         cursor_value = state.last_cursor if state.last_cursor and not state.cursor_completed else "*"
         tri = "dateCreationEtablissement desc"
 
+        initial_sync = context.session.query(models.Establishment.siret).first() is None
+        alert_service = AlertService(context.session, context.run)
         new_entities_total: list[models.Establishment] = []
 
         while True:
             page_size = self._settings.sirene.page_size
-            if max_records is not None:
-                remaining = max_records - context.run.fetched_records
-                if remaining <= 0:
-                    break
-                page_size = min(page_size, remaining)
 
             payload = context.client.search_establishments(
                 query=query,
@@ -375,67 +277,11 @@ class SyncService:
 
             new_entities = self._upsert_establishments(context.session, etablissements, context.run.id)
             context.run.created_records += len(new_entities)
-            if context.run.run_type != "full":
-                new_entities_total.extend(new_entities)
-
-            cursor_value = header.get("curseurSuivant")
-            state.last_cursor = cursor_value
-            total_value = header.get("total")
-            try:
-                state.last_total = int(total_value) if total_value is not None else state.last_total
-            except (TypeError, ValueError):
-                _LOGGER.debug("Valeur 'total' non exploitable: %s", total_value)
-            state.last_synced_at = datetime.utcnow()
-            context.session.flush()
-
-            if max_records is not None and context.run.fetched_records >= max_records:
-                state.cursor_completed = False
-                break
-
-            if not etablissements or not cursor_value or cursor_value == header.get("curseur"):
-                state.cursor_completed = True
-                break
-
-        state.last_successful_run_id = context.run.id
-        if new_entities_total and context.run.run_type != "full":
-            AlertService(context.session, context.run).create_alerts(new_entities_total)
-
-    def _collect_incremental(self, context: SyncContext, latest_treated: datetime, creation_floor: date) -> None:
-        state = context.state
-        champs = self._build_fields_parameter()
-        start = state.last_treated_max or (latest_treated - timedelta(days=1))
-        # Slightly extend the range to avoid missing borderline updates.
-        start_value = (start - timedelta(minutes=5)).isoformat() if start else None
-        end_value = (latest_treated + timedelta(seconds=1)).isoformat()
-
-        query = self._build_incremental_query(start_value, end_value, creation_floor)
-        checksum = sha256_digest(query)
-        context.run.query_checksum = checksum
-
-        cursor_value = "*"
-        state.cursor_completed = False
-
-        new_entities_total: list[models.Establishment] = []
-
-        while True:
-            payload = context.client.search_establishments(
-                query=query,
-                nombre=self._settings.sirene.page_size,
-                curseur=cursor_value,
-                champs=champs,
-                date=self._settings.sirene.current_period_date,
-            )
-            header = payload.get("header", {})
-            etablissements = payload.get("etablissements", [])
-            context.run.api_call_count += 1
-            context.run.fetched_records += len(etablissements)
-
-            new_entities = self._upsert_establishments(context.session, etablissements, context.run.id)
-            context.run.created_records += len(new_entities)
             new_entities_total.extend(new_entities)
 
             cursor_value = header.get("curseurSuivant")
             state.last_cursor = cursor_value
+            context.run.last_cursor = cursor_value
             total_value = header.get("total")
             try:
                 state.last_total = int(total_value) if total_value is not None else state.last_total
@@ -443,19 +289,29 @@ class SyncService:
                 _LOGGER.debug("Valeur 'total' non exploitable: %s", total_value)
             state.last_synced_at = datetime.utcnow()
             context.session.flush()
+            context.session.commit()
 
             if not etablissements or not cursor_value or cursor_value == header.get("curseur"):
                 state.cursor_completed = True
                 break
 
-        state.last_successful_run_id = context.run.id
         if new_entities_total:
-            AlertService(context.session, context.run).create_alerts(new_entities_total)
+            if initial_sync:
+                _LOGGER.info(
+                    "Exécution initiale: %s établissements indexés sans émission d'alertes.",
+                    len(new_entities_total),
+                )
+            else:
+                alert_service.create_alerts(new_entities_total)
 
-    def _finish_run(self, run: models.SyncRun, state: models.SyncState) -> None:
+        return latest_treated
+
+    def _finish_run(self, run: models.SyncRun, state: models.SyncState, *, last_treated_max: datetime | None) -> None:
         run.status = "success"
         run.finished_at = datetime.utcnow()
         state.last_successful_run_id = run.id
+        if last_treated_max:
+            state.last_treated_max = last_treated_max
 
     def _build_restaurant_query(self, *, since_creation: Optional[date] = None) -> str:
         naf_terms = [f"activitePrincipaleEtablissement:{code}" for code in self._settings.sirene.restaurant_naf_codes]
@@ -467,21 +323,6 @@ class SyncService:
             creation_clause = f"dateCreationEtablissement:[{since_creation.isoformat()} TO *]"
             return f"{period_clause} AND {creation_clause}"
         return period_clause
-
-    def _build_incremental_query(self, start_iso: Optional[str], end_iso: str, creation_floor: Optional[date]) -> str:
-        clauses = []
-        if start_iso:
-            clauses.append(
-                f"dateDernierTraitementEtablissement:[{start_iso} TO {end_iso}]"
-            )
-            clauses.append(
-                f"dateDernierTraitementUniteLegale:[{start_iso} TO {end_iso}]"
-            )
-        else:
-            clauses.append(f"dateDernierTraitementEtablissement:[* TO {end_iso}]")
-            clauses.append(f"dateDernierTraitementUniteLegale:[* TO {end_iso}]")
-        treated_clause = " OR ".join(clauses)
-        return f"({treated_clause}) AND {self._build_restaurant_query(since_creation=creation_floor)}"
 
     def _build_fields_parameter(self) -> str:
         fields = {
@@ -575,7 +416,3 @@ class SyncService:
                 if nested:
                     return nested
         return None
-
-    def _incremental_query_checksum(self, state: models.SyncState) -> str:
-        base = f"{state.scope_key}:{state.last_treated_max.isoformat() if state.last_treated_max else 'none'}"
-        return sha256_digest(base)

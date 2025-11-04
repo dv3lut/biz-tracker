@@ -24,7 +24,6 @@ class SyncRunOut(BaseModel):
     query_checksum: str | None
     resumed_from_run_id: UUID | None
     notes: str | None
-    max_records: int | None
     total_expected_records: int | None = None
     progress: float | None = None
     estimated_remaining_seconds: float | None = None
@@ -60,15 +59,17 @@ class AlertOut(BaseModel):
 class StatsSummary(BaseModel):
     total_establishments: int
     total_alerts: int
-    last_full_run: SyncRunOut | None
-    last_incremental_run: SyncRunOut | None
+    last_run: SyncRunOut | None
     last_alert: AlertOut | None
     database_size_pretty: str
 
 
 class SyncRequest(BaseModel):
     resume: bool = True
-    max_records: int | None = Field(default=None, ge=1, description="Nombre maximal d'enregistrements à traiter.")
+    check_for_updates: bool = Field(
+        default=False,
+        description="Vérifie le service informations Sirene et annule si aucune mise à jour n'est disponible.",
+    )
 
 
 class EstablishmentOut(BaseModel):

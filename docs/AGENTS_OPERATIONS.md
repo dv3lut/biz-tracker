@@ -6,10 +6,10 @@
 - Optionnel : configurer l’envoi d’e-mails (`EMAIL__ENABLED=true` + SMTP).
 
 ## Exécutions
-- **Initiale** : `python -m app sync-full` (reprend automatiquement si un run précédent a échoué).
-- **Récurrente** : `python -m app sync-incremental` après vérification du `service informations` (script l’appel par défaut). La collecte cible uniquement les établissements dont la création est très récente (fenêtre `sync.incremental_creation_window_days`) afin de ne générer des alertes que pour les nouvelles ouvertures. En production, l’API démarre un scheduler interne qui interroge périodiquement le `service informations` (`sync.auto_incremental_poll_minutes`) et déclenche automatiquement l’incrémentale dès qu’une mise à jour est disponible, sous réserve du délai minimum `sync.minimum_delay_minutes`.
+- **Initiale** : `python -m app sync --no-check-for-updates` pour forcer une collecte complète (reprend automatiquement si un run précédent a échoué).
+- **Récurrente** : `python -m app sync --check-for-updates` afin de consulter le `service informations` et d’éviter un run si rien n’a changé. En production, l’API démarre un scheduler interne (`SyncScheduler`) qui applique la même vérification toutes les `sync.auto_poll_minutes` minutes, sous réserve du délai minimum `sync.minimum_delay_minutes` entre deux runs.
 - **API admin** : `python -m app serve` (ou `make serve`) pour exposer les endpoints FastAPI. Vérifier que le reverse proxy ou le pare-feu restreint l’accès et que l’en-tête `X-Admin-Token` est fourni côté client.
-- Les endpoints `/admin/sync/full` et `/admin/sync/incremental` répondent immédiatement (`202 Accepted`) en déclenchant le traitement en arrière-plan. Le statut initial du run est `pending`, le front réinterroge automatiquement l’API toutes les 5 s tant qu’un run reste actif.
+- L’endpoint `/admin/sync` répond immédiatement (`202 Accepted`) en déclenchant le traitement en arrière-plan. Le statut initial du run est `pending`, le front réinterroge automatiquement l’API toutes les 5 s tant qu’un run reste actif.
 - **Console web** : lancer `npm run dev` dans le projet `../biz-tracker-admin-ui` après `npm install`. L'URL par défaut `http://localhost:5173` doit être déclarée dans `API__ALLOWED_ORIGINS`.
 - Les runs sont tracés dans `sync_runs` (status, métriques). Les curseurs et dates sont dans `sync_state`.
 - Les logs applicatifs sont dans `logs/app.log`, les alertes dans `logs/alerts.log`.
@@ -17,7 +17,7 @@
 
 ## Relance / reprise
 - En cas d’erreur, inspecter `sync_runs.status = 'failed'` et `sync_state.last_cursor`.
-- Pour rejouer totalement la collecte : `python -m app sync-full --no-resume`.
+- Pour rejouer totalement la collecte : `python -m app sync --no-check-for-updates --no-resume`.
 - Pour purger proprement la base : arrêter le service, dropper les tables/postgres si nécessaire, relancer `init-db`.
 
 ## Supervision

@@ -44,12 +44,12 @@ Toutes les commandes passent par `python -m app …` (Typer).
 | Commande | Description |
 | --- | --- |
 | `python -m app init-db` | Crée les tables si nécessaire. |
-| `python -m app sync-full` | Lance une synchronisation complète (reprend le curseur par défaut). |
-| `python -m app sync-full --no-resume` | Rejoue la synchronisation complète depuis le début. |
-| `python -m app sync-incremental` | Lance la synchronisation incrémentale quotidienne. |
+| `python -m app sync --check-for-updates` | Lance la synchronisation unifiée en vérifiant le service informations (annule si aucune nouveauté). |
+| `python -m app sync --no-check-for-updates` | Force une synchronisation complète à partir du curseur courant. |
+| `python -m app sync --no-check-for-updates --no-resume` | Rejoue intégralement la synchronisation depuis le début. |
 | `python -m app serve` | Démarre l'API FastAPI sécurisée (admin token requis). |
 
-Des cibles `Makefile` équivalentes existent (`make init-db`, `make sync-full`, `make serve`, etc.).
+Des cibles `Makefile` équivalentes existent (`make init-db`, `make sync`, `make serve`, `make sync-force`, etc.).
 
 ## API HTTP (admin seulement)
 
@@ -59,8 +59,7 @@ Des cibles `Makefile` équivalentes existent (`make init-db`, `make sync-full`, 
    - `GET /health` : pong sans authentification, utile pour les probes.
    - `GET /admin/stats/summary` : synthèse des volumes et derniers runs.
    - `GET /admin/sync-runs` / `GET /admin/sync-state` / `GET /admin/alerts/recent` : monitoring détaillé.
-   - `POST /admin/sync/full` (body `{ "resume": true }`) : lance une collecte complète.
-   - `POST /admin/sync/incremental` : lance un run incrémental (202 Accepted si aucune mise à jour disponible).
+   - `POST /admin/sync` (body `{ "resume": true, "check_for_updates": true }`) : déclenche une synchronisation unifiée (202 Accepted + `detail` si aucune nouveauté).
    - `DELETE /admin/sync-runs/{run_id}` : purge un run donné, supprime les établissements créés et les alertes associées, et réinitialise l’état de synchronisation lié.
 
 Un fichier Postman de référence est disponible (`docs/postman_collection.json`). Pensez à définir la variable `baseUrl` et l'en-tête `X-Admin-Token` dans votre environnement Postman avant utilisation.
@@ -79,10 +78,10 @@ Un fichier Postman de référence est disponible (`docs/postman_collection.json`
 - Toute autre origine (hébergement distant, tunnel) peut être ajoutée à `API__ALLOWED_ORIGINS` sous forme de liste JSON ou de chaîne séparée par des virgules.
 
 ## Planification recommandée
-- Exécuter `sync-full` une seule fois pour amorcer la base.
-- Programmer `sync-incremental` quotidiennement **après** la publication des mises à jour Sirene (cf. `Service informations`).
-  - La commande interroge `dateDernierTraitementMaximum`; si elle n’a pas évolué, elle s’arrête proprement.
-  - En cas de mise à jour très volumineuse (`dateDernierTraitementDeMasse`), prévoyez un monitoring spécifique.
+- Exécuter `python -m app sync --no-check-for-updates` une seule fois pour amorcer la base.
+- Programmer `python -m app sync --check-for-updates` quotidiennement **après** la publication des mises à jour Sirene (cf. `Service informations`).
+   - La commande interroge `dateDernierTraitementMaximum`; si elle n’a pas évolué, elle s’arrête proprement.
+   - En cas de mise à jour très volumineuse (`dateDernierTraitementDeMasse`), prévoyez un monitoring spécifique.
 
 ## Données stockées
 - `establishments` : identité du SIRET (nom + fallbacks, adresse complète, dates, état, NAF 56.10A).
@@ -91,7 +90,7 @@ Un fichier Postman de référence est disponible (`docs/postman_collection.json`
 - `alerts` : traces des alertes envoyées (payload, destinataires, date d’envoi).
 
 ## Alertes e-mail & logs
-- Les nouvelles entrées détectées lors d’un run incrémental sont loguées dans `logs/alerts.log`.
+- Les nouvelles entrées détectées lors d’une synchronisation sont loguées dans `logs/alerts.log`.
 - Si l’envoi e-mail est activé (`EMAIL__ENABLED=true` + configuration SMTP), un message synthétique est expédié à la liste définie dans `EMAIL__RECIPIENTS`.
 
 ## Points d’attention

@@ -45,7 +45,7 @@ def _compute_run_metrics(
     run: models.SyncRun,
     state: models.SyncState | None,
 ) -> tuple[int | None, float | None, float | None, datetime | None]:
-    target_raw = run.max_records if run.max_records is not None else (state.last_total if state else None)
+    target_raw = state.last_total if state and state.last_total is not None else run.max_records
     total_expected: int | None
     try:
         total_candidate = int(target_raw) if target_raw is not None else None
@@ -80,32 +80,29 @@ def get_stats_summary(session: Session = Depends(get_db_session)) -> StatsSummar
         select(func.pg_size_pretty(func.pg_database_size(func.current_database())))
     ).scalar_one()
 
-    last_full_stmt = (
-        select(models.SyncRun)
-        .where(models.SyncRun.run_type == "full")
-        .order_by(models.SyncRun.started_at.desc())
-        .limit(1)
-    )
-    last_incremental_stmt = (
-        select(models.SyncRun)
-        .where(models.SyncRun.run_type == "incremental")
-        .order_by(models.SyncRun.started_at.desc())
-        .limit(1)
-    )
-    last_alert_stmt = select(models.Alert).order_by(models.Alert.created_at.desc()).limit(1)
+    service = SyncService()
+    target_scope = service.settings.sync.scope_key
 
-    last_full = session.execute(last_full_stmt).scalar_one_or_none()
-    last_incremental = session.execute(last_incremental_stmt).scalar_one_or_none()
+    last_run_stmt = (
+        select(models.SyncRun)
+        .where(models.SyncRun.scope_key == target_scope)
+        .order_by(models.SyncRun.started_at.desc())
+        .limit(1)
+    )
+    last_run = session.execute(last_run_stmt).scalar_one_or_none()
+    if not last_run:
+        fallback_stmt = select(models.SyncRun).order_by(models.SyncRun.started_at.desc()).limit(1)
+        last_run = session.execute(fallback_stmt).scalar_one_or_none()
+
+    last_alert_stmt = select(models.Alert).order_by(models.Alert.created_at.desc()).limit(1)
     last_alert = session.execute(last_alert_stmt).scalar_one_or_none()
 
-    last_full_state = session.get(models.SyncState, last_full.scope_key) if last_full else None
-    last_incremental_state = session.get(models.SyncState, last_incremental.scope_key) if last_incremental else None
+    last_run_state = session.get(models.SyncState, last_run.scope_key) if last_run else None
 
     return StatsSummary(
         total_establishments=total_establishments,
         total_alerts=total_alerts,
-        last_full_run=_serialize_run(last_full, state=last_full_state),
-        last_incremental_run=_serialize_run(last_incremental, state=last_incremental_state),
+        last_run=_serialize_run(last_run, state=last_run_state),
         last_alert=_serialize_alert(last_alert),
         database_size_pretty=database_size_pretty,
     )
@@ -256,65 +253,36 @@ def delete_establishment(
 
 
 @router.post(
-    "/sync/full",
+    "/sync",
     response_model=SyncRunOut,
     status_code=status.HTTP_202_ACCEPTED,
-    summary="Déclencher une synchronisation complète",
+    summary="Déclencher une synchronisation",
 )
-def trigger_full_sync(
+def trigger_sync_run(
     payload: SyncRequest,
     background_tasks: BackgroundTasks,
     session: Session = Depends(get_db_session),
 ) -> SyncRunOut:
     service = SyncService()
-    scope_key = service.settings.sync.full_scope_key
+    scope_key = service.settings.sync.scope_key
     if service.has_active_run(session, scope_key):
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Une synchronisation complète est déjà en cours.")
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Une synchronisation est déjà en cours.")
 
-    run = service.prepare_full_run(session, resume=payload.resume, max_records=payload.max_records)
-    session.commit()
-    session.refresh(run)
-    state = session.get(models.SyncState, run.scope_key)
-
-    background_tasks.add_task(
-        service.execute_full_run,
-        run.id,
+    run = service.prepare_sync_run(
+        session,
         resume=payload.resume,
-        max_records=payload.max_records,
+        check_informations=payload.check_for_updates,
     )
-    return _serialize_run(run, state=state)
-
-@router.post(
-    "/sync/incremental",
-    response_model=SyncRunOut,
-    status_code=status.HTTP_202_ACCEPTED,
-    summary="Déclencher une synchronisation incrémentale",
-)
-def trigger_incremental_sync(
-    background_tasks: BackgroundTasks,
-    session: Session = Depends(get_db_session),
-) -> SyncRunOut:
-    service = SyncService()
-    scope_key = service.settings.sync.incremental_scope_key
-    if service.has_active_run(session, scope_key):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Une synchronisation incrémentale est déjà en cours.",
-        )
-
-    prepared = service.prepare_incremental_run(session)
-    if prepared is None:
+    if run is None:
         raise HTTPException(status_code=status.HTTP_202_ACCEPTED, detail="Aucune mise à jour disponible.")
 
-    run, latest_treated, creation_floor = prepared
     session.commit()
     session.refresh(run)
     state = session.get(models.SyncState, run.scope_key)
 
     background_tasks.add_task(
-        service.execute_incremental_run,
+        service.execute_sync_run,
         run.id,
-        latest_treated=latest_treated,
-        creation_floor=creation_floor,
+        resume=payload.resume,
     )
     return _serialize_run(run, state=state)

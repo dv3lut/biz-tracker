@@ -127,7 +127,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"total_establishments\": 4235,\n  \"total_alerts\": 12,\n  \"database_size_pretty\": \"512 MB\",\n  \"last_full_run\": {\n    \"id\": \"d2719c1c-86f2-41aa-82c8-1b6bc2fe9efb\",\n    \"scope_key\": \"restaurants_full\",\n    \"run_type\": \"full\",\n    \"status\": \"success\",\n    \"started_at\": \"2025-10-30T01:15:42.502345Z\",\n    \"finished_at\": \"2025-10-30T03:47:08.112233Z\",\n    \"api_call_count\": 178,\n    \"fetched_records\": 4235,\n    \"created_records\": 387,\n    \"last_cursor\": \"OEFHSlpTPT0=\",\n    \"query_checksum\": \"cf657aa9c5be06c098628c1cf75d3a76\",\n    \"resumed_from_run_id\": null,\n    \"notes\": null,\n    \"max_records\": null,\n    \"total_expected_records\": 4235,\n    \"progress\": 1.0,\n    \"estimated_remaining_seconds\": 0.0,\n    \"estimated_completion_at\": \"2025-10-30T03:47:08.112233Z\"\n  },\n  \"last_incremental_run\": {\n    \"id\": \"9a4e6a4b-57a0-4221-a00c-7b7b9529f2fd\",\n    \"scope_key\": \"restaurants_incremental\",\n    \"run_type\": \"incremental\",\n    \"status\": \"running\",\n    \"started_at\": \"2025-10-31T05:00:01.104400Z\",\n    \"finished_at\": null,\n    \"api_call_count\": 14,\n    \"fetched_records\": 260,\n    \"created_records\": 42,\n    \"last_cursor\": \"S1dKSU5saz0=\",\n    \"query_checksum\": \"7b41f6100026b0d9b73d95245bb59aec\",\n    \"resumed_from_run_id\": null,\n    \"notes\": \"Reprise depuis lot 2025-10-30\",\n    \"max_records\": 1000,\n    \"total_expected_records\": 640,\n    \"progress\": 0.41,\n    \"estimated_remaining_seconds\": 320.5,\n    \"estimated_completion_at\": \"2025-10-31T05:05:21.604400Z\"\n  },\n  \"last_alert\": {\n    \"id\": \"2358abe8-4c7b-46cf-9f42-94b65c7f38df\",\n    \"run_id\": \"9a4e6a4b-57a0-4221-a00c-7b7b9529f2fd\",\n    \"siret\": \"12345678900011\",\n    \"recipients\": [\n      \"ops@example.com\",\n      \"marketing@example.com\"\n    ],\n    \"payload\": {\n      \"nom\": \"Bistrot du Centre\",\n      \"code_postal\": \"75002\",\n      \"ville\": \"Paris\",\n      \"date_creation\": \"2025-10-29\"\n    },\n    \"created_at\": \"2025-10-31T05:01:44.502300Z\",\n    \"sent_at\": \"2025-10-31T05:01:59.114400Z\"\n  }\n}"
+              "body": "{\n  \"total_establishments\": 4235,\n  \"total_alerts\": 12,\n  \"database_size_pretty\": \"512 MB\",\n  \"last_full_run\": {\n    \"id\": \"d2719c1c-86f2-41aa-82c8-1b6bc2fe9efb\",\n    \"scope_key\": \"restaurants_full\",\n    \"run_type\": \"full\",\n    \"status\": \"success\",\n    \"started_at\": \"2025-10-30T01:15:42.502345Z\",\n    \"finished_at\": \"2025-10-30T03:47:08.112233Z\",\n    \"api_call_count\": 178,\n    \"fetched_records\": 4235,\n    \"created_records\": 387,\n    \"last_cursor\": \"OEFHSlpTPT0=\",\n    \"query_checksum\": \"cf657aa9c5be06c098628c1cf75d3a76\",\n    \"resumed_from_run_id\": null,\n    \"notes\": null,\n    \"total_expected_records\": 4235,\n    \"progress\": 1.0,\n    \"estimated_remaining_seconds\": 0.0,\n    \"estimated_completion_at\": \"2025-10-30T03:47:08.112233Z\"\n  },\n  \"last_incremental_run\": {\n    \"id\": \"9a4e6a4b-57a0-4221-a00c-7b7b9529f2fd\",\n    \"scope_key\": \"restaurants_incremental\",\n    \"run_type\": \"incremental\",\n    \"status\": \"running\",\n    \"started_at\": \"2025-10-31T05:00:01.104400Z\",\n    \"finished_at\": null,\n    \"api_call_count\": 14,\n    \"fetched_records\": 260,\n    \"created_records\": 42,\n    \"last_cursor\": \"S1dKSU5saz0=\",\n    \"query_checksum\": \"7b41f6100026b0d9b73d95245bb59aec\",\n    \"resumed_from_run_id\": null,\n    \"notes\": \"Reprise depuis lot 2025-10-30\",\n    \"total_expected_records\": 640,\n    \"progress\": 0.41,\n    \"estimated_remaining_seconds\": 320.5,\n    \"estimated_completion_at\": \"2025-10-31T05:05:21.604400Z\"\n  },\n  \"last_alert\": {\n    \"id\": \"2358abe8-4c7b-46cf-9f42-94b65c7f38df\",\n    \"run_id\": \"9a4e6a4b-57a0-4221-a00c-7b7b9529f2fd\",\n    \"siret\": \"12345678900011\",\n    \"recipients\": [\n      \"ops@example.com\",\n      \"marketing@example.com\"\n    ],\n    \"payload\": {\n      \"nom\": \"Bistrot du Centre\",\n      \"code_postal\": \"75002\",\n      \"ville\": \"Paris\",\n      \"date_creation\": \"2025-10-29\"\n    },\n    \"created_at\": \"2025-10-31T05:01:44.502300Z\",\n    \"sent_at\": \"2025-10-31T05:01:59.114400Z\"\n  }\n}"
             }
           ]
         },
@@ -196,7 +196,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "[\n  {\n    \"id\": \"9a4e6a4b-57a0-4221-a00c-7b7b9529f2fd\",\n    \"scope_key\": \"restaurants_incremental\",\n    \"run_type\": \"incremental\",\n    \"status\": \"running\",\n    \"started_at\": \"2025-10-31T05:00:01.104400Z\",\n    \"finished_at\": null,\n    \"api_call_count\": 14,\n    \"fetched_records\": 260,\n    \"created_records\": 42,\n    \"last_cursor\": \"S1dKSU5saz0=\",\n    \"query_checksum\": \"7b41f6100026b0d9b73d95245bb59aec\",\n    \"resumed_from_run_id\": null,\n    \"notes\": \"Reprise depuis lot 2025-10-30\",\n    \"max_records\": 1000,\n    \"total_expected_records\": 640,\n    \"progress\": 0.41,\n    \"estimated_remaining_seconds\": 320.5,\n    \"estimated_completion_at\": \"2025-10-31T05:05:21.604400Z\"\n  },\n  {\n    \"id\": \"d2719c1c-86f2-41aa-82c8-1b6bc2fe9efb\",\n    \"scope_key\": \"restaurants_full\",\n    \"run_type\": \"full\",\n    \"status\": \"success\",\n    \"started_at\": \"2025-10-30T01:15:42.502345Z\",\n    \"finished_at\": \"2025-10-30T03:47:08.112233Z\",\n    \"api_call_count\": 178,\n    \"fetched_records\": 4235,\n    \"created_records\": 387,\n    \"last_cursor\": \"OEFHSlpTPT0=\",\n    \"query_checksum\": \"cf657aa9c5be06c098628c1cf75d3a76\",\n    \"resumed_from_run_id\": null,\n    \"notes\": null,\n    \"max_records\": null,\n    \"total_expected_records\": 4235,\n    \"progress\": 1.0,\n    \"estimated_remaining_seconds\": 0.0,\n    \"estimated_completion_at\": \"2025-10-30T03:47:08.112233Z\"\n  }\n]"
+              "body": "[\n  {\n    \"id\": \"9a4e6a4b-57a0-4221-a00c-7b7b9529f2fd\",\n    \"scope_key\": \"restaurants_incremental\",\n    \"run_type\": \"incremental\",\n    \"status\": \"running\",\n    \"started_at\": \"2025-10-31T05:00:01.104400Z\",\n    \"finished_at\": null,\n    \"api_call_count\": 14,\n    \"fetched_records\": 260,\n    \"created_records\": 42,\n    \"last_cursor\": \"S1dKSU5saz0=\",\n    \"query_checksum\": \"7b41f6100026b0d9b73d95245bb59aec\",\n    \"resumed_from_run_id\": null,\n    \"notes\": \"Reprise depuis lot 2025-10-30\",\n    \"total_expected_records\": 640,\n    \"progress\": 0.41,\n    \"estimated_remaining_seconds\": 320.5,\n    \"estimated_completion_at\": \"2025-10-31T05:05:21.604400Z\"\n  },\n  {\n    \"id\": \"d2719c1c-86f2-41aa-82c8-1b6bc2fe9efb\",\n    \"scope_key\": \"restaurants_full\",\n    \"run_type\": \"full\",\n    \"status\": \"success\",\n    \"started_at\": \"2025-10-30T01:15:42.502345Z\",\n    \"finished_at\": \"2025-10-30T03:47:08.112233Z\",\n    \"api_call_count\": 178,\n    \"fetched_records\": 4235,\n    \"created_records\": 387,\n    \"last_cursor\": \"OEFHSlpTPT0=\",\n    \"query_checksum\": \"cf657aa9c5be06c098628c1cf75d3a76\",\n    \"resumed_from_run_id\": null,\n    \"notes\": null,\n    \"total_expected_records\": 4235,\n    \"progress\": 1.0,\n    \"estimated_remaining_seconds\": 0.0,\n    \"estimated_completion_at\": \"2025-10-30T03:47:08.112233Z\"\n  }\n]"
             }
           ]
         },
@@ -614,7 +614,7 @@
           ]
         },
         {
-          "name": "POST Sync Full",
+          "name": "POST Sync",
           "request": {
             "method": "POST",
             "header": [
@@ -629,23 +629,22 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"resume\": true,\n  \"max_records\": null\n}"
+              "raw": "{\n  \"resume\": true,\n  \"check_for_updates\": true\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/admin/sync/full",
+              "raw": "{{baseUrl}}/admin/sync",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "admin",
-                "sync",
-                "full"
+                "sync"
               ]
             }
           },
           "response": [
             {
-              "name": "Example 200",
+              "name": "Example 202",
               "originalRequest": {
                 "method": "POST",
                 "header": [
@@ -660,22 +659,21 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"resume\": true,\n  \"max_records\": null\n}"
+                  "raw": "{\n  \"resume\": true,\n  \"check_for_updates\": true\n}"
                 },
                 "url": {
-                  "raw": "{{baseUrl}}/admin/sync/full",
+                  "raw": "{{baseUrl}}/admin/sync",
                   "host": [
                     "{{baseUrl}}"
                   ],
                   "path": [
                     "admin",
-                    "sync",
-                    "full"
+                    "sync"
                   ]
                 }
               },
-              "status": "OK",
-              "code": 200,
+              "status": "Accepted",
+              "code": 202,
               "_postman_previewlanguage": "json",
               "header": [
                 {
@@ -683,65 +681,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"id\": \"f409b1ac-0883-4f1d-92cf-7df2f10a2c9d\",\n  \"scope_key\": \"restaurants_full\",\n  \"run_type\": \"full\",\n  \"status\": \"pending\",\n  \"started_at\": \"2025-10-31T06:00:00.000000Z\",\n  \"finished_at\": null,\n  \"api_call_count\": 0,\n  \"fetched_records\": 0,\n  \"created_records\": 0,\n  \"last_cursor\": null,\n  \"query_checksum\": \"a4f2c0895c0dd64d3f1f2dc02d6aab6c\",\n  \"resumed_from_run_id\": null,\n  \"notes\": null,\n  \"max_records\": null,\n  \"total_expected_records\": null,\n  \"progress\": null,\n  \"estimated_remaining_seconds\": null,\n  \"estimated_completion_at\": null\n}"
-            }
-          ]
-        },
-        {
-          "name": "POST Sync Incremental",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "X-Admin-Token",
-                "value": "{{adminToken}}"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/admin/sync/incremental",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "admin",
-                "sync",
-                "incremental"
-              ]
-            }
-          },
-          "response": [
-            {
-              "name": "Example 200",
-              "originalRequest": {
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "X-Admin-Token",
-                    "value": "{{adminToken}}"
-                  }
-                ],
-                "url": {
-                  "raw": "{{baseUrl}}/admin/sync/incremental",
-                  "host": [
-                    "{{baseUrl}}"
-                  ],
-                  "path": [
-                    "admin",
-                    "sync",
-                    "incremental"
-                  ]
-                }
-              },
-              "status": "OK",
-              "code": 200,
-              "_postman_previewlanguage": "json",
-              "header": [
-                {
-                  "key": "Content-Type",
-                  "value": "application/json"
-                }
-              ],
-              "body": "{\n  \"id\": \"9a4e6a4b-57a0-4221-a00c-7b7b9529f2fd\",\n  \"scope_key\": \"restaurants_incremental\",\n  \"run_type\": \"incremental\",\n  \"status\": \"pending\",\n  \"started_at\": \"2025-10-31T06:10:00.000000Z\",\n  \"finished_at\": null,\n  \"api_call_count\": 0,\n  \"fetched_records\": 0,\n  \"created_records\": 0,\n  \"last_cursor\": null,\n  \"query_checksum\": \"7b41f6100026b0d9b73d95245bb59aec\",\n  \"resumed_from_run_id\": null,\n  \"notes\": null,\n  \"max_records\": 1000,\n  \"total_expected_records\": null,\n  \"progress\": null,\n  \"estimated_remaining_seconds\": null,\n  \"estimated_completion_at\": null\n}"
+              "body": "{\n  \"id\": \"f409b1ac-0883-4f1d-92cf-7df2f10a2c9d\",\n  \"scope_key\": \"restaurants\",\n  \"run_type\": \"sync\",\n  \"status\": \"pending\",\n  \"started_at\": \"2025-10-31T06:00:00.000000Z\",\n  \"finished_at\": null,\n  \"api_call_count\": 0,\n  \"fetched_records\": 0,\n  \"created_records\": 0,\n  \"last_cursor\": null,\n  \"query_checksum\": \"a4f2c0895c0dd64d3f1f2dc02d6aab6c\",\n  \"resumed_from_run_id\": null,\n  \"notes\": \"dateDernierTraitementMaximum: 2025-10-30T22:00:00+00:00\",\n  \"total_expected_records\": null,\n  \"progress\": null,\n  \"estimated_remaining_seconds\": null,\n  \"estimated_completion_at\": null\n}"
             },
             {
               "name": "Example 202 - No update",
@@ -749,19 +689,26 @@
                 "method": "POST",
                 "header": [
                   {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
                     "key": "X-Admin-Token",
                     "value": "{{adminToken}}"
                   }
                 ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"resume\": true,\n  \"check_for_updates\": true\n}"
+                },
                 "url": {
-                  "raw": "{{baseUrl}}/admin/sync/incremental",
+                  "raw": "{{baseUrl}}/admin/sync",
                   "host": [
                     "{{baseUrl}}"
                   ],
                   "path": [
                     "admin",
-                    "sync",
-                    "incremental"
+                    "sync"
                   ]
                 }
               },

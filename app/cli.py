@@ -11,6 +11,7 @@ from app.config import get_settings
 from app.db import Base, get_engine, session_scope
 from app.logging_config import configure_logging
 from app.services.sync_service import SyncService
+from app.db import models
 
 cli = typer.Typer(help="Outils de synchronisation avec l'API Sirene.")
 
@@ -27,37 +28,59 @@ def init_db() -> None:
     typer.echo("Tables créées (si nécessaire).")
 
 
-@cli.command("sync-full")
-def sync_full(
+def _execute_sync(resume: bool, check_for_updates: bool) -> None:
+    configure_logging()
+    service = SyncService()
+    with session_scope() as session:
+        run = service.prepare_sync_run(
+            session,
+            resume=resume,
+            check_informations=check_for_updates,
+        )
+        if run is None:
+            typer.echo("Aucune mise à jour à synchroniser.")
+            return
+        run_id = run.id
+
+    typer.echo(f"Synchronisation programmée: run={run_id}")
+    service.execute_sync_run(run_id, resume=resume)
+
+    with session_scope() as session:
+        final_run = session.get(models.SyncRun, run_id)
+        status = final_run.status if final_run else "inconnu"
+    typer.echo(f"Synchronisation terminée: run={run_id} status={status}")
+
+
+@cli.command("sync")
+def sync(
     resume: bool = typer.Option(True, help="Reprendre le curseur précédent si disponible."),
-    max_records: Optional[int] = typer.Option(
-        None,
-        "--max-records",
-        "-m",
-        help="Nombre maximal d'établissements à traiter (ignorer pour la synchro complète).",
+    check_for_updates: bool = typer.Option(
+        False,
+        "--check-for-updates/--no-check-for-updates",
+        help="Annule automatiquement si aucune nouvelle donnée n'est disponible côté Sirene.",
     ),
 ) -> None:
-    """Lancer une synchronisation complète des restaurants."""
+    """Lancer la synchronisation unifiée des restaurants."""
 
-    configure_logging()
-    service = SyncService()
-    with session_scope() as session:
-        run = service.run_full_sync(session, resume=resume, max_records=max_records)
-        typer.echo(f"Synchronisation complète terminée: run={run.id} status={run.status}")
+    _execute_sync(resume=resume, check_for_updates=check_for_updates)
 
 
-@cli.command("sync-incremental")
-def sync_incremental() -> None:
-    """Lancer une synchronisation incrémentale basée sur la dernière mise à jour Sirene."""
+@cli.command("sync-full", hidden=True)
+def sync_full_legacy(
+    resume: bool = typer.Option(True, help="Reprendre le curseur précédent si disponible."),
+) -> None:
+    """Alias rétrocompatibilité vers la synchronisation unifiée."""
 
-    configure_logging()
-    service = SyncService()
-    with session_scope() as session:
-        run = service.run_incremental_sync(session)
-        if run:
-            typer.echo(f"Synchronisation incrémentale terminée: run={run.id} status={run.status}")
-        else:
-            typer.echo("Aucune mise à jour disponible.")
+    typer.echo("Commande 'sync-full' obsolète. Utilisation de 'sync'.")
+    _execute_sync(resume=resume, check_for_updates=False)
+
+
+@cli.command("sync-incremental", hidden=True)
+def sync_incremental_legacy() -> None:
+    """Alias rétrocompatibilité vers la synchronisation unifiée."""
+
+    typer.echo("Commande 'sync-incremental' obsolète. Utilisation de 'sync'.")
+    _execute_sync(resume=True, check_for_updates=False)
 
 
 @cli.command("serve")
