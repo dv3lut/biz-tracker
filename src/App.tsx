@@ -11,7 +11,6 @@ import {
   clearAdminToken,
 } from "./api/client";
 import { AdminTokenPrompt } from "./components/AdminTokenPrompt";
-import { TriggerSyncForm } from "./components/TriggerSyncForm";
 import { StatsSummaryCard } from "./components/StatsSummaryCard";
 import { SyncRunsTable } from "./components/SyncRunsTable";
 import { SyncStateTable } from "./components/SyncStateTable";
@@ -21,7 +20,7 @@ import { SyncRequestPayload, SyncRun } from "./types";
 
 const REFRESH_LONG = 60_000;
 const REFRESH_SHORT = 30_000;
-const REFRESH_ACTIVE = 5_000;
+const REFRESH_ACTIVE = 1_000;
 
 const isUnauthorizedError = (error: unknown): error is ApiError => {
   return error instanceof ApiError && error.status === 403;
@@ -103,26 +102,27 @@ const App = () => {
   });
 
   const hasActiveRun = syncRunsQuery.data?.some((run) => run.status === "running" || run.status === "pending") ?? false;
+  const isSyncActive = hasActiveRun;
 
   const statsQuery = useQuery({
     queryKey: ["stats-summary"],
     queryFn: adminApi.getStatsSummary,
     enabled: isAuthenticated,
-    refetchInterval: isAuthenticated ? (hasActiveRun ? REFRESH_ACTIVE : REFRESH_LONG) : false,
+    refetchInterval: isAuthenticated ? (isSyncActive ? REFRESH_ACTIVE : REFRESH_LONG) : false,
   });
 
   const syncStateQuery = useQuery({
     queryKey: ["sync-state"],
     queryFn: adminApi.getSyncState,
     enabled: isAuthenticated,
-    refetchInterval: isAuthenticated ? (hasActiveRun ? REFRESH_ACTIVE : REFRESH_LONG) : false,
+    refetchInterval: isAuthenticated ? (isSyncActive ? REFRESH_ACTIVE : REFRESH_LONG) : false,
   });
 
   const alertsQuery = useQuery({
     queryKey: ["alerts", alertsLimit],
     queryFn: () => adminApi.getRecentAlerts(alertsLimit),
     enabled: isAuthenticated,
-    refetchInterval: isAuthenticated ? REFRESH_SHORT : false,
+    refetchInterval: isAuthenticated ? (isSyncActive ? REFRESH_ACTIVE : REFRESH_SHORT) : false,
   });
 
   const establishmentsQueryResult = useQuery({
@@ -177,40 +177,19 @@ const App = () => {
     [handleUnauthorized, setErrorMessage, setFeedbackMessage]
   );
 
-  const fullSyncMutation = useMutation<TriggerSyncResult, unknown, SyncRequestPayload>({
-    mutationFn: (payload: SyncRequestPayload) => adminApi.triggerFullSync(payload),
-    onSuccess: (result: TriggerSyncResult) => {
-      const { run, status, detail } = result;
+  const syncMutation = useMutation<TriggerSyncResult, unknown, SyncRequestPayload>({
+    mutationFn: (payload: SyncRequestPayload) => adminApi.triggerSync(payload),
+    onSuccess: ({ run, status, detail }: TriggerSyncResult) => {
       if (run) {
         const label = status === 202 ? "programmée" : "déclenchée";
-        setFeedbackMessage(`Synchro complète ${label} (scope ${run.scopeKey}).`);
+        setFeedbackMessage(`Synchro ${label} (scope ${run.scopeKey}).`);
       } else {
-        setFeedbackMessage(detail ?? "Synchro complète acceptée.");
+        setFeedbackMessage(detail ?? "Synchro acceptée.");
       }
       setErrorMessage(null);
       statsQuery.refetch();
       syncRunsQuery.refetch();
       syncStateQuery.refetch();
-    },
-    onError: showError,
-  });
-
-  const incrementalSyncMutation = useMutation<TriggerSyncResult, unknown, void>({
-    mutationFn: () => adminApi.triggerIncrementalSync(),
-    onSuccess: (result: TriggerSyncResult) => {
-      const { run, detail, status } = result;
-      if (!run) {
-        setFeedbackMessage(detail ?? "Aucune mise à jour disponible.");
-      } else {
-        const label = status === 202 ? "programmée" : "déclenchée";
-        setFeedbackMessage(`Synchro incrémentale ${label} (scope ${run.scopeKey}).`);
-      }
-      setErrorMessage(null);
-      if (run) {
-        statsQuery.refetch();
-        syncRunsQuery.refetch();
-        syncStateQuery.refetch();
-      }
     },
     onError: showError,
   });
@@ -254,21 +233,13 @@ const App = () => {
     onError: showError,
   });
 
-  const handleTriggerFull = (payload: SyncRequestPayload) => {
+  const handleTriggerSync = useCallback(() => {
     if (!isAuthenticated) {
       setTokenError("Merci de saisir un jeton administrateur.");
       return;
     }
-    fullSyncMutation.mutate(payload);
-  };
-
-  const handleTriggerIncremental = () => {
-    if (!isAuthenticated) {
-      setTokenError("Merci de saisir un jeton administrateur.");
-      return;
-    }
-    incrementalSyncMutation.mutate();
-  };
+    syncMutation.mutate({ checkForUpdates: true });
+  }, [isAuthenticated, syncMutation, setTokenError]);
 
   const handleEstablishmentsLimitChange = (limit: number) => {
     setEstablishmentsLimit(limit);
@@ -345,24 +316,20 @@ const App = () => {
               <p className="muted">Pilotage des traitements batch et suivi d'exécution.</p>
             </div>
           </div>
-          <div className="section-grid-two">
+          <div className="section-grid">
             <StatsSummaryCard
               summary={statsQuery.data}
               isLoading={statsQuery.isLoading}
               error={statsQuery.error as Error | null}
               onRefresh={() => statsQuery.refetch()}
-            />
-
-            <TriggerSyncForm
-              onTriggerFull={handleTriggerFull}
-              onTriggerIncremental={handleTriggerIncremental}
-              isFullSyncLoading={fullSyncMutation.isPending}
-              isIncrementalLoading={incrementalSyncMutation.isPending}
+              onTriggerSync={handleTriggerSync}
+              isTriggering={syncMutation.isPending}
               feedbackMessage={feedbackMessage}
               errorMessage={errorMessage}
+              isRefreshing={isSyncActive && statsQuery.isFetching}
             />
           </div>
-          <div className="section-grid">
+          <div className="section-grid two-column">
             <SyncRunsTable
               runs={syncRunsQuery.data}
               isLoading={syncRunsQuery.isLoading}
@@ -373,6 +340,7 @@ const App = () => {
               onDeleteRun={handleDeleteRun}
               deletingRunId={deletingRunId}
               isDeletingRun={deleteRunMutation.isPending}
+              isRefreshing={isSyncActive && syncRunsQuery.isFetching}
             />
 
             <SyncStateTable
@@ -380,6 +348,7 @@ const App = () => {
               isLoading={syncStateQuery.isLoading}
               error={syncStateQuery.error as Error | null}
               onRefresh={() => syncStateQuery.refetch()}
+              isRefreshing={isSyncActive && syncStateQuery.isFetching}
             />
           </div>
         </section>

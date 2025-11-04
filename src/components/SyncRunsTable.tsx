@@ -13,6 +13,7 @@ type Props = {
   onDeleteRun: (runId: string) => void;
   deletingRunId: string | null;
   isDeletingRun: boolean;
+  isRefreshing: boolean;
 };
 
 const truncate = (value: string | null, length = 16): string => {
@@ -35,6 +36,7 @@ export const SyncRunsTable = ({
   onDeleteRun,
   deletingRunId,
   isDeletingRun,
+  isRefreshing,
 }: Props) => {
   const handleLimitChange = (event: ChangeEvent<HTMLSelectElement>) => {
     onLimitChange(Number(event.target.value));
@@ -73,8 +75,9 @@ export const SyncRunsTable = ({
         </div>
       </header>
 
-      {isLoading && <p>Chargement...</p>}
+  {isLoading && <p>Chargement...</p>}
       {error && <p className="error">{error.message}</p>}
+  {isRefreshing && !isLoading && <p className="refresh-indicator">Actualisation en cours…</p>}
 
       {!isLoading && !error && runs && runs.length === 0 && <p className="muted">Aucune exécution à afficher.</p>}
 
@@ -83,13 +86,9 @@ export const SyncRunsTable = ({
           <table>
             <thead>
               <tr>
-                <th>Début</th>
-                <th>Type</th>
-                <th>Status</th>
+                <th>Run</th>
                 <th>Progression</th>
-                <th>Volumes</th>
-                <th>Paramètres</th>
-                <th>Temps</th>
+                <th>Durées</th>
                 <th>Détails</th>
                 <th>Actions</th>
               </tr>
@@ -98,42 +97,40 @@ export const SyncRunsTable = ({
               {runs.map((run) => (
                 <tr key={run.id}>
                   <td>
-                    <span className="small muted">{run.scopeKey}</span>
+                    <strong>{formatDateTime(run.startedAt)}</strong>
                     <br />
-                    {formatDateTime(run.startedAt)}
+                    <span className="small muted">Scope: {run.scopeKey}</span>
+                    <br />
+                    <span className="small muted">Type: {run.runType}</span>
+                    {run.resumedFromRunId ? (
+                      <>
+                        <br />
+                        <span className="small muted">Reprise: {truncate(run.resumedFromRunId, 20)}</span>
+                      </>
+                    ) : null}
                   </td>
-                  <td>{run.runType}</td>
                   <td>
                     <span className={`badge status-${run.status}`}>{run.status}</span>
-                  </td>
-                  <td>{formatPercent(run.progress)}</td>
-                  <td>
-                    <strong>{formatNumber(run.fetchedRecords)}</strong>
+                    <br />
+                    <span className="small muted">Progression: {formatPercent(run.progress)}</span>
+                    <br />
+                    <span className="small muted">Traités: {formatNumber(run.fetchedRecords)}</span>
                     <br />
                     <span className="small muted">Créés: {formatNumber(run.createdRecords)}</span>
                     <br />
-                    <span className="small muted">Appels API: {formatNumber(run.apiCallCount)}</span>
+                    <span className="small muted">Total attendu: {formatNumber(run.totalExpectedRecords)}</span>
                   </td>
                   <td>
-                    <span className="small muted">Attendu: {formatNumber(run.totalExpectedRecords)}</span>
-                    <br />
-                    <span className="small muted">Max autorisé: {formatNumber(run.maxRecords)}</span>
-                    <br />
-                    <span className="small muted">
-                      Reprise depuis: {run.resumedFromRunId ? truncate(run.resumedFromRunId) : "—"}
-                    </span>
-                  </td>
-                  <td>
-                    {formatDuration(run.estimatedRemainingSeconds)}
+                    <span className="small muted">Restant: {formatDuration(run.estimatedRemainingSeconds)}</span>
                     <br />
                     <span className="small muted">Fin estimée: {formatDateTime(run.estimatedCompletionAt)}</span>
                     <br />
                     <span className="small muted">Terminée: {formatDateTime(run.finishedAt)}</span>
+                    <br />
+                    <span className="small muted">Appels API: {formatNumber(run.apiCallCount)}</span>
                   </td>
                   <td>
-                    {run.notes ? <span>{run.notes}</span> : <span className="muted">—</span>}
-                    <br />
-                    <span className="small muted">Curseur: {truncate(run.lastCursor)}</span>
+                    <span className="small muted">Notes: {run.notes ? truncate(run.notes, 64) : "—"}</span>
                   </td>
                   <td>
                     <button

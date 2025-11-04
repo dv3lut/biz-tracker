@@ -12,7 +12,6 @@ export interface SyncRun {
   queryChecksum: string | null;
   resumedFromRunId: string | null;
   notes: string | null;
-  maxRecords: number | null;
   totalExpectedRecords: number | null;
   progress: number | null;
   estimatedRemainingSeconds: number | null;
@@ -49,14 +48,12 @@ export interface StatsSummary {
   totalEstablishments: number;
   totalAlerts: number;
   databaseSizePretty: string | null;
-  lastFullRun: SyncRun | null;
-  lastIncrementalRun: SyncRun | null;
+  lastRun: SyncRun | null;
   lastAlert: Alert | null;
 }
 
 export interface SyncRequestPayload {
-  resume: boolean;
-  maxRecords: number | null;
+  checkForUpdates?: boolean;
 }
 
 export interface Establishment {

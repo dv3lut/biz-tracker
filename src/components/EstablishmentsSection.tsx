@@ -178,14 +178,6 @@ export const EstablishmentsSection = ({
         </div>
       )}
 
-      <div className="establishments-danger">
-        <h3>Purger une synchronisation</h3>
-        <p className="muted small">
-          Utilisez l&apos;historique des synchronisations pour supprimer un run : l&apos;API effacera les établissements
-          créés par cette exécution ainsi que les alertes associées.
-        </p>
-      </div>
-
       {feedbackMessage && <p className="feedback success">{feedbackMessage}</p>}
       {errorMessage && <p className="feedback error">{errorMessage}</p>}
     </section>

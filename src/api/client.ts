@@ -25,7 +25,6 @@ interface SyncRunResponse {
   query_checksum: string | null;
   resumed_from_run_id: string | null;
   notes: string | null;
-  max_records: number | null;
   total_expected_records: number | null;
   progress: number | null;
   estimated_remaining_seconds: number | null;
@@ -58,8 +57,7 @@ interface StatsSummaryResponse {
   total_establishments: number;
   total_alerts: number;
   database_size_pretty?: string | null;
-  last_full_run: SyncRunResponse | null;
-  last_incremental_run: SyncRunResponse | null;
+  last_run: SyncRunResponse | null;
   last_alert: AlertResponse | null;
 }
 
@@ -130,7 +128,6 @@ const toSyncRun = (payload: SyncRunResponse): SyncRun => ({
   queryChecksum: payload.query_checksum,
   resumedFromRunId: payload.resumed_from_run_id,
   notes: payload.notes,
-  maxRecords: payload.max_records,
   totalExpectedRecords: payload.total_expected_records,
   progress: payload.progress,
   estimatedRemainingSeconds: payload.estimated_remaining_seconds,
@@ -163,8 +160,7 @@ const toStatsSummary = (payload: StatsSummaryResponse): StatsSummary => ({
   totalEstablishments: payload.total_establishments,
   totalAlerts: payload.total_alerts,
   databaseSizePretty: payload.database_size_pretty ?? null,
-  lastFullRun: payload.last_full_run ? toSyncRun(payload.last_full_run) : null,
-  lastIncrementalRun: payload.last_incremental_run ? toSyncRun(payload.last_incremental_run) : null,
+  lastRun: payload.last_run ? toSyncRun(payload.last_run) : null,
   lastAlert: payload.last_alert ? toAlert(payload.last_alert) : null,
 });
 
@@ -261,32 +257,19 @@ export const adminApi = {
     return data.map(toAlert);
   },
 
-  async triggerFullSync(payload: SyncRequestPayload): Promise<TriggerSyncResult> {
-    const { data, status } = await request<SyncRunResponse | { detail?: string }>("/admin/sync/full", {
+  async triggerSync(payload: SyncRequestPayload): Promise<TriggerSyncResult> {
+    const requestBody: Record<string, unknown> = {};
+    if (payload.checkForUpdates !== undefined) {
+      requestBody.check_for_updates = payload.checkForUpdates;
+    }
+    const { data, status } = await request<SyncRunResponse | { detail?: string }>("/admin/sync", {
       method: "POST",
-      body: JSON.stringify({
-        resume: payload.resume,
-        max_records: payload.maxRecords,
-      }),
+      body: JSON.stringify(requestBody),
     });
     if (isSyncRunResponse(data)) {
       return { run: toSyncRun(data), status };
     }
     const detail = typeof data === "object" && data !== null && "detail" in data ? String((data as { detail?: string }).detail) : undefined;
-    return { run: null, status, detail };
-  },
-
-  async triggerIncrementalSync(): Promise<TriggerSyncResult> {
-    const { data, status } = await request<SyncRunResponse | { detail?: string }>("/admin/sync/incremental", {
-      method: "POST",
-    });
-
-    if (isSyncRunResponse(data)) {
-      return { run: toSyncRun(data), status };
-    }
-
-    const detail =
-      typeof data === "object" && data !== null && "detail" in data ? String((data as { detail?: string }).detail) : undefined;
     return { run: null, status, detail };
   },
 

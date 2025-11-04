@@ -8,6 +8,11 @@ type Props = {
   isLoading: boolean;
   error: Error | null;
   onRefresh: () => void;
+  onTriggerSync: () => void;
+  isTriggering: boolean;
+  feedbackMessage: string | null;
+  errorMessage: string | null;
+  isRefreshing: boolean;
 };
 
 const renderRunDetails = (run: SyncRun | null): ReactNode => {
@@ -58,20 +63,12 @@ const renderRunDetails = (run: SyncRun | null): ReactNode => {
         <dd>{formatDateTime(run.estimatedCompletionAt)}</dd>
       </div>
       <div>
-        <dt>Max autorisé</dt>
-        <dd>{formatNumber(run.maxRecords)}</dd>
-      </div>
-      <div>
         <dt>Total attendu</dt>
         <dd>{formatNumber(run.totalExpectedRecords)}</dd>
       </div>
       <div>
         <dt>Run repris</dt>
         <dd>{run.resumedFromRunId ?? "—"}</dd>
-      </div>
-      <div>
-        <dt>Dernier curseur</dt>
-        <dd>{run.lastCursor ?? "—"}</dd>
       </div>
       <div>
         <dt>Notes</dt>
@@ -81,17 +78,42 @@ const renderRunDetails = (run: SyncRun | null): ReactNode => {
   );
 };
 
-export const StatsSummaryCard = ({ summary, isLoading, error, onRefresh }: Props) => (
+export const StatsSummaryCard = ({
+  summary,
+  isLoading,
+  error,
+  onRefresh,
+  onTriggerSync,
+  isTriggering,
+  feedbackMessage,
+  errorMessage,
+  isRefreshing,
+}: Props) => (
   <section className="card">
     <header className="card-header">
       <div>
         <h2>Statistiques globales</h2>
-        <p className="muted">Synthèse des traitements récents côté API.</p>
+        <p className="muted">Synthèse des traitements récents et déclenchement direct d'une nouvelle synchro.</p>
       </div>
-      <button type="button" className="ghost" onClick={onRefresh} disabled={isLoading}>
-        Rafraîchir
-      </button>
+      <div className="card-actions">
+        <button type="button" className="ghost" onClick={onRefresh} disabled={isLoading}>
+          Rafraîchir
+        </button>
+        <button
+          type="button"
+          className="primary"
+          onClick={onTriggerSync}
+          disabled={isTriggering}
+          title="Vérifie les mises à jour Sirene avant d'exécuter une synchronisation complète"
+        >
+          {isTriggering ? "Déclenchement..." : "Lancer une synchro"}
+        </button>
+      </div>
     </header>
+
+    {feedbackMessage && <p className="feedback success">{feedbackMessage}</p>}
+    {errorMessage && <p className="feedback error">{errorMessage}</p>}
+  {isRefreshing && !isLoading && <p className="refresh-indicator">Actualisation en cours…</p>}
 
     {isLoading && <p>Chargement...</p>}
     {error && <p className="error">{error.message}</p>}
@@ -125,12 +147,8 @@ export const StatsSummaryCard = ({ summary, isLoading, error, onRefresh }: Props
     {summary && !isLoading && !error && (
       <div className="split">
         <article>
-          <h3>Dernière synchro complète</h3>
-          {renderRunDetails(summary.lastFullRun)}
-        </article>
-        <article>
-          <h3>Dernière synchro incrémentale</h3>
-          {renderRunDetails(summary.lastIncrementalRun)}
+          <h3>Dernière synchronisation</h3>
+          {renderRunDetails(summary.lastRun)}
         </article>
       </div>
     )}

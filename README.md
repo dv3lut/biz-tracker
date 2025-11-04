@@ -38,4 +38,4 @@ npm run preview
 - Historique des synchronisations et suivi des ETA (`/admin/sync-runs`).
 - Etat des curseurs et checkpoints (`/admin/sync-state`).
 - Liste des alertes récentes (`/admin/alerts/recent`).
-- Déclenchement des synchronisations complètes et incrémentales (`/admin/sync/full`, `/admin/sync/incremental`).
+- Déclenchement de la synchronisation unifiée (`/admin/sync`).

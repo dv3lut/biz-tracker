@@ -38,9 +38,10 @@ select {
 }
 
 .app-shell {
-  max-width: 1200px;
+  max-width: 1360px;
   margin: 0 auto;
-  padding: 2rem 1.5rem 4rem;
+  padding: 1.75rem 1.25rem 3rem;
+  width: 100%;
 }
 
 .app-header {
@@ -105,14 +106,13 @@ select {
   gap: 1.5rem;
 }
 
-.section-grid-two {
-  display: grid;
-  gap: 1.5rem;
+.section-grid.two-column {
+  grid-template-columns: 1fr;
 }
 
-@media (min-width: 900px) {
-  .section-grid-two {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+@media (min-width: 1200px) {
+  .section-grid.two-column {
+    grid-template-columns: minmax(0, 1.7fr) minmax(0, 1.1fr);
   }
 }
 
@@ -123,7 +123,7 @@ select {
 .card {
   background: #fff;
   border-radius: 12px;
-  padding: 1.25rem 1.5rem;
+  padding: 1.25rem 1.25rem;
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
   display: flex;
   flex-direction: column;
@@ -135,6 +135,22 @@ select {
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
+}
+
+.card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.card-header .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  align-items: center;
 }
 
 .card-header h2 {
@@ -185,7 +201,7 @@ button.danger:hover:not(:disabled) {
 
 .summary-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 1rem;
 }
 
@@ -233,7 +249,7 @@ button.danger:hover:not(:disabled) {
 table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
 }
 
 table thead {
@@ -242,10 +258,11 @@ table thead {
 
 table th,
 table td {
-  padding: 0.75rem;
+  padding: 0.7rem;
   text-align: left;
   vertical-align: top;
   border-bottom: 1px solid #e2e8f0;
+  word-break: break-word;
 }
 
 .badge {
@@ -383,6 +400,12 @@ table td {
   color: #b91c1c;
 }
 
+.refresh-indicator {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #2563eb;
+}
+
 .payload {
   margin: 0;
   max-height: 160px;
@@ -392,6 +415,8 @@ table td {
   padding: 0.75rem;
   border-radius: 6px;
   font-size: 0.85rem;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .establishments-controls {
@@ -413,22 +438,6 @@ table td {
   display: inline-flex;
   align-items: center;
   gap: 0.75rem;
-}
-
-.establishments-danger {
-  display: grid;
-  gap: 0.75rem;
-  padding: 1rem;
-  border: 1px solid #fee2e2;
-  border-radius: 12px;
-  background: #fef2f2;
-}
-
-.establishments-danger input[type="text"] {
-  padding: 0.5rem 0.75rem;
-  border-radius: 8px;
-  border: 1px solid #fca5a5;
-  font-size: 1rem;
 }
 
 .token-prompt {
