@@ -79,6 +79,12 @@ class Establishment(Base):
     first_seen_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
+    google_place_id: Mapped[str | None] = mapped_column(String(128), index=True, nullable=True)
+    google_place_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    google_last_checked_at: Mapped[datetime | None] = mapped_column(DateTime)
+    google_last_found_at: Mapped[datetime | None] = mapped_column(DateTime)
+    google_check_status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False)
+
     alerts: Mapped[list["Alert"]] = relationship("Alert", back_populates="establishment")
 
 

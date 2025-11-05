@@ -92,6 +92,44 @@ class EmailSettings(BaseModel):
         raise TypeError("Unsupported value for recipients")
 
 
+class GoogleSettings(BaseModel):
+    api_key: Optional[str] = Field(default=None, description="API key used to call Google Places APIs.")
+    find_place_url: str = Field(
+        default="https://maps.googleapis.com/maps/api/place/findplacefromtext/json",
+        description="Endpoint for the Find Place from Text API.",
+    )
+    place_details_url: str = Field(
+        default="https://maps.googleapis.com/maps/api/place/details/json",
+        description="Endpoint for the Place Details API.",
+    )
+    max_calls_per_minute: int = Field(
+        default=20,
+        ge=1,
+        description="Maximum number of Google Places API calls per minute (both search and details combined).",
+    )
+    language: str = Field(default="fr", description="Language hint provided to Google Places.")
+    min_match_confidence: float = Field(
+        default=0.75,
+        ge=0.0,
+        le=1.0,
+        description="Minimum similarity ratio required to accept a place match.",
+    )
+    recheck_hours: int = Field(
+        default=24,
+        ge=1,
+        description="Delay (in hours) before retrying establishments without an associated Google place.",
+    )
+    daily_retry_limit: int = Field(
+        default=200,
+        ge=1,
+        description="Maximum number of establishments rechecked for Google data during a single sync run.",
+    )
+
+    @property
+    def enabled(self) -> bool:
+        return bool(self.api_key)
+
+
 class SyncSettings(BaseModel):
     scope_key: str = Field(
         default="restaurants",
@@ -187,6 +225,7 @@ class Settings(BaseSettings):
     sync: SyncSettings = Field(default_factory=SyncSettings)
     logging: LoggingSettings = Field(default_factory=LoggingSettings)
     api: ApiSettings = Field(default_factory=ApiSettings)
+    google: GoogleSettings = Field(default_factory=GoogleSettings)
 
 
 @lru_cache()

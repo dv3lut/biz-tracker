@@ -15,6 +15,7 @@ from app.config import Settings, get_settings
 from app.db import models
 from app.db.session import session_scope
 from app.services.alert_service import AlertService
+from app.services.google_business_service import GoogleBusinessService
 from app.services.establishment_mapper import extract_fields
 from app.utils.dates import parse_datetime, subtract_months
 from app.utils.hashing import sha256_digest
@@ -255,7 +256,6 @@ class SyncService:
         cursor_value = state.last_cursor if state.last_cursor and not state.cursor_completed else "*"
         tri = "dateCreationEtablissement desc"
 
-        initial_sync = context.session.query(models.Establishment.siret).first() is None
         alert_service = AlertService(context.session, context.run)
         new_entities_total: list[models.Establishment] = []
 
@@ -295,14 +295,15 @@ class SyncService:
                 state.cursor_completed = True
                 break
 
-        if new_entities_total:
-            if initial_sync:
-                _LOGGER.info(
-                    "Exécution initiale: %s établissements indexés sans émission d'alertes.",
-                    len(new_entities_total),
-                )
-            else:
-                alert_service.create_alerts(new_entities_total)
+        google_service = GoogleBusinessService(context.session)
+        try:
+            matched_establishments = google_service.enrich(new_entities_total)
+        finally:
+            google_service.close()
+
+        if matched_establishments:
+            alert_service.create_google_alerts(matched_establishments)
+        context.session.commit()
 
         return latest_treated
 

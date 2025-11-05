@@ -23,13 +23,15 @@ class AlertService:
         self._settings = get_settings().email
         self._email_service = EmailService()
 
-    def create_alerts(self, establishments: Sequence[models.Establishment]) -> list[models.Alert]:
+    def create_google_alerts(self, establishments: Sequence[models.Establishment]) -> list[models.Alert]:
         if not establishments:
             return []
 
         alerts: list[models.Alert] = []
         for establishment in establishments:
             payload = self._build_payload(establishment)
+            payload["google_place_url"] = establishment.google_place_url
+            payload["google_place_id"] = establishment.google_place_id
             alert = models.Alert(
                 run_id=self._run.id,
                 siret=establishment.siret,
@@ -42,21 +44,22 @@ class AlertService:
         self._session.flush()
 
         message_lines = [
-            "Nouveaux établissements restaurants détectés:",
+            "Pages Google My Business associées détectées:",
             "",
         ]
         for establishment in establishments:
-            message_lines.extend(self._format_lines(establishment))
+            message_lines.extend(self._format_lines(establishment, include_google=True))
             message_lines.append("")
 
         message = "\n".join(message_lines).strip()
         _ALERT_LOGGER.info(message)
 
         if self._settings.recipients:
-            subject = f"[{self._run.scope_key}] {len(establishments)} nouveau(x) restaurant(s) détecté(s)"
+            subject = f"[{self._run.scope_key}] {len(establishments)} page(s) Google My Business détectée(s)"
             self._email_service.send(subject, message, self._settings.recipients)
+            sent_at = datetime.utcnow()
             for alert in alerts:
-                alert.sent_at = datetime.utcnow()
+                alert.sent_at = sent_at
         return alerts
 
     def _build_payload(self, establishment: models.Establishment) -> dict[str, object]:
@@ -83,7 +86,7 @@ class AlertService:
             else None,
         }
 
-    def _format_lines(self, establishment: models.Establishment) -> list[str]:
+    def _format_lines(self, establishment: models.Establishment, *, include_google: bool = False) -> list[str]:
         lines = [
             f"- {establishment.name or '(nom indisponible)'}",
             f"  SIRET: {establishment.siret} | NAF: {establishment.naf_code or 'N/A'}",
@@ -109,4 +112,6 @@ class AlertService:
         lines.append(f"           {' '.join(commune_parts)}")
         if establishment.date_creation:
             lines.append(f"  Création: {establishment.date_creation.isoformat()}")
+        if include_google and establishment.google_place_url:
+            lines.append(f"  Google: {establishment.google_place_url}")
         return lines
