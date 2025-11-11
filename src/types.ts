@@ -8,6 +8,13 @@ export interface SyncRun {
   apiCallCount: number;
   fetchedRecords: number;
   createdRecords: number;
+  updatedRecords: number;
+  googleQueueCount: number;
+  googleEligibleCount: number;
+  googleMatchedCount: number;
+  googlePendingCount: number;
+  googleImmediateMatchedCount: number;
+  googleLateMatchedCount: number;
   lastCursor: string | null;
   queryChecksum: string | null;
   resumedFromRunId: string | null;
@@ -16,6 +23,7 @@ export interface SyncRun {
   progress: number | null;
   estimatedRemainingSeconds: number | null;
   estimatedCompletionAt: string | null;
+  summary: RunSummary | null;
 }
 
 export interface SyncState {
@@ -52,6 +60,123 @@ export interface StatsSummary {
   lastAlert: Alert | null;
 }
 
+export interface DailyMetricPoint {
+  date: string;
+  value: number;
+}
+
+export interface DailyApiMetricPoint extends DailyMetricPoint {
+  runCount: number;
+}
+
+export interface DailyAlertMetricPoint {
+  date: string;
+  created: number;
+  sent: number;
+}
+
+export interface GoogleStatusBreakdown {
+  found: number;
+  notFound: number;
+  insufficient: number;
+  pending: number;
+  other: number;
+}
+
+export interface DashboardRunBreakdown {
+  runId: string;
+  startedAt: string;
+  createdRecords: number;
+  updatedRecords: number;
+  apiCallCount: number;
+  googleFound: number;
+  googleFoundLate: number;
+  googleNotFound: number;
+  googleInsufficient: number;
+  googlePending: number;
+  googleOther: number;
+  alertsCreated: number;
+  alertsSent: number;
+}
+
+export interface RunSummary {
+  run: RunSummaryMeta;
+  stats: RunSummaryStats;
+  samples: RunSummarySamples;
+  email?: RunEmailSummary;
+}
+
+export interface RunSummaryMeta {
+  id: string;
+  scopeKey: string;
+  status: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  durationSeconds: number;
+  pageCount: number;
+}
+
+export interface RunSummaryStats {
+  fetchedRecords: number;
+  createdRecords: number;
+  updatedRecords: number;
+  apiCallCount: number;
+  google: {
+    queueCount: number;
+    eligibleCount: number;
+    matchedCount: number;
+    immediateMatches: number;
+    lateMatches: number;
+    pendingCount: number;
+  };
+  alerts: {
+    created: number;
+    sent: number;
+  };
+}
+
+export interface RunSummarySamples {
+  newEstablishments: RunSummaryEstablishment[];
+  updatedEstablishments: RunSummaryUpdatedEstablishment[];
+  googleLateMatches: RunSummaryEstablishment[];
+  googleImmediateMatches: RunSummaryEstablishment[];
+}
+
+export interface RunSummaryEstablishment {
+  siret: string;
+  name: string | null;
+  codePostal: string | null;
+  libelleCommune: string | null;
+  nafCode: string | null;
+  googleStatus: string | null;
+  googlePlaceUrl: string | null;
+  googlePlaceId: string | null;
+  createdRunId: string | null;
+  firstSeenAt: string | null;
+  lastSeenAt: string | null;
+}
+
+export interface RunSummaryUpdatedEstablishment extends RunSummaryEstablishment {
+  changedFields: string[];
+}
+
+export interface RunEmailSummary {
+  sent: boolean;
+  recipients: string[];
+  subject: string | null;
+  reason?: string | null;
+}
+
+export interface DashboardMetrics {
+  latestRun: SyncRun | null;
+  latestRunBreakdown: DashboardRunBreakdown | null;
+  dailyNewBusinesses: DailyMetricPoint[];
+  dailyApiCalls: DailyApiMetricPoint[];
+  dailyAlerts: DailyAlertMetricPoint[];
+  googleStatusBreakdown: GoogleStatusBreakdown;
+  establishmentStatusBreakdown: Record<string, number>;
+}
+
 export interface SyncRequestPayload {
   checkForUpdates?: boolean;
 }
@@ -72,6 +197,48 @@ export interface Establishment {
   updatedAt: string | null;
   createdRunId: string | null;
   lastRunId: string | null;
+  googlePlaceId: string | null;
+  googlePlaceUrl: string | null;
+  googleLastCheckedAt: string | null;
+  googleLastFoundAt: string | null;
+  googleCheckStatus: string;
+}
+
+export interface EstablishmentDetail extends Establishment {
+  nic: string | null;
+  denominationUniteLegale: string | null;
+  denominationUsuelleUniteLegale: string | null;
+  denominationUsuelleEtablissement: string | null;
+  enseigne1: string | null;
+  enseigne2: string | null;
+  enseigne3: string | null;
+  categorieJuridique: string | null;
+  categorieEntreprise: string | null;
+  trancheEffectifs: string | null;
+  anneeEffectifs: number | null;
+  nomUsage: string | null;
+  nom: string | null;
+  prenom1: string | null;
+  prenom2: string | null;
+  prenom3: string | null;
+  prenom4: string | null;
+  prenomUsuel: string | null;
+  pseudonyme: string | null;
+  sexe: string | null;
+  dateDernierTraitementEtablissement: string | null;
+  dateDernierTraitementUniteLegale: string | null;
+  complementAdresse: string | null;
+  numeroVoie: string | null;
+  indiceRepetition: string | null;
+  typeVoie: string | null;
+  libelleVoie: string | null;
+  distributionSpeciale: string | null;
+  libelleCommuneEtranger: string | null;
+  codeCommune: string | null;
+  codeCedex: string | null;
+  libelleCedex: string | null;
+  codePays: string | null;
+  libellePays: string | null;
 }
 
 export interface EmailTestPayload {
@@ -85,4 +252,14 @@ export interface EmailTestResult {
   provider: string;
   subject: string;
   recipients: string[];
+}
+
+export interface GoogleCheckResult {
+  found: boolean;
+  emailSent: boolean;
+  message: string;
+  placeId: string | null;
+  placeUrl: string | null;
+  checkStatus: string;
+  establishment: Establishment;
 }

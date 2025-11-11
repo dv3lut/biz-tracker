@@ -17,11 +17,21 @@ import { SyncStateTable } from "./components/SyncStateTable";
 import { AlertsList } from "./components/AlertsList";
 import { EstablishmentsSection } from "./components/EstablishmentsSection";
 import { EmailTestPanel } from "./components/EmailTestPanel";
-import { EmailTestPayload, EmailTestResult, SyncRequestPayload, SyncRun } from "./types";
+import { EstablishmentDetailModal } from "./components/EstablishmentDetailModal";
+import { DashboardInsights } from "./components/DashboardInsights";
+import {
+  EmailTestPayload,
+  EmailTestResult,
+  EstablishmentDetail,
+  GoogleCheckResult,
+  SyncRequestPayload,
+  SyncRun,
+} from "./types";
 
 const REFRESH_LONG = 60_000;
 const REFRESH_SHORT = 30_000;
 const REFRESH_ACTIVE = 1_000;
+const DASHBOARD_DAYS = 30;
 
 const isUnauthorizedError = (error: unknown): error is ApiError => {
   return error instanceof ApiError && error.status === 403;
@@ -41,6 +51,11 @@ const App = () => {
   const [establishmentsError, setEstablishmentsError] = useState<string | null>(null);
   const [emailFeedback, setEmailFeedback] = useState<string | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
+  const [alertsFeedback, setAlertsFeedback] = useState<string | null>(null);
+  const [alertsError, setAlertsError] = useState<string | null>(null);
+  const [checkingGoogleSiret, setCheckingGoogleSiret] = useState<string | null>(null);
+  const [selectedEstablishmentSiret, setSelectedEstablishmentSiret] = useState<string | null>(null);
+  const [isExportingGooglePlaces, setIsExportingGooglePlaces] = useState(false);
 
   const queryClient = useQueryClient();
   const isAuthenticated = Boolean(adminToken);
@@ -51,6 +66,8 @@ const App = () => {
   const dismissEstablishmentsError = useCallback(() => setEstablishmentsError(null), []);
   const dismissEmailFeedback = useCallback(() => setEmailFeedback(null), []);
   const dismissEmailError = useCallback(() => setEmailError(null), []);
+  const dismissAlertsFeedback = useCallback(() => setAlertsFeedback(null), []);
+  const dismissAlertsError = useCallback(() => setAlertsError(null), []);
 
   useEffect(() => {
     if (!feedbackMessage) {
@@ -100,6 +117,22 @@ const App = () => {
     return () => window.clearTimeout(timeout);
   }, [emailError, dismissEmailError]);
 
+  useEffect(() => {
+    if (!alertsFeedback) {
+      return;
+    }
+    const timeout = window.setTimeout(dismissAlertsFeedback, 5000);
+    return () => window.clearTimeout(timeout);
+  }, [alertsFeedback, dismissAlertsFeedback]);
+
+  useEffect(() => {
+    if (!alertsError) {
+      return;
+    }
+    const timeout = window.setTimeout(dismissAlertsError, 5000);
+    return () => window.clearTimeout(timeout);
+  }, [alertsError, dismissAlertsError]);
+
   const handleUnauthorized = useCallback(() => {
     clearAdminToken();
     setAdminTokenState(null);
@@ -108,7 +141,28 @@ const App = () => {
     setErrorMessage(null);
     setEmailFeedback(null);
     setEmailError(null);
-  }, [setAdminTokenState, setTokenError, setFeedbackMessage, setErrorMessage, setEmailFeedback, setEmailError]);
+    setEstablishmentsFeedback(null);
+    setEstablishmentsError(null);
+    setAlertsFeedback(null);
+    setAlertsError(null);
+    setCheckingGoogleSiret(null);
+    setSelectedEstablishmentSiret(null);
+    setIsExportingGooglePlaces(false);
+  }, [
+    setAdminTokenState,
+    setTokenError,
+    setFeedbackMessage,
+    setErrorMessage,
+    setEmailFeedback,
+    setEmailError,
+    setEstablishmentsFeedback,
+    setEstablishmentsError,
+    setAlertsFeedback,
+    setAlertsError,
+    setCheckingGoogleSiret,
+    setSelectedEstablishmentSiret,
+    setIsExportingGooglePlaces,
+  ]);
 
   const syncRunsQuery = useQuery<SyncRun[]>({
     queryKey: ["sync-runs", syncRunsLimit],
@@ -141,6 +195,13 @@ const App = () => {
     refetchInterval: isAuthenticated ? (isSyncActive ? REFRESH_ACTIVE : REFRESH_LONG) : false,
   });
 
+  const dashboardQuery = useQuery({
+    queryKey: ["dashboard-metrics", DASHBOARD_DAYS],
+    queryFn: () => adminApi.getDashboardMetrics(DASHBOARD_DAYS),
+    enabled: isAuthenticated,
+    refetchInterval: isAuthenticated ? (isSyncActive ? REFRESH_ACTIVE : REFRESH_LONG) : false,
+  });
+
   const alertsQuery = useQuery({
     queryKey: ["alerts", alertsLimit],
     queryFn: () => adminApi.getRecentAlerts(alertsLimit),
@@ -164,6 +225,13 @@ const App = () => {
     enabled: isAuthenticated,
   });
 
+  const establishmentDetailQuery = useQuery<EstablishmentDetail>({
+    queryKey: ["establishment-detail", selectedEstablishmentSiret],
+    queryFn: () => adminApi.getEstablishment(selectedEstablishmentSiret!),
+    enabled: isAuthenticated && Boolean(selectedEstablishmentSiret),
+    staleTime: 60_000,
+  });
+
   useEffect(() => {
     if (!adminToken) {
       return;
@@ -173,7 +241,8 @@ const App = () => {
       isUnauthorizedError(syncRunsQuery.error) ||
       isUnauthorizedError(syncStateQuery.error) ||
       isUnauthorizedError(alertsQuery.error) ||
-      isUnauthorizedError(establishmentsQueryResult.error)
+      isUnauthorizedError(establishmentsQueryResult.error) ||
+      isUnauthorizedError(dashboardQuery.error)
     ) {
       handleUnauthorized();
     }
@@ -184,8 +253,18 @@ const App = () => {
     syncStateQuery.error,
     alertsQuery.error,
     establishmentsQueryResult.error,
+    dashboardQuery.error,
     handleUnauthorized,
   ]);
+
+  useEffect(() => {
+    if (!selectedEstablishmentSiret) {
+      return;
+    }
+    if (isUnauthorizedError(establishmentDetailQuery.error)) {
+      handleUnauthorized();
+    }
+  }, [selectedEstablishmentSiret, establishmentDetailQuery.error, handleUnauthorized]);
 
   const showError = useCallback(
     (error: unknown) => {
@@ -279,6 +358,58 @@ const App = () => {
     onError: showEmailError,
   });
 
+  const manualGoogleCheckMutation = useMutation<GoogleCheckResult, unknown, { siret: string; source: "alerts" | "establishments" }>({
+    mutationFn: ({ siret }) => adminApi.checkGoogleForEstablishment(siret),
+    onMutate: ({ siret, source }) => {
+      setCheckingGoogleSiret(siret);
+      if (source === "alerts") {
+        setAlertsFeedback(null);
+        setAlertsError(null);
+      } else {
+        setEstablishmentsFeedback(null);
+        setEstablishmentsError(null);
+      }
+    },
+    onSuccess: (result, variables) => {
+      const message = result.message || `Vérification Google relancée pour ${variables.siret}.`;
+      if (variables.source === "alerts") {
+        setAlertsFeedback(message);
+        setAlertsError(null);
+      } else {
+        setEstablishmentsFeedback(message);
+        setEstablishmentsError(null);
+      }
+      alertsQuery.refetch();
+      establishmentsQueryResult.refetch();
+      queryClient.invalidateQueries({ queryKey: ["establishment-detail", variables.siret] });
+    },
+    onError: (error, variables) => {
+      if (isUnauthorizedError(error)) {
+        handleUnauthorized();
+        return;
+      }
+      const message = error instanceof ApiError ? error.message : "La vérification Google a échoué.";
+      if (variables.source === "alerts") {
+        setAlertsError(message);
+        setAlertsFeedback(null);
+      } else {
+        setEstablishmentsError(message);
+        setEstablishmentsFeedback(null);
+      }
+    },
+    onSettled: () => {
+      setCheckingGoogleSiret(null);
+    },
+  });
+
+  const triggerManualGoogleCheck = manualGoogleCheckMutation.mutate;
+
+  const establishmentDetailErrorMessage = establishmentDetailQuery.error
+    ? establishmentDetailQuery.error instanceof ApiError
+      ? establishmentDetailQuery.error.message
+      : "Impossible de charger la fiche établissement."
+    : null;
+
   const handleTriggerSync = useCallback(() => {
     if (!isAuthenticated) {
       setTokenError("Merci de saisir un jeton administrateur.");
@@ -309,6 +440,47 @@ const App = () => {
     deleteEstablishmentMutation.mutate(siret);
   };
 
+  const handleOpenEstablishmentDetail = useCallback(
+    (siret: string) => {
+      if (!isAuthenticated) {
+        setTokenError("Merci de saisir un jeton administrateur.");
+        return;
+      }
+      setSelectedEstablishmentSiret(siret);
+    },
+    [isAuthenticated, setTokenError]
+  );
+
+  const handleCloseEstablishmentDetail = useCallback(() => {
+    const currentSiret = selectedEstablishmentSiret;
+    setSelectedEstablishmentSiret(null);
+    if (currentSiret) {
+      queryClient.removeQueries({ queryKey: ["establishment-detail", currentSiret], exact: true });
+    }
+  }, [queryClient, selectedEstablishmentSiret]);
+
+  const handleTriggerGoogleCheckFromAlerts = useCallback(
+    (siret: string) => {
+      if (!isAuthenticated) {
+        setTokenError("Merci de saisir un jeton administrateur.");
+        return;
+      }
+      triggerManualGoogleCheck({ siret, source: "alerts" });
+    },
+    [isAuthenticated, triggerManualGoogleCheck, setTokenError]
+  );
+
+  const handleTriggerGoogleCheckFromEstablishments = useCallback(
+    (siret: string) => {
+      if (!isAuthenticated) {
+        setTokenError("Merci de saisir un jeton administrateur.");
+        return;
+      }
+      triggerManualGoogleCheck({ siret, source: "establishments" });
+    },
+    [isAuthenticated, triggerManualGoogleCheck, setTokenError]
+  );
+
   const handleDeleteRun = (runId: string) => {
     if (!isAuthenticated) {
       setTokenError("Merci de saisir un jeton administrateur.");
@@ -328,6 +500,12 @@ const App = () => {
       setErrorMessage(null);
       setEmailFeedback(null);
       setEmailError(null);
+      setEstablishmentsFeedback(null);
+      setEstablishmentsError(null);
+      setAlertsFeedback(null);
+      setAlertsError(null);
+      setCheckingGoogleSiret(null);
+      setSelectedEstablishmentSiret(null);
       queryClient.invalidateQueries();
     },
     [
@@ -338,6 +516,12 @@ const App = () => {
       setErrorMessage,
       setEmailFeedback,
       setEmailError,
+      setEstablishmentsFeedback,
+      setEstablishmentsError,
+      setAlertsFeedback,
+      setAlertsError,
+      setCheckingGoogleSiret,
+      setSelectedEstablishmentSiret,
     ]
   );
 
@@ -349,7 +533,26 @@ const App = () => {
     setErrorMessage(null);
     setEmailFeedback(null);
     setEmailError(null);
-  }, [setAdminTokenState, setTokenError, setFeedbackMessage, setErrorMessage, setEmailFeedback, setEmailError]);
+    setEstablishmentsFeedback(null);
+    setEstablishmentsError(null);
+    setAlertsFeedback(null);
+    setAlertsError(null);
+    setCheckingGoogleSiret(null);
+    setSelectedEstablishmentSiret(null);
+  }, [
+    setAdminTokenState,
+    setTokenError,
+    setFeedbackMessage,
+    setErrorMessage,
+    setEmailFeedback,
+    setEmailError,
+    setEstablishmentsFeedback,
+    setEstablishmentsError,
+    setAlertsFeedback,
+    setAlertsError,
+    setCheckingGoogleSiret,
+    setSelectedEstablishmentSiret,
+  ]);
 
   const handleSendEmailTest = useCallback(
     (payload: EmailTestPayload) => {
@@ -367,9 +570,40 @@ const App = () => {
     setEmailError(null);
   }, []);
 
+  const handleExportGooglePlaces = useCallback(async () => {
+    if (!isAuthenticated) {
+      setTokenError("Merci de saisir un jeton administrateur.");
+      return;
+    }
+    setIsExportingGooglePlaces(true);
+    try {
+      const blob = await adminApi.exportGooglePlaces();
+      const url = window.URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      const today = new Date().toISOString().slice(0, 10);
+      anchor.download = `biz-tracker-google-places-${today}.xlsx`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(url);
+      setFeedbackMessage("Export Google Places téléchargé.");
+      setErrorMessage(null);
+    } catch (error) {
+      showError(error);
+    } finally {
+      setIsExportingGooglePlaces(false);
+    }
+  }, [isAuthenticated, showError]);
+
   if (!adminToken) {
     return <AdminTokenPrompt onSubmit={handleTokenSubmit} errorMessage={tokenError} />;
   }
+
+  const isCheckingGoogle = manualGoogleCheckMutation.isPending;
+  const isDetailLoading =
+    establishmentDetailQuery.isLoading ||
+    (establishmentDetailQuery.isFetching && !establishmentDetailQuery.data);
 
   return (
     <div className="app-shell">
@@ -398,9 +632,19 @@ const App = () => {
               onRefresh={() => statsQuery.refetch()}
               onTriggerSync={handleTriggerSync}
               isTriggering={syncMutation.isPending}
+              onExportGooglePlaces={handleExportGooglePlaces}
+              isExportingGooglePlaces={isExportingGooglePlaces}
               feedbackMessage={feedbackMessage}
               errorMessage={errorMessage}
               isRefreshing={isSyncActive && statsQuery.isFetching}
+            />
+            <DashboardInsights
+              metrics={dashboardQuery.data}
+              isLoading={dashboardQuery.isLoading}
+              error={dashboardQuery.error as Error | null}
+              onRefresh={() => dashboardQuery.refetch()}
+              isRefreshing={isSyncActive && dashboardQuery.isFetching}
+              days={DASHBOARD_DAYS}
             />
           </div>
           <div className="section-grid two-column">
@@ -442,6 +686,12 @@ const App = () => {
               limit={alertsLimit}
               onLimitChange={setAlertsLimit}
               onRefresh={() => alertsQuery.refetch()}
+              onTriggerGoogleCheck={handleTriggerGoogleCheckFromAlerts}
+              isCheckingGoogle={isCheckingGoogle}
+              checkingGoogleSiret={checkingGoogleSiret}
+              feedbackMessage={alertsFeedback}
+              errorMessage={alertsError}
+              onSelect={handleOpenEstablishmentDetail}
             />
           </div>
         </section>
@@ -493,10 +743,21 @@ const App = () => {
               isDeletingOne={deleteEstablishmentMutation.isPending}
               feedbackMessage={establishmentsFeedback}
               errorMessage={establishmentsError}
+              onTriggerGoogleCheck={handleTriggerGoogleCheckFromEstablishments}
+              isCheckingGoogle={isCheckingGoogle}
+              checkingGoogleSiret={checkingGoogleSiret}
+              onSelectEstablishment={handleOpenEstablishmentDetail}
             />
           </div>
         </section>
       </main>
+      <EstablishmentDetailModal
+        isOpen={Boolean(selectedEstablishmentSiret)}
+        establishment={establishmentDetailQuery.data ?? null}
+        isLoading={isDetailLoading}
+        errorMessage={establishmentDetailErrorMessage}
+        onClose={handleCloseEstablishmentDetail}
+      />
     </div>
   );
 };

@@ -10,9 +10,28 @@ type Props = {
   limit: number;
   onLimitChange: (limit: number) => void;
   onRefresh: () => void;
+  onTriggerGoogleCheck: (siret: string) => void;
+  isCheckingGoogle: boolean;
+  checkingGoogleSiret: string | null;
+  feedbackMessage: string | null;
+  errorMessage: string | null;
+  onSelect: (siret: string) => void;
 };
 
-export const AlertsList = ({ alerts, isLoading, error, limit, onLimitChange, onRefresh }: Props) => {
+export const AlertsList = ({
+  alerts,
+  isLoading,
+  error,
+  limit,
+  onLimitChange,
+  onRefresh,
+  onTriggerGoogleCheck,
+  isCheckingGoogle,
+  checkingGoogleSiret,
+  feedbackMessage,
+  errorMessage,
+  onSelect,
+}: Props) => {
   const handleLimitChange = (event: ChangeEvent<HTMLSelectElement>) => {
     onLimitChange(Number(event.target.value));
   };
@@ -56,11 +75,16 @@ export const AlertsList = ({ alerts, isLoading, error, limit, onLimitChange, onR
                 <th>Destinataires</th>
                 <th>Payload</th>
                 <th>Envoyée</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {alerts.map((alert) => (
-                <tr key={alert.id}>
+                <tr
+                  key={alert.id}
+                  className="clickable"
+                  onClick={() => onSelect(alert.siret)}
+                >
                   <td>{formatDateTime(alert.createdAt)}</td>
                   <td>{alert.siret}</td>
                   <td>{alert.recipients.join(", ") || "—"}</td>
@@ -68,12 +92,30 @@ export const AlertsList = ({ alerts, isLoading, error, limit, onLimitChange, onR
                     <pre className="payload">{JSON.stringify(alert.payload, null, 2)}</pre>
                   </td>
                   <td>{formatDateTime(alert.sentAt)}</td>
+                  <td>
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onTriggerGoogleCheck(alert.siret);
+                      }}
+                      disabled={isCheckingGoogle && checkingGoogleSiret === alert.siret}
+                    >
+                      {isCheckingGoogle && checkingGoogleSiret === alert.siret
+                        ? "Vérification..."
+                        : "Rechecker Google"}
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
+
+      {feedbackMessage && <p className="feedback success">{feedbackMessage}</p>}
+      {errorMessage && <p className="feedback error">{errorMessage}</p>}
     </section>
   );
 };

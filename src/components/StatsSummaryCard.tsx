@@ -10,6 +10,8 @@ type Props = {
   onRefresh: () => void;
   onTriggerSync: () => void;
   isTriggering: boolean;
+  onExportGooglePlaces: () => void;
+  isExportingGooglePlaces: boolean;
   feedbackMessage: string | null;
   errorMessage: string | null;
   isRefreshing: boolean;
@@ -47,8 +49,24 @@ const renderRunDetails = (run: SyncRun | null): ReactNode => {
         <dd>{formatNumber(run.fetchedRecords)}</dd>
       </div>
       <div>
-        <dt>Enregistrements créés</dt>
+        <dt>Nouveaux établissements</dt>
         <dd>{formatNumber(run.createdRecords)}</dd>
+      </div>
+      <div>
+        <dt>File Google totale</dt>
+        <dd>{formatNumber(run.googleQueueCount)}</dd>
+      </div>
+      <div>
+        <dt>Eligibles Google</dt>
+        <dd>{formatNumber(run.googleEligibleCount)}</dd>
+      </div>
+      <div>
+        <dt>Fiches Google trouvées</dt>
+        <dd>{formatNumber(run.googleMatchedCount)}</dd>
+      </div>
+      <div>
+        <dt>Reste à trouver</dt>
+        <dd>{formatNumber(run.googlePendingCount)}</dd>
       </div>
       <div>
         <dt>Appels API</dt>
@@ -85,6 +103,8 @@ export const StatsSummaryCard = ({
   onRefresh,
   onTriggerSync,
   isTriggering,
+  onExportGooglePlaces,
+  isExportingGooglePlaces,
   feedbackMessage,
   errorMessage,
   isRefreshing,
@@ -98,6 +118,15 @@ export const StatsSummaryCard = ({
       <div className="card-actions">
         <button type="button" className="ghost" onClick={onRefresh} disabled={isLoading}>
           Rafraîchir
+        </button>
+        <button
+          type="button"
+          className="ghost"
+          onClick={onExportGooglePlaces}
+          disabled={isExportingGooglePlaces}
+          title="Télécharger un export Excel des fiches Google détectées"
+        >
+          {isExportingGooglePlaces ? "Export..." : "Exporter Google Places"}
         </button>
         <button
           type="button"

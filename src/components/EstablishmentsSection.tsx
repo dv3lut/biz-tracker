@@ -20,6 +20,10 @@ interface EstablishmentsSectionProps {
   isDeletingOne: boolean;
   feedbackMessage: string | null;
   errorMessage: string | null;
+  onTriggerGoogleCheck: (siret: string) => void;
+  isCheckingGoogle: boolean;
+  checkingGoogleSiret: string | null;
+  onSelectEstablishment: (siret: string) => void;
 }
 
 export const EstablishmentsSection = ({
@@ -39,6 +43,10 @@ export const EstablishmentsSection = ({
   isDeletingOne,
   feedbackMessage,
   errorMessage,
+  onTriggerGoogleCheck,
+  isCheckingGoogle,
+  checkingGoogleSiret,
+  onSelectEstablishment,
 }: EstablishmentsSectionProps) => {
   const handleSearchChange = (event: ChangeEvent<HTMLInputElement>) => {
     onQueryChange(event.target.value);
@@ -129,7 +137,11 @@ export const EstablishmentsSection = ({
             </thead>
             <tbody>
               {establishments.map((establishment) => (
-                <tr key={establishment.siret}>
+                <tr
+                  key={establishment.siret}
+                  className="clickable"
+                  onClick={() => onSelectEstablishment(establishment.siret)}
+                >
                   <td>
                     <strong>{establishment.siret}</strong>
                     <br />
@@ -160,12 +172,52 @@ export const EstablishmentsSection = ({
                     <span className="small muted">Créé par: {formatRunId(establishment.createdRunId)}</span>
                     <br />
                     <span className="small muted">Dernier run: {formatRunId(establishment.lastRunId)}</span>
+                    <br />
+                    <span className="small muted">
+                      Google: {establishment.googleCheckStatus}
+                      {establishment.googleLastCheckedAt ? ` (checké le ${formatDateTime(establishment.googleLastCheckedAt)})` : ""}
+                    </span>
+                    <br />
+                    <span className="small muted">
+                      Dernière détection: {establishment.googleLastFoundAt ? formatDateTime(establishment.googleLastFoundAt) : "—"}
+                    </span>
+                    {establishment.googlePlaceId && (
+                      <>
+                        <br />
+                        <span className="small muted">Place ID: {establishment.googlePlaceId}</span>
+                      </>
+                    )}
+                    {establishment.googlePlaceUrl && (
+                      <>
+                        <br />
+                        <a className="small" href={establishment.googlePlaceUrl} target="_blank" rel="noreferrer">
+                          Ouvrir la page Google
+                        </a>
+                      </>
+                    )}
                   </td>
                   <td>
                     <button
                       type="button"
                       className="ghost"
-                      onClick={() => handleDeleteOne(establishment.siret)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onTriggerGoogleCheck(establishment.siret);
+                      }}
+                      disabled={isCheckingGoogle && checkingGoogleSiret === establishment.siret}
+                    >
+                      {isCheckingGoogle && checkingGoogleSiret === establishment.siret
+                        ? "Vérification..."
+                        : "Rechecker Google"}
+                    </button>
+                    <br />
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleDeleteOne(establishment.siret);
+                      }}
                       disabled={isDeletingOne && deletingSiret === establishment.siret}
                     >
                       {isDeletingOne && deletingSiret === establishment.siret ? "Suppression..." : "Supprimer"}

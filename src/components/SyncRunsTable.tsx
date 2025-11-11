@@ -116,7 +116,7 @@ export const SyncRunsTable = ({
                     <br />
                     <span className="small muted">Traités: {formatNumber(run.fetchedRecords)}</span>
                     <br />
-                    <span className="small muted">Créés: {formatNumber(run.createdRecords)}</span>
+                    <span className="small muted">Nouveaux: {formatNumber(run.createdRecords)}</span>
                     <br />
                     <span className="small muted">Total attendu: {formatNumber(run.totalExpectedRecords)}</span>
                   </td>
@@ -130,6 +130,14 @@ export const SyncRunsTable = ({
                     <span className="small muted">Appels API: {formatNumber(run.apiCallCount)}</span>
                   </td>
                   <td>
+                    <span className="small muted">Google - File: {formatNumber(run.googleQueueCount)}</span>
+                    <br />
+                    <span className="small muted">Eligibles: {formatNumber(run.googleEligibleCount)}</span>
+                    <br />
+                    <span className="small muted">Trouvées: {formatNumber(run.googleMatchedCount)}</span>
+                    <br />
+                    <span className="small muted">Restant: {formatNumber(run.googlePendingCount)}</span>
+                    <br />
                     <span className="small muted">Notes: {run.notes ? truncate(run.notes, 64) : "—"}</span>
                   </td>
                   <td>
