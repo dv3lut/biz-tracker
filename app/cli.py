@@ -9,6 +9,7 @@ import uvicorn
 from app.api import create_app
 from app.config import get_settings
 from app.db import Base, get_engine, session_scope
+from app.db.migrations import run_schema_upgrades
 from app.logging_config import configure_logging
 from app.services.sync_service import SyncService
 from app.db import models
@@ -25,6 +26,7 @@ def init_db() -> None:
     typer.echo(f"Initialisation de la base de données sur {settings.database.sqlalchemy_url}")
     engine = get_engine()
     Base.metadata.create_all(engine)
+    run_schema_upgrades(engine)
     typer.echo("Tables créées (si nécessaire).")
 
 
@@ -43,7 +45,7 @@ def _execute_sync(resume: bool, check_for_updates: bool) -> None:
         run_id = run.id
 
     typer.echo(f"Synchronisation programmée: run={run_id}")
-    service.execute_sync_run(run_id, resume=resume)
+    service.execute_sync_run(run_id, resume=resume, triggered_by="cli")
 
     with session_scope() as session:
         final_run = session.get(models.SyncRun, run_id)

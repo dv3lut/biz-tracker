@@ -9,6 +9,7 @@ from app.config import get_settings
 from app.db import models
 from app.db.session import session_scope
 from app.services.sync_service import SyncService
+from app.observability import log_event
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -26,6 +27,11 @@ class SyncScheduler:
     def start(self) -> None:
         if not self._settings.sync.auto_enabled:
             _LOGGER.info("Automatic synchronisation disabled via configuration.")
+            log_event(
+                "scheduler.disabled",
+                scope_key=self._settings.sync.scope_key,
+                minutes=self._settings.sync.auto_poll_minutes,
+            )
             return
         with self._lock:
             if self._thread and self._thread.is_alive():
@@ -37,6 +43,11 @@ class SyncScheduler:
                 "Automatic synchronisation scheduler started (interval=%s min).",
                 self._settings.sync.auto_poll_minutes,
             )
+            log_event(
+                "scheduler.started",
+                scope_key=self._settings.sync.scope_key,
+                interval_minutes=self._settings.sync.auto_poll_minutes,
+            )
 
     def stop(self) -> None:
         with self._lock:
@@ -46,6 +57,10 @@ class SyncScheduler:
             self._thread.join(timeout=5)
             self._thread = None
             _LOGGER.info("Automatic synchronisation scheduler stopped.")
+            log_event(
+                "scheduler.stopped",
+                scope_key=self._settings.sync.scope_key,
+            )
 
     def _run_loop(self) -> None:
         interval_seconds = max(self._settings.sync.auto_poll_minutes, 1) * 60
@@ -63,6 +78,11 @@ class SyncScheduler:
         with session_scope() as session:
             if self._service.has_active_run(session, scope_key):
                 _LOGGER.debug("A synchronisation is already active; skipping auto trigger.")
+                log_event(
+                    "scheduler.skip",
+                    reason="active_run",
+                    scope_key=scope_key,
+                )
                 return
 
             state = session.get(models.SyncState, scope_key)
@@ -70,6 +90,12 @@ class SyncScheduler:
                 next_allowed = state.last_synced_at + minimum_delay
                 if datetime.utcnow() < next_allowed:
                     _LOGGER.debug("Minimum delay not reached for auto sync (next at %s).", next_allowed)
+                    log_event(
+                        "scheduler.skip",
+                        reason="minimum_delay",
+                        scope_key=scope_key,
+                        next_allowed=next_allowed,
+                    )
                     return
 
             run = self._service.prepare_sync_run(
@@ -79,6 +105,11 @@ class SyncScheduler:
             )
             if not run:
                 _LOGGER.debug("No synchronisation to trigger automatically (informations service up-to-date).")
+                log_event(
+                    "scheduler.skip",
+                    reason="no_updates",
+                    scope_key=scope_key,
+                )
                 return
 
             session.commit()
@@ -86,10 +117,15 @@ class SyncScheduler:
             run_id = run.id
 
         _LOGGER.info("Automatic synchronisation scheduled (run=%s).", run_id)
+        log_event(
+            "scheduler.run_scheduled",
+            run_id=str(run_id),
+            scope_key=scope_key,
+        )
         worker = threading.Thread(
             target=self._service.execute_sync_run,
             args=(run_id,),
-            kwargs={"resume": True},
+            kwargs={"resume": True, "triggered_by": "scheduler"},
             daemon=True,
             name=f"SyncWorker-{run_id}",
         )

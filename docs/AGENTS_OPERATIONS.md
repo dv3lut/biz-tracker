@@ -2,8 +2,8 @@
 
 ## Préparation
 - Copier `.env.example` en `.env` et renseigner au minimum le token Sirene, la chaîne PostgreSQL (port local `15432`) et un `API__ADMIN_TOKEN` robuste.
-- Lancer `docker compose up -d db` puis `python -m app init-db`.
-- Optionnel : configurer l’envoi d’e-mails (`EMAIL__ENABLED=true` + SMTP).
+- Lancer `docker compose up -d biz-tracker-db` puis `python -m app init-db` (rejouer après chaque mise à jour pour appliquer les colonnes manquantes).
+- Optionnel : configurer l’envoi d’e-mails (`EMAIL__ENABLED=true` + SMTP). Utiliser `EMAIL__PROVIDER=mailhog` en local (lancer `docker compose up -d biz-tracker-mailhog`, interface http://localhost:8025) et `EMAIL__PROVIDER=mailjet` en production (identifiant = API key, mot de passe = secret key, expéditeur validé côté Mailjet).
 
 ## Exécutions
 - **Initiale** : `python -m app sync --no-check-for-updates` pour forcer une collecte complète (reprend automatiquement si un run précédent a échoué).
@@ -14,6 +14,7 @@
 - Les runs sont tracés dans `sync_runs` (status, métriques). Les curseurs et dates sont dans `sync_state`.
 - Les logs applicatifs sont dans `logs/app.log`, les alertes dans `logs/alerts.log`.
 - Les statistiques et états sont consultables via l’API (`GET /admin/stats/summary`, `/admin/sync-runs`, `/admin/sync-state`, `/admin/alerts/recent`).
+- `POST /admin/email/test` permet de vérifier la configuration SMTP active (destinataires par défaut ou fournis dans le corps de la requête).
 
 ## Relance / reprise
 - En cas d’erreur, inspecter `sync_runs.status = 'failed'` et `sync_state.last_cursor`.
@@ -27,3 +28,9 @@
   - Le contenu des alertes (`alerts` + fichier) pour éviter les doublons.
 - Vérifier les erreurs front (console navigateur) en cas de problème CORS ; ajuster `API__ALLOWED_ORIGINS` le cas échéant.
 - TODO futur : brancher un système d’alerting externe (Prometheus/Grafana, Sentry, etc.).
+
+## Observabilité Elastic/Kibana
+- Démarrer la pile avec `docker compose up -d biz-tracker-elasticsearch biz-tracker-kibana` (ports 9200 et 5601).
+- Activer la journalisation vers Elasticsearch via `.env` (`LOGGING__ELASTICSEARCH__ENABLED=true`, hôte, credentials optionnels).
+- Un dashboard prêt à l’emploi est versionné dans `docs/kibana/dashboards.ndjson` (importer via Stack Management > Saved Objects > Import).
+- Les événements structurés disponibles : `sync.run.*`, `sync.new_establishment`, `sync.google.match`, `sync.alert.created`, `scheduler.*`, `email.test_sent`.

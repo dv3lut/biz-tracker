@@ -15,7 +15,10 @@
   - Reprise via `SyncState.last_cursor` et suivi des traitements via `SyncState.last_treated_max`.
 - **Alertes** :
   - Logging dédié (`logging_config` définit un logger `alerts` -> `logs/alerts.log`).
-  - Envoi SMTP optionnel (classe `EmailService`, désactivée si `EMAIL__ENABLED=false`).
+  - Envoi SMTP optionnel (classe `EmailService`, désactivée si `EMAIL__ENABLED=false`) avec presets `EMAIL__PROVIDER` (`mailhog`, `mailjet`, `custom`) et endpoint de validation `POST /admin/email/test`.
+- **Observabilité** :
+  - Les logs sont sérialisés en JSON (service `observability.log_event`) et peuvent être expédiés directement vers Elasticsearch (`LOGGING__ELASTICSEARCH__*`).
+  - Les événements suivent la convention `event.name` (`sync.run.*`, `sync.new_establishment`, `sync.alert.created`, `scheduler.*`) pour alimenter Kibana.
 - **API** : FastAPI (`app/api`) exposant des routes d’admin sécurisées par jeton (`X-Admin-Token` configurable). Les dépendances gèrent les sessions SQLAlchemy et les contrôles d’accès.
 - **CORS** : middleware FastAPI activé. La liste des origines autorisées est configurable via `API__ALLOWED_ORIGINS` (liste JSON ou chaîne séparée par des virgules, valeur par défaut `http://localhost:5173`).
 - **CLI** : Typer (`python -m app …`). Commandes `init-db`, `sync`, `serve` (lance Uvicorn). Aliases historiques `sync-full` et `sync-incremental` redirigent vers `sync`.

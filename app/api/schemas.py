@@ -98,3 +98,25 @@ class DeleteRunResult(BaseModel):
     states_reset: int = Field(description="Nombre d'états de synchronisation remis à zéro.")
     runs_updated: int = Field(description="Nombre de runs mis à jour (liens de reprise supprimés).")
     sync_run_deleted: bool = Field(description="Indique si le run a été supprimé.")
+
+
+class EmailTestRequest(BaseModel):
+    subject: str | None = Field(
+        default=None,
+        description="Sujet personnalisé. Utilise un sujet par défaut si omis.",
+    )
+    body: str | None = Field(
+        default=None,
+        description="Corps du message en texte brut.",
+    )
+    recipients: list[str] | None = Field(
+        default=None,
+        description="Destinataires spécifiques pour ce test (sinon configuration par défaut).",
+    )
+
+
+class EmailTestResponse(BaseModel):
+    sent: bool = Field(description="Indique si la demande d'envoi a été effectuée.")
+    provider: str = Field(description="Preset SMTP actif.")
+    subject: str = Field(description="Sujet utilisé pour l'envoi.")
+    recipients: list[str] = Field(description="Destinataires ciblés par l'envoi.")

@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import json
 from functools import lru_cache
-from typing import Any, List, Optional
-from pydantic import AliasChoices, BaseModel, Field, field_validator
+from typing import Any, List, Literal, Optional
+from pydantic import AliasChoices, BaseModel, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import URL, make_url
 
@@ -71,6 +71,10 @@ class DatabaseSettings(BaseModel):
 
 
 class EmailSettings(BaseModel):
+    provider: Literal["custom", "mailhog", "mailjet"] = Field(
+        default="custom",
+        description="Preset de configuration SMTP (custom, mailhog, mailjet).",
+    )
     enabled: bool = Field(default=False)
     smtp_host: Optional[str] = None
     smtp_port: int = Field(default=587, ge=1)
@@ -79,6 +83,18 @@ class EmailSettings(BaseModel):
     use_tls: bool = Field(default=True)
     from_address: Optional[str] = None
     recipients: List[str] = Field(default_factory=list)
+
+    @field_validator("smtp_host", "smtp_username", "smtp_password", "from_address", mode="before")
+    @classmethod
+    def _normalize_nullable_field(cls, value: object) -> Optional[str | object]:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            trimmed = value.strip()
+            if not trimmed or trimmed.lower() in {"null", "none"}:
+                return None
+            return trimmed
+        return value
 
     @field_validator("recipients", mode="before")
     @classmethod
@@ -90,6 +106,18 @@ class EmailSettings(BaseModel):
         if isinstance(value, list):
             return value
         raise TypeError("Unsupported value for recipients")
+
+    @model_validator(mode="after")
+    def _apply_provider_defaults(self) -> "EmailSettings":
+        if self.provider == "mailhog":
+            self.smtp_host = self.smtp_host or "localhost"
+            self.smtp_port = 1025
+            self.use_tls = False
+        elif self.provider == "mailjet":
+            self.smtp_host = self.smtp_host or "in-v3.mailjet.com"
+            self.smtp_port = 587
+            self.use_tls = True
+        return self
 
 
 class GoogleSettings(BaseModel):
@@ -159,11 +187,24 @@ class SyncSettings(BaseModel):
     )
 
 
+class ElasticsearchLoggingSettings(BaseModel):
+    enabled: bool = Field(default=False)
+    hosts: List[str] = Field(default_factory=lambda: ["http://localhost:9200"])
+    index_prefix: str = Field(default="biz-tracker-observability")
+    environment: str = Field(default="local")
+    verify_certs: bool = Field(default=False)
+    username: Optional[str] = None
+    password: Optional[str] = None
+    timeout_seconds: int = Field(default=10, ge=1)
+
+
 class LoggingSettings(BaseModel):
     level: str = Field(default="INFO")
     directory: str = Field(default="logs")
     alerts_log_filename: str = Field(default="alerts.log")
     app_log_filename: str = Field(default="app.log")
+    service_name: str = Field(default="biz-tracker-back")
+    elasticsearch: ElasticsearchLoggingSettings = Field(default_factory=ElasticsearchLoggingSettings)
 
 
 class ApiSettings(BaseModel):

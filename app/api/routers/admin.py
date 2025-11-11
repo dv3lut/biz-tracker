@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
@@ -12,13 +12,18 @@ from app.api.dependencies import get_db_session, require_admin
 from app.api.schemas import (
     AlertOut,
     DeleteRunResult,
+    EmailTestRequest,
+    EmailTestResponse,
     EstablishmentOut,
     StatsSummary,
     SyncRequest,
     SyncRunOut,
     SyncStateOut,
 )
+from app.config import get_settings
 from app.db import models
+from app.observability import log_event
+from app.services.email_service import EmailService
 from app.services.sync_service import SyncService
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)])
@@ -106,6 +111,45 @@ def get_stats_summary(session: Session = Depends(get_db_session)) -> StatsSummar
         last_alert=_serialize_alert(last_alert),
         database_size_pretty=database_size_pretty,
     )
+
+
+@router.post(
+    "/email/test",
+    response_model=EmailTestResponse,
+    summary="Envoyer un e-mail de test",
+)
+def send_test_email(
+    payload: EmailTestRequest = Body(default_factory=EmailTestRequest),
+) -> EmailTestResponse:
+    settings = get_settings().email
+    email_service = EmailService()
+
+    if not email_service.is_enabled():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Le service e-mail est désactivé.")
+
+    if not email_service.is_configured():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Configuration SMTP incomplète (hôte ou adresse expéditeur manquants).",
+        )
+
+    recipients = payload.recipients or email_service.default_recipients
+    if not recipients:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Aucun destinataire configuré.")
+
+    subject = payload.subject or f"[{settings.provider}] Test Biz Tracker"
+    body = payload.body or (
+        "Ce message confirme que la configuration SMTP de Biz Tracker fonctionne.\n"
+        "Vous recevez cet e-mail car l'endpoint /admin/email/test a été appelé."
+    )
+
+    email_service.send(subject, body, recipients)
+    log_event(
+        "email.test_sent",
+        provider=settings.provider,
+        recipients=recipients,
+    )
+    return EmailTestResponse(sent=True, provider=settings.provider, subject=subject, recipients=recipients)
 
 
 @router.get("/sync-runs", response_model=list[SyncRunOut], summary="Historique des synchronisations")
@@ -266,6 +310,11 @@ def trigger_sync_run(
     service = SyncService()
     scope_key = service.settings.sync.scope_key
     if service.has_active_run(session, scope_key):
+        log_event(
+            "sync.run.request_rejected",
+            scope_key=scope_key,
+            reason="active_run",
+        )
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Une synchronisation est déjà en cours.")
 
     run = service.prepare_sync_run(
@@ -274,15 +323,30 @@ def trigger_sync_run(
         check_informations=payload.check_for_updates,
     )
     if run is None:
+        log_event(
+            "sync.run.request_no_updates",
+            scope_key=scope_key,
+            resume=payload.resume,
+            check_informations=payload.check_for_updates,
+        )
         raise HTTPException(status_code=status.HTTP_202_ACCEPTED, detail="Aucune mise à jour disponible.")
 
     session.commit()
     session.refresh(run)
     state = session.get(models.SyncState, run.scope_key)
 
+    log_event(
+        "sync.run.request_accepted",
+        run_id=str(run.id),
+        scope_key=scope_key,
+        resume=payload.resume,
+        check_informations=payload.check_for_updates,
+    )
+
     background_tasks.add_task(
         service.execute_sync_run,
         run.id,
         resume=payload.resume,
+        triggered_by="api",
     )
     return _serialize_run(run, state=state)

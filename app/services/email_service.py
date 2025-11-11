@@ -17,6 +17,24 @@ class EmailService:
     def __init__(self) -> None:
         self._settings = get_settings().email
 
+    @property
+    def default_recipients(self) -> list[str]:
+        return list(self._settings.recipients)
+
+    @property
+    def provider(self) -> str:
+        return self._settings.provider
+
+    def is_enabled(self) -> bool:
+        return bool(self._settings.enabled)
+
+    def is_configured(self) -> bool:
+        return bool(
+            self._settings.enabled
+            and self._settings.smtp_host
+            and self._settings.from_address
+        )
+
     def send(self, subject: str, body: str, recipients: Iterable[str]) -> None:
         settings = self._settings
         recipient_list = [addr for addr in recipients if addr]

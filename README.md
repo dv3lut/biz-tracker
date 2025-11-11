@@ -25,17 +25,18 @@ Solution de veille sur les nouveaux établissements de restauration (NAF 56.10A)
    ```
 3. **Configurer la base de données** via Docker (expose le port local `15432`) :
    ```bash
-   docker compose up -d db
+   docker compose up -d biz-tracker-db
    ```
 4. **Créer votre fichier `.env`** à partir du template :
    ```bash
    cp .env.example .env
    ```
-   Renseignez au minimum `SIRENE__API_TOKEN` et, si besoin, adaptez l’URL de base, la configuration SMTP ou les paramètres PostgreSQL.
-5. **Initialiser la base** :
+   Renseignez au minimum `SIRENE__API_TOKEN` et, si besoin, adaptez l’URL de base, la configuration SMTP ou les paramètres PostgreSQL. Le champ `EMAIL__PROVIDER` permet de basculer rapidement entre `mailhog` (dev local), `mailjet` (production) ou `custom`.
+5. **Initialiser / mettre à niveau la base** :
    ```bash
    python -m app init-db
    ```
+   Cette commande applique également les colonnes manquantes si vous avez mis à jour le projet.
 
 ## Commandes disponibles
 
@@ -92,6 +93,14 @@ Un fichier Postman de référence est disponible (`docs/postman_collection.json`
 ## Alertes e-mail & logs
 - Les nouvelles entrées détectées lors d’une synchronisation sont loguées dans `logs/alerts.log`.
 - Si l’envoi e-mail est activé (`EMAIL__ENABLED=true` + configuration SMTP), un message synthétique est expédié à la liste définie dans `EMAIL__RECIPIENTS`.
+- Presets disponibles : `EMAIL__PROVIDER=mailhog` (hôte `localhost`, port `1025`, TLS désactivé, interface http://localhost:8025 via `docker compose up -d biz-tracker-mailhog`), `EMAIL__PROVIDER=mailjet` (hôte `in-v3.mailjet.com`, port `587`, TLS activé, identifiant = API key, mot de passe = secret key), `EMAIL__PROVIDER=custom` (remplir manuellement `EMAIL__SMTP_*`).
+- L’endpoint `POST /admin/email/test` déclenche un envoi de test (corps optionnel) afin de valider la configuration active.
+
+## Observabilité Kibana
+- Un handler Elasticsearch optionnel peut être activé via `.env` (`LOGGING__ELASTICSEARCH__ENABLED=true`). Les autres variables `LOGGING__ELASTICSEARCH__HOSTS`, `LOGGING__ELASTICSEARCH__INDEX_PREFIX`, `LOGGING__ELASTICSEARCH__ENVIRONMENT` et `LOGGING__ELASTICSEARCH__USERNAME`/`PASSWORD` ajustent la connexion.
+- Lancer `docker compose up -d biz-tracker-elasticsearch biz-tracker-kibana` pour démarrer la pile locale (Elasticsearch : `http://localhost:9200`, Kibana : `http://localhost:5601`).
+- Importer le fichier `docs/kibana/dashboards.ndjson` depuis Kibana (Stack Management > Saved Objects) pour obtenir un dashboard clef en main : runs terminés/en échec, nouveaux établissements, alertes Google.
+- Les événements (`event.name`) exposent toutes les métriques : `sync.run.*`, `sync.new_establishment`, `sync.google.match`, `sync.alert.created`, `scheduler.*`, `email.test_sent`. Ils peuvent être utilisés pour créer de nouvelles visualisations Lens (temps moyen, volumétrie journalière, etc.).
 
 ## Points d’attention
 - L’API Sirene limite à 30 appels/minute : le client embarque un rate limiter et gère les réponses `429` / `503` avec back-off.

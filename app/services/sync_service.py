@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import time
 import unicodedata
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -17,6 +18,7 @@ from app.db.session import session_scope
 from app.services.alert_service import AlertService
 from app.services.google_business_service import GoogleBusinessService
 from app.services.establishment_mapper import extract_fields
+from app.observability import log_event, serialize_alert, serialize_establishment, serialize_sync_run
 from app.utils.dates import parse_datetime, subtract_months
 from app.utils.hashing import sha256_digest
 
@@ -46,6 +48,16 @@ class SyncContext:
     settings: Settings
 
 
+@dataclass
+class SyncResult:
+    last_treated: datetime | None
+    new_establishments: list[dict[str, object]]
+    google_matches: list[dict[str, object]]
+    alerts: list[dict[str, object]]
+    page_count: int
+    duration_seconds: float
+
+
 class SyncService:
     """Run Sirene synchronisations and persist new establishments and alerts."""
 
@@ -72,15 +84,51 @@ class SyncService:
 
         client = SireneClient()
         context = SyncContext(session=session, run=run, state=state, client=client, settings=self._settings)
+        log_event(
+            "sync.run.started",
+            run_id=str(run.id),
+            scope_key=run.scope_key,
+            resume=resume,
+            triggered_by="cli",
+            run=serialize_sync_run(run),
+        )
+        started_at = time.perf_counter()
         try:
-            last_treated = self._collect_sync(context, resume=resume)
-            self._finish_run(run, state, last_treated_max=last_treated)
+            result = self._collect_sync(context, resume=resume)
+            self._finish_run(run, state, last_treated_max=result.last_treated)
             session.commit()
-        except Exception:
+            duration = time.perf_counter() - started_at
+            log_event(
+                "sync.run.completed",
+                run_id=str(run.id),
+                scope_key=run.scope_key,
+                status=run.status,
+                duration_seconds=duration,
+                result={
+                    "page_count": result.page_count,
+                    "new_establishment_count": len(result.new_establishments),
+                    "google_match_count": len(result.google_matches),
+                    "alert_count": len(result.alerts),
+                },
+                run=serialize_sync_run(run),
+            )
+        except Exception as exc:
             session.rollback()
             run.status = "failed"
             run.finished_at = datetime.utcnow()
             session.commit()
+            log_event(
+                "sync.run.failed",
+                level=logging.ERROR,
+                run_id=str(run.id),
+                scope_key=run.scope_key,
+                resume=resume,
+                run=serialize_sync_run(run),
+                error={
+                    "type": type(exc).__name__,
+                    "message": str(exc),
+                },
+            )
             raise
         finally:
             client.close()
@@ -102,6 +150,12 @@ class SyncService:
                     "Aucune mise à jour détectée depuis la dernière exécution (%s).",
                     state.last_treated_max,
                 )
+                log_event(
+                    "sync.run.skipped_no_changes",
+                    scope_key=self._settings.sync.scope_key,
+                    last_known_treated=state.last_treated_max,
+                    latest_treated=latest_treated,
+                )
                 return None
 
         run, _state = self._initialize_sync_run(
@@ -112,34 +166,87 @@ class SyncService:
         )
         if latest_treated:
             run.notes = f"dateDernierTraitementMaximum: {latest_treated.isoformat()}"
+        log_event(
+            "sync.run.prepared",
+            run_id=str(run.id),
+            scope_key=run.scope_key,
+            resume=resume,
+            status=run.status,
+            check_informations=check_informations,
+            run=serialize_sync_run(run),
+        )
         return run
 
-    def execute_sync_run(self, run_id: UUID, *, resume: bool) -> None:
+    def execute_sync_run(self, run_id: UUID, *, resume: bool, triggered_by: str = "background") -> None:
         try:
             with session_scope() as session:
                 run = session.get(models.SyncRun, run_id)
                 if not run:
                     _log_and_print(logging.WARNING, "Run %s introuvable pour la synchronisation.", run_id)
+                    log_event(
+                        "sync.run.missing",
+                        level=logging.WARNING,
+                        run_id=str(run_id),
+                    )
                     return
                 state = self._get_or_create_state(session, run.scope_key)
                 run.status = "running"
                 run.started_at = datetime.utcnow()
                 session.commit()
 
+                log_event(
+                    "sync.run.started",
+                    run_id=str(run.id),
+                    scope_key=run.scope_key,
+                    resume=resume,
+                    triggered_by=triggered_by,
+                    run=serialize_sync_run(run),
+                )
                 _log_and_print(logging.INFO, "Synchronisation démarrée (run=%s)", run.id)
 
                 client = SireneClient()
                 context = SyncContext(session=session, run=run, state=state, client=client, settings=self._settings)
+                started_at = time.perf_counter()
                 try:
-                    last_treated = self._collect_sync(context, resume=resume)
-                    self._finish_run(run, state, last_treated_max=last_treated)
+                    result = self._collect_sync(context, resume=resume)
+                    self._finish_run(run, state, last_treated_max=result.last_treated)
                     session.commit()
+                    duration = time.perf_counter() - started_at
+                    log_event(
+                        "sync.run.completed",
+                        run_id=str(run.id),
+                        scope_key=run.scope_key,
+                        status=run.status,
+                        resume=resume,
+                        triggered_by=triggered_by,
+                        duration_seconds=duration,
+                        result={
+                            "page_count": result.page_count,
+                            "new_establishment_count": len(result.new_establishments),
+                            "google_match_count": len(result.google_matches),
+                            "alert_count": len(result.alerts),
+                        },
+                        run=serialize_sync_run(run),
+                    )
                     _log_and_print(logging.INFO, "Synchronisation terminée (run=%s, créés=%s)", run.id, run.created_records)
-                except Exception:
+                except Exception as exc:
                     session.rollback()
                     run.status = "failed"
                     run.finished_at = datetime.utcnow()
                     session.commit()
+                    log_event(
+                        "sync.run.failed",
+                        level=logging.ERROR,
+                        run_id=str(run.id),
+                        scope_key=run.scope_key,
+                        resume=resume,
+                        triggered_by=triggered_by,
+                        run=serialize_sync_run(run),
+                        error={
+                            "type": type(exc).__name__,
+                            "message": str(exc),
+                        },
+                    )
                     raise
                 finally:
                     client.close()
@@ -230,7 +337,7 @@ class SyncService:
             session.flush()
         return state
 
-    def _collect_sync(self, context: SyncContext, *, resume: bool) -> datetime | None:
+    def _collect_sync(self, context: SyncContext, *, resume: bool) -> SyncResult:
         state = context.state
         months_back = max(self._settings.sync.months_back, 1)
         since_creation = subtract_months(datetime.utcnow().date(), months_back)
@@ -240,17 +347,37 @@ class SyncService:
 
         if state.query_checksum and state.query_checksum != checksum:
             _LOGGER.info("La requête a changé, réinitialisation du curseur.")
+            log_event(
+                "sync.cursor.reset",
+                run_id=str(context.run.id),
+                scope_key=context.run.scope_key,
+                reason="query_changed",
+                previous_checksum=state.query_checksum,
+                new_checksum=checksum,
+            )
             state.last_cursor = None
             state.cursor_completed = False
         state.query_checksum = checksum
 
         if not resume:
+            log_event(
+                "sync.cursor.reset",
+                run_id=str(context.run.id),
+                scope_key=context.run.scope_key,
+                reason="forced_full_run",
+            )
             state.last_cursor = None
             state.cursor_completed = False
 
         latest_treated = self._fetch_latest_treated(context.client)
         if latest_treated:
             context.run.notes = f"dateDernierTraitementMaximum: {latest_treated.isoformat()}"
+            log_event(
+                "sync.informations.latest_treated",
+                run_id=str(context.run.id),
+                scope_key=context.run.scope_key,
+                latest_treated=latest_treated,
+            )
 
         champs = self._build_fields_parameter()
         cursor_value = state.last_cursor if state.last_cursor and not state.cursor_completed else "*"
@@ -258,9 +385,27 @@ class SyncService:
 
         alert_service = AlertService(context.session, context.run)
         new_entities_total: list[models.Establishment] = []
+        new_entities_payload: list[dict[str, object]] = []
+        google_matches_payload: list[dict[str, object]] = []
+        alerts_payload: list[dict[str, object]] = []
+        page_count = 0
+        collection_started = time.perf_counter()
+
+        log_event(
+            "sync.collection.started",
+            run_id=str(context.run.id),
+            scope_key=context.run.scope_key,
+            resume=resume,
+            months_back=months_back,
+            since_creation=since_creation,
+            page_size=self._settings.sirene.page_size,
+            initial_cursor=cursor_value,
+        )
 
         while True:
             page_size = self._settings.sirene.page_size
+            page_count += 1
+            page_started = time.perf_counter()
 
             payload = context.client.search_establishments(
                 query=query,
@@ -279,9 +424,28 @@ class SyncService:
             context.run.created_records += len(new_entities)
             new_entities_total.extend(new_entities)
 
-            cursor_value = header.get("curseurSuivant")
-            state.last_cursor = cursor_value
-            context.run.last_cursor = cursor_value
+            if new_entities:
+                batch_payload = [serialize_establishment(entity) for entity in new_entities]
+                new_entities_payload.extend(batch_payload)
+                log_event(
+                    "sync.new_establishments.batch",
+                    run_id=str(context.run.id),
+                    scope_key=context.run.scope_key,
+                    page=page_count,
+                    count=len(batch_payload),
+                    establishments=batch_payload,
+                )
+                for establishment_payload in batch_payload:
+                    log_event(
+                        "sync.new_establishment",
+                        run_id=str(context.run.id),
+                        scope_key=context.run.scope_key,
+                        establishment=establishment_payload,
+                    )
+
+            next_cursor = header.get("curseurSuivant")
+            state.last_cursor = next_cursor
+            context.run.last_cursor = next_cursor
             total_value = header.get("total")
             try:
                 state.last_total = int(total_value) if total_value is not None else state.last_total
@@ -291,9 +455,27 @@ class SyncService:
             context.session.flush()
             context.session.commit()
 
-            if not etablissements or not cursor_value or cursor_value == header.get("curseur"):
+            current_cursor = cursor_value or "*"
+            page_duration = time.perf_counter() - page_started
+            log_event(
+                "sync.page.processed",
+                run_id=str(context.run.id),
+                scope_key=context.run.scope_key,
+                page=page_count,
+                fetched=len(etablissements),
+                created=len(new_entities),
+                api_call_count=context.run.api_call_count,
+                cursor=current_cursor,
+                next_cursor=next_cursor,
+                reported_total=total_value,
+                duration_seconds=page_duration,
+            )
+
+            if not etablissements or not next_cursor or next_cursor == header.get("curseur"):
                 state.cursor_completed = True
                 break
+
+            cursor_value = next_cursor
 
         google_service = GoogleBusinessService(context.session)
         try:
@@ -302,10 +484,61 @@ class SyncService:
             google_service.close()
 
         if matched_establishments:
-            alert_service.create_google_alerts(matched_establishments)
+            google_matches_payload = [serialize_establishment(item) for item in matched_establishments]
+            log_event(
+                "sync.google.enrichment",
+                run_id=str(context.run.id),
+                scope_key=context.run.scope_key,
+                matched_count=len(google_matches_payload),
+                establishments=google_matches_payload,
+            )
+            for match_payload in google_matches_payload:
+                log_event(
+                    "sync.google.match",
+                    run_id=str(context.run.id),
+                    scope_key=context.run.scope_key,
+                    establishment=match_payload,
+                )
+
+            alerts = alert_service.create_google_alerts(matched_establishments)
+            if alerts:
+                alerts_payload = [serialize_alert(alert) for alert in alerts]
+                log_event(
+                    "sync.alerts.created",
+                    run_id=str(context.run.id),
+                    scope_key=context.run.scope_key,
+                    count=len(alerts_payload),
+                    alerts=alerts_payload,
+                )
+                for alert_payload in alerts_payload:
+                    log_event(
+                        "sync.alert.created",
+                        run_id=str(context.run.id),
+                        scope_key=context.run.scope_key,
+                        alert=alert_payload,
+                    )
         context.session.commit()
 
-        return latest_treated
+        duration = time.perf_counter() - collection_started
+        log_event(
+            "sync.collection.completed",
+            run_id=str(context.run.id),
+            scope_key=context.run.scope_key,
+            duration_seconds=duration,
+            page_count=page_count,
+            fetched_records=context.run.fetched_records,
+            created_records=context.run.created_records,
+            api_call_count=context.run.api_call_count,
+        )
+
+        return SyncResult(
+            last_treated=latest_treated,
+            new_establishments=new_entities_payload,
+            google_matches=google_matches_payload,
+            alerts=alerts_payload,
+            page_count=page_count,
+            duration_seconds=duration,
+        )
 
     def _finish_run(self, run: models.SyncRun, state: models.SyncState, *, last_treated_max: datetime | None) -> None:
         run.status = "success"
