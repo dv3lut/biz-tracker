@@ -1,4 +1,13 @@
-import { SyncRequestPayload, SyncRun, SyncState, Alert, StatsSummary, Establishment } from "../types";
+import {
+  SyncRequestPayload,
+  SyncRun,
+  SyncState,
+  Alert,
+  StatsSummary,
+  Establishment,
+  EmailTestPayload,
+  EmailTestResult,
+} from "../types";
 
 export class ApiError extends Error {
   status: number;
@@ -77,6 +86,13 @@ interface EstablishmentResponse {
   updated_at: string | null;
   created_run_id: string | null;
   last_run_id: string | null;
+}
+
+interface EmailTestResponse {
+  sent: boolean;
+  provider: string;
+  subject: string;
+  recipients: string[];
 }
 
 export interface DeleteRunResponse {
@@ -301,5 +317,29 @@ export const adminApi = {
       method: "DELETE",
     });
     return data;
+  },
+
+  async sendEmailTest(payload: EmailTestPayload): Promise<EmailTestResult> {
+    const requestBody: Record<string, unknown> = {};
+    if (payload.subject && payload.subject.trim()) {
+      requestBody.subject = payload.subject.trim();
+    }
+    if (payload.body && payload.body.trim()) {
+      requestBody.body = payload.body;
+    }
+    if (payload.recipients && payload.recipients.length > 0) {
+      requestBody.recipients = payload.recipients;
+    }
+
+    const { data } = await request<EmailTestResponse>("/admin/email/test", {
+      method: "POST",
+      body: JSON.stringify(requestBody),
+    });
+    return {
+      sent: data.sent,
+      provider: data.provider,
+      subject: data.subject,
+      recipients: data.recipients,
+    };
   },
 };

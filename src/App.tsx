@@ -16,7 +16,8 @@ import { SyncRunsTable } from "./components/SyncRunsTable";
 import { SyncStateTable } from "./components/SyncStateTable";
 import { AlertsList } from "./components/AlertsList";
 import { EstablishmentsSection } from "./components/EstablishmentsSection";
-import { SyncRequestPayload, SyncRun } from "./types";
+import { EmailTestPanel } from "./components/EmailTestPanel";
+import { EmailTestPayload, EmailTestResult, SyncRequestPayload, SyncRun } from "./types";
 
 const REFRESH_LONG = 60_000;
 const REFRESH_SHORT = 30_000;
@@ -38,6 +39,8 @@ const App = () => {
   const [establishmentsQuery, setEstablishmentsQuery] = useState("");
   const [establishmentsFeedback, setEstablishmentsFeedback] = useState<string | null>(null);
   const [establishmentsError, setEstablishmentsError] = useState<string | null>(null);
+  const [emailFeedback, setEmailFeedback] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
 
   const queryClient = useQueryClient();
   const isAuthenticated = Boolean(adminToken);
@@ -46,6 +49,8 @@ const App = () => {
   const dismissError = useCallback(() => setErrorMessage(null), []);
   const dismissEstablishmentsFeedback = useCallback(() => setEstablishmentsFeedback(null), []);
   const dismissEstablishmentsError = useCallback(() => setEstablishmentsError(null), []);
+  const dismissEmailFeedback = useCallback(() => setEmailFeedback(null), []);
+  const dismissEmailError = useCallback(() => setEmailError(null), []);
 
   useEffect(() => {
     if (!feedbackMessage) {
@@ -79,13 +84,31 @@ const App = () => {
     return () => window.clearTimeout(timeout);
   }, [establishmentsError, dismissEstablishmentsError]);
 
+  useEffect(() => {
+    if (!emailFeedback) {
+      return;
+    }
+    const timeout = window.setTimeout(dismissEmailFeedback, 5000);
+    return () => window.clearTimeout(timeout);
+  }, [emailFeedback, dismissEmailFeedback]);
+
+  useEffect(() => {
+    if (!emailError) {
+      return;
+    }
+    const timeout = window.setTimeout(dismissEmailError, 5000);
+    return () => window.clearTimeout(timeout);
+  }, [emailError, dismissEmailError]);
+
   const handleUnauthorized = useCallback(() => {
     clearAdminToken();
     setAdminTokenState(null);
     setTokenError("Jeton invalide. Merci de le ressaisir.");
     setFeedbackMessage(null);
     setErrorMessage(null);
-  }, [setAdminTokenState, setTokenError, setFeedbackMessage, setErrorMessage]);
+    setEmailFeedback(null);
+    setEmailError(null);
+  }, [setAdminTokenState, setTokenError, setFeedbackMessage, setErrorMessage, setEmailFeedback, setEmailError]);
 
   const syncRunsQuery = useQuery<SyncRun[]>({
     queryKey: ["sync-runs", syncRunsLimit],
@@ -177,6 +200,19 @@ const App = () => {
     [handleUnauthorized, setErrorMessage, setFeedbackMessage]
   );
 
+  const showEmailError = useCallback(
+    (error: unknown) => {
+      if (isUnauthorizedError(error)) {
+        handleUnauthorized();
+        return;
+      }
+      const message = error instanceof ApiError ? error.message : "L'envoi du test a échoué.";
+      setEmailError(message);
+      setEmailFeedback(null);
+    },
+    [handleUnauthorized]
+  );
+
   const syncMutation = useMutation<TriggerSyncResult, unknown, SyncRequestPayload>({
     mutationFn: (payload: SyncRequestPayload) => adminApi.triggerSync(payload),
     onSuccess: ({ run, status, detail }: TriggerSyncResult) => {
@@ -233,6 +269,16 @@ const App = () => {
     onError: showError,
   });
 
+  const emailTestMutation = useMutation<EmailTestResult, unknown, EmailTestPayload>({
+    mutationFn: (payload: EmailTestPayload) => adminApi.sendEmailTest(payload),
+    onSuccess: (result) => {
+      const recipients = result.recipients.length > 0 ? result.recipients.join(", ") : "destinataires configurés";
+      setEmailFeedback(`E-mail de test envoyé via ${result.provider} vers ${recipients}.`);
+      setEmailError(null);
+    },
+    onError: showEmailError,
+  });
+
   const handleTriggerSync = useCallback(() => {
     if (!isAuthenticated) {
       setTokenError("Merci de saisir un jeton administrateur.");
@@ -280,9 +326,19 @@ const App = () => {
       setTokenError(null);
       setFeedbackMessage(null);
       setErrorMessage(null);
+      setEmailFeedback(null);
+      setEmailError(null);
       queryClient.invalidateQueries();
     },
-    [queryClient, setAdminTokenState, setTokenError, setFeedbackMessage, setErrorMessage]
+    [
+      queryClient,
+      setAdminTokenState,
+      setTokenError,
+      setFeedbackMessage,
+      setErrorMessage,
+      setEmailFeedback,
+      setEmailError,
+    ]
   );
 
   const handleTokenReset = useCallback(() => {
@@ -291,7 +347,25 @@ const App = () => {
     setTokenError(null);
     setFeedbackMessage(null);
     setErrorMessage(null);
-  }, [setAdminTokenState, setTokenError, setFeedbackMessage, setErrorMessage]);
+    setEmailFeedback(null);
+    setEmailError(null);
+  }, [setAdminTokenState, setTokenError, setFeedbackMessage, setErrorMessage, setEmailFeedback, setEmailError]);
+
+  const handleSendEmailTest = useCallback(
+    (payload: EmailTestPayload) => {
+      if (!isAuthenticated) {
+        setTokenError("Merci de saisir un jeton administrateur.");
+        return;
+      }
+      emailTestMutation.mutate(payload);
+    },
+    [isAuthenticated, emailTestMutation, setTokenError]
+  );
+
+  const handleResetEmailMessages = useCallback(() => {
+    setEmailFeedback(null);
+    setEmailError(null);
+  }, []);
 
   if (!adminToken) {
     return <AdminTokenPrompt onSubmit={handleTokenSubmit} errorMessage={tokenError} />;
@@ -368,6 +442,24 @@ const App = () => {
               limit={alertsLimit}
               onLimitChange={setAlertsLimit}
               onRefresh={() => alertsQuery.refetch()}
+            />
+          </div>
+        </section>
+
+        <section className="dashboard-section">
+          <div className="section-header">
+            <div>
+              <h2>E-mails</h2>
+              <p className="muted">Tester et valider la configuration SMTP.</p>
+            </div>
+          </div>
+          <div className="section-grid">
+            <EmailTestPanel
+              onSend={handleSendEmailTest}
+              isSending={emailTestMutation.isPending}
+              feedbackMessage={emailFeedback}
+              errorMessage={emailError}
+              onResetMessages={handleResetEmailMessages}
             />
           </div>
         </section>

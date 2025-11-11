@@ -306,7 +306,7 @@ table td {
   gap: 0.5rem;
 }
 
-.sync-form .input-label {
+.input-label {
   font-weight: 600;
 }
 
@@ -320,6 +320,24 @@ table td {
 .sync-form input[type="checkbox"] {
   width: 18px;
   height: 18px;
+}
+
+.email-test-form {
+  display: grid;
+  gap: 1rem;
+}
+
+.email-test-form input,
+.email-test-form textarea {
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #cbd5f5;
+  font-size: 1rem;
+  font-family: inherit;
+}
+
+.email-test-form textarea {
+  resize: vertical;
 }
 
 .toggle-group {

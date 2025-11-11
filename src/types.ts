@@ -73,3 +73,16 @@ export interface Establishment {
   createdRunId: string | null;
   lastRunId: string | null;
 }
+
+export interface EmailTestPayload {
+  subject?: string;
+  body?: string;
+  recipients?: string[];
+}
+
+export interface EmailTestResult {
+  sent: boolean;
+  provider: string;
+  subject: string;
+  recipients: string[];
+}

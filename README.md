@@ -39,3 +39,4 @@ npm run preview
 - Etat des curseurs et checkpoints (`/admin/sync-state`).
 - Liste des alertes récentes (`/admin/alerts/recent`).
 - Déclenchement de la synchronisation unifiée (`/admin/sync`).
+- Envoi d'un e-mail de test pour valider la configuration SMTP (`/admin/email/test`).
