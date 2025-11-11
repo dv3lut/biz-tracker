@@ -5,11 +5,13 @@ import logging
 from datetime import datetime
 from typing import Sequence
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.config import get_settings
 from app.db import models
 from app.services.email_service import EmailService
+from app.observability import log_event
+from app.services.client_service import collect_client_emails, dispatch_email_to_clients, get_active_clients
 
 _ALERT_LOGGER = logging.getLogger("alerts")
 
@@ -20,7 +22,6 @@ class AlertService:
     def __init__(self, session: Session, run: models.SyncRun) -> None:
         self._session = session
         self._run = run
-        self._settings = get_settings().email
         self._email_service = EmailService()
 
     def create_google_alerts(self, establishments: Sequence[models.Establishment]) -> list[models.Alert]:
@@ -35,7 +36,7 @@ class AlertService:
             alert = models.Alert(
                 run_id=self._run.id,
                 siret=establishment.siret,
-                recipients=self._settings.recipients,
+                recipients=[],
                 payload=payload,
             )
             alerts.append(alert)
@@ -54,12 +55,87 @@ class AlertService:
         message = "\n".join(message_lines).strip()
         _ALERT_LOGGER.info(message)
 
-        if self._settings.recipients:
+        email_enabled = self._email_service.is_enabled()
+        email_configured = self._email_service.is_configured()
+        has_previous_success = self._has_previous_successful_run()
+        active_clients = get_active_clients(self._session)
+        eligible_clients = [client for client in active_clients if any(recipient.email for recipient in client.recipients)]
+
+        all_recipient_addresses = collect_client_emails(eligible_clients)
+        for alert in alerts:
+            alert.recipients = all_recipient_addresses
+
+        if not email_enabled:
+            reason = "email_disabled"
+        elif not email_configured:
+            reason = "email_not_configured"
+        elif not has_previous_success:
+            reason = "initial_sync"
+        elif not active_clients:
+            reason = "no_clients"
+        elif not eligible_clients:
+            reason = "no_active_recipients"
+        else:
             subject = f"[{self._run.scope_key}] {len(establishments)} page(s) Google My Business détectée(s)"
-            self._email_service.send(subject, message, self._settings.recipients)
-            sent_at = datetime.utcnow()
-            for alert in alerts:
-                alert.sent_at = sent_at
+            dispatch_result = dispatch_email_to_clients(self._email_service, eligible_clients, subject, message)
+
+            if dispatch_result.delivered:
+                if dispatch_result.sent_at:
+                    for alert in alerts:
+                        alert.sent_at = dispatch_result.sent_at
+                for client, exc in dispatch_result.failed:
+                    _ALERT_LOGGER.warning("Échec de l'envoi pour le client %s: %s", client.name, exc)
+                    log_event(
+                        "alerts.email.error",
+                        run_id=str(self._run.id),
+                        scope_key=self._run.scope_key,
+                        client_id=str(client.id),
+                        error={"type": type(exc).__name__, "message": str(exc)},
+                    )
+                log_event(
+                    "alerts.email.sent",
+                    run_id=str(self._run.id),
+                    scope_key=self._run.scope_key,
+                    recipient_count=len(all_recipient_addresses),
+                    clients=[str(client.id) for client in dispatch_result.delivered],
+                    failures=[
+                        {"client_id": str(client.id), "error": str(exc)}
+                        for client, exc in dispatch_result.failed
+                    ],
+                )
+                return alerts
+
+            for client, exc in dispatch_result.failed:
+                _ALERT_LOGGER.warning("Échec de l'envoi pour le client %s: %s", client.name, exc)
+                log_event(
+                    "alerts.email.error",
+                    run_id=str(self._run.id),
+                    scope_key=self._run.scope_key,
+                    client_id=str(client.id),
+                    error={"type": type(exc).__name__, "message": str(exc)},
+                )
+
+            reason = "send_error"
+            log_event(
+                "alerts.email.skipped",
+                run_id=str(self._run.id),
+                scope_key=self._run.scope_key,
+                reason=reason,
+                recipient_count=len(all_recipient_addresses),
+                failures=[
+                    {"client_id": str(client.id), "error": str(exc)}
+                    for client, exc in dispatch_result.failed
+                ],
+            )
+            return alerts
+
+        log_event(
+            "alerts.email.skipped",
+            run_id=str(self._run.id),
+            scope_key=self._run.scope_key,
+            reason=reason,
+            recipient_count=len(all_recipient_addresses),
+        )
         return alerts
 
     def _build_payload(self, establishment: models.Establishment) -> dict[str, object]:
@@ -115,3 +191,15 @@ class AlertService:
         if include_google and establishment.google_place_url:
             lines.append(f"  Google: {establishment.google_place_url}")
         return lines
+
+    def _has_previous_successful_run(self) -> bool:
+        stmt = (
+            select(models.SyncRun.id)
+            .where(
+                models.SyncRun.scope_key == self._run.scope_key,
+                models.SyncRun.status == "success",
+                models.SyncRun.id != self._run.id,
+            )
+            .limit(1)
+        )
+        return self._session.execute(stmt).first() is not None

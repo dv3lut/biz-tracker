@@ -13,13 +13,27 @@
   - Possibilité de vérifier le `service informations` avant de lancer (`check_for_updates`) afin d’éviter un run s’il n’y a pas de nouveautés.
   - Scheduler interne (`SyncScheduler`) démarré avec l’API : scrute périodiquement les mises à jour (`sync.auto_poll_minutes`) et respecte un délai minimum `sync.minimum_delay_minutes` avant de relancer.
   - Reprise via `SyncState.last_cursor` et suivi des traitements via `SyncState.last_treated_max`.
+  - `_collect_sync` journalise chaque page, incrémente `api_call_count`, `fetched_records`, `created_records`, met à jour `SyncState` après commit partiel et sécurise la reprise même en cas de plantage intermédiaire.
+  - Les mises à jour de SIRET existants sont détectées (diff des champs) puis comptabilisées dans `sync_runs.updated_records` avec log structuré `sync.updated_establishments.batch`.
+  - Les correspondances Google sont catégorisées : `google_immediate_matched_count` pour les créations du run, `google_late_matched_count` pour le backlog.
+  - Chaque run conserve un résumé (`sync_runs.summary`) incluant statistiques, échantillons (top 10) et statut d’envoi e-mail.
 - **Alertes** :
   - Logging dédié (`logging_config` définit un logger `alerts` -> `logs/alerts.log`).
   - Envoi SMTP optionnel (classe `EmailService`, désactivée si `EMAIL__ENABLED=false`) avec presets `EMAIL__PROVIDER` (`mailhog`, `mailjet`, `custom`) et endpoint de validation `POST /admin/email/test`.
+  - Les destinataires sont notifiés individuellement (un message par adresse) et le tout premier run supprime les envois pour éviter un afflux massif.
+- **Rapport e-mail** : `_send_run_summary_email` pousse une synthèse quotidienne vers `EMAIL__SUMMARY_RECIPIENTS` (si SMTP actif/configuré), avec fallback silencieux en cas d’absence de destinataires.
+- **Enrichissement Google Places** :
+  - Service `GoogleBusinessService` + `GooglePlacesClient` activé lorsque `GOOGLE__API_KEY` est défini (Places API + Geocoding API requis côté Google Cloud).
+  - Paramètres ajustables via `.env` (`GOOGLE__*`). Sans clé, aucune requête n’est émise et les colonnes Google restent à `pending`.
+  - Chaque run enregistre les compteurs Google (file totale, éligibles, correspondances, backlog) dans `sync_runs` pour exploitation API/UI.
+  - Export XLSX disponible via `build_google_places_workbook` et l’endpoint `GET /admin/google/places-export`.
+  - Statuts persistés dans `establishments.google_check_status` : `pending`, `found`, `not_found`, `insufficient`, plus `other` comme garde-fou lors des agrégations.
 - **Observabilité** :
   - Les logs sont sérialisés en JSON (service `observability.log_event`) et peuvent être expédiés directement vers Elasticsearch (`LOGGING__ELASTICSEARCH__*`).
-  - Les événements suivent la convention `event.name` (`sync.run.*`, `sync.new_establishment`, `sync.alert.created`, `scheduler.*`) pour alimenter Kibana.
+  - Les événements suivent la convention `event.name` (`sync.run.*`, `sync.new_establishment`, `sync.google.*`, `sync.updated_establishment*`, `sync.alert.created`, `alerts.email.*`, `sync.summary.email.*`, `scheduler.*`, `email.test_sent`) pour alimenter Kibana.
+- **Analytics API** : `GET /admin/stats/dashboard` centralise les agrégations (séries journalières, répartition Google globale et du dernier run, alertes envoyées, états administratifs). Les schémas Pydantic `DashboardMetrics` et `DashboardRunBreakdown` décrivent ces payloads.
 - **API** : FastAPI (`app/api`) exposant des routes d’admin sécurisées par jeton (`X-Admin-Token` configurable). Les dépendances gèrent les sessions SQLAlchemy et les contrôles d’accès.
+  - Nouveaux endpoints : `GET /admin/google/places-export` (XLSX), `GET /admin/stats/dashboard` (agrégations journalières) et journalisation `sync.google.summary`.
 - **CORS** : middleware FastAPI activé. La liste des origines autorisées est configurable via `API__ALLOWED_ORIGINS` (liste JSON ou chaîne séparée par des virgules, valeur par défaut `http://localhost:5173`).
 - **CLI** : Typer (`python -m app …`). Commandes `init-db`, `sync`, `serve` (lance Uvicorn). Aliases historiques `sync-full` et `sync-incremental` redirigent vers `sync`.
 - **Tests & QA** : placeholder `make lint` (compileall). Prévoir pytest/ruff ultérieurement.
@@ -28,3 +42,6 @@
 
 - Projet React + Vite (`biz-tracker-admin-ui`) placé hors du dépôt backend (dossier parent). S’appuie sur React Query pour appeler les endpoints `/admin/*`.
 - Configuration via `.env` côté UI (`VITE_API_BASE_URL`). Build `npm run build`, dev `npm run dev` (port 5173).
+  - `StatsSummaryCard`, `SyncRunsTable`, `SyncStateTable`, `AlertsList`, `EstablishmentsSection` consomment les endpoints historiques (`/stats/summary`, `/sync-runs`, `/sync-state`, `/alerts/recent`, `/establishments`).
+  - `DashboardInsights` exploite `GET /admin/stats/dashboard` (30 jours par défaut, fenêtre réduite à 14 jours sur les graphiques) et s’appuie sur un composant `BarChart` CSS-only (pas de librairie externe) pour afficher les séries.
+  - Les métriques sont formatées via `utils/format.ts`; les footnotes (nombre de runs par jour) sont calculées côté front pour garder le payload compact.

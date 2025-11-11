@@ -22,6 +22,10 @@ class EmailService:
         return list(self._settings.recipients)
 
     @property
+    def summary_recipients(self) -> list[str]:
+        return list(self._settings.summary_recipients)
+
+    @property
     def provider(self) -> str:
         return self._settings.provider
 
@@ -48,16 +52,16 @@ class EmailService:
             _LOGGER.info("No recipients supplied; nothing to send.")
             return
 
-        message = EmailMessage()
-        message["Subject"] = subject
-        message["From"] = settings.from_address
-        message["To"] = ", ".join(recipient_list)
-        message.set_content(body)
-
         _LOGGER.info("Sending email to %s", recipient_list)
         with smtplib.SMTP(settings.smtp_host, settings.smtp_port) as server:
             if settings.use_tls:
                 server.starttls()
             if settings.smtp_username and settings.smtp_password:
                 server.login(settings.smtp_username, settings.smtp_password)
-            server.send_message(message)
+            message = EmailMessage()
+            message["Subject"] = subject
+            message["From"] = settings.from_address
+            message["To"] = ", ".join(recipient_list)
+            message.set_content(body)
+            server.send_message(message, to_addrs=recipient_list)
+            _LOGGER.debug("Email sent to %s", recipient_list)

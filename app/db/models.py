@@ -104,6 +104,14 @@ class SyncRun(Base):
     api_call_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     fetched_records: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     created_records: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    google_queue_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    google_eligible_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    google_matched_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    google_pending_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    google_immediate_matched_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    google_late_matched_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    updated_records: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    summary: Mapped[dict[str, object] | None] = mapped_column(JSONB, default=None)
     resumed_from_run_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("sync_runs.id"), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text)
     max_records: Mapped[int | None] = mapped_column(Integer)
@@ -147,3 +155,49 @@ class Alert(Base):
 
     run: Mapped[SyncRun] = relationship("SyncRun", back_populates="alerts")
     establishment: Mapped[Establishment] = relationship("Establishment", back_populates="alerts")
+
+
+class Client(Base):
+    """Client configuration owning email recipients for alerting."""
+
+    __tablename__ = "clients"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    emails_sent_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_email_sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    recipients: Mapped[list["ClientRecipient"]] = relationship(
+        "ClientRecipient",
+        back_populates="client",
+        cascade="all, delete-orphan",
+        order_by="ClientRecipient.email",
+    )
+
+
+class ClientRecipient(Base):
+    """Email address associated with a client."""
+
+    __tablename__ = "client_recipients"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    client_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("clients.id", ondelete="CASCADE"), index=True)
+    email: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    client: Mapped[Client] = relationship("Client", back_populates="recipients")
+
+
+class AdminRecipient(Base):
+    """Administrative email recipient for run summaries."""
+
+    __tablename__ = "admin_recipients"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)

@@ -8,6 +8,7 @@ Solution de veille sur les nouveaux établissements de restauration (NAF 56.10A)
 - Résilience : reprise automatique via `SyncState`, stockage des curseurs, gestion du throttling (30 appels/min).
 - Détection des nouveaux SIRET et génération d'alertes (log fichier + e-mail configurable via SMTP).
 - Traçabilité des exécutions (« moulinettes ») avec états, curseurs, métriques et possibilité de reprise.
+- Agrégations journalières exposées via `GET /admin/stats/dashboard` (nouveaux établissements, appels API, alertes, statuts Google) et restituées dans l'interface React.
 
 ## Prérequis
 - Python 3.11+
@@ -31,7 +32,7 @@ Solution de veille sur les nouveaux établissements de restauration (NAF 56.10A)
    ```bash
    cp .env.example .env
    ```
-   Renseignez au minimum `SIRENE__API_TOKEN` et, si besoin, adaptez l’URL de base, la configuration SMTP ou les paramètres PostgreSQL. Le champ `EMAIL__PROVIDER` permet de basculer rapidement entre `mailhog` (dev local), `mailjet` (production) ou `custom`.
+   Renseignez au minimum `SIRENE__API_TOKEN` et, si besoin, adaptez l’URL de base, la configuration SMTP ou les paramètres PostgreSQL. Le champ `EMAIL__PROVIDER` permet de basculer rapidement entre `mailhog` (dev local), `mailjet` (production) ou `custom`. Pour activer l’enrichissement Google, renseignez `GOOGLE__API_KEY` avec une clé Places valide (voir section ci-dessous).
 5. **Initialiser / mettre à niveau la base** :
    ```bash
    python -m app init-db
@@ -52,6 +53,16 @@ Toutes les commandes passent par `python -m app …` (Typer).
 
 Des cibles `Makefile` équivalentes existent (`make init-db`, `make sync`, `make serve`, `make sync-force`, etc.).
 
+## Pipeline de synchronisation
+
+1. **Préparation du run** (`SyncService.prepare_sync_run`) : création d'un `sync_run` en statut `pending`, calcul du checksum de requête, option de vérification du service `informations` pour éviter un déclenchement inutile.
+2. **Collecte Sirene** (`SyncService._collect_sync`) : itération `curseur` par `curseur`, respect du quota (30 appels/min) via `RateLimiter`, upsert des établissements et alimentation des métriques (`fetched_records`, `created_records`, `api_call_count`).
+3. **Enrichissement Google** (`GoogleBusinessService.enrich`) : constitution d'une file (nouveautés + backlog), filtrage des identités insuffisantes, appels `find_place` / `get_place_details` sous rate limiting, mise à jour des colonnes Google et des compteurs (`google_*`).
+4. **Alerting** (`AlertService.create_google_alerts`) : création des entrées `alerts`, logging structuré et envoi SMTP si la configuration est valide et qu'un run précédent a déjà abouti.
+5. **Finalisation** (`SyncService._finish_run`) : passage du run en `success`, mise à jour des curseurs `SyncState`. En cas d'exception, rollback et statut `failed` garantissent la reprise.
+
+Le scheduler (`SyncScheduler`) applique cette séquence automatiquement selon `sync.auto_poll_minutes`, tout en respectant `sync.minimum_delay_minutes` entre deux exécutions.
+
 ## API HTTP (admin seulement)
 
 - Démarrage : `python -m app serve` (ou `make serve`). Par défaut, l'API écoute sur `0.0.0.0:8080` (configurable via `.env`).
@@ -59,6 +70,7 @@ Des cibles `Makefile` équivalentes existent (`make init-db`, `make sync`, `make
 - Points d'entrée principaux :
    - `GET /health` : pong sans authentification, utile pour les probes.
    - `GET /admin/stats/summary` : synthèse des volumes et derniers runs.
+   - `GET /admin/stats/dashboard` : agrégations journalières (nouveaux établissements, appels API, alertes, statuts Google et répartition par état administratif).
    - `GET /admin/sync-runs` / `GET /admin/sync-state` / `GET /admin/alerts/recent` : monitoring détaillé.
    - `POST /admin/sync` (body `{ "resume": true, "check_for_updates": true }`) : déclenche une synchronisation unifiée (202 Accepted + `detail` si aucune nouveauté).
    - `DELETE /admin/sync-runs/{run_id}` : purge un run donné, supprime les établissements créés et les alertes associées, et réinitialise l’état de synchronisation lié.
@@ -77,6 +89,7 @@ Un fichier Postman de référence est disponible (`docs/postman_collection.json`
    ```
 - L'interface écoute par défaut sur `http://localhost:5173`. Vérifiez que `API__ALLOWED_ORIGINS` dans `.env` côté backend contient cette origine (valeur par défaut fournie).
 - Toute autre origine (hébergement distant, tunnel) peut être ajoutée à `API__ALLOWED_ORIGINS` sous forme de liste JSON ou de chaîne séparée par des virgules.
+- La section « Monitoring quotidien » de l'UI consomme `GET /admin/stats/dashboard` pour restituer les courbes journalières (nouveaux établissements, appels API), la répartition Google (global et dernier run), les alertes envoyées et le bilan des statuts établissements.
 
 ## Planification recommandée
 - Exécuter `python -m app sync --no-check-for-updates` une seule fois pour amorcer la base.
@@ -93,6 +106,7 @@ Un fichier Postman de référence est disponible (`docs/postman_collection.json`
 ## Alertes e-mail & logs
 - Les nouvelles entrées détectées lors d’une synchronisation sont loguées dans `logs/alerts.log`.
 - Si l’envoi e-mail est activé (`EMAIL__ENABLED=true` + configuration SMTP), un message synthétique est expédié à la liste définie dans `EMAIL__RECIPIENTS`.
+- Une synthèse quotidienne de run est envoyée aux adresses `EMAIL__SUMMARY_RECIPIENTS` (si définies) après chaque synchronisation réussie.
 - Presets disponibles : `EMAIL__PROVIDER=mailhog` (hôte `localhost`, port `1025`, TLS désactivé, interface http://localhost:8025 via `docker compose up -d biz-tracker-mailhog`), `EMAIL__PROVIDER=mailjet` (hôte `in-v3.mailjet.com`, port `587`, TLS activé, identifiant = API key, mot de passe = secret key), `EMAIL__PROVIDER=custom` (remplir manuellement `EMAIL__SMTP_*`).
 - L’endpoint `POST /admin/email/test` déclenche un envoi de test (corps optionnel) afin de valider la configuration active.
 
@@ -100,7 +114,12 @@ Un fichier Postman de référence est disponible (`docs/postman_collection.json`
 - Un handler Elasticsearch optionnel peut être activé via `.env` (`LOGGING__ELASTICSEARCH__ENABLED=true`). Les autres variables `LOGGING__ELASTICSEARCH__HOSTS`, `LOGGING__ELASTICSEARCH__INDEX_PREFIX`, `LOGGING__ELASTICSEARCH__ENVIRONMENT` et `LOGGING__ELASTICSEARCH__USERNAME`/`PASSWORD` ajustent la connexion.
 - Lancer `docker compose up -d biz-tracker-elasticsearch biz-tracker-kibana` pour démarrer la pile locale (Elasticsearch : `http://localhost:9200`, Kibana : `http://localhost:5601`).
 - Importer le fichier `docs/kibana/dashboards.ndjson` depuis Kibana (Stack Management > Saved Objects) pour obtenir un dashboard clef en main : runs terminés/en échec, nouveaux établissements, alertes Google.
-- Les événements (`event.name`) exposent toutes les métriques : `sync.run.*`, `sync.new_establishment`, `sync.google.match`, `sync.alert.created`, `scheduler.*`, `email.test_sent`. Ils peuvent être utilisés pour créer de nouvelles visualisations Lens (temps moyen, volumétrie journalière, etc.).
+- Les événements (`event.name`) exposent toutes les métriques : `sync.run.*`, `sync.new_establishment`, `sync.google.*`, `sync.updated_establishment*`, `sync.alert.created`, `alerts.email.*`, `sync.summary.email.*`, `scheduler.*`, `email.test_sent`. Ils peuvent être utilisés pour créer de nouvelles visualisations Lens (comparaison avec les agrégations `GET /admin/stats/dashboard`, temps moyen, volumétrie journalière, etc.).
+
+## Enrichissement Google Places
+- Activez l’enrichissement en renseignant `GOOGLE__API_KEY` (clé Places API) dans `.env`. Les autres paramètres (`GOOGLE__FIND_PLACE_URL`, `GOOGLE__PLACE_DETAILS_URL`, quotas, langue…) disposent de valeurs par défaut mais peuvent être surchargés.
+- La clé doit disposer au minimum des API **Places API** et **Geocoding API**, avec un mode de facturation actif. Restriction recommandée : limiter la clé aux IP/host applicatifs et aux API nécessaires.
+- Lorsqu’elle est absente, le service `GoogleBusinessService` est désactivé automatiquement et aucun appel n’est tenté (les runs restent fonctionnels sans enrichissement).
 
 ## Points d’attention
 - L’API Sirene limite à 30 appels/minute : le client embarque un rate limiter et gère les réponses `429` / `503` avec back-off.

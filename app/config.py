@@ -83,6 +83,7 @@ class EmailSettings(BaseModel):
     use_tls: bool = Field(default=True)
     from_address: Optional[str] = None
     recipients: List[str] = Field(default_factory=list)
+    summary_recipients: List[str] = Field(default_factory=list, description="Destinataires des rapports de synchronisation.")
 
     @field_validator("smtp_host", "smtp_username", "smtp_password", "from_address", mode="before")
     @classmethod
@@ -106,6 +107,17 @@ class EmailSettings(BaseModel):
         if isinstance(value, list):
             return value
         raise TypeError("Unsupported value for recipients")
+
+    @field_validator("summary_recipients", mode="before")
+    @classmethod
+    def _split_summary_recipients(cls, value: object) -> List[str]:
+        if value is None:
+            return []
+        if isinstance(value, str):
+            return [item.strip() for item in value.split(",") if item.strip()]
+        if isinstance(value, list):
+            return value
+        raise TypeError("Unsupported value for summary_recipients")
 
     @model_validator(mode="after")
     def _apply_provider_defaults(self) -> "EmailSettings":
@@ -156,6 +168,18 @@ class GoogleSettings(BaseModel):
     @property
     def enabled(self) -> bool:
         return bool(self.api_key)
+
+    @field_validator("api_key", mode="before")
+    @classmethod
+    def _normalize_api_key(cls, value: object) -> Optional[str | object]:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            trimmed = value.strip()
+            if not trimmed or trimmed.lower() in {"null", "none"}:
+                return None
+            return trimmed
+        return value
 
 
 class SyncSettings(BaseModel):

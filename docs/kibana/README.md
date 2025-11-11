@@ -22,10 +22,12 @@ Ce dossier contient les ressources nécessaires pour superviser Biz Tracker via 
 
 ## Contenu du dashboard
 
-- **Runs terminés** : liste des synchronisations réussies avec leurs métriques (durée, nouveaux établissements, alertes générées).
+- **Runs terminés** : liste des synchronisations réussies avec la durée, le nombre de nouveaux établissements et les compteurs Google (file totale, éligibles, fiches trouvées, restant à traiter).
+- **Résumé Google Places** : synthèse par run des tentatives d’enrichissement (volume total traité, éligibles, correspondances et backlog restant).
 - **Nouveaux établissements** : vue détaillée par établissement (SIRET, nom, localisation, URL Google éventuelle).
 - **Alertes** : journal des alertes Google My Business envoyées.
 - **Runs en échec** : chronologie des incidents avec le type et le message d’erreur associé.
+- **Appels externes** : trois tables (tous services, Sirene, Google Places) pour suivre les statuts HTTP, durées et rejets côté APIs partenaires.
 
 Les vues sont basées sur les événements structurés émis par le backend (`event.name`). Vous pouvez créer des filtres ou des visualisations Lens supplémentaires à partir du même data view pour explorer des KPI spécifiques (volume par jour, délais moyens, etc.).
 

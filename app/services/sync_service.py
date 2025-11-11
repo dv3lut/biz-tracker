@@ -6,7 +6,7 @@ import time
 import unicodedata
 from dataclasses import dataclass
 from datetime import date, datetime
-from typing import Optional, Sequence
+from typing import Any, Optional, Sequence
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -17,7 +17,9 @@ from app.db import models
 from app.db.session import session_scope
 from app.services.alert_service import AlertService
 from app.services.google_business_service import GoogleBusinessService
+from app.services.email_service import EmailService
 from app.services.establishment_mapper import extract_fields
+from app.services.client_service import get_admin_emails
 from app.observability import log_event, serialize_alert, serialize_establishment, serialize_sync_run
 from app.utils.dates import parse_datetime, subtract_months
 from app.utils.hashing import sha256_digest
@@ -49,13 +51,30 @@ class SyncContext:
 
 
 @dataclass
+class UpdatedEstablishmentInfo:
+    establishment: models.Establishment
+    changed_fields: list[str]
+
+
+@dataclass
 class SyncResult:
     last_treated: datetime | None
-    new_establishments: list[dict[str, object]]
-    google_matches: list[dict[str, object]]
-    alerts: list[dict[str, object]]
+    new_establishments: list[models.Establishment]
+    new_establishment_payloads: list[dict[str, object]]
+    updated_establishments: list[UpdatedEstablishmentInfo]
+    updated_payloads: list[dict[str, object]]
+    google_immediate_matches: list[models.Establishment]
+    google_late_matches: list[models.Establishment]
+    google_match_payloads: list[dict[str, object]]
+    alerts: list[models.Alert]
+    alert_payloads: list[dict[str, object]]
     page_count: int
     duration_seconds: float
+    google_queue_count: int
+    google_eligible_count: int
+    google_matched_count: int
+    google_pending_count: int
+    alerts_sent_count: int
 
 
 class SyncService:
@@ -96,6 +115,10 @@ class SyncService:
         try:
             result = self._collect_sync(context, resume=resume)
             self._finish_run(run, state, last_treated_max=result.last_treated)
+            summary_payload = self._build_run_summary_payload(run, result)
+            email_summary = self._send_run_summary_email(session, run, summary_payload)
+            summary_payload["email"] = email_summary
+            run.summary = summary_payload
             session.commit()
             duration = time.perf_counter() - started_at
             log_event(
@@ -107,8 +130,19 @@ class SyncService:
                 result={
                     "page_count": result.page_count,
                     "new_establishment_count": len(result.new_establishments),
-                    "google_match_count": len(result.google_matches),
+                    "updated_establishment_count": len(result.updated_establishments),
+                    "google_match_count": result.google_matched_count,
+                    "google": {
+                        "queue_count": result.google_queue_count,
+                        "eligible_count": result.google_eligible_count,
+                        "matched_count": result.google_matched_count,
+                        "immediate_matches": len(result.google_immediate_matches),
+                        "late_matches": len(result.google_late_matches),
+                        "pending_count": result.google_pending_count,
+                    },
                     "alert_count": len(result.alerts),
+                    "alerts_sent_count": result.alerts_sent_count,
+                    "email": email_summary,
                 },
                 run=serialize_sync_run(run),
             )
@@ -210,6 +244,10 @@ class SyncService:
                 try:
                     result = self._collect_sync(context, resume=resume)
                     self._finish_run(run, state, last_treated_max=result.last_treated)
+                    summary_payload = self._build_run_summary_payload(run, result)
+                    email_summary = self._send_run_summary_email(session, run, summary_payload)
+                    summary_payload["email"] = email_summary
+                    run.summary = summary_payload
                     session.commit()
                     duration = time.perf_counter() - started_at
                     log_event(
@@ -223,8 +261,19 @@ class SyncService:
                         result={
                             "page_count": result.page_count,
                             "new_establishment_count": len(result.new_establishments),
-                            "google_match_count": len(result.google_matches),
+                            "updated_establishment_count": len(result.updated_establishments),
+                            "google_match_count": result.google_matched_count,
+                            "google": {
+                                "queue_count": result.google_queue_count,
+                                "eligible_count": result.google_eligible_count,
+                                "matched_count": result.google_matched_count,
+                                "immediate_matches": len(result.google_immediate_matches),
+                                "late_matches": len(result.google_late_matches),
+                                "pending_count": result.google_pending_count,
+                            },
                             "alert_count": len(result.alerts),
+                            "alerts_sent_count": result.alerts_sent_count,
+                            "email": email_summary,
                         },
                         run=serialize_sync_run(run),
                     )
@@ -386,8 +435,13 @@ class SyncService:
         alert_service = AlertService(context.session, context.run)
         new_entities_total: list[models.Establishment] = []
         new_entities_payload: list[dict[str, object]] = []
+        updated_entities: list[UpdatedEstablishmentInfo] = []
+        updated_payloads: list[dict[str, object]] = []
+        google_immediate_matches: list[models.Establishment] = []
+        google_late_matches: list[models.Establishment] = []
         google_matches_payload: list[dict[str, object]] = []
         alerts_payload: list[dict[str, object]] = []
+        alerts_created: list[models.Alert] = []
         page_count = 0
         collection_started = time.perf_counter()
 
@@ -420,9 +474,11 @@ class SyncService:
             context.run.api_call_count += 1
             context.run.fetched_records += len(etablissements)
 
-            new_entities = self._upsert_establishments(context.session, etablissements, context.run.id)
+            new_entities, updated_batch = self._upsert_establishments(context.session, etablissements, context.run.id)
             context.run.created_records += len(new_entities)
+            context.run.updated_records += len(updated_batch)
             new_entities_total.extend(new_entities)
+            updated_entities.extend(updated_batch)
 
             if new_entities:
                 batch_payload = [serialize_establishment(entity) for entity in new_entities]
@@ -442,6 +498,28 @@ class SyncService:
                         scope_key=context.run.scope_key,
                         establishment=establishment_payload,
                     )
+
+            if updated_batch:
+                updated_batch_payload: list[dict[str, object]] = []
+                for info in updated_batch:
+                    payload = serialize_establishment(info.establishment)
+                    payload["changed_fields"] = list(info.changed_fields)
+                    updated_batch_payload.append(payload)
+                    log_event(
+                        "sync.updated_establishment",
+                        run_id=str(context.run.id),
+                        scope_key=context.run.scope_key,
+                        establishment=payload,
+                    )
+                updated_payloads.extend(updated_batch_payload)
+                log_event(
+                    "sync.updated_establishments.batch",
+                    run_id=str(context.run.id),
+                    scope_key=context.run.scope_key,
+                    page=page_count,
+                    count=len(updated_batch_payload),
+                    establishments=updated_batch_payload,
+                )
 
             next_cursor = header.get("curseurSuivant")
             state.last_cursor = next_cursor
@@ -479,17 +557,43 @@ class SyncService:
 
         google_service = GoogleBusinessService(context.session)
         try:
-            matched_establishments = google_service.enrich(new_entities_total)
+            enrichment = google_service.enrich(new_entities_total)
         finally:
             google_service.close()
 
-        if matched_establishments:
-            google_matches_payload = [serialize_establishment(item) for item in matched_establishments]
+        context.run.google_queue_count = enrichment.queue_count
+        context.run.google_eligible_count = enrichment.eligible_count
+        context.run.google_matched_count = enrichment.matched_count
+        context.run.google_pending_count = enrichment.remaining_count
+
+        log_event(
+            "sync.google.summary",
+            run_id=str(context.run.id),
+            scope_key=context.run.scope_key,
+            queue_count=enrichment.queue_count,
+            eligible_count=enrichment.eligible_count,
+            matched_count=enrichment.matched_count,
+            remaining_count=enrichment.remaining_count,
+            new_establishment_count=len(new_entities_total),
+        )
+
+        if enrichment.matches:
+            for match in enrichment.matches:
+                if match.created_run_id == context.run.id:
+                    google_immediate_matches.append(match)
+                else:
+                    google_late_matches.append(match)
+            context.run.google_immediate_matched_count = len(google_immediate_matches)
+            context.run.google_late_matched_count = len(google_late_matches)
+
+            google_matches_payload = [serialize_establishment(item) for item in enrichment.matches]
             log_event(
                 "sync.google.enrichment",
                 run_id=str(context.run.id),
                 scope_key=context.run.scope_key,
                 matched_count=len(google_matches_payload),
+                immediate_matched_count=context.run.google_immediate_matched_count,
+                late_matched_count=context.run.google_late_matched_count,
                 establishments=google_matches_payload,
             )
             for match_payload in google_matches_payload:
@@ -500,8 +604,9 @@ class SyncService:
                     establishment=match_payload,
                 )
 
-            alerts = alert_service.create_google_alerts(matched_establishments)
+            alerts = alert_service.create_google_alerts(enrichment.matches)
             if alerts:
+                alerts_created.extend(alerts)
                 alerts_payload = [serialize_alert(alert) for alert in alerts]
                 log_event(
                     "sync.alerts.created",
@@ -519,6 +624,8 @@ class SyncService:
                     )
         context.session.commit()
 
+        alerts_sent_count = sum(1 for alert in alerts_created if alert.sent_at)
+
         duration = time.perf_counter() - collection_started
         log_event(
             "sync.collection.completed",
@@ -528,17 +635,233 @@ class SyncService:
             page_count=page_count,
             fetched_records=context.run.fetched_records,
             created_records=context.run.created_records,
+            updated_records=context.run.updated_records,
             api_call_count=context.run.api_call_count,
+            google_queue_count=enrichment.queue_count,
+            google_eligible_count=enrichment.eligible_count,
+            google_matched_count=enrichment.matched_count,
+            google_pending_count=enrichment.remaining_count,
+            google_immediate_matched_count=context.run.google_immediate_matched_count,
+            google_late_matched_count=context.run.google_late_matched_count,
+            alerts_created=len(alerts_created),
+            alerts_sent=alerts_sent_count,
         )
 
         return SyncResult(
             last_treated=latest_treated,
-            new_establishments=new_entities_payload,
-            google_matches=google_matches_payload,
-            alerts=alerts_payload,
+            new_establishments=new_entities_total,
+            new_establishment_payloads=new_entities_payload,
+            updated_establishments=updated_entities,
+            updated_payloads=updated_payloads,
+            google_immediate_matches=google_immediate_matches,
+            google_late_matches=google_late_matches,
+            google_match_payloads=google_matches_payload,
+            alerts=alerts_created,
+            alert_payloads=alerts_payload,
             page_count=page_count,
             duration_seconds=duration,
+            google_queue_count=enrichment.queue_count,
+            google_eligible_count=enrichment.eligible_count,
+            google_matched_count=enrichment.matched_count,
+            google_pending_count=enrichment.remaining_count,
+            alerts_sent_count=alerts_sent_count,
         )
+
+    def _build_run_summary_payload(self, run: models.SyncRun, result: SyncResult) -> dict[str, Any]:
+        def summarize_establishment(establishment: models.Establishment) -> dict[str, Any]:
+            return {
+                "siret": establishment.siret,
+                "name": establishment.name,
+                "code_postal": establishment.code_postal,
+                "libelle_commune": establishment.libelle_commune or establishment.libelle_commune_etranger,
+                "naf_code": establishment.naf_code,
+                "google_status": establishment.google_check_status,
+                "google_place_url": establishment.google_place_url,
+                "google_place_id": establishment.google_place_id,
+                "created_run_id": str(establishment.created_run_id) if establishment.created_run_id else None,
+                "first_seen_at": establishment.first_seen_at.isoformat() if establishment.first_seen_at else None,
+                "last_seen_at": establishment.last_seen_at.isoformat() if establishment.last_seen_at else None,
+            }
+
+        samples = {
+            "new_establishments": [summarize_establishment(item) for item in result.new_establishments[:10]],
+            "updated_establishments": [],
+            "google_late_matches": [summarize_establishment(item) for item in result.google_late_matches[:10]],
+            "google_immediate_matches": [summarize_establishment(item) for item in result.google_immediate_matches[:10]],
+        }
+        for info in result.updated_establishments[:10]:
+            payload = summarize_establishment(info.establishment)
+            payload["changed_fields"] = list(info.changed_fields)
+            samples["updated_establishments"].append(payload)
+
+        summary_stats = {
+            "fetched_records": run.fetched_records,
+            "created_records": run.created_records,
+            "updated_records": run.updated_records,
+            "api_call_count": run.api_call_count,
+            "google": {
+                "queue_count": run.google_queue_count,
+                "eligible_count": run.google_eligible_count,
+                "matched_count": run.google_matched_count,
+                "immediate_matches": run.google_immediate_matched_count,
+                "late_matches": run.google_late_matched_count,
+                "pending_count": run.google_pending_count,
+            },
+            "alerts": {
+                "created": len(result.alerts),
+                "sent": result.alerts_sent_count,
+            },
+        }
+
+        return {
+            "run": {
+                "id": str(run.id),
+                "scope_key": run.scope_key,
+                "status": run.status,
+                "started_at": run.started_at.isoformat() if run.started_at else None,
+                "finished_at": run.finished_at.isoformat() if run.finished_at else None,
+                "duration_seconds": result.duration_seconds,
+                "page_count": result.page_count,
+            },
+            "stats": summary_stats,
+            "samples": samples,
+        }
+
+    def _send_run_summary_email(self, session: Session, run: models.SyncRun, summary: dict[str, Any]) -> dict[str, Any]:
+        email_service = EmailService()
+        recipients = get_admin_emails(session)
+        if not recipients:
+            log_event(
+                "sync.summary.email.skipped",
+                run_id=str(run.id),
+                scope_key=run.scope_key,
+                reason="no_recipients",
+            )
+            return {"sent": False, "recipients": [], "subject": None, "reason": "no_recipients"}
+        if not email_service.is_enabled():
+            log_event(
+                "sync.summary.email.skipped",
+                run_id=str(run.id),
+                scope_key=run.scope_key,
+                reason="email_disabled",
+            )
+            return {"sent": False, "recipients": recipients, "subject": None, "reason": "email_disabled"}
+        if not email_service.is_configured():
+            log_event(
+                "sync.summary.email.skipped",
+                run_id=str(run.id),
+                scope_key=run.scope_key,
+                reason="email_not_configured",
+            )
+            return {"sent": False, "recipients": recipients, "subject": None, "reason": "email_not_configured"}
+
+        started_at_display = run.started_at.strftime("%Y-%m-%d %H:%M") if run.started_at else "inconnu"
+        subject = f"[{run.scope_key}] Synthese run {started_at_display}"
+        body = self._render_run_summary_email(run, summary)
+
+        try:
+            email_service.send(subject, body, recipients)
+        except Exception as exc:  # noqa: BLE001 - log and continue
+            _LOGGER.warning("Échec de l'envoi de la synthèse du run %s: %s", run.id, exc)
+            log_event(
+                "sync.summary.email.error",
+                run_id=str(run.id),
+                scope_key=run.scope_key,
+                reason="send_error",
+                error={"type": type(exc).__name__, "message": str(exc)},
+            )
+            return {"sent": False, "recipients": recipients, "subject": subject, "reason": "send_error"}
+
+        log_event(
+            "sync.summary.email.sent",
+            run_id=str(run.id),
+            scope_key=run.scope_key,
+            recipients=recipients,
+            subject=subject,
+        )
+        return {"sent": True, "recipients": recipients, "subject": subject}
+
+
+    def _render_run_summary_email(self, run: models.SyncRun, summary: dict[str, Any]) -> str:
+        run_data = summary.get("run", {})
+        stats = summary.get("stats", {})
+        google_stats = stats.get("google", {})
+        alerts_stats = stats.get("alerts", {})
+        samples = summary.get("samples", {})
+
+        def format_sample(sample: dict[str, Any], *, include_changes: bool = False) -> str:
+            name = sample.get("name") or "(nom indisponible)"
+            siret = sample.get("siret") or "N/A"
+            postal = sample.get("code_postal") or ""
+            commune = sample.get("libelle_commune") or ""
+            location = " ".join(part for part in [postal, commune] if part)
+            google_status = sample.get("google_status") or "unknown"
+            line = f"- {name} — {siret}"
+            if location:
+                line += f" ({location})"
+            line += f" | Google: {google_status}"
+            place_url = sample.get("google_place_url")
+            if place_url:
+                line += f" | {place_url}"
+            if include_changes and sample.get("changed_fields"):
+                changes = ", ".join(sample["changed_fields"])
+                line += f" | champs: {changes}"
+            return line
+
+        lines = [
+            f"Synthèse du run {run_data.get('id', run.id)} ({run.scope_key})",
+            f"Statut: {run_data.get('status', run.status)}",
+            f"Début: {run_data.get('started_at')}",
+            f"Fin: {run_data.get('finished_at')}",
+            f"Durée: {run_data.get('duration_seconds')} s",
+            f"Pages traitées: {run_data.get('page_count')}",
+            "",
+            "Statistiques:",
+            f"- Enregistrements récupérés: {stats.get('fetched_records')}",
+            f"- Nouveaux établissements: {stats.get('created_records')}",
+            f"- Établissements mis à jour: {stats.get('updated_records')}",
+            f"- Appels API: {stats.get('api_call_count')}",
+            "",
+            "Google Places:",
+            f"- Correspondances immédiates: {google_stats.get('immediate_matches')}",
+            f"- Correspondances tardives: {google_stats.get('late_matches')}",
+            f"- Total correspondances: {google_stats.get('matched_count')}",
+            f"- En file d'attente: {google_stats.get('pending_count')}",
+            "",
+            "Alertes:",
+            f"- Créées: {alerts_stats.get('created')}",
+            f"- Envoyées: {alerts_stats.get('sent')}",
+        ]
+
+        new_samples = samples.get("new_establishments", [])
+        if new_samples:
+            lines.append("")
+            lines.append("Nouveaux établissements (top 10):")
+            for sample in new_samples:
+                lines.append(format_sample(sample))
+
+        updated_samples = samples.get("updated_establishments", [])
+        if updated_samples:
+            lines.append("")
+            lines.append("Établissements mis à jour (top 10):")
+            for sample in updated_samples:
+                lines.append(format_sample(sample, include_changes=True))
+
+        late_samples = samples.get("google_late_matches", [])
+        if late_samples:
+            lines.append("")
+            lines.append("Correspondances Google tardives (top 10):")
+            for sample in late_samples:
+                lines.append(format_sample(sample))
+
+        immediate_samples = samples.get("google_immediate_matches", [])
+        if immediate_samples:
+            lines.append("")
+            lines.append("Correspondances Google immédiates (top 10):")
+            for sample in immediate_samples:
+                lines.append(format_sample(sample))
+
+        return "\n".join(lines).strip()
 
     def _finish_run(self, run: models.SyncRun, state: models.SyncState, *, last_treated_max: datetime | None) -> None:
         run.status = "success"
@@ -580,8 +903,9 @@ class SyncService:
         session: Session,
         etablissements: Sequence[dict[str, object]],
         run_id: UUID,
-    ) -> list[models.Establishment]:
+    ) -> tuple[list[models.Establishment], list[UpdatedEstablishmentInfo]]:
         new_entities: list[models.Establishment] = []
+        updated_entities: list[UpdatedEstablishmentInfo] = []
         now = datetime.utcnow()
         for payload in etablissements:
             fields = extract_fields(payload)
@@ -595,10 +919,16 @@ class SyncService:
                 continue
             entity = session.get(models.Establishment, siret)
             if entity:
+                changed_fields: list[str] = []
                 for key, value in fields.items():
-                    setattr(entity, key, value)
+                    current_value = getattr(entity, key)
+                    if current_value != value:
+                        setattr(entity, key, value)
+                        changed_fields.append(key)
                 entity.last_seen_at = now
                 entity.last_run_id = run_id
+                if changed_fields:
+                    updated_entities.append(UpdatedEstablishmentInfo(entity, changed_fields))
             else:
                 fields["created_run_id"] = run_id
                 fields["last_run_id"] = run_id
@@ -608,7 +938,7 @@ class SyncService:
                 session.add(entity)
                 new_entities.append(entity)
         session.flush()
-        return new_entities
+        return new_entities, updated_entities
 
     def _extract_collection_info(self, payload: dict[str, object], name: str) -> Optional[dict[str, object]]:
         if not isinstance(payload, dict):

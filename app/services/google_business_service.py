@@ -34,6 +34,15 @@ class GoogleMatch:
     confidence: float
 
 
+@dataclass
+class GoogleEnrichmentResult:
+    matches: list[models.Establishment]
+    queue_count: int
+    eligible_count: int
+    matched_count: int
+    remaining_count: int
+
+
 class GoogleBusinessService:
     """Lookup Google My Business pages for establishments lacking an association."""
 
@@ -52,9 +61,9 @@ class GoogleBusinessService:
         if self._client:
             self._client.close()
 
-    def enrich(self, new_establishments: Sequence[models.Establishment]) -> list[models.Establishment]:
+    def enrich(self, new_establishments: Sequence[models.Establishment]) -> GoogleEnrichmentResult:
         if not self._client or not self._rate_limiter:
-            return []
+            return GoogleEnrichmentResult(matches=[], queue_count=0, eligible_count=0, matched_count=0, remaining_count=0)
 
         now = datetime.utcnow()
         unique_new = {establishment.siret: establishment for establishment in new_establishments if establishment.siret}
@@ -63,9 +72,11 @@ class GoogleBusinessService:
         queue = candidates + backlog
 
         newly_found: list[models.Establishment] = []
+        eligible_count = 0
         for establishment in queue:
             if not self._should_lookup(establishment, now):
                 continue
+            eligible_count += 1
             result = self._lookup(establishment)
             establishment.google_last_checked_at = now
             if not result:
@@ -81,7 +92,50 @@ class GoogleBusinessService:
             establishment.google_check_status = "found"
             newly_found.append(establishment)
         self._session.flush()
-        return newly_found
+        remaining = [
+            establishment
+            for establishment in queue
+            if self._has_searchable_identity(establishment) and not establishment.google_place_url
+        ]
+        return GoogleEnrichmentResult(
+            matches=newly_found,
+            queue_count=len(queue),
+            eligible_count=eligible_count,
+            matched_count=len(newly_found),
+            remaining_count=len(remaining),
+        )
+
+    def manual_check(self, establishment: models.Establishment) -> GoogleMatch | None:
+        """Lookup a single establishment without processing the backlog."""
+
+        if not self._client or not self._rate_limiter:
+            raise GooglePlacesError("Google Places API key is not configured.")
+
+        now = datetime.utcnow()
+        if not self._has_searchable_identity(establishment):
+            establishment.google_check_status = "insufficient"
+            establishment.google_last_checked_at = establishment.google_last_checked_at or now
+            self._session.flush()
+            return None
+
+        result = self._lookup(establishment)
+        establishment.google_last_checked_at = now
+        if not result:
+            if establishment.google_check_status != "found":
+                establishment.google_check_status = "not_found"
+            self._session.flush()
+            return None
+
+        establishment.google_place_id = result.place_id
+        if result.place_url:
+            establishment.google_place_url = result.place_url
+            establishment.google_last_found_at = now
+            establishment.google_check_status = "found"
+        else:
+            _LOGGER.debug("Résultat Google Places trouvé sans URL exploitable pour %s", establishment.siret)
+            establishment.google_check_status = "found"
+        self._session.flush()
+        return result
 
     def _filter_candidates(
         self,
