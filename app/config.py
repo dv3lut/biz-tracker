@@ -143,7 +143,7 @@ class GoogleSettings(BaseModel):
         description="Endpoint for the Place Details API.",
     )
     max_calls_per_minute: int = Field(
-        default=20,
+        default=600,
         ge=1,
         description="Maximum number of Google Places API calls per minute (both search and details combined).",
     )

@@ -82,6 +82,10 @@ def run_schema_upgrades(engine: Engine) -> None:
         ALTER TABLE sync_runs
         ADD COLUMN IF NOT EXISTS google_pending_count INTEGER DEFAULT 0
         """,
+    """
+    ALTER TABLE sync_runs
+    ADD COLUMN IF NOT EXISTS google_api_call_count INTEGER DEFAULT 0
+    """,
         """
         ALTER TABLE sync_runs
         ADD COLUMN IF NOT EXISTS google_immediate_matched_count INTEGER DEFAULT 0

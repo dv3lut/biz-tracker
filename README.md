@@ -47,8 +47,7 @@ Toutes les commandes passent par `python -m app …` (Typer).
 | --- | --- |
 | `python -m app init-db` | Crée les tables si nécessaire. |
 | `python -m app sync --check-for-updates` | Lance la synchronisation unifiée en vérifiant le service informations (annule si aucune nouveauté). |
-| `python -m app sync --no-check-for-updates` | Force une synchronisation complète à partir du curseur courant. |
-| `python -m app sync --no-check-for-updates --no-resume` | Rejoue intégralement la synchronisation depuis le début. |
+| `python -m app sync --no-check-for-updates` | Force une synchronisation complète depuis le début. |
 | `python -m app serve` | Démarre l'API FastAPI sécurisée (admin token requis). |
 
 Des cibles `Makefile` équivalentes existent (`make init-db`, `make sync`, `make serve`, `make sync-force`, etc.).
@@ -72,7 +71,7 @@ Le scheduler (`SyncScheduler`) applique cette séquence automatiquement selon `s
    - `GET /admin/stats/summary` : synthèse des volumes et derniers runs.
    - `GET /admin/stats/dashboard` : agrégations journalières (nouveaux établissements, appels API, alertes, statuts Google et répartition par état administratif).
    - `GET /admin/sync-runs` / `GET /admin/sync-state` / `GET /admin/alerts/recent` : monitoring détaillé.
-   - `POST /admin/sync` (body `{ "resume": true, "check_for_updates": true }`) : déclenche une synchronisation unifiée (202 Accepted + `detail` si aucune nouveauté).
+   - `POST /admin/sync` (body `{ "check_for_updates": true }`) : déclenche une synchronisation unifiée (202 Accepted + `detail` si aucune nouveauté).
    - `DELETE /admin/sync-runs/{run_id}` : purge un run donné, supprime les établissements créés et les alertes associées, et réinitialise l’état de synchronisation lié.
 
 Un fichier Postman de référence est disponible (`docs/postman_collection.json`). Pensez à définir la variable `baseUrl` et l'en-tête `X-Admin-Token` dans votre environnement Postman avant utilisation.
@@ -92,7 +91,7 @@ Un fichier Postman de référence est disponible (`docs/postman_collection.json`
 - La section « Monitoring quotidien » de l'UI consomme `GET /admin/stats/dashboard` pour restituer les courbes journalières (nouveaux établissements, appels API), la répartition Google (global et dernier run), les alertes envoyées et le bilan des statuts établissements.
 
 ## Planification recommandée
-- Exécuter `python -m app sync --no-check-for-updates` une seule fois pour amorcer la base.
+- Exécuter `python -m app sync --no-check-for-updates` une seule fois pour amorcer la base (chaque exécution rejoue l'intégralité de la collecte).
 - Programmer `python -m app sync --check-for-updates` quotidiennement **après** la publication des mises à jour Sirene (cf. `Service informations`).
    - La commande interroge `dateDernierTraitementMaximum`; si elle n’a pas évolué, elle s’arrête proprement.
    - En cas de mise à jour très volumineuse (`dateDernierTraitementDeMasse`), prévoyez un monitoring spécifique.

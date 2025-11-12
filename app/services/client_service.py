@@ -28,6 +28,17 @@ def get_active_clients(session: Session) -> list[models.Client]:
     return list(session.execute(stmt).scalars())
 
 
+def is_client_active(client: models.Client, *, on_date: date | None = None) -> bool:
+    """Check whether the client is active for the given date (defaults to today)."""
+
+    reference_date = on_date or date.today()
+    if client.start_date > reference_date:
+        return False
+    if client.end_date and client.end_date < reference_date:
+        return False
+    return True
+
+
 def get_admin_emails(session: Session) -> list[str]:
     """Fetch the sorted list of administrative summary recipients."""
 
@@ -75,8 +86,11 @@ def dispatch_email_to_clients(
     failed: list[tuple[models.Client, Exception]] = []
     recipient_map: dict[str, list[str]] = {}
     timestamp: datetime | None = None
+    today = date.today()
 
     for client in clients:
+        if not is_client_active(client, on_date=today):
+            continue
         recipients = [recipient.email for recipient in client.recipients if recipient.email]
         if not recipients:
             continue

@@ -102,6 +102,7 @@ class SyncRun(Base):
     last_cursor: Mapped[str | None] = mapped_column(Text)
     query_checksum: Mapped[str | None] = mapped_column(String(64))
     api_call_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    google_api_call_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     fetched_records: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     created_records: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     google_queue_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

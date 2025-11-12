@@ -127,8 +127,21 @@ def extract_fields(payload: dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+
+_PLACEHOLDER_TOKENS = {"ND"}
+
+
 def _clean(value: Optional[str]) -> Optional[str]:
     if value is None:
         return None
     stripped = value.strip()
-    return stripped or None
+    if not stripped:
+        return None
+    normalized = "".join(ch for ch in stripped.upper() if ch.isalnum())
+    if not normalized:
+        return None
+    if normalized in _PLACEHOLDER_TOKENS:
+        return None
+    if len(normalized) % 2 == 0 and all(normalized[i : i + 2] == "ND" for i in range(0, len(normalized), 2)):
+        return None
+    return stripped

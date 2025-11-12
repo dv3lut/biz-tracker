@@ -100,7 +100,6 @@ class SyncScheduler:
 
             run = self._service.prepare_sync_run(
                 session,
-                resume=True,
                 check_informations=True,
             )
             if not run:
@@ -125,7 +124,7 @@ class SyncScheduler:
         worker = threading.Thread(
             target=self._service.execute_sync_run,
             args=(run_id,),
-            kwargs={"resume": True, "triggered_by": "scheduler"},
+            kwargs={"triggered_by": "scheduler"},
             daemon=True,
             name=f"SyncWorker-{run_id}",
         )

@@ -30,13 +30,12 @@ def init_db() -> None:
     typer.echo("Tables créées (si nécessaire).")
 
 
-def _execute_sync(resume: bool, check_for_updates: bool) -> None:
+def _execute_sync(check_for_updates: bool) -> None:
     configure_logging()
     service = SyncService()
     with session_scope() as session:
         run = service.prepare_sync_run(
             session,
-            resume=resume,
             check_informations=check_for_updates,
         )
         if run is None:
@@ -45,7 +44,7 @@ def _execute_sync(resume: bool, check_for_updates: bool) -> None:
         run_id = run.id
 
     typer.echo(f"Synchronisation programmée: run={run_id}")
-    service.execute_sync_run(run_id, resume=resume, triggered_by="cli")
+    service.execute_sync_run(run_id, triggered_by="cli")
 
     with session_scope() as session:
         final_run = session.get(models.SyncRun, run_id)
@@ -55,7 +54,6 @@ def _execute_sync(resume: bool, check_for_updates: bool) -> None:
 
 @cli.command("sync")
 def sync(
-    resume: bool = typer.Option(True, help="Reprendre le curseur précédent si disponible."),
     check_for_updates: bool = typer.Option(
         False,
         "--check-for-updates/--no-check-for-updates",
@@ -64,17 +62,16 @@ def sync(
 ) -> None:
     """Lancer la synchronisation unifiée des restaurants."""
 
-    _execute_sync(resume=resume, check_for_updates=check_for_updates)
+    _execute_sync(check_for_updates=check_for_updates)
 
 
 @cli.command("sync-full", hidden=True)
 def sync_full_legacy(
-    resume: bool = typer.Option(True, help="Reprendre le curseur précédent si disponible."),
 ) -> None:
     """Alias rétrocompatibilité vers la synchronisation unifiée."""
 
     typer.echo("Commande 'sync-full' obsolète. Utilisation de 'sync'.")
-    _execute_sync(resume=resume, check_for_updates=False)
+    _execute_sync(check_for_updates=False)
 
 
 @cli.command("sync-incremental", hidden=True)
@@ -82,7 +79,7 @@ def sync_incremental_legacy() -> None:
     """Alias rétrocompatibilité vers la synchronisation unifiée."""
 
     typer.echo("Commande 'sync-incremental' obsolète. Utilisation de 'sync'.")
-    _execute_sync(resume=True, check_for_updates=False)
+    _execute_sync(check_for_updates=False)
 
 
 @cli.command("serve")

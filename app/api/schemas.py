@@ -18,6 +18,7 @@ class SyncRunOut(BaseModel):
     started_at: datetime
     finished_at: datetime | None
     api_call_count: int
+    google_api_call_count: int
     fetched_records: int
     created_records: int
     google_queue_count: int
@@ -79,12 +80,29 @@ class DailyMetricPoint(BaseModel):
 
 class DailyApiMetricPoint(DailyMetricPoint):
     run_count: int = Field(description="Nombre de runs terminés ce jour-là.")
+    google_api_call_count: int = Field(default=0, description="Nombre d'appels Google réalisés durant la journée.")
 
 
 class DailyAlertMetricPoint(BaseModel):
     date: Date = Field(description="Jour de référence.")
     created: int = Field(description="Alertes créées durant la journée.")
     sent: int = Field(description="Alertes réellement envoyées durant la journée.")
+
+
+class DailyRunOutcomePoint(BaseModel):
+    date: Date = Field(description="Jour de référence.")
+    created_records: int = Field(description="Établissements créés durant la journée.")
+    updated_records: int = Field(description="Établissements mis à jour durant la journée.")
+
+
+class DailyGoogleStatusPoint(BaseModel):
+    date: Date = Field(description="Jour de référence.")
+    immediate_matches: int = Field(description="Fiches Google trouvées immédiatement pour la journée.")
+    late_matches: int = Field(description="Fiches Google rattrapées sur des établissements existants pour la journée.")
+    not_found: int = Field(description="Établissements sans fiche Google trouvée durant la journée.")
+    insufficient: int = Field(description="Établissements avec identité insuffisante pour Google durant la journée.")
+    pending: int = Field(description="Établissements encore en file d'attente Google durant la journée.")
+    other: int = Field(description="Statuts Google inattendus durant la journée.")
 
 
 class GoogleStatusBreakdown(BaseModel):
@@ -101,6 +119,7 @@ class DashboardRunBreakdown(BaseModel):
     created_records: int = Field(description="Nombre de nouveaux établissements créés par le run.")
     updated_records: int = Field(description="Nombre d'établissements existants mis à jour durant le run.")
     api_call_count: int = Field(description="Nombre d'appels API effectués par le run.")
+    google_api_call_count: int = Field(description="Nombre d'appels Google effectués par le run.")
     google_found: int = Field(description="Nouveaux établissements associés à une fiche Google.")
     google_found_late: int = Field(description="Établissements existants enrichis lors d'un run ultérieur.")
     google_not_found: int = Field(description="Nouveaux établissements sans fiche Google détectée.")
@@ -117,6 +136,8 @@ class DashboardMetrics(BaseModel):
     daily_new_businesses: list[DailyMetricPoint] = Field(default_factory=list, description="Volume de nouveaux établissements par jour.")
     daily_api_calls: list[DailyApiMetricPoint] = Field(default_factory=list, description="Nombre d'appels API par jour avec le nombre de runs.")
     daily_alerts: list[DailyAlertMetricPoint] = Field(default_factory=list, description="Alertes créées et envoyées par jour.")
+    daily_run_outcomes: list[DailyRunOutcomePoint] = Field(default_factory=list, description="Créations et mises à jour quotidiennes.")
+    daily_google_statuses: list[DailyGoogleStatusPoint] = Field(default_factory=list, description="Répartition quotidienne des statuts Google.")
     google_status_breakdown: GoogleStatusBreakdown = Field(description="Répartition globale des statuts Google.")
     establishment_status_breakdown: dict[str, int] = Field(default_factory=dict, description="Répartition des établissements par état administratif.")
 
@@ -145,6 +166,7 @@ class RunSummaryStats(BaseModel):
     google_total_matches: int
     google_immediate_matches: int
     google_late_matches: int
+    google_api_call_count: int
     alerts_created: int
     alerts_sent: int
     page_count: int
@@ -213,7 +235,6 @@ class AdminEmailConfigUpdate(BaseModel):
 
 
 class SyncRequest(BaseModel):
-    resume: bool = True
     check_for_updates: bool = Field(
         default=False,
         description="Vérifie le service informations Sirene et annule si aucune mise à jour n'est disponible.",
