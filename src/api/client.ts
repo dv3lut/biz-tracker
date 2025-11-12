@@ -13,6 +13,8 @@ import {
   DailyMetricPoint,
   DailyApiMetricPoint,
   DailyAlertMetricPoint,
+  DailyGoogleStatusPoint,
+  DailyRunOutcomePoint,
   GoogleStatusBreakdown,
   DashboardRunBreakdown,
   RunSummary,
@@ -39,6 +41,7 @@ interface SyncRunResponse {
   started_at: string;
   finished_at: string | null;
   api_call_count: number;
+  google_api_call_count: number;
   fetched_records: number;
   created_records: number;
   updated_records: number;
@@ -86,6 +89,7 @@ interface RunSummaryStatsResponse {
 }
 
 interface RunSummaryGoogleStatsResponse {
+  api_call_count: number;
   queue_count: number;
   eligible_count: number;
   matched_count: number;
@@ -168,12 +172,29 @@ interface DailyMetricPointResponse {
 
 interface DailyApiMetricPointResponse extends DailyMetricPointResponse {
   run_count: number;
+  google_api_call_count: number;
 }
 
 interface DailyAlertMetricPointResponse {
   date: string;
   created: number;
   sent: number;
+}
+
+interface DailyRunOutcomePointResponse {
+  date: string;
+  created_records: number;
+  updated_records: number;
+}
+
+interface DailyGoogleStatusPointResponse {
+  date: string;
+  immediate_matches: number;
+  late_matches: number;
+  not_found: number;
+  insufficient: number;
+  pending: number;
+  other: number;
 }
 
 interface GoogleStatusBreakdownResponse {
@@ -190,6 +211,7 @@ interface DashboardRunBreakdownResponse {
   created_records: number;
   updated_records: number;
   api_call_count: number;
+  google_api_call_count: number;
   google_found: number;
   google_found_late: number;
   google_not_found: number;
@@ -206,6 +228,8 @@ interface DashboardMetricsResponse {
   daily_new_businesses: DailyMetricPointResponse[];
   daily_api_calls: DailyApiMetricPointResponse[];
   daily_alerts: DailyAlertMetricPointResponse[];
+  daily_run_outcomes: DailyRunOutcomePointResponse[];
+  daily_google_statuses: DailyGoogleStatusPointResponse[];
   google_status_breakdown: GoogleStatusBreakdownResponse;
   establishment_status_breakdown: Record<string, number>;
 }
@@ -359,6 +383,7 @@ const toRunSummary = (payload: RunSummaryResponse): RunSummary => ({
     updatedRecords: payload.stats.updated_records,
     apiCallCount: payload.stats.api_call_count,
     google: {
+      apiCallCount: payload.stats.google.api_call_count,
       queueCount: payload.stats.google.queue_count,
       eligibleCount: payload.stats.google.eligible_count,
       matchedCount: payload.stats.google.matched_count,
@@ -395,6 +420,7 @@ const toSyncRun = (payload: SyncRunResponse): SyncRun => ({
   startedAt: payload.started_at,
   finishedAt: payload.finished_at,
   apiCallCount: payload.api_call_count,
+  googleApiCallCount: payload.google_api_call_count,
   fetchedRecords: payload.fetched_records,
   createdRecords: payload.created_records,
   updatedRecords: payload.updated_records,
@@ -454,12 +480,29 @@ const toDailyApiMetricPoint = (payload: DailyApiMetricPointResponse): DailyApiMe
   date: payload.date,
   value: payload.value,
   runCount: payload.run_count,
+  googleApiCallCount: payload.google_api_call_count,
 });
 
 const toDailyAlertMetricPoint = (payload: DailyAlertMetricPointResponse): DailyAlertMetricPoint => ({
   date: payload.date,
   created: payload.created,
   sent: payload.sent,
+});
+
+const toDailyRunOutcomePoint = (payload: DailyRunOutcomePointResponse): DailyRunOutcomePoint => ({
+  date: payload.date,
+  createdRecords: payload.created_records,
+  updatedRecords: payload.updated_records,
+});
+
+const toDailyGoogleStatusPoint = (payload: DailyGoogleStatusPointResponse): DailyGoogleStatusPoint => ({
+  date: payload.date,
+  immediateMatches: payload.immediate_matches,
+  lateMatches: payload.late_matches,
+  notFound: payload.not_found,
+  insufficient: payload.insufficient,
+  pending: payload.pending,
+  other: payload.other,
 });
 
 const toGoogleStatusBreakdown = (payload: GoogleStatusBreakdownResponse): GoogleStatusBreakdown => ({
@@ -476,6 +519,7 @@ const toDashboardRunBreakdown = (payload: DashboardRunBreakdownResponse): Dashbo
   createdRecords: payload.created_records,
   updatedRecords: payload.updated_records,
   apiCallCount: payload.api_call_count,
+  googleApiCallCount: payload.google_api_call_count,
   googleFound: payload.google_found,
   googleFoundLate: payload.google_found_late,
   googleNotFound: payload.google_not_found,
@@ -492,6 +536,8 @@ const toDashboardMetrics = (payload: DashboardMetricsResponse): DashboardMetrics
   dailyNewBusinesses: payload.daily_new_businesses.map(toDailyMetricPoint),
   dailyApiCalls: payload.daily_api_calls.map(toDailyApiMetricPoint),
   dailyAlerts: payload.daily_alerts.map(toDailyAlertMetricPoint),
+  dailyRunOutcomes: payload.daily_run_outcomes.map(toDailyRunOutcomePoint),
+  dailyGoogleStatuses: payload.daily_google_statuses.map(toDailyGoogleStatusPoint),
   googleStatusBreakdown: toGoogleStatusBreakdown(payload.google_status_breakdown),
   establishmentStatusBreakdown: payload.establishment_status_breakdown,
 });

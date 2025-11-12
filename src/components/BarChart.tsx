@@ -25,6 +25,8 @@ type BarChartProps = {
   data: BarChartDatum[];
   height?: number;
   highlightLast?: boolean;
+  selectedKey?: string | null;
+  onSelect?: (datum: BarChartDatum) => void;
 };
 
 const ValueLabel = ({ x, y, value }: LabelProps) => {
@@ -55,7 +57,7 @@ const ChartTooltip = ({ active, payload, label }: TooltipProps<ValueType, NameTy
   );
 };
 
-export const BarChart = ({ data, height = 220, highlightLast = false }: BarChartProps) => {
+export const BarChart = ({ data, height = 220, highlightLast = false, selectedKey, onSelect }: BarChartProps) => {
   if (data.length === 0) {
     return <p className="muted">Pas encore de donnees.</p>;
   }
@@ -83,6 +85,9 @@ export const BarChart = ({ data, height = 220, highlightLast = false }: BarChart
               <Cell
                 key={item.key}
                 fill={highlightLast && index === data.length - 1 ? "url(#barGradientHighlight)" : "url(#barGradient)"}
+                opacity={selectedKey && selectedKey !== item.key ? 0.55 : 1}
+                style={{ cursor: onSelect ? "pointer" : "default" }}
+                onClick={() => onSelect?.(item)}
               />
             ))}
             <LabelList dataKey="value" content={<ValueLabel />} />

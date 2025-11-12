@@ -6,6 +6,7 @@ export interface SyncRun {
   startedAt: string;
   finishedAt: string | null;
   apiCallCount: number;
+  googleApiCallCount: number;
   fetchedRecords: number;
   createdRecords: number;
   updatedRecords: number;
@@ -67,12 +68,29 @@ export interface DailyMetricPoint {
 
 export interface DailyApiMetricPoint extends DailyMetricPoint {
   runCount: number;
+  googleApiCallCount: number;
 }
 
 export interface DailyAlertMetricPoint {
   date: string;
   created: number;
   sent: number;
+}
+
+export interface DailyRunOutcomePoint {
+  date: string;
+  createdRecords: number;
+  updatedRecords: number;
+}
+
+export interface DailyGoogleStatusPoint {
+  date: string;
+  immediateMatches: number;
+  lateMatches: number;
+  notFound: number;
+  insufficient: number;
+  pending: number;
+  other: number;
 }
 
 export interface GoogleStatusBreakdown {
@@ -89,6 +107,7 @@ export interface DashboardRunBreakdown {
   createdRecords: number;
   updatedRecords: number;
   apiCallCount: number;
+  googleApiCallCount: number;
   googleFound: number;
   googleFoundLate: number;
   googleNotFound: number;
@@ -122,6 +141,7 @@ export interface RunSummaryStats {
   updatedRecords: number;
   apiCallCount: number;
   google: {
+    apiCallCount: number;
     queueCount: number;
     eligibleCount: number;
     matchedCount: number;
@@ -173,6 +193,8 @@ export interface DashboardMetrics {
   dailyNewBusinesses: DailyMetricPoint[];
   dailyApiCalls: DailyApiMetricPoint[];
   dailyAlerts: DailyAlertMetricPoint[];
+  dailyRunOutcomes: DailyRunOutcomePoint[];
+  dailyGoogleStatuses: DailyGoogleStatusPoint[];
   googleStatusBreakdown: GoogleStatusBreakdown;
   establishmentStatusBreakdown: Record<string, number>;
 }
@@ -251,6 +273,28 @@ export interface EmailTestResult {
   sent: boolean;
   provider: string;
   subject: string;
+  recipients: string[];
+}
+
+export interface ClientRecipient {
+  id: string;
+  email: string;
+  createdAt: string;
+}
+
+export interface Client {
+  id: string;
+  name: string;
+  startDate: string;
+  endDate: string | null;
+  emailsSentCount: number;
+  lastEmailSentAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  recipients: ClientRecipient[];
+}
+
+export interface AdminEmailConfig {
   recipients: string[];
 }
 

@@ -2,6 +2,8 @@ import { type ReactNode } from "react";
 
 import { StatsSummary, SyncRun } from "../types";
 import { formatDateTime, formatNumber, formatPercent, formatDuration } from "../utils/format";
+import { computeGoogleProgress, computeSireneProgress } from "../utils/progress";
+import { ProgressBar } from "./ProgressBar";
 
 type Props = {
   summary?: StatsSummary;
@@ -22,8 +24,44 @@ const renderRunDetails = (run: SyncRun | null): ReactNode => {
     return <p className="muted">Aucune exécution enregistrée.</p>;
   }
 
+  const sireneProgress = computeSireneProgress(run);
+  const googleProgress = computeGoogleProgress(run);
+  const sireneDetails = sireneProgress.total
+    ? `${formatNumber(sireneProgress.processed)} / ${formatNumber(sireneProgress.total)} établissements traités`
+    : `${formatNumber(sireneProgress.processed)} établissements traités (total inconnu)`;
+  const hasGoogleWork = googleProgress.total !== null || run.googleQueueCount > 0 || run.googleEligibleCount > 0;
+  const googleDetailParts: string[] = [];
+  if (googleProgress.total !== null) {
+    googleDetailParts.push(
+      `${formatNumber(googleProgress.processed)} / ${formatNumber(googleProgress.total)} fiches traitées`,
+    );
+  } else {
+    googleDetailParts.push(
+      run.status === "running" ? "Traitement en cours (volume inconnu)" : "Aucune fiche Google à traiter",
+    );
+  }
+  if (googleProgress.pending > 0) {
+    googleDetailParts.push(`Restant: ${formatNumber(googleProgress.pending)}`);
+  }
+
   return (
-    <dl className="data-grid">
+    <>
+      <div className="progress-bars">
+        <ProgressBar
+          label="Avancement Sirene"
+          value={sireneProgress.value}
+          details={<span>{sireneDetails}</span>}
+        />
+        {hasGoogleWork ? (
+          <ProgressBar
+            label="Appels Google"
+            tone="success"
+            value={googleProgress.value}
+            details={<span>{googleDetailParts.join(" · ")}</span>}
+          />
+        ) : null}
+      </div>
+      <dl className="data-grid">
       <div>
         <dt>Type</dt>
         <dd>{run.runType}</dd>
@@ -73,6 +111,10 @@ const renderRunDetails = (run: SyncRun | null): ReactNode => {
         <dd>{formatNumber(run.apiCallCount)}</dd>
       </div>
       <div>
+        <dt>Appels Google</dt>
+        <dd>{formatNumber(run.googleApiCallCount)}</dd>
+      </div>
+      <div>
         <dt>Restant estimé</dt>
         <dd>{formatDuration(run.estimatedRemainingSeconds)}</dd>
       </div>
@@ -92,7 +134,8 @@ const renderRunDetails = (run: SyncRun | null): ReactNode => {
         <dt>Notes</dt>
         <dd>{run.notes ?? "—"}</dd>
       </div>
-    </dl>
+      </dl>
+    </>
   );
 };
 

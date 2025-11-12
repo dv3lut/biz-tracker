@@ -2,31 +2,69 @@ import { useEffect, useState, useCallback } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
-  adminApi,
   ApiError,
-  type TriggerSyncResult,
-  type DeleteRunResponse,
-  getAdminToken,
-  setAdminToken,
+  alertsApi,
+  adminConfigApi,
   clearAdminToken,
-} from "./api/client";
+  emailApi,
+  establishmentsApi,
+  getAdminToken,
+  googleApi,
+  clientsApi,
+  setAdminToken,
+  statsApi,
+  syncApi,
+  type AdminEmailConfigPayload,
+  type ClientCreatePayload,
+  type ClientUpdatePayload,
+  type DeleteRunResponse,
+  type TriggerSyncResult,
+} from "./api";
 import { AdminTokenPrompt } from "./components/AdminTokenPrompt";
-import { StatsSummaryCard } from "./components/StatsSummaryCard";
-import { SyncRunsTable } from "./components/SyncRunsTable";
-import { SyncStateTable } from "./components/SyncStateTable";
-import { AlertsList } from "./components/AlertsList";
-import { EstablishmentsSection } from "./components/EstablishmentsSection";
-import { EmailTestPanel } from "./components/EmailTestPanel";
 import { EstablishmentDetailModal } from "./components/EstablishmentDetailModal";
-import { DashboardInsights } from "./components/DashboardInsights";
+import { SyncRunDetailModal } from "./components/SyncRunDetailModal";
+import { ClientModal, type ClientFormSubmitPayload } from "./components/ClientModal";
+import { SidebarNav } from "./components/layout/SidebarNav";
+import { AppHeader } from "./components/layout/AppHeader";
+import { DashboardView } from "./components/views/DashboardView";
+import { SyncView } from "./components/views/SyncView";
+import { AlertsView } from "./components/views/AlertsView";
+import { ClientsView } from "./components/views/ClientsView";
+import { EmailsView } from "./components/views/EmailsView";
+import { EstablishmentsView } from "./components/views/EstablishmentsView";
 import {
+  Alert,
+  AdminEmailConfig,
+  DashboardMetrics,
   EmailTestPayload,
   EmailTestResult,
+  Establishment,
   EstablishmentDetail,
+  Client,
   GoogleCheckResult,
+  StatsSummary,
   SyncRequestPayload,
   SyncRun,
+  SyncState,
 } from "./types";
+import { NAV_SECTIONS, type SectionKey } from "./constants/sections";
+import { useRefreshIndicator } from "./hooks/useRefreshIndicator";
+
+type RunDetailModalState = {
+  isOpen: boolean;
+  date: string | null;
+  runs: SyncRun[];
+  selectedRunId: string | null;
+  isLoading: boolean;
+  error: string | null;
+};
+
+const runMatchesDay = (run: SyncRun, isoDate: string): boolean => {
+  if (!run.startedAt) {
+    return false;
+  }
+  return run.startedAt.slice(0, 10) === isoDate;
+};
 
 const REFRESH_LONG = 60_000;
 const REFRESH_SHORT = 30_000;
@@ -40,6 +78,7 @@ const isUnauthorizedError = (error: unknown): error is ApiError => {
 const App = () => {
   const [adminToken, setAdminTokenState] = useState<string | null>(() => getAdminToken());
   const [tokenError, setTokenError] = useState<string | null>(null);
+  const [activeSection, setActiveSection] = useState<SectionKey>("dashboard");
   const [syncRunsLimit, setSyncRunsLimit] = useState(20);
   const [alertsLimit, setAlertsLimit] = useState(20);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
@@ -53,10 +92,17 @@ const App = () => {
   const [emailError, setEmailError] = useState<string | null>(null);
   const [alertsFeedback, setAlertsFeedback] = useState<string | null>(null);
   const [alertsError, setAlertsError] = useState<string | null>(null);
+  const [clientsFeedback, setClientsFeedback] = useState<string | null>(null);
+  const [clientsError, setClientsError] = useState<string | null>(null);
+  const [adminEmailFeedback, setAdminEmailFeedback] = useState<string | null>(null);
+  const [adminEmailError, setAdminEmailError] = useState<string | null>(null);
   const [checkingGoogleSiret, setCheckingGoogleSiret] = useState<string | null>(null);
   const [selectedEstablishmentSiret, setSelectedEstablishmentSiret] = useState<string | null>(null);
   const [isExportingGooglePlaces, setIsExportingGooglePlaces] = useState(false);
-
+  const [runDetailModal, setRunDetailModal] = useState<RunDetailModalState | null>(null);
+  const [clientModalState, setClientModalState] = useState<{ mode: "create" | "edit"; client: Client | null } | null>(
+    null,
+  );
   const queryClient = useQueryClient();
   const isAuthenticated = Boolean(adminToken);
 
@@ -68,6 +114,115 @@ const App = () => {
   const dismissEmailError = useCallback(() => setEmailError(null), []);
   const dismissAlertsFeedback = useCallback(() => setAlertsFeedback(null), []);
   const dismissAlertsError = useCallback(() => setAlertsError(null), []);
+  const dismissClientsFeedback = useCallback(() => setClientsFeedback(null), []);
+  const dismissClientsError = useCallback(() => setClientsError(null), []);
+  const dismissAdminEmailFeedback = useCallback(() => setAdminEmailFeedback(null), []);
+  const dismissAdminEmailError = useCallback(() => setAdminEmailError(null), []);
+
+  const handleUnauthorized = useCallback(() => {
+    clearAdminToken();
+    setAdminTokenState(null);
+    setTokenError("Jeton invalide. Merci de le ressaisir.");
+    setFeedbackMessage(null);
+    setErrorMessage(null);
+    setEmailFeedback(null);
+    setEmailError(null);
+    setEstablishmentsFeedback(null);
+    setEstablishmentsError(null);
+    setAlertsFeedback(null);
+    setAlertsError(null);
+    setClientsFeedback(null);
+    setClientsError(null);
+    setAdminEmailFeedback(null);
+    setAdminEmailError(null);
+    setCheckingGoogleSiret(null);
+    setSelectedEstablishmentSiret(null);
+    setIsExportingGooglePlaces(false);
+    setRunDetailModal(null);
+    setClientModalState(null);
+    setActiveSection("dashboard");
+  }, []);
+
+  const syncRunsQuery = useQuery<SyncRun[]>({
+    queryKey: ["sync-runs", syncRunsLimit],
+    queryFn: () => syncApi.fetchRuns(syncRunsLimit),
+    enabled: isAuthenticated,
+    refetchInterval: (query) => {
+      if (!isAuthenticated) {
+        return false;
+      }
+      const runs = (query.state.data as SyncRun[] | undefined) ?? [];
+      const active = runs.some((run) => run.status === "running" || run.status === "pending");
+      return active ? REFRESH_ACTIVE : REFRESH_SHORT;
+    },
+  });
+
+  const hasActiveRun =
+    syncRunsQuery.data?.some((run) => run.status === "running" || run.status === "pending") ?? false;
+  const isSyncActive = hasActiveRun;
+
+  const statsQuery = useQuery<StatsSummary>({
+    queryKey: ["stats-summary"],
+    queryFn: () => statsApi.fetchSummary(),
+    enabled: isAuthenticated,
+    refetchInterval: isAuthenticated ? (isSyncActive ? REFRESH_ACTIVE : REFRESH_LONG) : false,
+  });
+
+  const syncStateQuery = useQuery<SyncState[]>({
+    queryKey: ["sync-state"],
+    queryFn: () => syncApi.fetchState(),
+    enabled: isAuthenticated,
+    refetchInterval: isAuthenticated ? (isSyncActive ? REFRESH_ACTIVE : REFRESH_LONG) : false,
+  });
+
+  const dashboardQuery = useQuery<DashboardMetrics>({
+    queryKey: ["dashboard-metrics", DASHBOARD_DAYS],
+    queryFn: () => statsApi.fetchDashboardMetrics(DASHBOARD_DAYS),
+    enabled: isAuthenticated,
+    refetchInterval: isAuthenticated ? (isSyncActive ? REFRESH_ACTIVE : REFRESH_LONG) : false,
+  });
+
+  const alertsQuery = useQuery<Alert[]>({
+    queryKey: ["alerts", alertsLimit],
+    queryFn: () => alertsApi.fetchRecent(alertsLimit),
+    enabled: isAuthenticated,
+    refetchInterval: isAuthenticated ? (isSyncActive ? REFRESH_ACTIVE : REFRESH_SHORT) : false,
+  });
+
+  const clientsQuery = useQuery<Client[]>({
+    queryKey: ["clients"],
+    queryFn: () => clientsApi.list(),
+    enabled: isAuthenticated,
+  });
+
+  const adminEmailConfigQuery = useQuery<AdminEmailConfig>({
+    queryKey: ["admin-email-config"],
+    queryFn: () => adminConfigApi.fetch(),
+    enabled: isAuthenticated,
+  });
+
+  const establishmentsQueryResult = useQuery<Establishment[]>({
+    queryKey: ["establishments", establishmentsLimit, establishmentsPage, establishmentsQuery],
+    queryFn: () =>
+      establishmentsApi.fetchMany({
+        limit: establishmentsLimit,
+        offset: establishmentsPage * establishmentsLimit,
+        q: establishmentsQuery ? establishmentsQuery : undefined,
+      }),
+    enabled: isAuthenticated,
+  });
+
+  const establishmentDetailQuery = useQuery<EstablishmentDetail>({
+    queryKey: ["establishment-detail", selectedEstablishmentSiret],
+    queryFn: () => establishmentsApi.fetchOne(selectedEstablishmentSiret!),
+    enabled: isAuthenticated && Boolean(selectedEstablishmentSiret),
+    staleTime: 60_000,
+  });
+
+  const runsIsRefreshing = useRefreshIndicator(syncRunsQuery.isFetching);
+  const statsIsRefreshing = useRefreshIndicator(statsQuery.isFetching);
+  const statesIsRefreshing = useRefreshIndicator(syncStateQuery.isFetching);
+  const metricsIsRefreshing = useRefreshIndicator(dashboardQuery.isFetching);
 
   useEffect(() => {
     if (!feedbackMessage) {
@@ -133,104 +288,37 @@ const App = () => {
     return () => window.clearTimeout(timeout);
   }, [alertsError, dismissAlertsError]);
 
-  const handleUnauthorized = useCallback(() => {
-    clearAdminToken();
-    setAdminTokenState(null);
-    setTokenError("Jeton invalide. Merci de le ressaisir.");
-    setFeedbackMessage(null);
-    setErrorMessage(null);
-    setEmailFeedback(null);
-    setEmailError(null);
-    setEstablishmentsFeedback(null);
-    setEstablishmentsError(null);
-    setAlertsFeedback(null);
-    setAlertsError(null);
-    setCheckingGoogleSiret(null);
-    setSelectedEstablishmentSiret(null);
-    setIsExportingGooglePlaces(false);
-  }, [
-    setAdminTokenState,
-    setTokenError,
-    setFeedbackMessage,
-    setErrorMessage,
-    setEmailFeedback,
-    setEmailError,
-    setEstablishmentsFeedback,
-    setEstablishmentsError,
-    setAlertsFeedback,
-    setAlertsError,
-    setCheckingGoogleSiret,
-    setSelectedEstablishmentSiret,
-    setIsExportingGooglePlaces,
-  ]);
+  useEffect(() => {
+    if (!clientsFeedback) {
+      return;
+    }
+    const timeout = window.setTimeout(dismissClientsFeedback, 5000);
+    return () => window.clearTimeout(timeout);
+  }, [clientsFeedback, dismissClientsFeedback]);
 
-  const syncRunsQuery = useQuery<SyncRun[]>({
-    queryKey: ["sync-runs", syncRunsLimit],
-    queryFn: () => adminApi.getSyncRuns(syncRunsLimit),
-    enabled: isAuthenticated,
-    refetchInterval: (query) => {
-      if (!isAuthenticated) {
-        return false;
-      }
-      const runs = (query.state.data as SyncRun[] | undefined) ?? [];
-      const active = runs.some((run) => run.status === "running" || run.status === "pending");
-      return active ? REFRESH_ACTIVE : REFRESH_SHORT;
-    },
-  });
+  useEffect(() => {
+    if (!clientsError) {
+      return;
+    }
+    const timeout = window.setTimeout(dismissClientsError, 5000);
+    return () => window.clearTimeout(timeout);
+  }, [clientsError, dismissClientsError]);
 
-  const hasActiveRun = syncRunsQuery.data?.some((run) => run.status === "running" || run.status === "pending") ?? false;
-  const isSyncActive = hasActiveRun;
+  useEffect(() => {
+    if (!adminEmailFeedback) {
+      return;
+    }
+    const timeout = window.setTimeout(dismissAdminEmailFeedback, 5000);
+    return () => window.clearTimeout(timeout);
+  }, [adminEmailFeedback, dismissAdminEmailFeedback]);
 
-  const statsQuery = useQuery({
-    queryKey: ["stats-summary"],
-    queryFn: adminApi.getStatsSummary,
-    enabled: isAuthenticated,
-    refetchInterval: isAuthenticated ? (isSyncActive ? REFRESH_ACTIVE : REFRESH_LONG) : false,
-  });
-
-  const syncStateQuery = useQuery({
-    queryKey: ["sync-state"],
-    queryFn: adminApi.getSyncState,
-    enabled: isAuthenticated,
-    refetchInterval: isAuthenticated ? (isSyncActive ? REFRESH_ACTIVE : REFRESH_LONG) : false,
-  });
-
-  const dashboardQuery = useQuery({
-    queryKey: ["dashboard-metrics", DASHBOARD_DAYS],
-    queryFn: () => adminApi.getDashboardMetrics(DASHBOARD_DAYS),
-    enabled: isAuthenticated,
-    refetchInterval: isAuthenticated ? (isSyncActive ? REFRESH_ACTIVE : REFRESH_LONG) : false,
-  });
-
-  const alertsQuery = useQuery({
-    queryKey: ["alerts", alertsLimit],
-    queryFn: () => adminApi.getRecentAlerts(alertsLimit),
-    enabled: isAuthenticated,
-    refetchInterval: isAuthenticated ? (isSyncActive ? REFRESH_ACTIVE : REFRESH_SHORT) : false,
-  });
-
-  const establishmentsQueryResult = useQuery({
-    queryKey: [
-      "establishments",
-      establishmentsLimit,
-      establishmentsPage,
-      establishmentsQuery,
-    ],
-    queryFn: () =>
-      adminApi.getEstablishments({
-        limit: establishmentsLimit,
-        offset: establishmentsPage * establishmentsLimit,
-        q: establishmentsQuery ? establishmentsQuery : undefined,
-      }),
-    enabled: isAuthenticated,
-  });
-
-  const establishmentDetailQuery = useQuery<EstablishmentDetail>({
-    queryKey: ["establishment-detail", selectedEstablishmentSiret],
-    queryFn: () => adminApi.getEstablishment(selectedEstablishmentSiret!),
-    enabled: isAuthenticated && Boolean(selectedEstablishmentSiret),
-    staleTime: 60_000,
-  });
+  useEffect(() => {
+    if (!adminEmailError) {
+      return;
+    }
+    const timeout = window.setTimeout(dismissAdminEmailError, 5000);
+    return () => window.clearTimeout(timeout);
+  }, [adminEmailError, dismissAdminEmailError]);
 
   useEffect(() => {
     if (!adminToken) {
@@ -242,7 +330,9 @@ const App = () => {
       isUnauthorizedError(syncStateQuery.error) ||
       isUnauthorizedError(alertsQuery.error) ||
       isUnauthorizedError(establishmentsQueryResult.error) ||
-      isUnauthorizedError(dashboardQuery.error)
+      isUnauthorizedError(dashboardQuery.error) ||
+      isUnauthorizedError(clientsQuery.error) ||
+      isUnauthorizedError(adminEmailConfigQuery.error)
     ) {
       handleUnauthorized();
     }
@@ -254,6 +344,8 @@ const App = () => {
     alertsQuery.error,
     establishmentsQueryResult.error,
     dashboardQuery.error,
+    clientsQuery.error,
+    adminEmailConfigQuery.error,
     handleUnauthorized,
   ]);
 
@@ -266,6 +358,79 @@ const App = () => {
     }
   }, [selectedEstablishmentSiret, establishmentDetailQuery.error, handleUnauthorized]);
 
+  const handleDashboardDaySelect = useCallback(
+    async (isoDate: string) => {
+      if (!isAuthenticated) {
+        setTokenError("Merci de saisir un jeton administrateur.");
+        return;
+      }
+      setRunDetailModal({
+        isOpen: true,
+        date: isoDate,
+        runs: [],
+        selectedRunId: null,
+        isLoading: true,
+        error: null,
+      });
+
+      const cachedRuns = (syncRunsQuery.data ?? []).filter((run) => runMatchesDay(run, isoDate));
+      if (cachedRuns.length > 0) {
+        setRunDetailModal({
+          isOpen: true,
+          date: isoDate,
+          runs: cachedRuns,
+          selectedRunId: cachedRuns[0]?.id ?? null,
+          isLoading: false,
+          error: null,
+        });
+        return;
+      }
+
+      try {
+        const limit = Math.max(syncRunsLimit, 100);
+        const runs = await syncApi.fetchRuns(limit);
+        const matches = runs.filter((run) => runMatchesDay(run, isoDate));
+        setRunDetailModal({
+          isOpen: true,
+          date: isoDate,
+          runs: matches,
+          selectedRunId: matches[0]?.id ?? null,
+          isLoading: false,
+          error: matches.length === 0 ? "Aucun run trouvé pour cette journée dans l'historique." : null,
+        });
+      } catch (error) {
+        if (isUnauthorizedError(error)) {
+          handleUnauthorized();
+          return;
+        }
+        const message =
+          error instanceof ApiError ? error.message : "Impossible de charger le détail de cette synchro.";
+        setRunDetailModal({
+          isOpen: true,
+          date: isoDate,
+          runs: [],
+          selectedRunId: null,
+          isLoading: false,
+          error: message,
+        });
+      }
+    },
+    [isAuthenticated, syncRunsQuery.data, syncRunsLimit, handleUnauthorized, setTokenError],
+  );
+
+  const handleSelectRunFromModal = useCallback((runId: string) => {
+    setRunDetailModal((current) => {
+      if (!current) {
+        return current;
+      }
+      return { ...current, selectedRunId: runId };
+    });
+  }, []);
+
+  const handleCloseRunDetailModal = useCallback(() => {
+    setRunDetailModal(null);
+  }, []);
+
   const showError = useCallback(
     (error: unknown) => {
       if (isUnauthorizedError(error)) {
@@ -276,7 +441,7 @@ const App = () => {
       setErrorMessage(message);
       setFeedbackMessage(null);
     },
-    [handleUnauthorized, setErrorMessage, setFeedbackMessage]
+    [handleUnauthorized],
   );
 
   const showEmailError = useCallback(
@@ -292,8 +457,34 @@ const App = () => {
     [handleUnauthorized]
   );
 
+  const showClientsError = useCallback(
+    (error: unknown) => {
+      if (isUnauthorizedError(error)) {
+        handleUnauthorized();
+        return;
+      }
+      const message = error instanceof ApiError ? error.message : "Une erreur est survenue.";
+      setClientsError(message);
+      setClientsFeedback(null);
+    },
+    [handleUnauthorized]
+  );
+
+  const showAdminEmailError = useCallback(
+    (error: unknown) => {
+      if (isUnauthorizedError(error)) {
+        handleUnauthorized();
+        return;
+      }
+      const message = error instanceof ApiError ? error.message : "La mise à jour a échoué.";
+      setAdminEmailError(message);
+      setAdminEmailFeedback(null);
+    },
+    [handleUnauthorized]
+  );
+
   const syncMutation = useMutation<TriggerSyncResult, unknown, SyncRequestPayload>({
-    mutationFn: (payload: SyncRequestPayload) => adminApi.triggerSync(payload),
+    mutationFn: (payload: SyncRequestPayload) => syncApi.trigger(payload),
     onSuccess: ({ run, status, detail }: TriggerSyncResult) => {
       if (run) {
         const label = status === 202 ? "programmée" : "déclenchée";
@@ -323,7 +514,7 @@ const App = () => {
   );
 
   const deleteEstablishmentMutation = useMutation<void, unknown, string>({
-    mutationFn: (siret: string) => adminApi.deleteEstablishment(siret),
+    mutationFn: (siret: string) => establishmentsApi.deleteOne(siret),
     onSuccess: (_, variables) => {
       setEstablishmentsFeedback(`Établissement ${variables} supprimé.`);
       setEstablishmentsError(null);
@@ -333,7 +524,7 @@ const App = () => {
   });
 
   const deleteRunMutation = useMutation<DeleteRunResponse, unknown, string>({
-    mutationFn: (runId: string) => adminApi.deleteRun(runId),
+    mutationFn: (runId: string) => syncApi.deleteRun(runId),
     onSuccess: (result, runId) => {
       setFeedbackMessage(
         `Run ${runId} supprimé (${result.establishments_deleted} établissements, ${result.alerts_deleted} alertes).`
@@ -349,7 +540,7 @@ const App = () => {
   });
 
   const emailTestMutation = useMutation<EmailTestResult, unknown, EmailTestPayload>({
-    mutationFn: (payload: EmailTestPayload) => adminApi.sendEmailTest(payload),
+    mutationFn: (payload: EmailTestPayload) => emailApi.sendTest(payload),
     onSuccess: (result) => {
       const recipients = result.recipients.length > 0 ? result.recipients.join(", ") : "destinataires configurés";
       setEmailFeedback(`E-mail de test envoyé via ${result.provider} vers ${recipients}.`);
@@ -358,8 +549,56 @@ const App = () => {
     onError: showEmailError,
   });
 
+  const createClientMutation = useMutation<Client, unknown, ClientCreatePayload>({
+    mutationFn: (payload: ClientCreatePayload) => clientsApi.create(payload),
+    onSuccess: (client) => {
+      setClientsFeedback(`Client ${client.name} créé.`);
+      setClientsError(null);
+      clientsQuery.refetch();
+      queryClient.invalidateQueries({ queryKey: ["clients"] });
+      setClientModalState(null);
+    },
+    onError: showClientsError,
+  });
+
+  const updateClientMutation = useMutation<Client, unknown, { clientId: string; payload: ClientUpdatePayload }>({
+    mutationFn: ({ clientId, payload }) => clientsApi.update(clientId, payload),
+    onSuccess: (client) => {
+      setClientsFeedback(`Client ${client.name} mis à jour.`);
+      setClientsError(null);
+      clientsQuery.refetch();
+      queryClient.invalidateQueries({ queryKey: ["clients"] });
+      setClientModalState(null);
+    },
+    onError: showClientsError,
+  });
+
+  const deleteClientMutation = useMutation<void, unknown, { clientId: string; clientName: string }>({
+    mutationFn: ({ clientId }) => clientsApi.delete(clientId),
+    onSuccess: (_, variables) => {
+      setClientsFeedback(`Client ${variables.clientName} supprimé.`);
+      setClientsError(null);
+      clientsQuery.refetch();
+    },
+    onError: showClientsError,
+  });
+
+  const updateAdminEmailConfigMutation = useMutation<AdminEmailConfig, unknown, AdminEmailConfigPayload>({
+    mutationFn: (payload: AdminEmailConfigPayload) => adminConfigApi.update(payload),
+    onSuccess: (config) => {
+      setAdminEmailFeedback(
+        config.recipients.length === 0
+          ? "Destinataires admin mis à jour (aucun destinataire)."
+          : `Destinataires admin mis à jour (${config.recipients.length}).`,
+      );
+      setAdminEmailError(null);
+      adminEmailConfigQuery.refetch();
+    },
+    onError: showAdminEmailError,
+  });
+
   const manualGoogleCheckMutation = useMutation<GoogleCheckResult, unknown, { siret: string; source: "alerts" | "establishments" }>({
-    mutationFn: ({ siret }) => adminApi.checkGoogleForEstablishment(siret),
+    mutationFn: ({ siret }) => googleApi.checkEstablishment(siret),
     onMutate: ({ siret, source }) => {
       setCheckingGoogleSiret(siret);
       if (source === "alerts") {
@@ -490,6 +729,84 @@ const App = () => {
   };
 
   const deletingRunId = deleteRunMutation.isPending ? deleteRunMutation.variables ?? null : null;
+  const deletingClientId = deleteClientMutation.isPending
+    ? (deleteClientMutation.variables?.clientId ?? null)
+    : null;
+
+  const handleOpenCreateClient = useCallback(() => {
+    setClientsFeedback(null);
+    setClientsError(null);
+    setClientModalState({ mode: "create", client: null });
+  }, []);
+
+  const handleOpenEditClient = useCallback((client: Client) => {
+    setClientsFeedback(null);
+    setClientsError(null);
+    setClientModalState({ mode: "edit", client });
+  }, []);
+
+  const handleCloseClientModal = useCallback(() => {
+    setClientModalState(null);
+  }, []);
+
+  const handleSubmitClientModal = useCallback(
+    (payload: ClientFormSubmitPayload) => {
+      if (!isAuthenticated) {
+        setTokenError("Merci de saisir un jeton administrateur.");
+        return;
+      }
+      if (!clientModalState) {
+        return;
+      }
+      if (clientModalState.mode === "edit" && clientModalState.client) {
+        updateClientMutation.mutate({
+          clientId: clientModalState.client.id,
+          payload: {
+            name: payload.name,
+            startDate: payload.startDate,
+            endDate: payload.endDate,
+            recipients: payload.recipients,
+          },
+        });
+      } else {
+        createClientMutation.mutate({
+          name: payload.name,
+          startDate: payload.startDate,
+          endDate: payload.endDate,
+          recipients: payload.recipients,
+        });
+      }
+    },
+    [
+      isAuthenticated,
+      setTokenError,
+      clientModalState,
+      updateClientMutation,
+      createClientMutation,
+    ],
+  );
+
+  const handleDeleteClient = useCallback(
+    (client: Client) => {
+      if (!isAuthenticated) {
+        setTokenError("Merci de saisir un jeton administrateur.");
+        return;
+      }
+      deleteClientMutation.mutate({ clientId: client.id, clientName: client.name });
+    },
+    [isAuthenticated, deleteClientMutation, setTokenError],
+  );
+
+  const handleSubmitAdminEmailConfig = useCallback(
+    (payload: AdminEmailConfigPayload) => {
+      if (!isAuthenticated) {
+        setTokenError("Merci de saisir un jeton administrateur.");
+        return;
+      }
+      updateAdminEmailConfigMutation.mutate(payload);
+    },
+    [isAuthenticated, updateAdminEmailConfigMutation, setTokenError],
+  );
 
   const handleTokenSubmit = useCallback(
     (token: string) => {
@@ -504,25 +821,18 @@ const App = () => {
       setEstablishmentsError(null);
       setAlertsFeedback(null);
       setAlertsError(null);
+      setClientsFeedback(null);
+      setClientsError(null);
+      setAdminEmailFeedback(null);
+      setAdminEmailError(null);
       setCheckingGoogleSiret(null);
       setSelectedEstablishmentSiret(null);
+      setRunDetailModal(null);
+      setClientModalState(null);
+      setActiveSection("dashboard");
       queryClient.invalidateQueries();
     },
-    [
-      queryClient,
-      setAdminTokenState,
-      setTokenError,
-      setFeedbackMessage,
-      setErrorMessage,
-      setEmailFeedback,
-      setEmailError,
-      setEstablishmentsFeedback,
-      setEstablishmentsError,
-      setAlertsFeedback,
-      setAlertsError,
-      setCheckingGoogleSiret,
-      setSelectedEstablishmentSiret,
-    ]
+    [queryClient],
   );
 
   const handleTokenReset = useCallback(() => {
@@ -537,8 +847,15 @@ const App = () => {
     setEstablishmentsError(null);
     setAlertsFeedback(null);
     setAlertsError(null);
+    setClientsFeedback(null);
+    setClientsError(null);
+    setAdminEmailFeedback(null);
+    setAdminEmailError(null);
     setCheckingGoogleSiret(null);
     setSelectedEstablishmentSiret(null);
+    setRunDetailModal(null);
+    setClientModalState(null);
+    setActiveSection("dashboard");
   }, [
     setAdminTokenState,
     setTokenError,
@@ -550,8 +867,15 @@ const App = () => {
     setEstablishmentsError,
     setAlertsFeedback,
     setAlertsError,
+    setClientsFeedback,
+    setClientsError,
+    setAdminEmailFeedback,
+    setAdminEmailError,
     setCheckingGoogleSiret,
     setSelectedEstablishmentSiret,
+    setRunDetailModal,
+    setClientModalState,
+    setActiveSection,
   ]);
 
   const handleSendEmailTest = useCallback(
@@ -577,7 +901,7 @@ const App = () => {
     }
     setIsExportingGooglePlaces(true);
     try {
-      const blob = await adminApi.exportGooglePlaces();
+      const blob = await googleApi.exportPlaces();
       const url = window.URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
@@ -605,152 +929,151 @@ const App = () => {
     establishmentDetailQuery.isLoading ||
     (establishmentDetailQuery.isFetching && !establishmentDetailQuery.data);
 
+  const clientsIsRefreshing = useRefreshIndicator(
+    clientsQuery.isFetching && !clientsQuery.isLoading,
+    { delay: 300, minVisible: 250 },
+  );
+  const adminConfigIsRefreshing = useRefreshIndicator(
+    adminEmailConfigQuery.isFetching && !adminEmailConfigQuery.isLoading,
+    { delay: 300, minVisible: 250 },
+  );
+  const establishmentsHasNextPage = (establishmentsQueryResult.data?.length ?? 0) === establishmentsLimit;
+  const deletingEstablishmentSiret = deleteEstablishmentMutation.isPending
+    ? ((deleteEstablishmentMutation.variables as string | null | undefined) ?? null)
+    : null;
+
   return (
-    <div className="app-shell">
-      <header className="app-header">
-        <div className="app-header-titles">
-          <h1>Biz Tracker Admin</h1>
-          <p className="muted">Console de pilotage des synchronisations et alertes.</p>
+    <>
+      <div className="app-frame">
+        <SidebarNav sections={NAV_SECTIONS} activeSection={activeSection} onSelect={setActiveSection} />
+        <div className="app-frame-content">
+          <AppHeader onTokenReset={handleTokenReset} />
+          <main className="app-main">
+            {activeSection === "dashboard" ? (
+              <DashboardView
+                stats={statsQuery.data}
+                isStatsLoading={statsQuery.isLoading}
+                statsError={statsQuery.error as Error | null}
+                onRefreshStats={() => statsQuery.refetch()}
+                onTriggerSync={handleTriggerSync}
+                isTriggeringSync={syncMutation.isPending}
+                onExportGooglePlaces={handleExportGooglePlaces}
+                isExportingGooglePlaces={isExportingGooglePlaces}
+                feedbackMessage={feedbackMessage}
+                errorMessage={errorMessage}
+                isStatsRefreshing={statsIsRefreshing}
+                metrics={dashboardQuery.data}
+                isMetricsLoading={dashboardQuery.isLoading}
+                metricsError={dashboardQuery.error as Error | null}
+                onRefreshMetrics={() => dashboardQuery.refetch()}
+                isMetricsRefreshing={metricsIsRefreshing}
+                days={DASHBOARD_DAYS}
+                onSelectDay={handleDashboardDaySelect}
+                selectedDay={runDetailModal?.date ?? null}
+                hasActiveRun={isSyncActive}
+              />
+            ) : null}
+
+            {activeSection === "sync" ? (
+              <SyncView
+                runs={syncRunsQuery.data}
+                isRunsLoading={syncRunsQuery.isLoading}
+                runsError={syncRunsQuery.error as Error | null}
+                runsLimit={syncRunsLimit}
+                onRunsLimitChange={setSyncRunsLimit}
+                onRefreshRuns={() => syncRunsQuery.refetch()}
+                onDeleteRun={handleDeleteRun}
+                deletingRunId={deletingRunId}
+                isDeletingRun={deleteRunMutation.isPending}
+                isRunsRefreshing={runsIsRefreshing}
+                states={syncStateQuery.data}
+                isStatesLoading={syncStateQuery.isLoading}
+                statesError={syncStateQuery.error as Error | null}
+                onRefreshStates={() => syncStateQuery.refetch()}
+                isStatesRefreshing={statesIsRefreshing}
+              />
+            ) : null}
+
+            {activeSection === "alerts" ? (
+              <AlertsView
+                alerts={alertsQuery.data}
+                isLoading={alertsQuery.isLoading}
+                error={alertsQuery.error as Error | null}
+                limit={alertsLimit}
+                onLimitChange={setAlertsLimit}
+                onRefresh={() => alertsQuery.refetch()}
+                onTriggerGoogleCheck={handleTriggerGoogleCheckFromAlerts}
+                isCheckingGoogle={isCheckingGoogle}
+                checkingGoogleSiret={checkingGoogleSiret}
+                feedbackMessage={alertsFeedback}
+                errorMessage={alertsError}
+                onSelectAlert={handleOpenEstablishmentDetail}
+              />
+            ) : null}
+
+            {activeSection === "clients" ? (
+              <ClientsView
+                clients={clientsQuery.data}
+                isLoading={clientsQuery.isLoading}
+                isRefreshing={clientsIsRefreshing}
+                error={clientsQuery.error as Error | null}
+                feedbackMessage={clientsFeedback}
+                errorMessage={clientsError}
+                onRefresh={() => clientsQuery.refetch()}
+                onCreateClient={handleOpenCreateClient}
+                onEditClient={handleOpenEditClient}
+                onDeleteClient={handleDeleteClient}
+                deletingClientId={deletingClientId}
+              />
+            ) : null}
+
+            {activeSection === "emails" ? (
+              <EmailsView
+                adminConfig={adminEmailConfigQuery.data}
+                isAdminConfigLoading={adminEmailConfigQuery.isLoading}
+                isAdminConfigRefreshing={adminConfigIsRefreshing}
+                adminConfigError={adminEmailConfigQuery.error as Error | null}
+                adminConfigFeedback={adminEmailFeedback}
+                adminConfigMessageError={adminEmailError}
+                onRefreshAdminConfig={() => adminEmailConfigQuery.refetch()}
+                onSubmitAdminConfig={handleSubmitAdminEmailConfig}
+                isSubmittingAdminConfig={updateAdminEmailConfigMutation.isPending}
+                onSendTestEmail={handleSendEmailTest}
+                isSendingTestEmail={emailTestMutation.isPending}
+                emailFeedbackMessage={emailFeedback}
+                emailErrorMessage={emailError}
+                onResetEmailMessages={handleResetEmailMessages}
+              />
+            ) : null}
+
+            {activeSection === "establishments" ? (
+              <EstablishmentsView
+                establishments={establishmentsQueryResult.data}
+                isLoading={establishmentsQueryResult.isLoading}
+                error={establishmentsQueryResult.error as Error | null}
+                limit={establishmentsLimit}
+                page={establishmentsPage}
+                query={establishmentsQuery}
+                hasNextPage={establishmentsHasNextPage}
+                onLimitChange={handleEstablishmentsLimitChange}
+                onPageChange={handleEstablishmentsPageChange}
+                onQueryChange={handleEstablishmentsQueryChange}
+                onRefresh={() => establishmentsQueryResult.refetch()}
+                onDeleteEstablishment={handleDeleteEstablishment}
+                deletingSiret={deletingEstablishmentSiret}
+                isDeletingOne={deleteEstablishmentMutation.isPending}
+                feedbackMessage={establishmentsFeedback}
+                errorMessage={establishmentsError}
+                onTriggerGoogleCheck={handleTriggerGoogleCheckFromEstablishments}
+                isCheckingGoogle={isCheckingGoogle}
+                checkingGoogleSiret={checkingGoogleSiret}
+                onSelectEstablishment={handleOpenEstablishmentDetail}
+              />
+            ) : null}
+          </main>
         </div>
-        <button type="button" className="ghost" onClick={handleTokenReset}>
-          Changer de jeton
-        </button>
-      </header>
-      <main className="app-grid">
-        <section className="dashboard-section">
-          <div className="section-header">
-            <div>
-              <h2>Synchronisations</h2>
-              <p className="muted">Pilotage des traitements batch et suivi d'exécution.</p>
-            </div>
-          </div>
-          <div className="section-grid">
-            <StatsSummaryCard
-              summary={statsQuery.data}
-              isLoading={statsQuery.isLoading}
-              error={statsQuery.error as Error | null}
-              onRefresh={() => statsQuery.refetch()}
-              onTriggerSync={handleTriggerSync}
-              isTriggering={syncMutation.isPending}
-              onExportGooglePlaces={handleExportGooglePlaces}
-              isExportingGooglePlaces={isExportingGooglePlaces}
-              feedbackMessage={feedbackMessage}
-              errorMessage={errorMessage}
-              isRefreshing={isSyncActive && statsQuery.isFetching}
-            />
-            <DashboardInsights
-              metrics={dashboardQuery.data}
-              isLoading={dashboardQuery.isLoading}
-              error={dashboardQuery.error as Error | null}
-              onRefresh={() => dashboardQuery.refetch()}
-              isRefreshing={isSyncActive && dashboardQuery.isFetching}
-              days={DASHBOARD_DAYS}
-            />
-          </div>
-          <div className="section-grid two-column">
-            <SyncRunsTable
-              runs={syncRunsQuery.data}
-              isLoading={syncRunsQuery.isLoading}
-              error={syncRunsQuery.error as Error | null}
-              limit={syncRunsLimit}
-              onLimitChange={setSyncRunsLimit}
-              onRefresh={() => syncRunsQuery.refetch()}
-              onDeleteRun={handleDeleteRun}
-              deletingRunId={deletingRunId}
-              isDeletingRun={deleteRunMutation.isPending}
-              isRefreshing={isSyncActive && syncRunsQuery.isFetching}
-            />
+      </div>
 
-            <SyncStateTable
-              states={syncStateQuery.data}
-              isLoading={syncStateQuery.isLoading}
-              error={syncStateQuery.error as Error | null}
-              onRefresh={() => syncStateQuery.refetch()}
-              isRefreshing={isSyncActive && syncStateQuery.isFetching}
-            />
-          </div>
-        </section>
-
-        <section className="dashboard-section">
-          <div className="section-header">
-            <div>
-              <h2>Alertes</h2>
-              <p className="muted">Dernières notifications envoyées aux équipes.</p>
-            </div>
-          </div>
-          <div className="section-grid">
-            <AlertsList
-              alerts={alertsQuery.data}
-              isLoading={alertsQuery.isLoading}
-              error={alertsQuery.error as Error | null}
-              limit={alertsLimit}
-              onLimitChange={setAlertsLimit}
-              onRefresh={() => alertsQuery.refetch()}
-              onTriggerGoogleCheck={handleTriggerGoogleCheckFromAlerts}
-              isCheckingGoogle={isCheckingGoogle}
-              checkingGoogleSiret={checkingGoogleSiret}
-              feedbackMessage={alertsFeedback}
-              errorMessage={alertsError}
-              onSelect={handleOpenEstablishmentDetail}
-            />
-          </div>
-        </section>
-
-        <section className="dashboard-section">
-          <div className="section-header">
-            <div>
-              <h2>E-mails</h2>
-              <p className="muted">Tester et valider la configuration SMTP.</p>
-            </div>
-          </div>
-          <div className="section-grid">
-            <EmailTestPanel
-              onSend={handleSendEmailTest}
-              isSending={emailTestMutation.isPending}
-              feedbackMessage={emailFeedback}
-              errorMessage={emailError}
-              onResetMessages={handleResetEmailMessages}
-            />
-          </div>
-        </section>
-
-        <section className="dashboard-section">
-          <div className="section-header">
-            <div>
-              <h2>Etablissements</h2>
-              <p className="muted">Recherche et suppression sécurisée des établissements.</p>
-            </div>
-          </div>
-          <div className="section-grid">
-            <EstablishmentsSection
-              establishments={establishmentsQueryResult.data}
-              isLoading={establishmentsQueryResult.isLoading}
-              error={establishmentsQueryResult.error as Error | null}
-              limit={establishmentsLimit}
-              page={establishmentsPage}
-              query={establishmentsQuery}
-              hasNextPage={(establishmentsQueryResult.data?.length ?? 0) === establishmentsLimit}
-              onLimitChange={handleEstablishmentsLimitChange}
-              onPageChange={handleEstablishmentsPageChange}
-              onQueryChange={handleEstablishmentsQueryChange}
-              onRefresh={() => establishmentsQueryResult.refetch()}
-              onDeleteEstablishment={handleDeleteEstablishment}
-              deletingSiret={
-                deleteEstablishmentMutation.isPending
-                  ? (deleteEstablishmentMutation.variables as string | null | undefined) ?? null
-                  : null
-              }
-              isDeletingOne={deleteEstablishmentMutation.isPending}
-              feedbackMessage={establishmentsFeedback}
-              errorMessage={establishmentsError}
-              onTriggerGoogleCheck={handleTriggerGoogleCheckFromEstablishments}
-              isCheckingGoogle={isCheckingGoogle}
-              checkingGoogleSiret={checkingGoogleSiret}
-              onSelectEstablishment={handleOpenEstablishmentDetail}
-            />
-          </div>
-        </section>
-      </main>
       <EstablishmentDetailModal
         isOpen={Boolean(selectedEstablishmentSiret)}
         establishment={establishmentDetailQuery.data ?? null}
@@ -758,7 +1081,27 @@ const App = () => {
         errorMessage={establishmentDetailErrorMessage}
         onClose={handleCloseEstablishmentDetail}
       />
-    </div>
+
+      <ClientModal
+        isOpen={Boolean(clientModalState)}
+        mode={clientModalState?.mode ?? "create"}
+        client={clientModalState?.client ?? null}
+        onSubmit={handleSubmitClientModal}
+        onCancel={handleCloseClientModal}
+        isProcessing={createClientMutation.isPending || updateClientMutation.isPending}
+      />
+
+      <SyncRunDetailModal
+        isOpen={Boolean(runDetailModal?.isOpen)}
+        date={runDetailModal?.date ?? null}
+        runs={runDetailModal?.runs ?? []}
+        selectedRunId={runDetailModal?.selectedRunId ?? null}
+        isLoading={runDetailModal?.isLoading ?? false}
+        errorMessage={runDetailModal?.error ?? null}
+        onSelectRun={handleSelectRunFromModal}
+        onClose={handleCloseRunDetailModal}
+      />
+    </>
   );
 };
 

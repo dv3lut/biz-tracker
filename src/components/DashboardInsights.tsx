@@ -16,7 +16,6 @@ import type { NameType, ValueType } from "recharts/types/component/DefaultToolti
 
 import { DashboardMetrics } from "../types";
 import { formatDateTime, formatNumber } from "../utils/format";
-import { BarChart } from "./BarChart";
 
 type DashboardInsightsProps = {
   metrics?: DashboardMetrics;
@@ -25,6 +24,8 @@ type DashboardInsightsProps = {
   onRefresh: () => void;
   isRefreshing: boolean;
   days: number;
+  onSelectDay?: (isoDate: string) => void;
+  selectedDay?: string | null;
 };
 
 type TooltipEntry = NonNullable<TooltipProps<ValueType, NameType>["payload"]>[number];
@@ -47,41 +48,123 @@ const pluralizeRuns = (value: number): string => {
   return value === 1 ? "1 run" : `${value} runs`;
 };
 
-export const DashboardInsights = ({ metrics, isLoading, error, onRefresh, isRefreshing, days }: DashboardInsightsProps) => {
-  const recentNewBusinesses = metrics ? metrics.dailyNewBusinesses.slice(-Math.min(days, 14)) : [];
-  const recentApiCalls = metrics ? metrics.dailyApiCalls.slice(-Math.min(days, 14)) : [];
-  const recentAlerts = metrics ? metrics.dailyAlerts.slice(-Math.min(days, 14)) : [];
+export const DashboardInsights = ({
+  metrics,
+  isLoading,
+  error,
+  onRefresh,
+  isRefreshing,
+  days,
+  onSelectDay,
+  selectedDay,
+}: DashboardInsightsProps) => {
+  const windowSize = Math.min(days, 30);
 
-  const newBusinessChartData = recentNewBusinesses.map((item) => ({
+  const runOutcomeSeries = metrics ? metrics.dailyRunOutcomes.slice(-windowSize) : [];
+  const apiVolumeSeries = metrics ? metrics.dailyApiCalls.slice(-windowSize) : [];
+  const alertSeries = metrics ? metrics.dailyAlerts.slice(-windowSize) : [];
+  const googleStatusSeries = metrics ? metrics.dailyGoogleStatuses.slice(-windowSize) : [];
+
+  const runOutcomeChartData = runOutcomeSeries.map((item) => ({
     key: item.date,
     label: shortDate(item.date),
-    value: item.value,
+    created: item.createdRecords,
+    updated: item.updatedRecords,
   }));
 
-  const apiActivityChartData = recentApiCalls.map((item) => ({
+  const apiActivityChartData = apiVolumeSeries.map((item) => ({
     key: item.date,
     label: shortDate(item.date),
-    value: item.value,
+    apiCalls: item.value,
+    googleApiCalls: item.googleApiCallCount,
     runCount: item.runCount,
   }));
 
-  const alertsChartData = recentAlerts.map((item) => ({
+  const alertsChartData = alertSeries.map((item) => ({
     key: item.date,
     label: shortDate(item.date),
     sent: item.sent,
     pending: Math.max(item.created - item.sent, 0),
   }));
 
-  const hasAlertsData = alertsChartData.some((item) => item.sent > 0 || item.pending > 0);
+  const googleStatusChartData = googleStatusSeries.map((item) => ({
+    key: item.date,
+    label: shortDate(item.date),
+    immediate: item.immediateMatches,
+    late: item.lateMatches,
+    notFound: item.notFound,
+    insufficient: item.insufficient,
+    pending: item.pending,
+    other: item.other,
+  }));
 
-  const renderApiTooltip = ({ active, label, payload }: TooltipProps<ValueType, NameType>) => {
+  const hasRunOutcomeData = runOutcomeChartData.some((item) => item.created > 0 || item.updated > 0);
+  const hasApiData = apiActivityChartData.some((item) => item.apiCalls > 0 || item.googleApiCalls > 0);
+  const hasAlertsData = alertsChartData.some((item) => item.sent > 0 || item.pending > 0);
+  const hasGoogleStatusData = googleStatusChartData.some(
+    (item) => item.immediate + item.late + item.notFound + item.insufficient + item.pending + item.other > 0,
+  );
+
+  const handleChartDayClick = (
+    event: { activePayload?: Array<{ payload?: { key?: string } }> } | undefined,
+  ) => {
+    if (!onSelectDay) {
+      return;
+    }
+    const payload = event?.activePayload?.[0]?.payload;
+    if (payload && typeof payload.key === "string") {
+      onSelectDay(payload.key);
+    }
+  };
+
+  const makeLineDot =
+    (stroke: string) =>
+    ({
+      cx,
+      cy,
+      payload,
+    }: {
+      cx?: number;
+      cy?: number;
+      payload?: { key?: string };
+    }) => {
+      if (typeof cx !== "number" || typeof cy !== "number" || !payload) {
+        return <g />;
+      }
+      const isSelected = selectedDay ? payload.key === selectedDay : false;
+      const radius = isSelected ? 5 : 3;
+      return (
+        <circle
+          cx={cx}
+          cy={cy}
+          r={radius}
+          stroke={stroke}
+          strokeWidth={isSelected ? 2 : 1.5}
+          fill="#ffffff"
+        />
+      );
+    };
+
+  const runLineDot = makeLineDot("#0f766e");
+  const apiLineDot = makeLineDot("#f97316");
+
+  const renderRunOutcomesTooltip = ({
+    active,
+    label,
+    payload,
+  }: TooltipProps<ValueType, NameType>) => {
     if (!active || !payload || payload.length === 0 || typeof label !== "string") {
       return null;
     }
+    const total = payload.reduce((acc, entry) => acc + Number(entry.value ?? 0), 0);
     return (
       <div className="chart-tooltip">
         <span className="chart-tooltip-label">{label}</span>
-  {payload.map((entry: TooltipEntry) => (
+        <span className="chart-tooltip-row">
+          <span>Total mouvements</span>
+          <strong>{formatNumber(total)}</strong>
+        </span>
+        {payload.map((entry: TooltipEntry) => (
           <span key={`${label}-${String(entry.name)}`} className="chart-tooltip-row">
             <span>{entry.name}</span>
             <strong>{formatNumber(Number(entry.value ?? 0))}</strong>
@@ -91,12 +174,36 @@ export const DashboardInsights = ({ metrics, isLoading, error, onRefresh, isRefr
     );
   };
 
+  const renderApiTooltip = ({ active, label, payload }: TooltipProps<ValueType, NameType>) => {
+    if (!active || !payload || payload.length === 0 || typeof label !== "string") {
+      return null;
+    }
+    const raw = (payload[0]?.payload ?? {}) as { runCount?: number };
+    return (
+      <div className="chart-tooltip">
+        <span className="chart-tooltip-label">{label}</span>
+        {payload.map((entry: TooltipEntry) => (
+          <span key={`${label}-${String(entry.name)}`} className="chart-tooltip-row">
+            <span>{entry.name}</span>
+            <strong>{formatNumber(Number(entry.value ?? 0))}</strong>
+          </span>
+        ))}
+        {typeof raw.runCount === "number" ? (
+          <span className="chart-tooltip-row">
+            <span>Runs termines</span>
+            <strong>{formatNumber(raw.runCount)}</strong>
+          </span>
+        ) : null}
+      </div>
+    );
+  };
+
   const renderAlertsTooltip = ({ active, label, payload }: TooltipProps<ValueType, NameType>) => {
     if (!active || !payload || payload.length === 0 || typeof label !== "string") {
       return null;
     }
-  const sent = payload.find((item: TooltipEntry) => item.name === "Envoyees");
-  const pending = payload.find((item: TooltipEntry) => item.name === "En attente");
+    const sent = payload.find((item: TooltipEntry) => item.name === "Envoyees");
+    const pending = payload.find((item: TooltipEntry) => item.name === "En attente");
     const total = Number(sent?.value ?? 0) + Number(pending?.value ?? 0);
     return (
       <div className="chart-tooltip">
@@ -120,6 +227,34 @@ export const DashboardInsights = ({ metrics, isLoading, error, onRefresh, isRefr
       </div>
     );
   };
+
+  const renderGoogleStatusTooltip = ({
+    active,
+    label,
+    payload,
+  }: TooltipProps<ValueType, NameType>) => {
+    if (!active || !payload || payload.length === 0 || typeof label !== "string") {
+      return null;
+    }
+    const total = payload.reduce((acc, entry) => acc + Number(entry.value ?? 0), 0);
+    return (
+      <div className="chart-tooltip">
+        <span className="chart-tooltip-label">{label}</span>
+        <span className="chart-tooltip-row">
+          <span>Total suivis</span>
+          <strong>{formatNumber(total)}</strong>
+        </span>
+        {payload.map((entry: TooltipEntry) => (
+          <span key={`${label}-${String(entry.name)}`} className="chart-tooltip-row">
+            <span>{entry.name}</span>
+            <strong>{formatNumber(Number(entry.value ?? 0))}</strong>
+          </span>
+        ))}
+      </div>
+    );
+  };
+
+  const isSelectedDay = (key: string) => (selectedDay ? selectedDay === key : false);
 
   return (
     <section className="card">
@@ -158,6 +293,9 @@ export const DashboardInsights = ({ metrics, isLoading, error, onRefresh, isRefr
                       <strong>{formatNumber(metrics.latestRunBreakdown.apiCallCount)}</strong> appels API
                     </li>
                     <li>
+                      <strong>{formatNumber(metrics.latestRunBreakdown.googleApiCallCount)}</strong> appels Google
+                    </li>
+                    <li>
                       <strong>{formatNumber(metrics.latestRunBreakdown.alertsSent)}</strong> alertes envoyees
                     </li>
                   </ul>
@@ -171,6 +309,9 @@ export const DashboardInsights = ({ metrics, isLoading, error, onRefresh, isRefr
               <h3>Google (dernier run)</h3>
               {metrics.latestRunBreakdown ? (
                 <ul className="metric-list">
+                  <li>
+                    <strong>{formatNumber(metrics.latestRunBreakdown.googleApiCallCount)}</strong> appels API
+                  </li>
                   <li>
                     <strong>{formatNumber(metrics.latestRunBreakdown.googleFound)}</strong> fiches trouvees (immediate)
                   </li>
@@ -240,56 +381,97 @@ export const DashboardInsights = ({ metrics, isLoading, error, onRefresh, isRefr
 
           <div className="charts-grid">
             <article className="insight-card">
-              <h3>Nouveaux etablissements par jour</h3>
-              <BarChart data={newBusinessChartData} highlightLast />
-            </article>
-
-            <article className="insight-card">
-              <h3>Appels API et runs</h3>
-              {apiActivityChartData.length > 0 ? (
+              <h3>Creations et mises a jour quotidiennes</h3>
+              {hasRunOutcomeData ? (
                 <div className="chart-wrapper">
-                  <ResponsiveContainer width="100%" height={220}>
-                    <ComposedChart data={apiActivityChartData} margin={{ top: 24, right: 16, left: 12, bottom: 12 }}>
+                  <ResponsiveContainer width="100%" height={240}>
+                    <ComposedChart
+                      data={runOutcomeChartData}
+                      margin={{ top: 24, right: 16, left: 12, bottom: 12 }}
+                      onClick={handleChartDayClick}
+                    >
                       <defs>
-                        <linearGradient id="apiBarGradient" x1="0" y1="0" x2="0" y2="1">
+                        <linearGradient id="runCreatedGradient" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="0%" stopColor="#2563eb" stopOpacity={0.9} />
                           <stop offset="100%" stopColor="#1d4ed8" stopOpacity={0.9} />
                         </linearGradient>
-                        <linearGradient id="apiBarGradientHighlight" x1="0" y1="0" x2="0" y2="1">
+                        <linearGradient id="runCreatedGradientHighlight" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="0%" stopColor="#0ea5e9" stopOpacity={0.95} />
                           <stop offset="100%" stopColor="#0284c7" stopOpacity={0.95} />
                         </linearGradient>
                       </defs>
                       <CartesianGrid stroke="#e2e8f0" strokeDasharray="4 4" vertical={false} />
                       <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "#475467" }} dy={6} />
-                      <YAxis
-                        yAxisId="api"
-                        tickLine={false}
-                        axisLine={false}
-                        tick={{ fontSize: 12, fill: "#475467" }}
-                        allowDecimals={false}
-                        width={60}
-                      />
-                      <YAxis
-                        yAxisId="runs"
-                        orientation="right"
-                        tickLine={false}
-                        axisLine={false}
-                        tick={{ fontSize: 12, fill: "#475467" }}
-                        allowDecimals={false}
-                        width={50}
-                      />
-                      <Tooltip content={renderApiTooltip} cursor={{ fill: "rgba(37, 99, 235, 0.08)" }} />
+                      <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "#475467" }} allowDecimals={false} width={60} />
+                      <Tooltip content={renderRunOutcomesTooltip} cursor={{ fill: "rgba(37, 99, 235, 0.08)" }} />
                       <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
-                      <RechartsBar yAxisId="api" dataKey="value" name="Appels API" radius={[10, 10, 0, 0]} maxBarSize={42}>
-                        {apiActivityChartData.map((item, index) => (
+                      <RechartsBar dataKey="created" name="Creations" radius={[10, 10, 0, 0]} maxBarSize={48}>
+                        {runOutcomeChartData.map((item) => (
                           <Cell
-                            key={item.key}
-                            fill={index === apiActivityChartData.length - 1 ? "url(#apiBarGradientHighlight)" : "url(#apiBarGradient)"}
+                            key={`created-${item.key}`}
+                            fill={isSelectedDay(item.key) ? "url(#runCreatedGradientHighlight)" : "url(#runCreatedGradient)"}
                           />
                         ))}
                       </RechartsBar>
-                      <Line yAxisId="runs" type="monotone" dataKey="runCount" name="Runs termines" stroke="#0f766e" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+                      <Line
+                        type="monotone"
+                        dataKey="updated"
+                        name="Mises a jour"
+                        stroke="#0f766e"
+                        strokeWidth={2}
+                        dot={runLineDot}
+                        activeDot={{ r: 6 }}
+                      />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <p className="muted">Pas encore de donnees.</p>
+              )}
+            </article>
+
+            <article className="insight-card">
+              <h3>Volume d'appels API</h3>
+              {hasApiData ? (
+                <div className="chart-wrapper">
+                  <ResponsiveContainer width="100%" height={240}>
+                    <ComposedChart
+                      data={apiActivityChartData}
+                      margin={{ top: 24, right: 16, left: 12, bottom: 12 }}
+                      onClick={handleChartDayClick}
+                    >
+                      <defs>
+                        <linearGradient id="apiVolumeGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#2563eb" stopOpacity={0.9} />
+                          <stop offset="100%" stopColor="#1d4ed8" stopOpacity={0.9} />
+                        </linearGradient>
+                        <linearGradient id="apiVolumeGradientHighlight" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#0ea5e9" stopOpacity={0.95} />
+                          <stop offset="100%" stopColor="#0284c7" stopOpacity={0.95} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid stroke="#e2e8f0" strokeDasharray="4 4" vertical={false} />
+                      <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "#475467" }} dy={6} />
+                      <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "#475467" }} allowDecimals={false} width={60} />
+                      <Tooltip content={renderApiTooltip} cursor={{ fill: "rgba(37, 99, 235, 0.08)" }} />
+                      <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+                      <RechartsBar dataKey="apiCalls" name="Appels API (total)" radius={[10, 10, 0, 0]} maxBarSize={48}>
+                        {apiActivityChartData.map((item) => (
+                          <Cell
+                            key={`api-${item.key}`}
+                            fill={isSelectedDay(item.key) ? "url(#apiVolumeGradientHighlight)" : "url(#apiVolumeGradient)"}
+                          />
+                        ))}
+                      </RechartsBar>
+                      <Line
+                        type="monotone"
+                        dataKey="googleApiCalls"
+                        name="Appels Google"
+                        stroke="#f97316"
+                        strokeWidth={2}
+                        dot={apiLineDot}
+                        activeDot={{ r: 6 }}
+                      />
                     </ComposedChart>
                   </ResponsiveContainer>
                   <div className="chart-footnotes">
@@ -306,26 +488,93 @@ export const DashboardInsights = ({ metrics, isLoading, error, onRefresh, isRefr
             </article>
           </div>
 
-          <article className="insight-card">
-            <h3>Alertes quotidiennes</h3>
-            {hasAlertsData ? (
-              <div className="chart-wrapper">
-                <ResponsiveContainer width="100%" height={220}>
-                  <RechartsBarChart data={alertsChartData} margin={{ top: 24, right: 16, left: 12, bottom: 12 }}>
-                    <CartesianGrid stroke="#e2e8f0" strokeDasharray="4 4" vertical={false} />
-                    <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "#475467" }} dy={6} />
-                    <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "#475467" }} allowDecimals={false} width={60} />
-                    <Tooltip content={renderAlertsTooltip} cursor={{ fill: "rgba(14, 165, 233, 0.08)" }} />
-                    <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
-                    <RechartsBar dataKey="sent" stackId="alerts" name="Envoyees" radius={[10, 10, 0, 0]} fill="#14b8a6" />
-                    <RechartsBar dataKey="pending" stackId="alerts" name="En attente" radius={[0, 0, 0, 0]} fill="#f97316" />
-                  </RechartsBarChart>
-                </ResponsiveContainer>
-              </div>
-            ) : (
-              <p className="muted">Aucune alerte recense sur la periode.</p>
-            )}
-          </article>
+          <div className="charts-grid">
+            <article className="insight-card">
+              <h3>Resultats Google par run</h3>
+              {hasGoogleStatusData ? (
+                <div className="chart-wrapper">
+                  <ResponsiveContainer width="100%" height={240}>
+                    <RechartsBarChart
+                      data={googleStatusChartData}
+                      margin={{ top: 24, right: 16, left: 12, bottom: 12 }}
+                      onClick={handleChartDayClick}
+                    >
+                      <CartesianGrid stroke="#e2e8f0" strokeDasharray="4 4" vertical={false} />
+                      <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "#475467" }} dy={6} />
+                      <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "#475467" }} allowDecimals={false} width={60} />
+                      <Tooltip content={renderGoogleStatusTooltip} cursor={{ fill: "rgba(59, 130, 246, 0.08)" }} />
+                      <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+                      <RechartsBar dataKey="immediate" stackId="google" name="Trouvees immediates" radius={[10, 10, 0, 0]}>
+                        {googleStatusChartData.map((item) => (
+                          <Cell key={`google-immediate-${item.key}`} fill={isSelectedDay(item.key) ? "#0284c7" : "#0ea5e9"} />
+                        ))}
+                      </RechartsBar>
+                      <RechartsBar dataKey="late" stackId="google" name="Trouvees (rattrapage)">
+                        {googleStatusChartData.map((item) => (
+                          <Cell key={`google-late-${item.key}`} fill={isSelectedDay(item.key) ? "#4f46e5" : "#6366f1"} />
+                        ))}
+                      </RechartsBar>
+                      <RechartsBar dataKey="notFound" stackId="google" name="Sans resultat">
+                        {googleStatusChartData.map((item) => (
+                          <Cell key={`google-not-found-${item.key}`} fill={isSelectedDay(item.key) ? "#ea580c" : "#f97316"} />
+                        ))}
+                      </RechartsBar>
+                      <RechartsBar dataKey="insufficient" stackId="google" name="Identite insuffisante">
+                        {googleStatusChartData.map((item) => (
+                          <Cell key={`google-insufficient-${item.key}`} fill={isSelectedDay(item.key) ? "#dc2626" : "#ef4444"} />
+                        ))}
+                      </RechartsBar>
+                      <RechartsBar dataKey="pending" stackId="google" name="En attente">
+                        {googleStatusChartData.map((item) => (
+                          <Cell key={`google-pending-${item.key}`} fill={isSelectedDay(item.key) ? "#ca8a04" : "#eab308"} />
+                        ))}
+                      </RechartsBar>
+                      <RechartsBar dataKey="other" stackId="google" name="Autres statuts">
+                        {googleStatusChartData.map((item) => (
+                          <Cell key={`google-other-${item.key}`} fill={isSelectedDay(item.key) ? "#64748b" : "#94a3b8"} />
+                        ))}
+                      </RechartsBar>
+                    </RechartsBarChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <p className="muted">Pas encore de donnees.</p>
+              )}
+            </article>
+
+            <article className="insight-card">
+              <h3>Alertes quotidiennes</h3>
+              {hasAlertsData ? (
+                <div className="chart-wrapper">
+                  <ResponsiveContainer width="100%" height={240}>
+                    <RechartsBarChart
+                      data={alertsChartData}
+                      margin={{ top: 24, right: 16, left: 12, bottom: 12 }}
+                      onClick={handleChartDayClick}
+                    >
+                      <CartesianGrid stroke="#e2e8f0" strokeDasharray="4 4" vertical={false} />
+                      <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "#475467" }} dy={6} />
+                      <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "#475467" }} allowDecimals={false} width={60} />
+                      <Tooltip content={renderAlertsTooltip} cursor={{ fill: "rgba(14, 165, 233, 0.08)" }} />
+                      <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+                      <RechartsBar dataKey="sent" stackId="alerts" name="Envoyees" radius={[10, 10, 0, 0]}>
+                        {alertsChartData.map((item) => (
+                          <Cell key={`alerts-sent-${item.key}`} fill={isSelectedDay(item.key) ? "#0f766e" : "#14b8a6"} />
+                        ))}
+                      </RechartsBar>
+                      <RechartsBar dataKey="pending" stackId="alerts" name="En attente">
+                        {alertsChartData.map((item) => (
+                          <Cell key={`alerts-pending-${item.key}`} fill={isSelectedDay(item.key) ? "#ea580c" : "#f97316"} />
+                        ))}
+                      </RechartsBar>
+                    </RechartsBarChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <p className="muted">Aucune alerte recense sur la periode.</p>
+              )}
+            </article>
+          </div>
         </>
       ) : null}
     </section>

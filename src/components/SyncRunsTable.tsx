@@ -1,7 +1,9 @@
 import { ChangeEvent } from "react";
 
 import { SyncRun } from "../types";
-import { formatDateTime, formatNumber, formatPercent, formatDuration } from "../utils/format";
+import { formatDateTime, formatNumber, formatDuration } from "../utils/format";
+import { computeGoogleProgress, computeSireneProgress } from "../utils/progress";
+import { ProgressBar } from "./ProgressBar";
 
 type Props = {
   runs?: SyncRun[];
@@ -94,64 +96,73 @@ export const SyncRunsTable = ({
               </tr>
             </thead>
             <tbody>
-              {runs.map((run) => (
-                <tr key={run.id}>
-                  <td>
-                    <strong>{formatDateTime(run.startedAt)}</strong>
-                    <br />
-                    <span className="small muted">Scope: {run.scopeKey}</span>
-                    <br />
-                    <span className="small muted">Type: {run.runType}</span>
-                    {run.resumedFromRunId ? (
-                      <>
-                        <br />
-                        <span className="small muted">Reprise: {truncate(run.resumedFromRunId, 20)}</span>
-                      </>
-                    ) : null}
-                  </td>
-                  <td>
-                    <span className={`badge status-${run.status}`}>{run.status}</span>
-                    <br />
-                    <span className="small muted">Progression: {formatPercent(run.progress)}</span>
-                    <br />
-                    <span className="small muted">Traités: {formatNumber(run.fetchedRecords)}</span>
-                    <br />
-                    <span className="small muted">Nouveaux: {formatNumber(run.createdRecords)}</span>
-                    <br />
-                    <span className="small muted">Total attendu: {formatNumber(run.totalExpectedRecords)}</span>
-                  </td>
-                  <td>
-                    <span className="small muted">Restant: {formatDuration(run.estimatedRemainingSeconds)}</span>
-                    <br />
-                    <span className="small muted">Fin estimée: {formatDateTime(run.estimatedCompletionAt)}</span>
-                    <br />
-                    <span className="small muted">Terminée: {formatDateTime(run.finishedAt)}</span>
-                    <br />
-                    <span className="small muted">Appels API: {formatNumber(run.apiCallCount)}</span>
-                  </td>
-                  <td>
-                    <span className="small muted">Google - File: {formatNumber(run.googleQueueCount)}</span>
-                    <br />
-                    <span className="small muted">Eligibles: {formatNumber(run.googleEligibleCount)}</span>
-                    <br />
-                    <span className="small muted">Trouvées: {formatNumber(run.googleMatchedCount)}</span>
-                    <br />
-                    <span className="small muted">Restant: {formatNumber(run.googlePendingCount)}</span>
-                    <br />
-                    <span className="small muted">Notes: {run.notes ? truncate(run.notes, 64) : "—"}</span>
-                  </td>
-                  <td>
-                    <button
-                      type="button"
-                      className="ghost"
-                      onClick={() => handleDeleteRun(run.id)}
-                      disabled={isDeletingRun && deletingRunId === run.id}
-                    >
-                      {isDeletingRun && deletingRunId === run.id ? "Suppression..." : "Supprimer les données"}
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {runs.map((run) => {
+                const sirene = computeSireneProgress(run);
+                const google = computeGoogleProgress(run);
+                const showGoogle = google.total !== null || run.googleQueueCount > 0 || run.googleEligibleCount > 0;
+
+                return (
+                  <tr key={run.id}>
+                    <td>
+                      <strong>{formatDateTime(run.startedAt)}</strong>
+                      <br />
+                      <span className="small muted">Scope: {run.scopeKey}</span>
+                      <br />
+                      <span className="small muted">Type: {run.runType}</span>
+                      {run.resumedFromRunId ? (
+                        <>
+                          <br />
+                          <span className="small muted">Reprise: {truncate(run.resumedFromRunId, 20)}</span>
+                        </>
+                      ) : null}
+                    </td>
+                    <td>
+                      <span className={`badge status-${run.status}`}>{run.status}</span>
+                      <div className="table-progress">
+                        <ProgressBar label="Sirene" value={sirene.value} />
+                        {showGoogle ? <ProgressBar label="Google" tone="success" value={google.value} /> : null}
+                      </div>
+                      <span className="small muted">Traités: {formatNumber(run.fetchedRecords)}</span>
+                      <br />
+                      <span className="small muted">Nouveaux: {formatNumber(run.createdRecords)}</span>
+                      <br />
+                      <span className="small muted">Total attendu: {formatNumber(run.totalExpectedRecords)}</span>
+                    </td>
+                    <td>
+                      <span className="small muted">Restant: {formatDuration(run.estimatedRemainingSeconds)}</span>
+                      <br />
+                      <span className="small muted">Fin estimée: {formatDateTime(run.estimatedCompletionAt)}</span>
+                      <br />
+                      <span className="small muted">Terminée: {formatDateTime(run.finishedAt)}</span>
+                      <br />
+                      <span className="small muted">Appels API: {formatNumber(run.apiCallCount)}</span>
+                      <br />
+                      <span className="small muted">Appels Google: {formatNumber(run.googleApiCallCount)}</span>
+                    </td>
+                    <td>
+                      <span className="small muted">Google - File: {formatNumber(run.googleQueueCount)}</span>
+                      <br />
+                      <span className="small muted">Eligibles: {formatNumber(run.googleEligibleCount)}</span>
+                      <br />
+                      <span className="small muted">Trouvées: {formatNumber(run.googleMatchedCount)}</span>
+                      <br />
+                      <span className="small muted">Restant: {formatNumber(run.googlePendingCount)}</span>
+                      <br />
+                      <span className="small muted">Notes: {run.notes ? truncate(run.notes, 64) : "—"}</span>
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className="ghost"
+                        onClick={() => handleDeleteRun(run.id)}
+                        disabled={isDeletingRun && deletingRunId === run.id}
+                      >
+                        {isDeletingRun && deletingRunId === run.id ? "Suppression..." : "Supprimer les données"}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

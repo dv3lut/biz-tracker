@@ -1,5 +1,18 @@
 const locale = "fr-FR";
 
+export const formatDate = (value: string | null | undefined): string => {
+  if (!value) {
+    return "—";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
+  return new Intl.DateTimeFormat(locale, {
+    dateStyle: "medium",
+  }).format(date);
+};
+
 export const formatDateTime = (value: string | null | undefined): string => {
   if (!value) {
     return "—";
