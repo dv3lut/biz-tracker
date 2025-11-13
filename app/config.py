@@ -82,8 +82,6 @@ class EmailSettings(BaseModel):
     smtp_password: Optional[str] = None
     use_tls: bool = Field(default=True)
     from_address: Optional[str] = None
-    recipients: List[str] = Field(default_factory=list)
-    summary_recipients: List[str] = Field(default_factory=list, description="Destinataires des rapports de synchronisation.")
 
     @field_validator("smtp_host", "smtp_username", "smtp_password", "from_address", mode="before")
     @classmethod
@@ -96,28 +94,6 @@ class EmailSettings(BaseModel):
                 return None
             return trimmed
         return value
-
-    @field_validator("recipients", mode="before")
-    @classmethod
-    def _split_recipients(cls, value: object) -> List[str]:
-        if value is None:
-            return []
-        if isinstance(value, str):
-            return [item.strip() for item in value.split(",") if item.strip()]
-        if isinstance(value, list):
-            return value
-        raise TypeError("Unsupported value for recipients")
-
-    @field_validator("summary_recipients", mode="before")
-    @classmethod
-    def _split_summary_recipients(cls, value: object) -> List[str]:
-        if value is None:
-            return []
-        if isinstance(value, str):
-            return [item.strip() for item in value.split(",") if item.strip()]
-        if isinstance(value, list):
-            return value
-        raise TypeError("Unsupported value for summary_recipients")
 
     @model_validator(mode="after")
     def _apply_provider_defaults(self) -> "EmailSettings":
@@ -160,7 +136,7 @@ class GoogleSettings(BaseModel):
         description="Delay (in hours) before retrying establishments without an associated Google place.",
     )
     daily_retry_limit: int = Field(
-        default=200,
+        default=20000,
         ge=1,
         description="Maximum number of establishments rechecked for Google data during a single sync run.",
     )

@@ -15,10 +15,10 @@
 - Les runs sont tracés dans `sync_runs` (status, métriques). Les curseurs et dates sont dans `sync_state`.
 - Les logs applicatifs sont dans `logs/app.log`, les alertes dans `logs/alerts.log`.
 - Les statistiques et états sont consultables via l’API (`GET /admin/stats/summary`, `/admin/stats/dashboard`, `/admin/sync-runs`, `/admin/sync-state`, `/admin/alerts/recent`).
-- `POST /admin/email/test` permet de vérifier la configuration SMTP active (destinataires par défaut ou fournis dans le corps de la requête).
+- `POST /admin/email/test` permet de vérifier la configuration SMTP active (destinataires admin par défaut, sinon clients actifs ou ceux fournis dans le corps de la requête).
 - `GET /admin/google/places-export` retourne un export Excel des établissements disposant d’une fiche Google (utilisé après la première synchronisation massive).
 - L’enrichissement Google journalise `sync.google.*`; surveiller les quotas et les éventuelles réponses `OVER_QUERY_LIMIT` côté logs applicatifs.
-- À la fin de chaque run réussi, une synthèse texte est envoyée aux adresses `EMAIL__SUMMARY_RECIPIENTS` (si le service e-mail est actif et configuré). Le message récapitule les volumes récupérés, les mises à jour, les correspondances Google immédiates vs tardives et les principales alertes.
+- À la fin de chaque run réussi, une synthèse texte est envoyée aux entrées `admin_recipients` (si le service e-mail est actif et configuré). Le message récapitule les volumes récupérés, les mises à jour, les correspondances Google immédiates vs tardives et les principales alertes.
 
 ## Relance / reprise
 - En cas d’erreur, inspecter `sync_runs.status = 'failed'` et `sync_state.last_cursor`.

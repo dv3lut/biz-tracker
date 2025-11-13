@@ -20,8 +20,8 @@
 - **Alertes** :
   - Logging dédié (`logging_config` définit un logger `alerts` -> `logs/alerts.log`).
   - Envoi SMTP optionnel (classe `EmailService`, désactivée si `EMAIL__ENABLED=false`) avec presets `EMAIL__PROVIDER` (`mailhog`, `mailjet`, `custom`) et endpoint de validation `POST /admin/email/test`.
-  - Les destinataires sont notifiés individuellement (un message par adresse) et le tout premier run supprime les envois pour éviter un afflux massif.
-- **Rapport e-mail** : `_send_run_summary_email` pousse une synthèse quotidienne vers `EMAIL__SUMMARY_RECIPIENTS` (si SMTP actif/configuré), avec fallback silencieux en cas d’absence de destinataires.
+  - Les destinataires sont pilotés depuis la base (`client_recipients` pour les alertes, `admin_recipients` pour les synthèses) et le tout premier run supprime les envois pour éviter un afflux massif.
+- **Rapport e-mail** : `_send_run_summary_email` diffuse une synthèse quotidienne aux entrées `admin_recipients` (si SMTP actif/configuré), avec fallback silencieux en cas d’absence de destinataires.
 - **Enrichissement Google Places** :
   - Service `GoogleBusinessService` + `GooglePlacesClient` activé lorsque `GOOGLE__API_KEY` est défini (Places API + Geocoding API requis côté Google Cloud).
   - Paramètres ajustables via `.env` (`GOOGLE__*`). Sans clé, aucune requête n’est émise et les colonnes Google restent à `pending`.

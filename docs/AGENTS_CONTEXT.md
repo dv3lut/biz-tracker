@@ -15,5 +15,5 @@
   - Accès API limité par jeton administrateur configurable (`X-Admin-Token`).
 - **Monitoring quotidien** : les agrégations sont calculées depuis `sync_runs`, `establishments` et `alerts` (dernière synchro, séries journalières sur 30 jours, répartition des statuts). Le front affiche graphiques, répartitions Google (global & dernier run) et alertes envoyées.
 - Les run récents distinguent désormais les correspondances Google immédiates (créations du jour) des rattrapages ultérieurs, et comptent les établissements déjà présents mais modifiés.
-- Une synthèse e-mail (statistiques + top 10) est diffusée aux destinataires `EMAIL__SUMMARY_RECIPIENTS` après chaque run réussi lorsque SMTP est opérationnel.
+- Une synthèse e-mail (statistiques + top 10) est diffusée aux destinataires renseignés dans `admin_recipients` après chaque run réussi lorsque SMTP est opérationnel.
 - **Prochaines évolutions envisagées** : enrichir les alertes (cartographie, scoring), exposer un dashboard public ou des intégrations externes, compléter le monitoring (SLA, volumétrie API Google).

@@ -18,14 +18,6 @@ class EmailService:
         self._settings = get_settings().email
 
     @property
-    def default_recipients(self) -> list[str]:
-        return list(self._settings.recipients)
-
-    @property
-    def summary_recipients(self) -> list[str]:
-        return list(self._settings.summary_recipients)
-
-    @property
     def provider(self) -> str:
         return self._settings.provider
 

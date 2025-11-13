@@ -104,8 +104,8 @@ Un fichier Postman de référence est disponible (`docs/postman_collection.json`
 
 ## Alertes e-mail & logs
 - Les nouvelles entrées détectées lors d’une synchronisation sont loguées dans `logs/alerts.log`.
-- Si l’envoi e-mail est activé (`EMAIL__ENABLED=true` + configuration SMTP), un message synthétique est expédié à la liste définie dans `EMAIL__RECIPIENTS`.
-- Une synthèse quotidienne de run est envoyée aux adresses `EMAIL__SUMMARY_RECIPIENTS` (si définies) après chaque synchronisation réussie.
+- Si l’envoi e-mail est activé (`EMAIL__ENABLED=true` + configuration SMTP), un message synthétique est expédié aux destinataires actifs configurés pour chaque client (table `client_recipients`).
+- Une synthèse quotidienne de run est envoyée aux destinataires administrateurs gérés via `/admin/email/admin-recipients` (table `admin_recipients`).
 - Presets disponibles : `EMAIL__PROVIDER=mailhog` (hôte `localhost`, port `1025`, TLS désactivé, interface http://localhost:8025 via `docker compose up -d biz-tracker-mailhog`), `EMAIL__PROVIDER=mailjet` (hôte `in-v3.mailjet.com`, port `587`, TLS activé, identifiant = API key, mot de passe = secret key), `EMAIL__PROVIDER=custom` (remplir manuellement `EMAIL__SMTP_*`).
 - L’endpoint `POST /admin/email/test` déclenche un envoi de test (corps optionnel) afin de valider la configuration active.
 
