@@ -8,6 +8,10 @@ type Props = {
   limit: number;
   onLimitChange: (limit: number) => void;
   onRefresh: () => void;
+  exportDays: number;
+  onExportDaysChange: (days: number) => void;
+  onExportAlerts: () => void;
+  isExportingAlerts: boolean;
   onTriggerGoogleCheck: (siret: string) => void;
   isCheckingGoogle: boolean;
   checkingGoogleSiret: string | null;
@@ -23,6 +27,10 @@ export const AlertsView = ({
   limit,
   onLimitChange,
   onRefresh,
+  exportDays,
+  onExportDaysChange,
+  onExportAlerts,
+  isExportingAlerts,
   onTriggerGoogleCheck,
   isCheckingGoogle,
   checkingGoogleSiret,
@@ -46,6 +54,10 @@ export const AlertsView = ({
           limit={limit}
           onLimitChange={onLimitChange}
           onRefresh={onRefresh}
+          exportDays={exportDays}
+          onExportDaysChange={onExportDaysChange}
+          onExport={onExportAlerts}
+          isExporting={isExportingAlerts}
           onTriggerGoogleCheck={onTriggerGoogleCheck}
           isCheckingGoogle={isCheckingGoogle}
           checkingGoogleSiret={checkingGoogleSiret}

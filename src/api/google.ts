@@ -44,7 +44,7 @@ export const googleApi = {
     }
 
     const response = await fetch(
-      `${import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080"}/admin/google/places-export`,
+      `${import.meta.env.VITE_APP_API_BASE_URL ?? "http://localhost:8080"}/admin/google/places-export`,
       { headers },
     );
     if (!response.ok) {

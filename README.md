@@ -15,7 +15,7 @@ cp .env.example .env  # Adapter l'URL de l'API si nécessaire
 npm run dev
 ```
 
-L'application est servie sur [http://localhost:5173](http://localhost:5173). La valeur par défaut de `VITE_API_BASE_URL` pointe sur `http://localhost:8000`.
+L'application est servie sur [http://localhost:5173](http://localhost:5173). La valeur par défaut de `VITE_APP_API_BASE_URL` pointe sur `http://localhost:8000`.
 
 ### Autorisations CORS côté backend
 

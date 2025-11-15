@@ -10,6 +10,10 @@ type Props = {
   limit: number;
   onLimitChange: (limit: number) => void;
   onRefresh: () => void;
+  exportDays: number;
+  onExportDaysChange: (days: number) => void;
+  onExport: () => void;
+  isExporting: boolean;
   onTriggerGoogleCheck: (siret: string) => void;
   isCheckingGoogle: boolean;
   checkingGoogleSiret: string | null;
@@ -25,6 +29,10 @@ export const AlertsList = ({
   limit,
   onLimitChange,
   onRefresh,
+  exportDays,
+  onExportDaysChange,
+  onExport,
+  isExporting,
   onTriggerGoogleCheck,
   isCheckingGoogle,
   checkingGoogleSiret,
@@ -34,6 +42,10 @@ export const AlertsList = ({
 }: Props) => {
   const handleLimitChange = (event: ChangeEvent<HTMLSelectElement>) => {
     onLimitChange(Number(event.target.value));
+  };
+
+  const handleExportDaysChange = (event: ChangeEvent<HTMLInputElement>) => {
+    onExportDaysChange(Number(event.target.value));
   };
 
   return (
@@ -54,6 +66,20 @@ export const AlertsList = ({
               ))}
             </select>
           </label>
+          <label className="muted small export-days">
+            Créées depuis
+            <input
+              type="number"
+              min={1}
+              max={365}
+              value={exportDays}
+              onChange={handleExportDaysChange}
+            />
+            jours
+          </label>
+          <button type="button" className="ghost" onClick={onExport} disabled={isExporting}>
+            {isExporting ? "Export..." : "Exporter"}
+          </button>
           <button type="button" className="ghost" onClick={onRefresh} disabled={isLoading}>
             Rafraîchir
           </button>

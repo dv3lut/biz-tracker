@@ -16,7 +16,7 @@ export interface RequestResult<T> {
   status: number;
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080";
+const API_BASE_URL = import.meta.env.VITE_APP_API_BASE_URL ?? "http://localhost:8080";
 
 const readPayload = async (response: Response): Promise<unknown> => {
   const text = await response.text();

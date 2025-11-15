@@ -92,6 +92,8 @@ const App = () => {
   const [emailError, setEmailError] = useState<string | null>(null);
   const [alertsFeedback, setAlertsFeedback] = useState<string | null>(null);
   const [alertsError, setAlertsError] = useState<string | null>(null);
+  const [alertsExportDays, setAlertsExportDays] = useState(30);
+  const [isExportingAlerts, setIsExportingAlerts] = useState(false);
   const [clientsFeedback, setClientsFeedback] = useState<string | null>(null);
   const [clientsError, setClientsError] = useState<string | null>(null);
   const [adminEmailFeedback, setAdminEmailFeedback] = useState<string | null>(null);
@@ -138,6 +140,8 @@ const App = () => {
     setCheckingGoogleSiret(null);
     setSelectedEstablishmentSiret(null);
     setIsExportingGooglePlaces(false);
+    setAlertsExportDays(30);
+    setIsExportingAlerts(false);
     setRunDetailModal(null);
     setClientModalState(null);
     setActiveSection("dashboard");
@@ -709,6 +713,47 @@ const App = () => {
     [isAuthenticated, triggerManualGoogleCheck, setTokenError]
   );
 
+  const handleAlertsExportDaysChange = useCallback((value: number) => {
+    const nextValue = Number.isFinite(value) ? Math.round(value) : 30;
+    const clamped = Math.max(1, Math.min(nextValue, 365));
+    setAlertsExportDays(clamped);
+  }, []);
+
+  const handleExportAlerts = useCallback(async () => {
+    if (!isAuthenticated) {
+      setTokenError("Merci de saisir un jeton administrateur.");
+      return;
+    }
+    setAlertsFeedback(null);
+    setAlertsError(null);
+    setIsExportingAlerts(true);
+    try {
+      const days = Math.max(1, Math.min(Math.round(alertsExportDays), 365));
+      const blob = await alertsApi.exportByCreation(days);
+      const url = window.URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      const today = new Date().toISOString().slice(0, 10);
+      anchor.download = `biz-tracker-alerts-${days}d-${today}.xlsx`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(url);
+      setAlertsFeedback(`Export des alertes (${days} jours) téléchargé.`);
+      setAlertsError(null);
+    } catch (error) {
+      if (isUnauthorizedError(error)) {
+        handleUnauthorized();
+        return;
+      }
+      const message = error instanceof ApiError ? error.message : "Export des alertes impossible.";
+      setAlertsError(message);
+      setAlertsFeedback(null);
+    } finally {
+      setIsExportingAlerts(false);
+    }
+  }, [isAuthenticated, alertsExportDays, handleUnauthorized, setTokenError]);
+
   const handleTriggerGoogleCheckFromEstablishments = useCallback(
     (siret: string) => {
       if (!isAuthenticated) {
@@ -827,6 +872,8 @@ const App = () => {
       setAdminEmailError(null);
       setCheckingGoogleSiret(null);
       setSelectedEstablishmentSiret(null);
+  setAlertsExportDays(30);
+  setIsExportingAlerts(false);
       setRunDetailModal(null);
       setClientModalState(null);
       setActiveSection("dashboard");
@@ -855,6 +902,8 @@ const App = () => {
     setSelectedEstablishmentSiret(null);
     setRunDetailModal(null);
     setClientModalState(null);
+    setAlertsExportDays(30);
+    setIsExportingAlerts(false);
     setActiveSection("dashboard");
   }, [
     setAdminTokenState,
@@ -1002,6 +1051,10 @@ const App = () => {
                 limit={alertsLimit}
                 onLimitChange={setAlertsLimit}
                 onRefresh={() => alertsQuery.refetch()}
+                exportDays={alertsExportDays}
+                onExportDaysChange={handleAlertsExportDaysChange}
+                onExportAlerts={handleExportAlerts}
+                isExportingAlerts={isExportingAlerts}
                 onTriggerGoogleCheck={handleTriggerGoogleCheckFromAlerts}
                 isCheckingGoogle={isCheckingGoogle}
                 checkingGoogleSiret={checkingGoogleSiret}

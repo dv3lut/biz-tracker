@@ -1,9 +1,9 @@
 # Step 1: Use Node.js to build the React app
 FROM node:22-alpine AS build
 
-ARG VITE_APP_API_URL
+ARG VITE_APP_API_BASE_URL
 
-ENV VITE_APP_API_URL=${VITE_APP_API_URL}
+ENV VITE_APP_API_BASE_URL=${VITE_APP_API_BASE_URL}
 
 WORKDIR /app
 
