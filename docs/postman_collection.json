@@ -328,6 +328,86 @@
           ]
         },
         {
+          "name": "GET Alerts Export",
+          "request": {
+            "method": "GET",
+            "description": "Export Excel des alertes filtrées sur la date de création d'établissement.",
+            "header": [
+              {
+                "key": "X-Admin-Token",
+                "value": "{{adminToken}}"
+              },
+              {
+                "key": "Accept",
+                "value": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/alerts/export?days=30",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "alerts",
+                "export"
+              ],
+              "query": [
+                {
+                  "key": "days",
+                  "value": "30",
+                  "description": "Fenêtre glissante basée sur `date_creation` (1-365)."
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Example 200",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Admin-Token",
+                    "value": "{{adminToken}}"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/alerts/export?days=30",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "alerts",
+                    "export"
+                  ],
+                  "query": [
+                    {
+                      "key": "days",
+                      "value": "30"
+                    }
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "plain",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                }
+              ],
+              "body": ""
+            }
+          ]
+        },
+        {
           "name": "GET Establishments",
           "request": {
             "method": "GET",

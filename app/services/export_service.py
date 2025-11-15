@@ -1,6 +1,7 @@
 """Utilities to export data snapshots (Excel, CSV, etc.)."""
 from __future__ import annotations
 
+import json
 from io import BytesIO
 from typing import Iterable
 
@@ -69,6 +70,79 @@ def build_google_places_workbook(establishments: Iterable[models.Establishment])
                 str(establishment.last_run_id) if establishment.last_run_id else None,
                 _format_datetime(establishment.first_seen_at),
                 _format_datetime(establishment.last_seen_at),
+            ]
+        )
+
+    sheet.freeze_panes = "A2"
+
+    for column in sheet.columns:
+        max_length = 0
+        column_letter = column[0].column_letter
+        for cell in column:
+            try:
+                value_length = len(str(cell.value)) if cell.value is not None else 0
+            except Exception:  # pragma: no cover - defensive
+                value_length = 0
+            max_length = max(max_length, value_length)
+        sheet.column_dimensions[column_letter].width = min(max(max_length + 2, 12), 60)
+
+    buffer = BytesIO()
+    workbook.save(buffer)
+    buffer.seek(0)
+    return buffer
+
+
+def build_alerts_workbook(alerts: Iterable[models.Alert]) -> BytesIO:
+    """Generate an Excel workbook listing alerts filtered by business creation date."""
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Alertes"
+    headers = [
+        "Date création",
+        "Date alerte",
+        "Date envoi",
+        "SIRET",
+        "Nom",
+        "Adresse",
+        "Code postal",
+        "Commune",
+        "Pays",
+        "NAF",
+        "Catégorie entreprise",
+        "Catégorie juridique",
+        "Run ID",
+        "Scope",
+        "Destinataires",
+        "Payload",
+    ]
+    sheet.append(headers)
+
+    for alert in alerts:
+        establishment = alert.establishment
+        if establishment is None:
+            continue
+
+        payload_str = json.dumps(alert.payload or {}, ensure_ascii=False)
+        recipients = ", ".join(alert.recipients or [])
+        sheet.append(
+            [
+                establishment.date_creation.isoformat() if establishment.date_creation else None,
+                _format_datetime(alert.created_at),
+                _format_datetime(alert.sent_at),
+                establishment.siret,
+                establishment.name,
+                _compose_address(establishment),
+                establishment.code_postal,
+                establishment.libelle_commune or establishment.libelle_commune_etranger,
+                establishment.code_pays,
+                establishment.naf_code,
+                establishment.categorie_entreprise,
+                establishment.categorie_juridique,
+                str(alert.run_id) if alert.run_id else None,
+                alert.run.scope_key if alert.run else None,
+                recipients,
+                payload_str,
             ]
         )
 

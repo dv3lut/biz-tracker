@@ -16,21 +16,6 @@ from .context import UpdatedEstablishmentInfo
 class SyncPersistenceMixin:
     """Expose reusable persistence helpers leveraged by the sync collector."""
 
-    _AUTO_ENTREPRENEUR_CATEGORIES = {
-        "1000",
-        "1005",
-        "1006",
-        "1007",
-        "1008",
-        "1009",
-        "1010",
-        "1011",
-        "1012",
-        "1013",
-    }
-
-    _MICRO_ENTERPRISE_MARKERS = {"ME", "MICRO", "MICRO-ENTREPRISE", "MICRO_ENTREPRISE"}
-
     def _build_restaurant_query(self, *, since_creation: date | None = None) -> str:
         naf_terms = [f"activitePrincipaleEtablissement:{code}" for code in self._settings.sirene.restaurant_naf_codes]
         naf_query = " OR ".join(naf_terms)
@@ -41,11 +26,6 @@ class SyncPersistenceMixin:
         if since_creation:
             creation_clause = f"dateCreationEtablissement:[{since_creation.isoformat()} TO *]"
             clauses.append(creation_clause)
-
-        clauses.append("-categorieJuridiqueUniteLegale:1*")
-        micro_markers = sorted(self._MICRO_ENTERPRISE_MARKERS)
-        for marker in micro_markers:
-            clauses.append(f'-categorieEntreprise:"{marker}"')
 
         return " AND ".join(clauses)
 
@@ -87,8 +67,6 @@ class SyncPersistenceMixin:
                 if existing:
                     session.delete(existing)
                 continue
-            if self._is_auto_or_micro_enterprise(fields):
-                continue
             entity = session.get(models.Establishment, siret)
             if entity:
                 changed_fields: list[str] = []
@@ -111,16 +89,3 @@ class SyncPersistenceMixin:
                 new_entities.append(entity)
         session.flush()
         return new_entities, updated_entities
-
-    def _is_auto_or_micro_enterprise(self, fields: dict[str, object]) -> bool:
-        categorie_juridique = fields.get("categorie_juridique")
-        if isinstance(categorie_juridique, str):
-            normalized = categorie_juridique.strip()
-            if normalized in self._AUTO_ENTREPRENEUR_CATEGORIES:
-                return True
-        categorie_entreprise = fields.get("categorie_entreprise")
-        if isinstance(categorie_entreprise, str):
-            normalized = categorie_entreprise.strip().upper()
-            if normalized in self._MICRO_ENTERPRISE_MARKERS:
-                return True
-        return False

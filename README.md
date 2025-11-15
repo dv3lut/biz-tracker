@@ -83,7 +83,7 @@ Un fichier Postman de référence est disponible (`docs/postman_collection.json`
    ```bash
    cd ../biz-tracker-admin-ui
    npm install
-   cp .env.example .env  # adapter VITE_API_BASE_URL si besoin
+   cp .env.example .env  # adapter VITE_APP_API_BASE_URL si besoin
    npm run dev
    ```
 - L'interface écoute par défaut sur `http://localhost:5173`. Vérifiez que `API__ALLOWED_ORIGINS` dans `.env` côté backend contient cette origine (valeur par défaut fournie).

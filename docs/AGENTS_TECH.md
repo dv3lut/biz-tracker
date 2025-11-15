@@ -21,6 +21,7 @@
   - Logging dédié (`logging_config` définit un logger `alerts` -> `logs/alerts.log`).
   - Envoi SMTP optionnel (classe `EmailService`, désactivée si `EMAIL__ENABLED=false`) avec presets `EMAIL__PROVIDER` (`mailhog`, `mailjet`, `custom`) et endpoint de validation `POST /admin/email/test`.
   - Les destinataires sont pilotés depuis la base (`client_recipients` pour les alertes, `admin_recipients` pour les synthèses) et le tout premier run supprime les envois pour éviter un afflux massif.
+  - Export Excel ciblé via `GET /admin/alerts/export?days=X` (filtre sur `establishments.date_creation`) pour suivre les créations récentes indépendamment de la date d’alerte.
 - **Rapport e-mail** : `_send_run_summary_email` diffuse une synthèse quotidienne aux entrées `admin_recipients` (si SMTP actif/configuré), avec fallback silencieux en cas d’absence de destinataires.
 - **Enrichissement Google Places** :
   - Service `GoogleBusinessService` + `GooglePlacesClient` activé lorsque `GOOGLE__API_KEY` est défini (Places API + Geocoding API requis côté Google Cloud).
@@ -41,7 +42,7 @@
 ## UI d’administration
 
 - Projet React + Vite (`biz-tracker-admin-ui`) placé hors du dépôt backend (dossier parent). S’appuie sur React Query pour appeler les endpoints `/admin/*`.
-- Configuration via `.env` côté UI (`VITE_API_BASE_URL`). Build `npm run build`, dev `npm run dev` (port 5173).
+- Configuration via `.env` côté UI (`VITE_APP_API_BASE_URL`). Build `npm run build`, dev `npm run dev` (port 5173).
   - `StatsSummaryCard`, `SyncRunsTable`, `SyncStateTable`, `AlertsList`, `EstablishmentsSection` consomment les endpoints historiques (`/stats/summary`, `/sync-runs`, `/sync-state`, `/alerts/recent`, `/establishments`).
   - `DashboardInsights` exploite `GET /admin/stats/dashboard` (30 jours par défaut, fenêtre réduite à 14 jours sur les graphiques) et s’appuie sur un composant `BarChart` CSS-only (pas de librairie externe) pour afficher les séries.
   - Les métriques sont formatées via `utils/format.ts`; les footnotes (nombre de runs par jour) sont calculées côté front pour garder le payload compact.

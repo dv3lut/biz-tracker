@@ -63,7 +63,7 @@ class DatabaseSettings(BaseModel):
         return URL.create(
             "postgresql+psycopg",
             username=self.user or None,
-            password=None,
+            password=self.password or None,
             host=self.host,
             port=self.port,
             database=self.name,
@@ -196,6 +196,17 @@ class ElasticsearchLoggingSettings(BaseModel):
     username: Optional[str] = None
     password: Optional[str] = None
     timeout_seconds: int = Field(default=10, ge=1)
+
+    @field_validator("enabled", "verify_certs", mode="before")
+    @classmethod
+    def _normalize_bool(cls, value: object) -> object:
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"", "0", "false", "off", "no"}:
+                return False
+            if normalized in {"1", "true", "on", "yes"}:
+                return True
+        return value
 
 
 class LoggingSettings(BaseModel):

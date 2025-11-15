@@ -79,6 +79,8 @@ def dispatch_email_to_clients(
     clients: Sequence[models.Client],
     subject: str,
     body: str,
+    *,
+    html_body: str | None = None,
 ) -> ClientDispatchResult:
     """Send a message to each client and update counters."""
 
@@ -97,7 +99,7 @@ def dispatch_email_to_clients(
         if timestamp is None:
             timestamp = datetime.utcnow()
         try:
-            email_service.send(subject, body, recipients)
+            email_service.send(subject, body, recipients, html_body=html_body)
         except Exception as exc:  # noqa: BLE001 - let caller handle logging
             failed.append((client, exc))
             continue

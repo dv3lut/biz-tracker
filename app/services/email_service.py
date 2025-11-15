@@ -31,7 +31,14 @@ class EmailService:
             and self._settings.from_address
         )
 
-    def send(self, subject: str, body: str, recipients: Iterable[str]) -> None:
+    def send(
+        self,
+        subject: str,
+        body: str,
+        recipients: Iterable[str],
+        *,
+        html_body: str | None = None,
+    ) -> None:
         settings = self._settings
         recipient_list = [addr for addr in recipients if addr]
         if not settings.enabled:
@@ -55,5 +62,7 @@ class EmailService:
             message["From"] = settings.from_address
             message["To"] = ", ".join(recipient_list)
             message.set_content(body)
+            if html_body:
+                message.add_alternative(html_body, subtype="html")
             server.send_message(message, to_addrs=recipient_list)
             _LOGGER.debug("Email sent to %s", recipient_list)
