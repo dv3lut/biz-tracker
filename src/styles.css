@@ -764,6 +764,120 @@ table td {
   resize: vertical;
 }
 
+.export-google-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: flex-end;
+}
+
+.export-google-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 180px;
+}
+
+.export-google-form input[type="date"] {
+  padding: 0.45rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #cbd5f5;
+  font-size: 0.95rem;
+}
+
+.export-google-form .muted {
+  margin: 0;
+  flex: 1 1 100%;
+}
+
+.google-retry-card {
+  display: grid;
+  gap: 1rem;
+}
+
+.google-retry-form {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.google-retry-fieldset {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.google-retry-fieldset legend {
+  font-weight: 600;
+}
+
+.weekday-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.weekday-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid #d0d5dd;
+  border-radius: 999px;
+  font-size: 0.9rem;
+}
+
+.weekday-toggle input {
+  margin: 0;
+}
+
+.rule-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.rule-row {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  align-items: end;
+}
+
+.rule-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.rule-row input {
+  padding: 0.45rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #cbd5f5;
+}
+
+.rule-actions {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+}
+
+.google-retry-categories {
+  display: grid;
+  gap: 1rem;
+}
+
+.google-retry-categories label {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.google-retry-categories input {
+  padding: 0.45rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #cbd5f5;
+}
+
 .toggle-group {
   display: inline-flex;
   padding: 0.25rem;

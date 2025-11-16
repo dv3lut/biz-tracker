@@ -307,3 +307,14 @@ export interface GoogleCheckResult {
   checkStatus: string;
   establishment: Establishment;
 }
+
+export interface GoogleRetryRule {
+  maxAgeDays: number | null;
+  frequencyDays: number;
+}
+
+export interface GoogleRetryConfig {
+  retryWeekdays: number[];
+  defaultRules: GoogleRetryRule[];
+  microRules: GoogleRetryRule[];
+}

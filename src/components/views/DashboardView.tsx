@@ -1,6 +1,7 @@
 import { StatsSummaryCard } from "../StatsSummaryCard";
 import { DashboardInsights } from "../DashboardInsights";
-import type { DashboardMetrics, StatsSummary } from "../../types";
+import { GoogleRetryConfigCard } from "../GoogleRetryConfigCard";
+import type { DashboardMetrics, GoogleRetryConfig, StatsSummary } from "../../types";
 
 export type DashboardViewProps = {
   stats: StatsSummary | undefined;
@@ -11,6 +12,19 @@ export type DashboardViewProps = {
   isTriggeringSync: boolean;
   onExportGooglePlaces: () => void;
   isExportingGooglePlaces: boolean;
+  googleExportStartDate: string;
+  googleExportEndDate: string;
+  onGoogleExportStartDateChange: (value: string) => void;
+  onGoogleExportEndDateChange: (value: string) => void;
+  googleRetryConfig: GoogleRetryConfig | undefined;
+  isGoogleRetryConfigLoading: boolean;
+  isGoogleRetryConfigRefreshing: boolean;
+  googleRetryConfigError: Error | null;
+  onRefreshGoogleRetryConfig: () => void;
+  onSubmitGoogleRetryConfig: (payload: GoogleRetryConfig) => void;
+  isSavingGoogleRetryConfig: boolean;
+  googleRetryConfigFeedback: string | null;
+  googleRetryConfigMessageError: string | null;
   feedbackMessage: string | null;
   errorMessage: string | null;
   isStatsRefreshing: boolean;
@@ -34,6 +48,19 @@ export const DashboardView = ({
   isTriggeringSync,
   onExportGooglePlaces,
   isExportingGooglePlaces,
+  googleExportStartDate,
+  googleExportEndDate,
+  onGoogleExportStartDateChange,
+  onGoogleExportEndDateChange,
+  googleRetryConfig,
+  isGoogleRetryConfigLoading,
+  isGoogleRetryConfigRefreshing,
+  googleRetryConfigError,
+  onRefreshGoogleRetryConfig,
+  onSubmitGoogleRetryConfig,
+  isSavingGoogleRetryConfig,
+  googleRetryConfigFeedback,
+  googleRetryConfigMessageError,
   feedbackMessage,
   errorMessage,
   isStatsRefreshing,
@@ -59,6 +86,10 @@ export const DashboardView = ({
           isTriggering={isTriggeringSync}
           onExportGooglePlaces={onExportGooglePlaces}
           isExportingGooglePlaces={isExportingGooglePlaces}
+          googleExportStartDate={googleExportStartDate}
+          googleExportEndDate={googleExportEndDate}
+          onGoogleExportStartDateChange={onGoogleExportStartDateChange}
+          onGoogleExportEndDateChange={onGoogleExportEndDateChange}
           feedbackMessage={feedbackMessage}
           errorMessage={errorMessage}
           isRefreshing={hasActiveRun && isStatsRefreshing}
@@ -74,6 +105,17 @@ export const DashboardView = ({
           selectedDay={selectedDay}
         />
       </div>
+      <GoogleRetryConfigCard
+        config={googleRetryConfig}
+        isLoading={isGoogleRetryConfigLoading}
+        isRefreshing={isGoogleRetryConfigRefreshing}
+        error={googleRetryConfigError}
+        onRefresh={onRefreshGoogleRetryConfig}
+        onSubmit={onSubmitGoogleRetryConfig}
+        isSubmitting={isSavingGoogleRetryConfig}
+        feedbackMessage={googleRetryConfigFeedback}
+        errorMessage={googleRetryConfigMessageError}
+      />
     </section>
   );
 };

@@ -42,6 +42,7 @@ import {
   EstablishmentDetail,
   Client,
   GoogleCheckResult,
+  GoogleRetryConfig,
   StatsSummary,
   SyncRequestPayload,
   SyncRun,
@@ -70,6 +71,15 @@ const REFRESH_LONG = 60_000;
 const REFRESH_SHORT = 30_000;
 const REFRESH_ACTIVE = 1_000;
 const DASHBOARD_DAYS = 30;
+const GOOGLE_EXPORT_DEFAULT_WINDOW_DAYS = 30;
+
+const getDefaultGoogleExportRange = () => {
+  const end = new Date();
+  const start = new Date();
+  start.setDate(start.getDate() - GOOGLE_EXPORT_DEFAULT_WINDOW_DAYS);
+  const format = (value: Date) => value.toISOString().slice(0, 10);
+  return { start: format(start), end: format(end) };
+};
 
 const isUnauthorizedError = (error: unknown): error is ApiError => {
   return error instanceof ApiError && error.status === 403;
@@ -101,10 +111,14 @@ const App = () => {
   const [checkingGoogleSiret, setCheckingGoogleSiret] = useState<string | null>(null);
   const [selectedEstablishmentSiret, setSelectedEstablishmentSiret] = useState<string | null>(null);
   const [isExportingGooglePlaces, setIsExportingGooglePlaces] = useState(false);
+  const [googleExportStartDate, setGoogleExportStartDate] = useState<string>(() => getDefaultGoogleExportRange().start);
+  const [googleExportEndDate, setGoogleExportEndDate] = useState<string>(() => getDefaultGoogleExportRange().end);
   const [runDetailModal, setRunDetailModal] = useState<RunDetailModalState | null>(null);
   const [clientModalState, setClientModalState] = useState<{ mode: "create" | "edit"; client: Client | null } | null>(
     null,
   );
+  const [googleRetryConfigFeedback, setGoogleRetryConfigFeedback] = useState<string | null>(null);
+  const [googleRetryConfigMessageError, setGoogleRetryConfigMessageError] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const isAuthenticated = Boolean(adminToken);
 
@@ -120,6 +134,14 @@ const App = () => {
   const dismissClientsError = useCallback(() => setClientsError(null), []);
   const dismissAdminEmailFeedback = useCallback(() => setAdminEmailFeedback(null), []);
   const dismissAdminEmailError = useCallback(() => setAdminEmailError(null), []);
+  const dismissGoogleRetryConfigFeedback = useCallback(() => setGoogleRetryConfigFeedback(null), []);
+  const dismissGoogleRetryConfigError = useCallback(() => setGoogleRetryConfigMessageError(null), []);
+
+  const resetGoogleExportRange = useCallback(() => {
+    const { start, end } = getDefaultGoogleExportRange();
+    setGoogleExportStartDate(start);
+    setGoogleExportEndDate(end);
+  }, [setGoogleExportStartDate, setGoogleExportEndDate]);
 
   const handleUnauthorized = useCallback(() => {
     clearAdminToken();
@@ -137,15 +159,18 @@ const App = () => {
     setClientsError(null);
     setAdminEmailFeedback(null);
     setAdminEmailError(null);
+  setGoogleRetryConfigFeedback(null);
+  setGoogleRetryConfigMessageError(null);
     setCheckingGoogleSiret(null);
     setSelectedEstablishmentSiret(null);
     setIsExportingGooglePlaces(false);
+    resetGoogleExportRange();
     setAlertsExportDays(30);
     setIsExportingAlerts(false);
     setRunDetailModal(null);
     setClientModalState(null);
     setActiveSection("dashboard");
-  }, []);
+  }, [resetGoogleExportRange]);
 
   const syncRunsQuery = useQuery<SyncRun[]>({
     queryKey: ["sync-runs", syncRunsLimit],
@@ -202,6 +227,12 @@ const App = () => {
   const adminEmailConfigQuery = useQuery<AdminEmailConfig>({
     queryKey: ["admin-email-config"],
     queryFn: () => adminConfigApi.fetch(),
+    enabled: isAuthenticated,
+  });
+
+  const googleRetryConfigQuery = useQuery<GoogleRetryConfig>({
+    queryKey: ["google-retry-config"],
+    queryFn: () => googleApi.fetchRetryConfig(),
     enabled: isAuthenticated,
   });
 
@@ -325,6 +356,22 @@ const App = () => {
   }, [adminEmailError, dismissAdminEmailError]);
 
   useEffect(() => {
+    if (!googleRetryConfigFeedback) {
+      return;
+    }
+    const timeout = window.setTimeout(dismissGoogleRetryConfigFeedback, 5000);
+    return () => window.clearTimeout(timeout);
+  }, [googleRetryConfigFeedback, dismissGoogleRetryConfigFeedback]);
+
+  useEffect(() => {
+    if (!googleRetryConfigMessageError) {
+      return;
+    }
+    const timeout = window.setTimeout(dismissGoogleRetryConfigError, 5000);
+    return () => window.clearTimeout(timeout);
+  }, [googleRetryConfigMessageError, dismissGoogleRetryConfigError]);
+
+  useEffect(() => {
     if (!adminToken) {
       return;
     }
@@ -336,7 +383,8 @@ const App = () => {
       isUnauthorizedError(establishmentsQueryResult.error) ||
       isUnauthorizedError(dashboardQuery.error) ||
       isUnauthorizedError(clientsQuery.error) ||
-      isUnauthorizedError(adminEmailConfigQuery.error)
+      isUnauthorizedError(adminEmailConfigQuery.error) ||
+      isUnauthorizedError(googleRetryConfigQuery.error)
     ) {
       handleUnauthorized();
     }
@@ -350,6 +398,7 @@ const App = () => {
     dashboardQuery.error,
     clientsQuery.error,
     adminEmailConfigQuery.error,
+    googleRetryConfigQuery.error,
     handleUnauthorized,
   ]);
 
@@ -487,6 +536,22 @@ const App = () => {
     [handleUnauthorized]
   );
 
+  const showGoogleRetryConfigError = useCallback(
+    (error: unknown) => {
+      if (isUnauthorizedError(error)) {
+        handleUnauthorized();
+        return;
+      }
+      const message =
+        error instanceof ApiError
+          ? error.message
+          : "La mise à jour de la configuration Google a échoué.";
+  setGoogleRetryConfigMessageError(message);
+      setGoogleRetryConfigFeedback(null);
+    },
+    [handleUnauthorized]
+  );
+
   const syncMutation = useMutation<TriggerSyncResult, unknown, SyncRequestPayload>({
     mutationFn: (payload: SyncRequestPayload) => syncApi.trigger(payload),
     onSuccess: ({ run, status, detail }: TriggerSyncResult) => {
@@ -599,6 +664,20 @@ const App = () => {
       adminEmailConfigQuery.refetch();
     },
     onError: showAdminEmailError,
+  });
+
+  const updateGoogleRetryConfigMutation = useMutation<GoogleRetryConfig, unknown, GoogleRetryConfig>({
+    mutationFn: (payload: GoogleRetryConfig) => googleApi.updateRetryConfig(payload),
+    onMutate: () => {
+      setGoogleRetryConfigFeedback(null);
+      setGoogleRetryConfigMessageError(null);
+    },
+    onSuccess: (config) => {
+      setGoogleRetryConfigFeedback("Configuration Google mise à jour.");
+      setGoogleRetryConfigMessageError(null);
+      queryClient.setQueryData(["google-retry-config"], config);
+    },
+    onError: showGoogleRetryConfigError,
   });
 
   const manualGoogleCheckMutation = useMutation<GoogleCheckResult, unknown, { siret: string; source: "alerts" | "establishments" }>({
@@ -853,6 +932,17 @@ const App = () => {
     [isAuthenticated, updateAdminEmailConfigMutation, setTokenError],
   );
 
+  const handleSubmitGoogleRetryConfig = useCallback(
+    (payload: GoogleRetryConfig) => {
+      if (!isAuthenticated) {
+        setTokenError("Merci de saisir un jeton administrateur.");
+        return;
+      }
+      updateGoogleRetryConfigMutation.mutate(payload);
+    },
+    [isAuthenticated, updateGoogleRetryConfigMutation, setTokenError],
+  );
+
   const handleTokenSubmit = useCallback(
     (token: string) => {
       setAdminToken(token);
@@ -870,16 +960,20 @@ const App = () => {
       setClientsError(null);
       setAdminEmailFeedback(null);
       setAdminEmailError(null);
+  setGoogleRetryConfigFeedback(null);
+  setGoogleRetryConfigMessageError(null);
       setCheckingGoogleSiret(null);
       setSelectedEstablishmentSiret(null);
-  setAlertsExportDays(30);
-  setIsExportingAlerts(false);
+      setAlertsExportDays(30);
+      setIsExportingAlerts(false);
+      setIsExportingGooglePlaces(false);
+      resetGoogleExportRange();
       setRunDetailModal(null);
       setClientModalState(null);
       setActiveSection("dashboard");
       queryClient.invalidateQueries();
     },
-    [queryClient],
+    [queryClient, resetGoogleExportRange],
   );
 
   const handleTokenReset = useCallback(() => {
@@ -898,12 +992,16 @@ const App = () => {
     setClientsError(null);
     setAdminEmailFeedback(null);
     setAdminEmailError(null);
+  setGoogleRetryConfigFeedback(null);
+  setGoogleRetryConfigMessageError(null);
     setCheckingGoogleSiret(null);
     setSelectedEstablishmentSiret(null);
     setRunDetailModal(null);
     setClientModalState(null);
     setAlertsExportDays(30);
     setIsExportingAlerts(false);
+    setIsExportingGooglePlaces(false);
+    resetGoogleExportRange();
     setActiveSection("dashboard");
   }, [
     setAdminTokenState,
@@ -920,11 +1018,15 @@ const App = () => {
     setClientsError,
     setAdminEmailFeedback,
     setAdminEmailError,
+  setGoogleRetryConfigFeedback,
+  setGoogleRetryConfigMessageError,
     setCheckingGoogleSiret,
     setSelectedEstablishmentSiret,
     setRunDetailModal,
     setClientModalState,
+    setIsExportingGooglePlaces,
     setActiveSection,
+    resetGoogleExportRange,
   ]);
 
   const handleSendEmailTest = useCallback(
@@ -943,14 +1045,45 @@ const App = () => {
     setEmailError(null);
   }, []);
 
+  const handleGoogleExportStartDateChange = useCallback(
+    (value: string) => {
+      setGoogleExportStartDate(value);
+      setErrorMessage(null);
+      setFeedbackMessage(null);
+    },
+    [setErrorMessage, setFeedbackMessage],
+  );
+
+  const handleGoogleExportEndDateChange = useCallback(
+    (value: string) => {
+      setGoogleExportEndDate(value);
+      setErrorMessage(null);
+      setFeedbackMessage(null);
+    },
+    [setErrorMessage, setFeedbackMessage],
+  );
+
   const handleExportGooglePlaces = useCallback(async () => {
     if (!isAuthenticated) {
       setTokenError("Merci de saisir un jeton administrateur.");
       return;
     }
+    if (!googleExportStartDate || !googleExportEndDate) {
+      setErrorMessage("Merci de renseigner une date de début et une date de fin pour l'export Google Places.");
+      setFeedbackMessage(null);
+      return;
+    }
+    if (googleExportStartDate > googleExportEndDate) {
+      setErrorMessage("La date de début doit précéder (ou être égale à) la date de fin.");
+      setFeedbackMessage(null);
+      return;
+    }
     setIsExportingGooglePlaces(true);
     try {
-      const blob = await googleApi.exportPlaces();
+      const blob = await googleApi.exportPlaces({
+        startDate: googleExportStartDate,
+        endDate: googleExportEndDate,
+      });
       const url = window.URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
@@ -967,7 +1100,15 @@ const App = () => {
     } finally {
       setIsExportingGooglePlaces(false);
     }
-  }, [isAuthenticated, showError]);
+  }, [
+    isAuthenticated,
+    googleExportStartDate,
+    googleExportEndDate,
+    showError,
+    setTokenError,
+    setErrorMessage,
+    setFeedbackMessage,
+  ]);
 
   if (!adminToken) {
     return <AdminTokenPrompt onSubmit={handleTokenSubmit} errorMessage={tokenError} />;
@@ -984,6 +1125,10 @@ const App = () => {
   );
   const adminConfigIsRefreshing = useRefreshIndicator(
     adminEmailConfigQuery.isFetching && !adminEmailConfigQuery.isLoading,
+    { delay: 300, minVisible: 250 },
+  );
+  const googleRetryConfigIsRefreshing = useRefreshIndicator(
+    googleRetryConfigQuery.isFetching && !googleRetryConfigQuery.isLoading,
     { delay: 300, minVisible: 250 },
   );
   const establishmentsHasNextPage = (establishmentsQueryResult.data?.length ?? 0) === establishmentsLimit;
@@ -1008,6 +1153,19 @@ const App = () => {
                 isTriggeringSync={syncMutation.isPending}
                 onExportGooglePlaces={handleExportGooglePlaces}
                 isExportingGooglePlaces={isExportingGooglePlaces}
+                googleExportStartDate={googleExportStartDate}
+                googleExportEndDate={googleExportEndDate}
+                onGoogleExportStartDateChange={handleGoogleExportStartDateChange}
+                onGoogleExportEndDateChange={handleGoogleExportEndDateChange}
+                googleRetryConfig={googleRetryConfigQuery.data}
+                isGoogleRetryConfigLoading={googleRetryConfigQuery.isLoading}
+                isGoogleRetryConfigRefreshing={googleRetryConfigIsRefreshing}
+                googleRetryConfigError={googleRetryConfigQuery.error as Error | null}
+                onRefreshGoogleRetryConfig={() => googleRetryConfigQuery.refetch()}
+                onSubmitGoogleRetryConfig={handleSubmitGoogleRetryConfig}
+                isSavingGoogleRetryConfig={updateGoogleRetryConfigMutation.isPending}
+                googleRetryConfigFeedback={googleRetryConfigFeedback}
+                googleRetryConfigMessageError={googleRetryConfigMessageError}
                 feedbackMessage={feedbackMessage}
                 errorMessage={errorMessage}
                 isStatsRefreshing={statsIsRefreshing}
