@@ -135,6 +135,8 @@ export const EstablishmentDetailModal = ({
                 <dd>{formatValue(establishment.categorieJuridique)}</dd>
                 <dt>Catégorie entreprise</dt>
                 <dd>{formatValue(establishment.categorieEntreprise)}</dd>
+                <dt>Entreprise individuelle</dt>
+                <dd>{establishment.isSoleProprietorship ? "Oui" : "Non"}</dd>
                 <dt>Tranche effectifs</dt>
                 <dd>{formatValue(establishment.trancheEffectifs)}</dd>
                 <dt>Année effectifs</dt>

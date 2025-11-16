@@ -1,6 +1,6 @@
 import { ChangeEvent } from "react";
 
-import { Establishment } from "../types";
+import { Establishment, EstablishmentIndividualFilter } from "../types";
 import { formatDateTime } from "../utils/format";
 
 interface EstablishmentsSectionProps {
@@ -10,10 +10,12 @@ interface EstablishmentsSectionProps {
   limit: number;
   page: number;
   query: string;
+  individualFilter: EstablishmentIndividualFilter;
   hasNextPage: boolean;
   onLimitChange: (limit: number) => void;
   onPageChange: (page: number) => void;
   onQueryChange: (query: string) => void;
+  onIndividualFilterChange: (value: EstablishmentIndividualFilter) => void;
   onRefresh: () => void;
   onDeleteEstablishment: (siret: string) => void;
   deletingSiret: string | null;
@@ -33,10 +35,12 @@ export const EstablishmentsSection = ({
   limit,
   page,
   query,
+  individualFilter,
   hasNextPage,
   onLimitChange,
   onPageChange,
   onQueryChange,
+  onIndividualFilterChange,
   onRefresh,
   onDeleteEstablishment,
   deletingSiret,
@@ -54,6 +58,10 @@ export const EstablishmentsSection = ({
 
   const handleLimitChange = (event: ChangeEvent<HTMLSelectElement>) => {
     onLimitChange(Number(event.target.value));
+  };
+
+  const handleIndividualFilterChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    onIndividualFilterChange(event.target.value as EstablishmentIndividualFilter);
   };
 
   const handleDeleteOne = (siret: string) => {
@@ -97,6 +105,14 @@ export const EstablishmentsSection = ({
                 {value}
               </option>
             ))}
+          </select>
+        </label>
+        <label className="muted small">
+          Entreprise individuelle
+          <select value={individualFilter} onChange={handleIndividualFilterChange}>
+            <option value="all">Toutes</option>
+            <option value="individual">Oui uniquement</option>
+            <option value="non_individual">Sans EI</option>
           </select>
         </label>
         <div className="establishments-pagination">
@@ -152,6 +168,10 @@ export const EstablishmentsSection = ({
                     <br />
                     <span className="small muted">
                       NAF: {establishment.nafCode ?? "—"} {establishment.nafLibelle ? `(${establishment.nafLibelle})` : ""}
+                    </span>
+                    <br />
+                    <span className="small muted">
+                      Entreprise individuelle: {establishment.isSoleProprietorship ? "Oui" : "Non"}
                     </span>
                   </td>
                   <td>

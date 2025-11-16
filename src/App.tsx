@@ -40,6 +40,7 @@ import {
   EmailTestResult,
   Establishment,
   EstablishmentDetail,
+  EstablishmentIndividualFilter,
   Client,
   GoogleCheckResult,
   GoogleRetryConfig,
@@ -96,6 +97,8 @@ const App = () => {
   const [establishmentsLimit, setEstablishmentsLimit] = useState(20);
   const [establishmentsPage, setEstablishmentsPage] = useState(0);
   const [establishmentsQuery, setEstablishmentsQuery] = useState("");
+  const [establishmentsIndividualFilter, setEstablishmentsIndividualFilter] =
+    useState<EstablishmentIndividualFilter>("all");
   const [establishmentsFeedback, setEstablishmentsFeedback] = useState<string | null>(null);
   const [establishmentsError, setEstablishmentsError] = useState<string | null>(null);
   const [emailFeedback, setEmailFeedback] = useState<string | null>(null);
@@ -237,12 +240,22 @@ const App = () => {
   });
 
   const establishmentsQueryResult = useQuery<Establishment[]>({
-    queryKey: ["establishments", establishmentsLimit, establishmentsPage, establishmentsQuery],
+    queryKey: [
+      "establishments",
+      establishmentsLimit,
+      establishmentsPage,
+      establishmentsQuery,
+      establishmentsIndividualFilter,
+    ],
     queryFn: () =>
       establishmentsApi.fetchMany({
         limit: establishmentsLimit,
         offset: establishmentsPage * establishmentsLimit,
         q: establishmentsQuery ? establishmentsQuery : undefined,
+        isIndividual:
+          establishmentsIndividualFilter === "all"
+            ? undefined
+            : establishmentsIndividualFilter === "individual",
       }),
     enabled: isAuthenticated,
   });
@@ -751,6 +764,11 @@ const App = () => {
 
   const handleEstablishmentsQueryChange = (value: string) => {
     setEstablishmentsQuery(value);
+    setEstablishmentsPage(0);
+  };
+
+  const handleEstablishmentsIndividualFilterChange = (value: EstablishmentIndividualFilter) => {
+    setEstablishmentsIndividualFilter(value);
     setEstablishmentsPage(0);
   };
 
@@ -1275,6 +1293,8 @@ const App = () => {
                 isDeletingOne={deleteEstablishmentMutation.isPending}
                 feedbackMessage={establishmentsFeedback}
                 errorMessage={establishmentsError}
+                individualFilter={establishmentsIndividualFilter}
+                onIndividualFilterChange={handleEstablishmentsIndividualFilterChange}
                 onTriggerGoogleCheck={handleTriggerGoogleCheckFromEstablishments}
                 isCheckingGoogle={isCheckingGoogle}
                 checkingGoogleSiret={checkingGoogleSiret}

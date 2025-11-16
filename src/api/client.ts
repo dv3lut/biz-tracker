@@ -255,6 +255,7 @@ interface EstablishmentResponse {
   google_last_checked_at: string | null;
   google_last_found_at: string | null;
   google_check_status: string;
+  is_sole_proprietorship: boolean;
 }
 
 interface EstablishmentDetailResponse extends EstablishmentResponse {
@@ -563,6 +564,7 @@ const toEstablishment = (payload: EstablishmentResponse): Establishment => ({
   googleLastCheckedAt: payload.google_last_checked_at,
   googleLastFoundAt: payload.google_last_found_at,
   googleCheckStatus: payload.google_check_status,
+  isSoleProprietorship: payload.is_sole_proprietorship,
 });
 
 const toEstablishmentDetail = (payload: EstablishmentDetailResponse): EstablishmentDetail => ({

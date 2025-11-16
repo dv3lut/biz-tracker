@@ -22,6 +22,7 @@ export interface EstablishmentResponse {
   google_last_checked_at: string | null;
   google_last_found_at: string | null;
   google_check_status: string;
+  is_sole_proprietorship: boolean;
 }
 
 export interface EstablishmentDetailResponse extends EstablishmentResponse {
@@ -82,6 +83,7 @@ export const mapEstablishment = (payload: EstablishmentResponse): Establishment 
   googleLastCheckedAt: payload.google_last_checked_at,
   googleLastFoundAt: payload.google_last_found_at,
   googleCheckStatus: payload.google_check_status,
+  isSoleProprietorship: payload.is_sole_proprietorship,
 });
 
 export const mapEstablishmentDetail = (payload: EstablishmentDetailResponse): EstablishmentDetail => ({
@@ -126,6 +128,7 @@ interface ListEstablishmentsParams {
   limit?: number;
   offset?: number;
   q?: string;
+  isIndividual?: boolean;
 }
 
 export const establishmentsApi = {
@@ -139,6 +142,9 @@ export const establishmentsApi = {
     }
     if (params.q) {
       query.set("q", params.q);
+    }
+    if (typeof params.isIndividual === "boolean") {
+      query.set("is_individual", String(params.isIndividual));
     }
     const queryString = query.toString();
     const path = `/admin/establishments${queryString ? `?${queryString}` : ""}`;

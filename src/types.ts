@@ -203,6 +203,8 @@ export interface SyncRequestPayload {
   checkForUpdates?: boolean;
 }
 
+export type EstablishmentIndividualFilter = "all" | "individual" | "non_individual";
+
 export interface Establishment {
   siret: string;
   siren: string;
@@ -224,6 +226,7 @@ export interface Establishment {
   googleLastCheckedAt: string | null;
   googleLastFoundAt: string | null;
   googleCheckStatus: string;
+  isSoleProprietorship: boolean;
 }
 
 export interface EstablishmentDetail extends Establishment {

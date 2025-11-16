@@ -1,5 +1,5 @@
 import { EstablishmentsSection } from "../EstablishmentsSection";
-import type { Establishment } from "../../types";
+import type { Establishment, EstablishmentIndividualFilter } from "../../types";
 
 type Props = {
   establishments: Establishment[] | undefined;
@@ -8,10 +8,12 @@ type Props = {
   limit: number;
   page: number;
   query: string;
+  individualFilter: EstablishmentIndividualFilter;
   hasNextPage: boolean;
   onLimitChange: (limit: number) => void;
   onPageChange: (page: number) => void;
   onQueryChange: (query: string) => void;
+  onIndividualFilterChange: (value: EstablishmentIndividualFilter) => void;
   onRefresh: () => void;
   onDeleteEstablishment: (siret: string) => void;
   deletingSiret: string | null;
@@ -31,10 +33,12 @@ export const EstablishmentsView = ({
   limit,
   page,
   query,
+  individualFilter,
   hasNextPage,
   onLimitChange,
   onPageChange,
   onQueryChange,
+  onIndividualFilterChange,
   onRefresh,
   onDeleteEstablishment,
   deletingSiret,
@@ -62,10 +66,12 @@ export const EstablishmentsView = ({
           limit={limit}
           page={page}
           query={query}
+          individualFilter={individualFilter}
           hasNextPage={hasNextPage}
           onLimitChange={onLimitChange}
           onPageChange={onPageChange}
           onQueryChange={onQueryChange}
+          onIndividualFilterChange={onIndividualFilterChange}
           onRefresh={onRefresh}
           onDeleteEstablishment={onDeleteEstablishment}
           deletingSiret={deletingSiret}
