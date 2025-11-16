@@ -7,13 +7,13 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from difflib import SequenceMatcher
 from typing import Callable, Iterable, Sequence
+
+from app.utils.business_types import is_micro_company, normalize_place_types
+
 ProgressCallback = Callable[[int, int, int, int, int], None]
 _PLACEHOLDER_TOKENS = {"ND"}
 _PROGRESS_BATCH_SIZE = 10
-_MICRO_COMPANY_CATEGORY = "ME"
-# Les codes 1XXX correspondent aux entrepreneurs individuels dans la nomenclature Sirene
-# (cf. documentation "Interrogation unitaire du siret : variables de la réponse").
-_MICRO_LEGAL_PREFIXES = ("1",)
+_TYPE_MISMATCH_STATUS = "type_mismatch"
 
 
 def _sanitize_placeholder(value: str | None) -> str:
@@ -75,6 +75,19 @@ class GoogleBusinessService:
         self._session = session
         self._settings = get_settings().google
         self._retry_config: GoogleRetryRuntimeConfig = load_runtime_google_retry_config(session)
+        self._default_allowed_place_types = normalize_place_types(self._settings.allowed_place_types)
+        if not self._default_allowed_place_types:
+            self._default_allowed_place_types = {"restaurant"}
+        self._place_type_rules: list[tuple[str, set[str]]] = []
+        raw_rules = self._settings.place_type_rules or {}
+        for prefix, types in raw_rules.items():
+            if not prefix:
+                continue
+            normalized_types = normalize_place_types(types)
+            if not normalized_types:
+                continue
+            self._place_type_rules.append((prefix, normalized_types))
+        self._place_type_rules.sort(key=lambda item: len(item[0]), reverse=True)
         if not self._settings.enabled:
             self._client: GooglePlacesClient | None = None
             self._rate_limiter = None
@@ -128,7 +141,7 @@ class GoogleBusinessService:
             result = self._lookup(establishment)
             establishment.google_last_checked_at = now
             if not result:
-                if establishment.google_check_status != "found":
+                if establishment.google_check_status not in {"found", _TYPE_MISMATCH_STATUS}:
                     establishment.google_check_status = "not_found"
             else:
                 if not result.place_url:
@@ -176,7 +189,7 @@ class GoogleBusinessService:
         result = self._lookup(establishment)
         establishment.google_last_checked_at = now
         if not result:
-            if establishment.google_check_status != "found":
+            if establishment.google_check_status not in {"found", _TYPE_MISMATCH_STATUS}:
                 establishment.google_check_status = "not_found"
             self._session.flush()
             return None
@@ -203,6 +216,8 @@ class GoogleBusinessService:
         for establishment in establishments:
             if establishment.google_place_url:
                 continue
+            if establishment.google_check_status == _TYPE_MISMATCH_STATUS:
+                continue
             if not self._has_searchable_identity(establishment):
                 establishment.google_check_status = "insufficient"
                 establishment.google_last_checked_at = establishment.google_last_checked_at or now
@@ -223,6 +238,7 @@ class GoogleBusinessService:
             .where(
                 models.Establishment.google_place_url.is_(None),
                 models.Establishment.google_check_status != "insufficient",
+                models.Establishment.google_check_status != _TYPE_MISMATCH_STATUS,
             )
             .order_by(
                 models.Establishment.google_last_checked_at.asc().nullsfirst(),
@@ -235,6 +251,8 @@ class GoogleBusinessService:
         updated = False
         for establishment in self._session.scalars(stmt):
             if establishment.siret in exclude:
+                continue
+            if establishment.google_check_status == _TYPE_MISMATCH_STATUS:
                 continue
             if not self._has_searchable_identity(establishment):
                 establishment.google_check_status = "insufficient"
@@ -255,6 +273,8 @@ class GoogleBusinessService:
 
     def _should_lookup(self, establishment: models.Establishment, now: datetime, *, is_new: bool = False) -> bool:
         if establishment.google_place_url:
+            return False
+        if establishment.google_check_status == _TYPE_MISMATCH_STATUS:
             return False
         if not self._has_searchable_identity(establishment):
             return False
@@ -280,6 +300,8 @@ class GoogleBusinessService:
             return None
 
         best_candidate: GoogleMatch | None = None
+        allowed_types = self._resolve_allowed_google_types(establishment)
+        type_mismatch_detected = False
         for candidate in candidates:
             place_id = candidate.get("place_id")
             name = candidate.get("name")
@@ -296,6 +318,18 @@ class GoogleBusinessService:
                 continue
             if not details:
                 continue
+            raw_types = details.get("types")
+            google_types = raw_types if isinstance(raw_types, list) else []
+            if not self._matches_allowed_google_types(google_types, allowed_types):
+                type_mismatch_detected = True
+                _LOGGER.debug(
+                    "Fiche Google %s ignorée pour %s : types %s incompatibles avec NAF %s",
+                    place_id,
+                    establishment.siret,
+                    google_types,
+                    establishment.naf_code,
+                )
+                continue
             url = details.get("url") or details.get("website")
             if not url:
                 _LOGGER.debug("Place %s trouvée mais sans URL exploitable.", place_id)
@@ -303,6 +337,8 @@ class GoogleBusinessService:
             match = GoogleMatch(establishment, place_id, url, confidence)
             if best_candidate is None or confidence > best_candidate.confidence:
                 best_candidate = match
+        if best_candidate is None and type_mismatch_detected:
+            establishment.google_check_status = _TYPE_MISMATCH_STATUS
         return best_candidate
 
     def _fetch_details(self, place_id: str) -> dict[str, object] | None:
@@ -310,7 +346,7 @@ class GoogleBusinessService:
         try:
             self._rate_limiter.acquire()
             self._record_api_call()
-            details = self._client.get_place_details(place_id, fields="url,website,name,formatted_address")
+            details = self._client.get_place_details(place_id, fields="url,website,name,formatted_address,types")
         except GooglePlacesError:
             raise
         if not details:
@@ -395,15 +431,29 @@ class GoogleBusinessService:
         return not self._retry_config.retry_weekdays or weekday in self._retry_config.retry_weekdays
 
     def _is_micro_business(self, establishment: models.Establishment) -> bool:
-        company_category = (establishment.categorie_entreprise or "").strip().upper()
-        if company_category == _MICRO_COMPANY_CATEGORY:
-            return True
+        return is_micro_company(establishment.categorie_entreprise, establishment.categorie_juridique)
 
-        legal_category = (establishment.categorie_juridique or "").strip()
-        if not legal_category:
-            return False
-        normalized = legal_category.lstrip("0") or legal_category
-        return normalized.startswith(_MICRO_LEGAL_PREFIXES)
+    def _resolve_allowed_google_types(self, establishment: models.Establishment) -> set[str]:
+        naf_code = self._normalize_naf_code(establishment.naf_code)
+        for prefix, allowed in self._place_type_rules:
+            if naf_code.startswith(prefix):
+                return allowed if allowed else self._default_allowed_place_types
+        return self._default_allowed_place_types
+
+    def _normalize_naf_code(self, naf_code: str | None) -> str:
+        if not naf_code:
+            return ""
+        return "".join(ch for ch in naf_code.upper() if ch.isalnum())
+
+    def _matches_allowed_google_types(self, google_types: Iterable[str] | None, allowed_types: set[str]) -> bool:
+        if not allowed_types:
+            return True
+        if not google_types:
+            return True
+        normalized_types = {value.lower().strip() for value in google_types if isinstance(value, str)}
+        if not normalized_types:
+            return True
+        return bool(normalized_types & allowed_types)
 
     def _build_query(self, establishment: models.Establishment) -> str:
         parts = [

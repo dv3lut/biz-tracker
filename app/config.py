@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 from functools import lru_cache
-from typing import Any, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 from pydantic import AliasChoices, BaseModel, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import URL, make_url
@@ -108,6 +108,35 @@ class EmailSettings(BaseModel):
         return self
 
 
+def _default_allowed_place_types() -> List[str]:
+    return [
+        "restaurant",
+        "meal_takeaway",
+        "meal_delivery",
+        "food",
+        "fast_food",
+        "pizza",
+        "sandwich_shop",
+        "cafe",
+        "bakery",
+    ]
+
+
+def _default_place_type_rules() -> Dict[str, List[str]]:
+    return {
+        "5610": _default_allowed_place_types(),
+        "5621": [
+            "meal_delivery",
+            "meal_takeaway",
+            "caterer",
+            "restaurant",
+            "food",
+        ],
+        "5629": _default_allowed_place_types() + ["food_court"],
+        "5630": ["bar", "night_club", "pub", "cafe", "restaurant"],
+    }
+
+
 class GoogleSettings(BaseModel):
     api_key: Optional[str] = Field(default=None, description="API key used to call Google Places APIs.")
     find_place_url: str = Field(
@@ -139,6 +168,14 @@ class GoogleSettings(BaseModel):
         default=20000,
         ge=1,
         description="Maximum number of establishments rechecked for Google data during a single sync run.",
+    )
+    allowed_place_types: List[str] = Field(
+        default_factory=_default_allowed_place_types,
+        description="Liste de types Google Places acceptés par défaut (fallback si aucune règle spécifique ne correspond).",
+    )
+    place_type_rules: Dict[str, List[str]] = Field(
+        default_factory=_default_place_type_rules,
+        description="Associe un préfixe de code NAF aux types Google Places attendus (JSON configurable).",
     )
 
     @property

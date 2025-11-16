@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import or_
+from sqlalchemy import or_, not_
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db_session
@@ -21,6 +21,7 @@ def list_establishments(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     search: str | None = Query(None, alias="q", description="Filtre sur SIRET, nom ou code postal"),
+    is_individual: bool | None = Query(None, description="Filtrer par entreprise individuelle (true/false)."),
     session: Session = Depends(get_db_session),
 ) -> list[EstablishmentOut]:
     query = session.query(models.Establishment).filter(models.Establishment.etat_administratif == "A")
@@ -33,6 +34,12 @@ def list_establishments(
                 models.Establishment.code_postal.ilike(pattern),
             )
         )
+    if is_individual is not None:
+        normalized_filter = models.Establishment.categorie_juridique.ilike("1%")
+        if is_individual:
+            query = query.filter(normalized_filter)
+        else:
+            query = query.filter(or_(models.Establishment.categorie_juridique.is_(None), not_(normalized_filter)))
     establishments = (
         query.order_by(
             models.Establishment.date_creation.desc(),

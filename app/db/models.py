@@ -9,6 +9,7 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.utils.business_types import is_individual_company
 
 
 class Establishment(Base):
@@ -86,6 +87,12 @@ class Establishment(Base):
     google_check_status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False)
 
     alerts: Mapped[list["Alert"]] = relationship("Alert", back_populates="establishment")
+
+    @property
+    def is_sole_proprietorship(self) -> bool:
+        """Return True when the establishment is classified as an entreprise individuelle."""
+
+        return is_individual_company(self.categorie_juridique)
 
 
 class SyncRun(Base):

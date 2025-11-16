@@ -28,7 +28,8 @@
   - Paramètres ajustables via `.env` (`GOOGLE__*`). Sans clé, aucune requête n’est émise et les colonnes Google restent à `pending`.
   - Chaque run enregistre les compteurs Google (file totale, éligibles, correspondances, backlog) dans `sync_runs` pour exploitation API/UI.
   - Export XLSX disponible via `build_google_places_workbook` et l’endpoint `GET /admin/google/places-export` (paramètres obligatoires `start_date` et `end_date` au format ISO `YYYY-MM-DD`, filtrage basé sur `establishments.date_creation`).
-  - Statuts persistés dans `establishments.google_check_status` : `pending`, `found`, `not_found`, `insufficient`, plus `other` comme garde-fou lors des agrégations.
+  - Statuts persistés dans `establishments.google_check_status` : `pending`, `found`, `not_found`, `insufficient`, `type_mismatch` (fiches rejetées car la catégorie Google ne correspond pas au NAF attendu), plus `other` comme garde-fou lors des agrégations.
+  - Les catégories Google acceptées sont configurables via `GOOGLE__ALLOWED_PLACE_TYPES` (liste fallback) et `GOOGLE__PLACE_TYPE_RULES` (JSON `prefixe_naf -> [types...]`). Ces variables peuvent être alignées avec `SIRENE__RESTAURANT_NAF_CODES` pour éviter toute divergence lors d’un changement de périmètre.
 - **Observabilité** :
   - Les logs sont sérialisés en JSON (service `observability.log_event`) et peuvent être expédiés directement vers Elasticsearch (`LOGGING__ELASTICSEARCH__*`).
   - Les événements suivent la convention `event.name` (`sync.run.*`, `sync.new_establishment`, `sync.google.*`, `sync.updated_establishment*`, `sync.alert.created`, `alerts.email.*`, `sync.summary.email.*`, `scheduler.*`, `email.test_sent`) pour alimenter Kibana.
@@ -44,5 +45,6 @@
 - Projet React + Vite (`biz-tracker-admin-ui`) placé hors du dépôt backend (dossier parent). S’appuie sur React Query pour appeler les endpoints `/admin/*`.
 - Configuration via `.env` côté UI (`VITE_APP_API_BASE_URL`). Build `npm run build`, dev `npm run dev` (port 5173).
   - `StatsSummaryCard`, `SyncRunsTable`, `SyncStateTable`, `AlertsList`, `EstablishmentsSection` consomment les endpoints historiques (`/stats/summary`, `/sync-runs`, `/sync-state`, `/alerts/recent`, `/establishments`).
+  - La section établissements affiche désormais un indicateur "Entreprise individuelle" et permet de filtrer la liste sur ce critère (paramètre `is_individual`).
   - `DashboardInsights` exploite `GET /admin/stats/dashboard` (30 jours par défaut, fenêtre réduite à 14 jours sur les graphiques) et s’appuie sur un composant `BarChart` CSS-only (pas de librairie externe) pour afficher les séries.
   - Les métriques sont formatées via `utils/format.ts`; les footnotes (nombre de runs par jour) sont calculées côté front pour garder le payload compact.

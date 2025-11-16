@@ -264,6 +264,7 @@ class EstablishmentOut(BaseModel):
     google_last_checked_at: datetime | None
     google_last_found_at: datetime | None
     google_check_status: str
+    is_sole_proprietorship: bool
 
 
 class DeleteRunResult(BaseModel):
