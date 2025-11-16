@@ -133,3 +133,11 @@ Un fichier Postman de référence est disponible (`docs/postman_collection.json`
 
 ---
 Ce README résume les choix d’implémentation ; les fichiers `docs/AGENTS_*.md` détaillent le contexte et les conventions pour les agents Copilot.
+
+Voir tailles des logs Docker :
+find /var/lib/docker/containers/ -name "*.log" -type f -exec du -h {} + | sort -h
+
+Vider logs Docker :
+find /var/lib/docker/containers/ -name "*-json.log" -type f -exec truncate -s 0 {} \;
+
+docker compose exec biztracker-back python -m app init-db

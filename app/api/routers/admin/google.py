@@ -1,15 +1,20 @@
 """Google-related admin endpoints."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Body, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db_session
-from app.api.schemas import EstablishmentOut, ManualGoogleCheckResponse
+from app.api.schemas import (
+    EstablishmentOut,
+    GoogleRetryConfigOut,
+    GoogleRetryConfigUpdate,
+    ManualGoogleCheckResponse,
+)
 from app.config import get_settings
 from app.db import models
 from app.observability import log_event
@@ -17,6 +22,12 @@ from app.services.client_service import collect_client_emails, dispatch_email_to
 from app.services.email_service import EmailService
 from app.services.google_business_service import GoogleBusinessService
 from app.services.export_service import build_google_places_workbook
+from app.services.google_retry_config import (
+    ensure_google_retry_config,
+    load_runtime_google_retry_config,
+    serialize_google_retry_config,
+    update_google_retry_config,
+)
 
 from .common import format_establishment_summary
 
@@ -158,7 +169,22 @@ def manual_google_check(
     "/google/places-export",
     summary="Exporter les établissements enrichis via Google Places",
 )
-def export_google_places(session: Session = Depends(get_db_session)) -> StreamingResponse:
+def export_google_places(
+    start_date: date | None = None,
+    end_date: date | None = None,
+    session: Session = Depends(get_db_session),
+) -> StreamingResponse:
+    if (start_date and not end_date) or (end_date and not start_date):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Merci de fournir une date de début et une date de fin pour l'export.",
+        )
+    if start_date and end_date and start_date > end_date:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La date de début doit être antérieure ou égale à la date de fin.",
+        )
+
     stmt = (
         select(models.Establishment)
         .where(
@@ -172,6 +198,12 @@ def export_google_places(session: Session = Depends(get_db_session)) -> Streamin
             models.Establishment.last_seen_at.desc(),
         )
     )
+
+    if start_date:
+        stmt = stmt.where(models.Establishment.date_creation >= start_date)
+    if end_date:
+        stmt = stmt.where(models.Establishment.date_creation <= end_date)
+
     establishments = session.execute(stmt).scalars().all()
     workbook_stream = build_google_places_workbook(establishments)
     timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
@@ -181,6 +213,8 @@ def export_google_places(session: Session = Depends(get_db_session)) -> Streamin
         "export.google.places",
         count=len(establishments),
         filename=filename,
+        start_date=start_date.isoformat() if start_date else None,
+        end_date=end_date.isoformat() if end_date else None,
     )
 
     headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
@@ -189,3 +223,48 @@ def export_google_places(session: Session = Depends(get_db_session)) -> Streamin
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers=headers,
     )
+
+
+@router.get(
+    "/google/retry-config",
+    response_model=GoogleRetryConfigOut,
+    summary="Consulter la configuration des relances Google",
+)
+def get_google_retry_config(session: Session = Depends(get_db_session)) -> GoogleRetryConfigOut:
+    record = ensure_google_retry_config(session)
+    payload = serialize_google_retry_config(record)
+    runtime = load_runtime_google_retry_config(session)
+    log_event(
+        "google.retry_config.read",
+        retry_weekdays=list(runtime.retry_weekdays),
+        default_rules=len(runtime.default_rules),
+        micro_rules=len(runtime.micro_rules),
+    )
+    return GoogleRetryConfigOut(**payload)
+
+
+@router.put(
+    "/google/retry-config",
+    response_model=GoogleRetryConfigOut,
+    summary="Mettre à jour la configuration des relances Google",
+)
+def update_google_retry_config_endpoint(
+    payload: GoogleRetryConfigUpdate = Body(...),
+    session: Session = Depends(get_db_session),
+) -> GoogleRetryConfigOut:
+    record = update_google_retry_config(
+        session,
+        retry_weekdays=payload.retry_weekdays,
+        default_rules=[rule.model_dump() for rule in payload.default_rules],
+        micro_rules=[rule.model_dump() for rule in payload.micro_rules],
+    )
+    session.flush()
+    payload_dict = serialize_google_retry_config(record)
+    runtime = load_runtime_google_retry_config(session)
+    log_event(
+        "google.retry_config.updated",
+        retry_weekdays=list(runtime.retry_weekdays),
+        default_rules=len(runtime.default_rules),
+        micro_rules=len(runtime.micro_rules),
+    )
+    return GoogleRetryConfigOut(**payload_dict)

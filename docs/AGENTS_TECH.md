@@ -27,7 +27,7 @@
   - Service `GoogleBusinessService` + `GooglePlacesClient` activé lorsque `GOOGLE__API_KEY` est défini (Places API + Geocoding API requis côté Google Cloud).
   - Paramètres ajustables via `.env` (`GOOGLE__*`). Sans clé, aucune requête n’est émise et les colonnes Google restent à `pending`.
   - Chaque run enregistre les compteurs Google (file totale, éligibles, correspondances, backlog) dans `sync_runs` pour exploitation API/UI.
-  - Export XLSX disponible via `build_google_places_workbook` et l’endpoint `GET /admin/google/places-export`.
+  - Export XLSX disponible via `build_google_places_workbook` et l’endpoint `GET /admin/google/places-export` (paramètres obligatoires `start_date` et `end_date` au format ISO `YYYY-MM-DD`, filtrage basé sur `establishments.date_creation`).
   - Statuts persistés dans `establishments.google_check_status` : `pending`, `found`, `not_found`, `insufficient`, plus `other` comme garde-fou lors des agrégations.
 - **Observabilité** :
   - Les logs sont sérialisés en JSON (service `observability.log_event`) et peuvent être expédiés directement vers Elasticsearch (`LOGGING__ELASTICSEARCH__*`).

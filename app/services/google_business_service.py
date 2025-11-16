@@ -10,6 +10,10 @@ from typing import Callable, Iterable, Sequence
 ProgressCallback = Callable[[int, int, int, int, int], None]
 _PLACEHOLDER_TOKENS = {"ND"}
 _PROGRESS_BATCH_SIZE = 10
+_MICRO_COMPANY_CATEGORY = "ME"
+# Les codes 1XXX correspondent aux entrepreneurs individuels dans la nomenclature Sirene
+# (cf. documentation "Interrogation unitaire du siret : variables de la réponse").
+_MICRO_LEGAL_PREFIXES = ("1",)
 
 
 def _sanitize_placeholder(value: str | None) -> str:
@@ -34,6 +38,7 @@ from app.clients.google_places_client import GooglePlacesClient, GooglePlacesErr
 from app.config import get_settings
 from app.db import models
 from app.services.rate_limiter import RateLimiter
+from app.services.google_retry_config import GoogleRetryRuntimeConfig, load_runtime_google_retry_config
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -69,6 +74,7 @@ class GoogleBusinessService:
     def __init__(self, session: Session) -> None:
         self._session = session
         self._settings = get_settings().google
+        self._retry_config: GoogleRetryRuntimeConfig = load_runtime_google_retry_config(session)
         if not self._settings.enabled:
             self._client: GooglePlacesClient | None = None
             self._rate_limiter = None
@@ -323,7 +329,7 @@ class GoogleBusinessService:
         if self._is_update_retry_due(establishment, now, last_checked):
             return True
 
-        if now.weekday() != 0:
+        if not self._allows_weekday(now.weekday()):
             return False
 
         frequency_days = self._determine_retry_frequency_days(establishment, now)
@@ -341,12 +347,12 @@ class GoogleBusinessService:
         if not updated_at or (last_checked and updated_at <= last_checked):
             return False
 
-        next_monday = self._next_monday(updated_at)
-        if now.weekday() != 0:
+        next_allowed = self._next_allowed_check(updated_at)
+        if not self._allows_weekday(now.weekday()):
             return False
-        if now < next_monday:
+        if now < next_allowed:
             return False
-        if last_checked and last_checked >= next_monday:
+        if last_checked and last_checked >= next_allowed:
             return False
         return True
 
@@ -357,11 +363,13 @@ class GoogleBusinessService:
         age_days = (now.date() - creation).days
         if age_days < 0:
             age_days = 0
-        if age_days < 60:
-            return 7
-        if age_days < 120:
-            return 14
-        return 30
+        rules = self._retry_config.micro_rules if self._is_micro_business(establishment) else self._retry_config.default_rules
+        if not rules:
+            return 30
+        for rule in rules:
+            if rule.max_age_days is None or age_days <= rule.max_age_days:
+                return rule.frequency_days
+        return rules[-1].frequency_days
 
     def _resolve_creation_date(self, establishment: models.Establishment) -> date | None:
         if establishment.date_creation:
@@ -372,14 +380,30 @@ class GoogleBusinessService:
             return establishment.last_seen_at.date()
         return None
 
-    @staticmethod
-    def _next_monday(reference: datetime) -> datetime:
+    def _next_allowed_check(self, reference: datetime) -> datetime:
         base_date = reference.date()
-        days_ahead = (7 - base_date.weekday()) % 7
-        if days_ahead == 0:
-            days_ahead = 7
-        next_date = base_date + timedelta(days=days_ahead)
-        return datetime.combine(next_date, datetime.min.time())
+        allowed = sorted(self._retry_config.retry_weekdays)
+        if not allowed:
+            allowed = list(range(7))
+        for offset in range(1, 8):
+            candidate = base_date + timedelta(days=offset)
+            if candidate.weekday() in allowed:
+                return datetime.combine(candidate, datetime.min.time())
+        return datetime.combine(base_date + timedelta(days=7), datetime.min.time())
+
+    def _allows_weekday(self, weekday: int) -> bool:
+        return not self._retry_config.retry_weekdays or weekday in self._retry_config.retry_weekdays
+
+    def _is_micro_business(self, establishment: models.Establishment) -> bool:
+        company_category = (establishment.categorie_entreprise or "").strip().upper()
+        if company_category == _MICRO_COMPANY_CATEGORY:
+            return True
+
+        legal_category = (establishment.categorie_juridique or "").strip()
+        if not legal_category:
+            return False
+        normalized = legal_category.lstrip("0") or legal_category
+        return normalized.startswith(_MICRO_LEGAL_PREFIXES)
 
     def _build_query(self, establishment: models.Establishment) -> str:
         parts = [

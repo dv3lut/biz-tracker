@@ -202,3 +202,17 @@ class AdminRecipient(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class GoogleRetryConfig(Base):
+    """Persisted configuration for Google Places retry strategy."""
+
+    __tablename__ = "google_retry_config"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    retry_weekdays: Mapped[list[int]] = mapped_column(JSONB, default=list, nullable=False)
+    default_rules: Mapped[list[dict[str, object]]] = mapped_column(JSONB, default=list, nullable=False)
+    micro_rules: Mapped[list[dict[str, object]]] = mapped_column(JSONB, default=list, nullable=False)
+    micro_company_categories: Mapped[list[str]] = mapped_column(JSONB, default=list, nullable=False)
+    micro_legal_categories: Mapped[list[str]] = mapped_column(JSONB, default=list, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)

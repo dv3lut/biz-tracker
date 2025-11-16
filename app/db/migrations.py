@@ -102,6 +102,17 @@ def run_schema_upgrades(engine: Engine) -> None:
         ALTER TABLE sync_runs
         ADD COLUMN IF NOT EXISTS summary JSONB
         """,
+        """
+        CREATE TABLE IF NOT EXISTS google_retry_config (
+            id SERIAL PRIMARY KEY,
+            retry_weekdays JSONB NOT NULL DEFAULT '[]'::jsonb,
+            default_rules JSONB NOT NULL DEFAULT '[]'::jsonb,
+            micro_rules JSONB NOT NULL DEFAULT '[]'::jsonb,
+            micro_company_categories JSONB NOT NULL DEFAULT '[]'::jsonb,
+            micro_legal_categories JSONB NOT NULL DEFAULT '[]'::jsonb,
+            updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+        """,
     ]
 
     with engine.begin() as connection:
