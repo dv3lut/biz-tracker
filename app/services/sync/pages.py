@@ -24,6 +24,7 @@ class PageCollectionResult:
     updated_payloads: list[dict[str, object]]
     page_count: int
     duration_seconds: float
+    max_creation_date: date | None
 
 
 def collect_pages(
@@ -54,6 +55,7 @@ def collect_pages(
     new_entities_payload: list[dict[str, object]] = []
     updated_entities: list[UpdatedEstablishmentInfo] = []
     updated_payloads: list[dict[str, object]] = []
+    max_creation_date: date | None = state.last_creation_date
 
     while True:
         page_size = collector._settings.sirene.page_size
@@ -80,6 +82,10 @@ def collect_pages(
         updated_entities.extend(updated_batch)
 
         if new_entities:
+            for entity in new_entities:
+                creation_date = entity.date_creation
+                if creation_date and (max_creation_date is None or creation_date > max_creation_date):
+                    max_creation_date = creation_date
             batch_payload = [serialize_establishment(entity) for entity in new_entities]
             new_entities_payload.extend(batch_payload)
             log_event(
@@ -162,4 +168,5 @@ def collect_pages(
         updated_payloads=updated_payloads,
         page_count=page_count,
         duration_seconds=duration,
+        max_creation_date=max_creation_date,
     )

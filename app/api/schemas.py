@@ -49,6 +49,7 @@ class SyncStateOut(BaseModel):
     last_synced_at: datetime | None
     last_total: int | None
     last_treated_max: datetime | None
+    last_creation_date: Date | None
     query_checksum: str | None
     updated_at: datetime
 

@@ -8,11 +8,11 @@
   - Les objets sont créés via `app/db/models.py`; exécution des migrations simplifiée via `Base.metadata.create_all`.
 - **Transformation** : `app/services/establishment_mapper.extract_fields` applique les règles métiers (fallbacks de nom, parsing dates/ISO).
 - **Synchronisation** : `SyncService`
-  - Collecte unifiée utilisant le curseur Sirene (`nombre=1000`) et limitée aux établissements créés dans les `sync.months_back` derniers mois (tri `dateCreationEtablissement desc`).
+  - Collecte unifiée utilisant le curseur Sirene (`nombre=1000`) et limitée aux établissements créés dans les `sync.months_back` derniers mois, bornée par `SyncState.last_creation_date` (chevauchement configurable via `sync.creation_overlap_days`, tri `dateCreationEtablissement desc`).
   - Déclenchements API exécutés en tâche de fond (FastAPI `BackgroundTasks`) avec un statut `pending` renvoyé immédiatement au front.
   - Possibilité de vérifier le `service informations` avant de lancer (`check_for_updates`) afin d’éviter un run s’il n’y a pas de nouveautés.
   - Scheduler interne (`SyncScheduler`) démarré avec l’API : scrute périodiquement les mises à jour (`sync.auto_poll_minutes`) et respecte un délai minimum `sync.minimum_delay_minutes` avant de relancer.
-  - Reprise via `SyncState.last_cursor` et suivi des traitements via `SyncState.last_treated_max`.
+  - Reprise via `SyncState.last_cursor`, suivi des traitements via `SyncState.last_treated_max` et fenêtre incrémentale via `SyncState.last_creation_date`.
   - `_collect_sync` journalise chaque page, incrémente `api_call_count`, `fetched_records`, `created_records`, met à jour `SyncState` après commit partiel et sécurise la reprise même en cas de plantage intermédiaire.
   - Les mises à jour de SIRET existants sont détectées (diff des champs) puis comptabilisées dans `sync_runs.updated_records` avec log structuré `sync.updated_establishments.batch`.
   - Les correspondances Google sont catégorisées : `google_immediate_matched_count` pour les créations du run, `google_late_matched_count` pour le backlog.

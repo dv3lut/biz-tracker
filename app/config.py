@@ -222,6 +222,11 @@ class SyncSettings(BaseModel):
         validation_alias=AliasChoices("auto_poll_minutes", "auto_incremental_poll_minutes"),
         description="Polling interval (in minutes) for the background sync scheduler.",
     )
+    creation_overlap_days: int = Field(
+        default=3,
+        ge=0,
+        description="Nombre de jours rejoués autour du dernier checkpoint de création pour éviter les trous de collecte.",
+    )
 
 
 class ElasticsearchLoggingSettings(BaseModel):

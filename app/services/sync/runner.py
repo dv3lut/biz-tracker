@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 from uuid import UUID
 
@@ -39,7 +39,12 @@ class SyncRunnerMixin(SyncRunPreparationMixin):
         started_at = time.perf_counter()
         try:
             result = self._collect_sync(context)
-            self._finish_run(run, state, last_treated_max=result.last_treated)
+            self._finish_run(
+                run,
+                state,
+                last_treated_max=result.last_treated,
+                last_creation_date=result.max_creation_date,
+            )
             summary_payload = self._build_run_summary_payload(run, result)
             email_summary = self._send_run_summary_email(session, run, summary_payload)
             summary_payload["email"] = email_summary
@@ -103,7 +108,12 @@ class SyncRunnerMixin(SyncRunPreparationMixin):
                 started_at = time.perf_counter()
                 try:
                     result = self._collect_sync(context)
-                    self._finish_run(run, state, last_treated_max=result.last_treated)
+                    self._finish_run(
+                        run,
+                        state,
+                        last_treated_max=result.last_treated,
+                        last_creation_date=result.max_creation_date,
+                    )
                     summary_payload = self._build_run_summary_payload(run, result)
                     email_summary = self._send_run_summary_email(session, run, summary_payload)
                     summary_payload["email"] = email_summary
@@ -148,12 +158,21 @@ class SyncRunnerMixin(SyncRunPreparationMixin):
                     run.finished_at = datetime.utcnow()
                     session.commit()
 
-    def _finish_run(self, run: models.SyncRun, state: models.SyncState, *, last_treated_max: datetime | None) -> None:
+    def _finish_run(
+        self,
+        run: models.SyncRun,
+        state: models.SyncState,
+        *,
+        last_treated_max: datetime | None,
+        last_creation_date: date | None,
+    ) -> None:
         run.status = "success"
         run.finished_at = datetime.utcnow()
         state.last_successful_run_id = run.id
         if last_treated_max:
             state.last_treated_max = last_treated_max
+        if last_creation_date:
+            state.last_creation_date = last_creation_date
 
     def _serialize_result(self, result: SyncResult, email_summary: dict[str, Any]) -> dict[str, Any]:
         return {

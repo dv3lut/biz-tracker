@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from typing import Sequence
 
 from sqlalchemy.orm import Session
@@ -47,6 +47,7 @@ class SyncResult:
     alert_payloads: list[dict[str, object]]
     page_count: int
     duration_seconds: float
+    max_creation_date: date | None
     google_queue_count: int
     google_eligible_count: int
     google_matched_count: int

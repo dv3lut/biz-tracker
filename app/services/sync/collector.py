@@ -1,7 +1,7 @@
 """Collection helpers for synchronization runs."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime, timedelta
 
 from app.db import models
 from app.observability import log_event, serialize_alert, serialize_establishment
@@ -21,7 +21,7 @@ class SyncCollectorMixin(SyncPersistenceMixin):
     def _collect_sync(self, context: SyncContext) -> SyncResult:
         state = context.state
         months_back = max(self._settings.sync.months_back, 1)
-        since_creation = subtract_months(datetime.utcnow().date(), months_back)
+        since_creation = self._compute_since_creation(state, months_back=months_back)
         query = self._build_restaurant_query(since_creation=since_creation)
         checksum = sha256_digest(query)
         context.run.query_checksum = checksum
@@ -188,6 +188,7 @@ class SyncCollectorMixin(SyncPersistenceMixin):
             google_late_matched_count=context.run.google_late_matched_count,
             alerts_created=len(alerts_created),
             alerts_sent=alerts_sent_count,
+            latest_creation_date=page_result.max_creation_date,
         )
 
         return SyncResult(
@@ -203,6 +204,7 @@ class SyncCollectorMixin(SyncPersistenceMixin):
             alert_payloads=alerts_payload,
             page_count=page_count,
             duration_seconds=duration,
+            max_creation_date=page_result.max_creation_date,
             google_queue_count=enrichment.queue_count,
             google_eligible_count=enrichment.eligible_count,
             google_matched_count=enrichment.matched_count,
@@ -210,4 +212,22 @@ class SyncCollectorMixin(SyncPersistenceMixin):
             google_api_call_count=enrichment.api_call_count,
             alerts_sent_count=alerts_sent_count,
         )
+
+    def _compute_since_creation(self, state: models.SyncState, *, months_back: int) -> date:
+        baseline = subtract_months(self._current_date(), months_back)
+        last_creation = state.last_creation_date
+        if not last_creation:
+            return baseline
+
+        overlap_days = max(self._settings.sync.creation_overlap_days, 0)
+        candidate = last_creation - timedelta(days=overlap_days)
+        today = self._current_date()
+        if candidate > today:
+            candidate = today
+        if candidate < baseline:
+            candidate = baseline
+        return candidate
+
+    def _current_date(self) -> date:
+        return datetime.utcnow().date()
 

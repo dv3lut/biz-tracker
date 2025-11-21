@@ -4,7 +4,7 @@ Solution de veille sur les nouveaux établissements de restauration (NAF 56.10A)
 
 ## Fonctionnalités principales
 - Synchronisation complète initiale des établissements actifs (avec pagination `curseur` pour la stabilité).
-- Synchronisations incrémentales quotidiennes basées sur `dateDernierTraitement*` et sur le service `informations`.
+- Synchronisations incrémentales quotidiennes basées sur `dateCreationEtablissement` (avec chevauchement configurable) et sur le service `informations`.
 - Résilience : reprise automatique via `SyncState`, stockage des curseurs, gestion du throttling (30 appels/min).
 - Détection des nouveaux SIRET et génération d'alertes (log fichier + e-mail configurable via SMTP).
 - Traçabilité des exécutions (« moulinettes ») avec états, curseurs, métriques et possibilité de reprise.
@@ -58,7 +58,7 @@ Des cibles `Makefile` équivalentes existent (`make init-db`, `make sync`, `make
 2. **Collecte Sirene** (`SyncService._collect_sync`) : itération `curseur` par `curseur`, respect du quota (30 appels/min) via `RateLimiter`, upsert des établissements et alimentation des métriques (`fetched_records`, `created_records`, `api_call_count`).
 3. **Enrichissement Google** (`GoogleBusinessService.enrich`) : constitution d'une file (nouveautés + backlog), filtrage des identités insuffisantes, appels `find_place` / `get_place_details` sous rate limiting, mise à jour des colonnes Google et des compteurs (`google_*`).
 4. **Alerting** (`AlertService.create_google_alerts`) : création des entrées `alerts`, logging structuré et envoi SMTP si la configuration est valide et qu'un run précédent a déjà abouti.
-5. **Finalisation** (`SyncService._finish_run`) : passage du run en `success`, mise à jour des curseurs `SyncState`. En cas d'exception, rollback et statut `failed` garantissent la reprise.
+5. **Finalisation** (`SyncService._finish_run`) : passage du run en `success`, mise à jour des curseurs `SyncState` (curseur Sirene, `dateDernierTraitementMaximum`, `last_creation_date`). En cas d'exception, rollback et statut `failed` garantissent la reprise.
 
 Le scheduler (`SyncScheduler`) applique cette séquence automatiquement selon `sync.auto_poll_minutes`, tout en respectant `sync.minimum_delay_minutes` entre deux exécutions.
 
@@ -95,11 +95,12 @@ Un fichier Postman de référence est disponible (`docs/postman_collection.json`
 - Programmer `python -m app sync --check-for-updates` quotidiennement **après** la publication des mises à jour Sirene (cf. `Service informations`).
    - La commande interroge `dateDernierTraitementMaximum`; si elle n’a pas évolué, elle s’arrête proprement.
    - En cas de mise à jour très volumineuse (`dateDernierTraitementDeMasse`), prévoyez un monitoring spécifique.
+   - Le chevauchement `SYNC__CREATION_OVERLAP_DAYS` rejoue N jours autour du dernier `last_creation_date` pour capter des arrivées tardives sans retraiter tout l’historique.
 
 ## Données stockées
 - `establishments` : identité du SIRET (nom + fallbacks, adresse complète, dates, état, NAF 56.10A).
 - `sync_runs` : journalisation de chaque moulinette (type, statut, métriques, curseur).
-- `sync_state` : pointeurs pour la reprise (`curseur`, `dateDernierTraitementMaximum`, checksum de requête).
+- `sync_state` : pointeurs pour la reprise (`curseur`, `dateDernierTraitementMaximum`, `last_creation_date`, checksum de requête).
 - `alerts` : traces des alertes envoyées (payload, destinataires, date d’envoi).
 
 ## Alertes e-mail & logs
@@ -125,7 +126,7 @@ Un fichier Postman de référence est disponible (`docs/postman_collection.json`
 - La requête utilise le paramètre `curseur=*` puis `curseurSuivant` pour garantir l’ordre et éviter les doublons/omissions.
 - Les champs demandés (`champs=`) sont réduits pour n’extraire que l’identification, les noms usuels/enseignes et l’adresse, conformément à la documentation.
 - Les noms sont déterminés par priorisation (`denominationUsuelle`, `enseigne`, etc.) avec fallback sur les informations de l’unité légale.
-- La reprise après incident se base sur `SyncState.last_cursor` pour la collecte complète, et sur `dateDernierTraitementMaximum` pour l’incrémental.
+- La reprise après incident se base sur `SyncState.last_cursor` pour la collecte complète, et sur `last_creation_date` pour limiter la fenêtre `dateCreationEtablissement` des incrémentaux (avec chevauchement configurable).
 
 ## Étapes suivantes
 - Intégrer un monitoring (Prometheus, Sentry…) si nécessaire.

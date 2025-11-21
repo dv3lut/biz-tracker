@@ -128,6 +128,7 @@ def delete_sync_run(
                 models.SyncState.last_synced_at: None,
                 models.SyncState.last_total: None,
                 models.SyncState.last_treated_max: None,
+                models.SyncState.last_creation_date: None,
                 models.SyncState.query_checksum: None,
             },
             synchronize_session=False,

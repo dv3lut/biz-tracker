@@ -104,6 +104,7 @@ class SyncRunPreparationMixin:
                 missing_run_id = str(state.last_successful_run_id)
                 state.last_successful_run_id = None
                 state.last_treated_max = None
+                state.last_creation_date = None
 
         previous_cursor = state.last_cursor
         cursor_was_completed = state.cursor_completed

@@ -4,6 +4,7 @@
 - Copier `.env.example` en `.env` et renseigner au minimum le token Sirene, la chaîne PostgreSQL (port local `15432`) et un `API__ADMIN_TOKEN` robuste.
 - Lancer `docker compose up -d biz-tracker-db` puis `python -m app init-db` (rejouer après chaque mise à jour pour appliquer les colonnes manquantes).
 - Optionnel : configurer l’envoi d’e-mails (`EMAIL__ENABLED=true` + SMTP). Utiliser `EMAIL__PROVIDER=mailhog` en local (lancer `docker compose up -d biz-tracker-mailhog`, interface http://localhost:8025) et `EMAIL__PROVIDER=mailjet` en production (identifiant = API key, mot de passe = secret key, expéditeur validé côté Mailjet).
+- Ajuster `SYNC__CREATION_OVERLAP_DAYS` (défaut : 3) pour rejouer davantage ou moins de jours autour du dernier `last_creation_date` et éviter les trous dus aux retards de publication.
 - Optionnel : activer l’enrichissement Google Places en définissant `GOOGLE__API_KEY` (clé API avec Places + Geocoding activées et facturation). Sans clé, le service reste inactif.
 
 ## Exécutions
@@ -12,7 +13,7 @@
 - **API admin** : `python -m app serve` (ou `make serve`) pour exposer les endpoints FastAPI. Vérifier que le reverse proxy ou le pare-feu restreint l’accès et que l’en-tête `X-Admin-Token` est fourni côté client.
 - L’endpoint `/admin/sync` répond immédiatement (`202 Accepted`) en déclenchant le traitement en arrière-plan. Le statut initial du run est `pending`, le front réinterroge automatiquement l’API toutes les 5 s tant qu’un run reste actif.
 - **Console web** : lancer `npm run dev` dans le projet `../biz-tracker-admin-ui` après `npm install`. L'URL par défaut `http://localhost:5173` doit être déclarée dans `API__ALLOWED_ORIGINS`.
-- Les runs sont tracés dans `sync_runs` (status, métriques). Les curseurs et dates sont dans `sync_state`.
+- Les runs sont tracés dans `sync_runs` (status, métriques). Les curseurs, `last_creation_date` et `dateDernierTraitementMaximum` sont dans `sync_state`.
 - Les logs applicatifs sont dans `logs/app.log`, les alertes dans `logs/alerts.log`.
 - Les statistiques et états sont consultables via l’API (`GET /admin/stats/summary`, `/admin/stats/dashboard`, `/admin/sync-runs`, `/admin/sync-state`, `/admin/alerts/recent`).
 - `POST /admin/email/test` permet de vérifier la configuration SMTP active (destinataires admin par défaut, sinon clients actifs ou ceux fournis dans le corps de la requête).

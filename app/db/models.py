@@ -142,6 +142,7 @@ class SyncState(Base):
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime)
     last_total: Mapped[int | None] = mapped_column(Integer)
     last_treated_max: Mapped[datetime | None] = mapped_column(DateTime)
+    last_creation_date: Mapped[date | None] = mapped_column(Date)
     query_checksum: Mapped[str | None] = mapped_column(String(64))
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
