@@ -41,6 +41,17 @@ export const formatPercent = (value: number | null | undefined): string => {
   return `${Math.round(value * 100)} %`;
 };
 
+export const formatCurrency = (value: number | null | undefined): string => {
+  if (value === null || value === undefined) {
+    return "—";
+  }
+  return new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency: "EUR",
+    minimumFractionDigits: 2,
+  }).format(value);
+};
+
 export const formatDuration = (value: number | null | undefined): string => {
   if (value === null || value === undefined) {
     return "—";

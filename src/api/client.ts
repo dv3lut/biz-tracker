@@ -20,6 +20,8 @@ import {
   RunSummary,
   RunSummaryEstablishment,
   RunSummaryUpdatedEstablishment,
+  NafCategoryStat,
+  NafSubCategoryStat,
 } from "../types";
 
 export class ApiError extends Error {
@@ -232,6 +234,21 @@ interface DashboardMetricsResponse {
   daily_google_statuses: DailyGoogleStatusPointResponse[];
   google_status_breakdown: GoogleStatusBreakdownResponse;
   establishment_status_breakdown: Record<string, number>;
+  naf_category_breakdown: NafCategoryStatResponse[];
+}
+
+interface NafSubCategoryStatResponse {
+  subcategory_id: string;
+  naf_code: string;
+  name: string;
+  establishment_count: number;
+}
+
+interface NafCategoryStatResponse {
+  category_id: string;
+  name: string;
+  total_establishments: number;
+  subcategories: NafSubCategoryStatResponse[];
 }
 
 interface EstablishmentResponse {
@@ -541,6 +558,21 @@ const toDashboardMetrics = (payload: DashboardMetricsResponse): DashboardMetrics
   dailyGoogleStatuses: payload.daily_google_statuses.map(toDailyGoogleStatusPoint),
   googleStatusBreakdown: toGoogleStatusBreakdown(payload.google_status_breakdown),
   establishmentStatusBreakdown: payload.establishment_status_breakdown,
+  nafCategoryBreakdown: payload.naf_category_breakdown.map(toNafCategoryStat),
+});
+
+const toNafSubCategoryStat = (payload: NafSubCategoryStatResponse): NafSubCategoryStat => ({
+  subcategoryId: payload.subcategory_id,
+  nafCode: payload.naf_code,
+  name: payload.name,
+  establishmentCount: payload.establishment_count,
+});
+
+const toNafCategoryStat = (payload: NafCategoryStatResponse): NafCategoryStat => ({
+  categoryId: payload.category_id,
+  name: payload.name,
+  totalEstablishments: payload.total_establishments,
+  subcategories: payload.subcategories.map(toNafSubCategoryStat),
 });
 
 const toEstablishment = (payload: EstablishmentResponse): Establishment => ({

@@ -7,6 +7,7 @@ const SECTION_BADGES: Record<SectionKey, string> = {
   emails: "EM",
   establishments: "ET",
   clients: "CL",
+  "naf-config": "NA",
 };
 
 type Props = {

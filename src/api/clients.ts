@@ -1,4 +1,5 @@
 import type { Client } from "../types";
+import { mapNafSubCategoryResponse, type NafSubCategoryResponse } from "./naf";
 import { request } from "./http";
 
 type ClientRecipientResponse = {
@@ -17,6 +18,14 @@ type ClientResponse = {
   created_at: string;
   updated_at: string;
   recipients: ClientRecipientResponse[];
+  subscriptions: ClientSubscriptionResponse[];
+};
+
+type ClientSubscriptionResponse = {
+  client_id: string;
+  subcategory_id: string;
+  created_at: string;
+  subcategory: NafSubCategoryResponse;
 };
 
 export interface ClientCreatePayload {
@@ -24,6 +33,7 @@ export interface ClientCreatePayload {
   startDate: string;
   endDate?: string | null;
   recipients: string[];
+  subscriptionIds: string[];
 }
 
 export interface ClientUpdatePayload {
@@ -31,6 +41,7 @@ export interface ClientUpdatePayload {
   startDate?: string;
   endDate?: string | null;
   recipients?: string[];
+  subscriptionIds?: string[];
 }
 
 const mapClient = (client: ClientResponse): Client => {
@@ -48,6 +59,12 @@ const mapClient = (client: ClientResponse): Client => {
       email: recipient.email,
       createdAt: recipient.created_at,
     })),
+    subscriptions: (client.subscriptions || []).map((subscription) => ({
+      clientId: subscription.client_id,
+      subcategoryId: subscription.subcategory_id,
+      createdAt: subscription.created_at,
+      subcategory: mapNafSubCategoryResponse(subscription.subcategory),
+    })),
   };
 };
 
@@ -56,6 +73,7 @@ const serializeCreatePayload = (payload: ClientCreatePayload) => ({
   start_date: payload.startDate,
   end_date: payload.endDate ?? null,
   recipients: payload.recipients,
+  subscription_ids: payload.subscriptionIds,
 });
 
 const serializeUpdatePayload = (payload: ClientUpdatePayload) => {
@@ -71,6 +89,9 @@ const serializeUpdatePayload = (payload: ClientUpdatePayload) => {
   }
   if (payload.recipients !== undefined) {
     body.recipients = payload.recipients;
+  }
+  if (payload.subscriptionIds !== undefined) {
+    body.subscription_ids = payload.subscriptionIds;
   }
   return body;
 };

@@ -6,6 +6,7 @@ import {
   DailyMetricPoint,
   DailyRunOutcomePoint,
   GoogleStatusBreakdown,
+  NafCategoryStat,
   StatsSummary,
 } from "../types";
 import { request } from "./http";
@@ -60,6 +61,20 @@ interface GoogleStatusBreakdownResponse {
   other: number;
 }
 
+interface NafSubCategoryStatResponse {
+  subcategory_id: string;
+  naf_code: string;
+  name: string;
+  establishment_count: number;
+}
+
+interface NafCategoryStatResponse {
+  category_id: string;
+  name: string;
+  total_establishments: number;
+  subcategories: NafSubCategoryStatResponse[];
+}
+
 interface DashboardRunBreakdownResponse {
   run_id: string;
   started_at: string;
@@ -87,6 +102,7 @@ interface DashboardMetricsResponse {
   daily_google_statuses: DailyGoogleStatusPointResponse[];
   google_status_breakdown: GoogleStatusBreakdownResponse;
   establishment_status_breakdown: Record<string, number>;
+  naf_category_breakdown: NafCategoryStatResponse[];
 }
 
 const mapDailyMetricPoint = (payload: DailyMetricPointResponse): DailyMetricPoint => ({
@@ -139,6 +155,22 @@ const mapGoogleStatusBreakdown = (
   other: payload.other,
 });
 
+const mapNafSubCategoryStat = (
+  payload: NafSubCategoryStatResponse,
+): NafCategoryStat["subcategories"][number] => ({
+  subcategoryId: payload.subcategory_id,
+  nafCode: payload.naf_code,
+  name: payload.name,
+  establishmentCount: payload.establishment_count,
+});
+
+const mapNafCategoryStat = (payload: NafCategoryStatResponse): NafCategoryStat => ({
+  categoryId: payload.category_id,
+  name: payload.name,
+  totalEstablishments: payload.total_establishments,
+  subcategories: payload.subcategories.map(mapNafSubCategoryStat),
+});
+
 const mapDashboardRunBreakdown = (
   payload: DashboardRunBreakdownResponse,
 ) => ({
@@ -178,6 +210,7 @@ const mapDashboardMetrics = (payload: DashboardMetricsResponse): DashboardMetric
   dailyGoogleStatuses: payload.daily_google_statuses.map(mapDailyGoogleStatusPoint),
   googleStatusBreakdown: mapGoogleStatusBreakdown(payload.google_status_breakdown),
   establishmentStatusBreakdown: payload.establishment_status_breakdown,
+  nafCategoryBreakdown: payload.naf_category_breakdown.map(mapNafCategoryStat),
 });
 
 export const statsApi = {

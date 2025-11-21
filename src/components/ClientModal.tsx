@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
-import { Client } from "../types";
+import { Client, NafCategory } from "../types";
 import { formatNumber, formatDateTime } from "../utils/format";
 
 type FormState = {
@@ -8,6 +8,7 @@ type FormState = {
   startDate: string;
   endDate: string;
   recipientsText: string;
+  subscriptionIds: string[];
 };
 
 type SubmitPayload = {
@@ -15,12 +16,15 @@ type SubmitPayload = {
   startDate: string;
   endDate: string | null;
   recipients: string[];
+  subscriptionIds: string[];
 };
 
 type Props = {
   isOpen: boolean;
   mode: "create" | "edit";
   client: Client | null;
+  nafCategories: NafCategory[] | undefined;
+  isLoadingNafCategories: boolean;
   onSubmit: (payload: SubmitPayload) => void;
   onCancel: () => void;
   isProcessing: boolean;
@@ -31,6 +35,7 @@ const EMPTY_STATE: FormState = {
   startDate: "",
   endDate: "",
   recipientsText: "",
+  subscriptionIds: [],
 };
 
 const splitRecipients = (value: string): string[] => {
@@ -41,7 +46,16 @@ const splitRecipients = (value: string): string[] => {
   return Array.from(new Set(normalized));
 };
 
-export const ClientModal = ({ isOpen, mode, client, onSubmit, onCancel, isProcessing }: Props) => {
+export const ClientModal = ({
+  isOpen,
+  mode,
+  client,
+  nafCategories,
+  isLoadingNafCategories,
+  onSubmit,
+  onCancel,
+  isProcessing,
+}: Props) => {
   const [formState, setFormState] = useState<FormState>(EMPTY_STATE);
 
   useEffect(() => {
@@ -55,6 +69,7 @@ export const ClientModal = ({ isOpen, mode, client, onSubmit, onCancel, isProces
         startDate: client.startDate,
         endDate: client.endDate ?? "",
         recipientsText: client.recipients.map((recipient) => recipient.email).join("\n"),
+        subscriptionIds: client.subscriptions.map((subscription) => subscription.subcategoryId),
       });
     } else {
       setFormState(EMPTY_STATE);
@@ -79,8 +94,45 @@ export const ClientModal = ({ isOpen, mode, client, onSubmit, onCancel, isProces
       startDate: formState.startDate,
       endDate: formState.endDate ? formState.endDate : null,
       recipients: splitRecipients(formState.recipientsText),
+      subscriptionIds: formState.subscriptionIds,
     };
     onSubmit(payload);
+  };
+
+  const handleToggleSubscription = (subcategoryId: string) => () => {
+    setFormState((current) => {
+      const exists = current.subscriptionIds.includes(subcategoryId);
+      if (exists) {
+        return { ...current, subscriptionIds: current.subscriptionIds.filter((id) => id !== subcategoryId) };
+      }
+      return { ...current, subscriptionIds: [...current.subscriptionIds, subcategoryId] };
+    });
+  };
+
+  const handleToggleCategory = (categoryId: string) => () => {
+    if (!nafCategories) {
+      return;
+    }
+    const category = nafCategories.find((entry) => entry.id === categoryId);
+    if (!category) {
+      return;
+    }
+    const selectableIds = category.subcategories.filter((sub) => sub.isActive).map((sub) => sub.id);
+    if (selectableIds.length === 0) {
+      return;
+    }
+    setFormState((current) => {
+      const hasAll = selectableIds.every((id) => current.subscriptionIds.includes(id));
+      if (hasAll) {
+        return {
+          ...current,
+          subscriptionIds: current.subscriptionIds.filter((id) => !selectableIds.includes(id)),
+        };
+      }
+      const merged = new Set(current.subscriptionIds);
+      selectableIds.forEach((id) => merged.add(id));
+      return { ...current, subscriptionIds: Array.from(merged) };
+    });
   };
 
   if (!isOpen) {
@@ -99,8 +151,8 @@ export const ClientModal = ({ isOpen, mode, client, onSubmit, onCancel, isProces
         <form className="modal-content" onSubmit={handleSubmit}>
           <section>
             <h3>Informations principales</h3>
-            <div className="email-test-form">
-              <label>
+            <div className="form-grid">
+              <div className="form-field">
                 <span className="input-label">Nom du client</span>
                 <input
                   type="text"
@@ -109,15 +161,15 @@ export const ClientModal = ({ isOpen, mode, client, onSubmit, onCancel, isProces
                   placeholder="Ex : Franchise Île-de-France"
                   required
                 />
-              </label>
-              <label>
+              </div>
+              <div className="form-field">
                 <span className="input-label">Date de début</span>
                 <input type="date" value={formState.startDate} onChange={handleChange("startDate")} required />
-              </label>
-              <label>
+              </div>
+              <div className="form-field">
                 <span className="input-label">Date de fin (optionnelle)</span>
                 <input type="date" value={formState.endDate} onChange={handleChange("endDate")} />
-              </label>
+              </div>
             </div>
           </section>
 
@@ -127,12 +179,82 @@ export const ClientModal = ({ isOpen, mode, client, onSubmit, onCancel, isProces
               Une adresse par ligne ou séparée par des virgules. Les adresses seront dédupliquées et converties en
               minuscules.
             </p>
-            <textarea
-              rows={6}
-              value={formState.recipientsText}
-              onChange={handleChange("recipientsText")}
-              placeholder="client@example.com"
-            />
+            <div className="form-field">
+              <textarea
+                rows={6}
+                value={formState.recipientsText}
+                onChange={handleChange("recipientsText")}
+                placeholder="client@example.com"
+              />
+            </div>
+          </section>
+
+          <section>
+            <h3>Abonnements NAF</h3>
+            {isLoadingNafCategories ? <p>Chargement des catégories…</p> : null}
+            {!isLoadingNafCategories && (!nafCategories || nafCategories.length === 0) ? (
+              <p className="muted small">
+                Aucune sous-catégorie configurée. Rendez-vous dans le sous-menu « Config NAF » pour en ajouter.
+              </p>
+            ) : null}
+            {nafCategories && nafCategories.length > 0 ? (
+              <div className="naf-subscription-grid">
+                {nafCategories.map((category) => {
+                  const activeSubcategories = category.subcategories.filter((sub) => sub.isActive);
+                  const activeIds = activeSubcategories.map((sub) => sub.id);
+                  const selectedCount = activeIds.filter((id) => formState.subscriptionIds.includes(id)).length;
+                  const isCategoryChecked = activeIds.length > 0 && selectedCount === activeIds.length;
+                  const isCategoryIndeterminate = selectedCount > 0 && selectedCount < activeIds.length;
+
+                  return (
+                    <article key={category.id}>
+                      <div className="naf-category-header">
+                        <strong>{category.name}</strong>
+                        <label className="category-select-toggle">
+                          <input
+                            type="checkbox"
+                            ref={(input) => {
+                              if (input) {
+                                input.indeterminate = isCategoryIndeterminate;
+                              }
+                            }}
+                            checked={isCategoryChecked}
+                            disabled={activeIds.length === 0}
+                            onChange={handleToggleCategory(category.id)}
+                          />
+                          <span>Tout sélectionner</span>
+                        </label>
+                      </div>
+                      {category.subcategories.length === 0 ? (
+                        <p className="small muted">Aucune sous-catégorie.</p>
+                      ) : (
+                        <ul className="naf-subscription-list">
+                          {category.subcategories.map((subcategory) => {
+                            const checked = formState.subscriptionIds.includes(subcategory.id);
+                            return (
+                              <li key={subcategory.id}>
+                                <label>
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={handleToggleSubscription(subcategory.id)}
+                                    disabled={!subcategory.isActive}
+                                  />
+                                  <span>
+                                    {subcategory.nafCode} · {subcategory.name}
+                                    {!subcategory.isActive ? " (inactif)" : ""}
+                                  </span>
+                                </label>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+                    </article>
+                  );
+                })}
+              </div>
+            ) : null}
           </section>
 
           {mode === "edit" && client ? (

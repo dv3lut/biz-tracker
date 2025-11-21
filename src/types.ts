@@ -101,6 +101,20 @@ export interface GoogleStatusBreakdown {
   other: number;
 }
 
+export interface NafSubCategoryStat {
+  subcategoryId: string;
+  nafCode: string;
+  name: string;
+  establishmentCount: number;
+}
+
+export interface NafCategoryStat {
+  categoryId: string;
+  name: string;
+  totalEstablishments: number;
+  subcategories: NafSubCategoryStat[];
+}
+
 export interface DashboardRunBreakdown {
   runId: string;
   startedAt: string;
@@ -197,6 +211,7 @@ export interface DashboardMetrics {
   dailyGoogleStatuses: DailyGoogleStatusPoint[];
   googleStatusBreakdown: GoogleStatusBreakdown;
   establishmentStatusBreakdown: Record<string, number>;
+  nafCategoryBreakdown: NafCategoryStat[];
 }
 
 export interface SyncRequestPayload {
@@ -285,6 +300,34 @@ export interface ClientRecipient {
   createdAt: string;
 }
 
+export interface NafSubCategory {
+  id: string;
+  categoryId: string;
+  name: string;
+  nafCode: string;
+  priceCents: number;
+  priceEur: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface NafCategory {
+  id: string;
+  name: string;
+  description: string | null;
+  createdAt: string;
+  updatedAt: string;
+  subcategories: NafSubCategory[];
+}
+
+export interface ClientSubscription {
+  clientId: string;
+  subcategoryId: string;
+  createdAt: string;
+  subcategory: NafSubCategory;
+}
+
 export interface Client {
   id: string;
   name: string;
@@ -295,6 +338,7 @@ export interface Client {
   createdAt: string;
   updatedAt: string;
   recipients: ClientRecipient[];
+  subscriptions: ClientSubscription[];
 }
 
 export interface AdminEmailConfig {

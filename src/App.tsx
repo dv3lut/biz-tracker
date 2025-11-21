@@ -11,6 +11,7 @@ import {
   getAdminToken,
   googleApi,
   clientsApi,
+  nafApi,
   setAdminToken,
   statsApi,
   syncApi,
@@ -32,6 +33,7 @@ import { AlertsView } from "./components/views/AlertsView";
 import { ClientsView } from "./components/views/ClientsView";
 import { EmailsView } from "./components/views/EmailsView";
 import { EstablishmentsView } from "./components/views/EstablishmentsView";
+import { NafConfigView } from "./components/views/NafConfigView";
 import {
   Alert,
   AdminEmailConfig,
@@ -42,6 +44,7 @@ import {
   EstablishmentDetail,
   EstablishmentIndividualFilter,
   Client,
+  NafCategory,
   GoogleCheckResult,
   GoogleRetryConfig,
   StatsSummary,
@@ -68,9 +71,6 @@ const runMatchesDay = (run: SyncRun, isoDate: string): boolean => {
   return run.startedAt.slice(0, 10) === isoDate;
 };
 
-const REFRESH_LONG = 60_000;
-const REFRESH_SHORT = 30_000;
-const REFRESH_ACTIVE = 1_000;
 const DASHBOARD_DAYS = 30;
 const GOOGLE_EXPORT_DEFAULT_WINDOW_DAYS = 30;
 
@@ -124,6 +124,9 @@ const App = () => {
   const [googleRetryConfigMessageError, setGoogleRetryConfigMessageError] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const isAuthenticated = Boolean(adminToken);
+  const requestAdminToken = useCallback(() => {
+    setTokenError("Merci de saisir un jeton administrateur.");
+  }, [setTokenError]);
 
   const dismissFeedback = useCallback(() => setFeedbackMessage(null), []);
   const dismissError = useCallback(() => setErrorMessage(null), []);
@@ -179,14 +182,6 @@ const App = () => {
     queryKey: ["sync-runs", syncRunsLimit],
     queryFn: () => syncApi.fetchRuns(syncRunsLimit),
     enabled: isAuthenticated,
-    refetchInterval: (query) => {
-      if (!isAuthenticated) {
-        return false;
-      }
-      const runs = (query.state.data as SyncRun[] | undefined) ?? [];
-      const active = runs.some((run) => run.status === "running" || run.status === "pending");
-      return active ? REFRESH_ACTIVE : REFRESH_SHORT;
-    },
   });
 
   const hasActiveRun =
@@ -197,33 +192,35 @@ const App = () => {
     queryKey: ["stats-summary"],
     queryFn: () => statsApi.fetchSummary(),
     enabled: isAuthenticated,
-    refetchInterval: isAuthenticated ? (isSyncActive ? REFRESH_ACTIVE : REFRESH_LONG) : false,
   });
 
   const syncStateQuery = useQuery<SyncState[]>({
     queryKey: ["sync-state"],
     queryFn: () => syncApi.fetchState(),
     enabled: isAuthenticated,
-    refetchInterval: isAuthenticated ? (isSyncActive ? REFRESH_ACTIVE : REFRESH_LONG) : false,
   });
 
   const dashboardQuery = useQuery<DashboardMetrics>({
     queryKey: ["dashboard-metrics", DASHBOARD_DAYS],
     queryFn: () => statsApi.fetchDashboardMetrics(DASHBOARD_DAYS),
     enabled: isAuthenticated,
-    refetchInterval: isAuthenticated ? (isSyncActive ? REFRESH_ACTIVE : REFRESH_LONG) : false,
   });
 
   const alertsQuery = useQuery<Alert[]>({
     queryKey: ["alerts", alertsLimit],
     queryFn: () => alertsApi.fetchRecent(alertsLimit),
     enabled: isAuthenticated,
-    refetchInterval: isAuthenticated ? (isSyncActive ? REFRESH_ACTIVE : REFRESH_SHORT) : false,
   });
 
   const clientsQuery = useQuery<Client[]>({
     queryKey: ["clients"],
     queryFn: () => clientsApi.list(),
+    enabled: isAuthenticated,
+  });
+
+  const nafCategoriesQuery = useQuery<NafCategory[]>({
+    queryKey: ["naf-categories"],
+    queryFn: () => nafApi.listCategories(),
     enabled: isAuthenticated,
   });
 
@@ -908,6 +905,7 @@ const App = () => {
             startDate: payload.startDate,
             endDate: payload.endDate,
             recipients: payload.recipients,
+            subscriptionIds: payload.subscriptionIds,
           },
         });
       } else {
@@ -916,6 +914,7 @@ const App = () => {
           startDate: payload.startDate,
           endDate: payload.endDate,
           recipients: payload.recipients,
+          subscriptionIds: payload.subscriptionIds,
         });
       }
     },
@@ -1256,6 +1255,19 @@ const App = () => {
               />
             ) : null}
 
+            {activeSection === "naf-config" ? (
+              <NafConfigView
+                categories={nafCategoriesQuery.data}
+                isLoading={nafCategoriesQuery.isLoading}
+                isFetching={nafCategoriesQuery.isFetching}
+                error={nafCategoriesQuery.error as Error | null}
+                onRefresh={() => nafCategoriesQuery.refetch()}
+                isAuthenticated={isAuthenticated}
+                onRequireToken={requestAdminToken}
+                onUnauthorized={handleUnauthorized}
+              />
+            ) : null}
+
             {activeSection === "emails" ? (
               <EmailsView
                 adminConfig={adminEmailConfigQuery.data}
@@ -1317,6 +1329,8 @@ const App = () => {
         isOpen={Boolean(clientModalState)}
         mode={clientModalState?.mode ?? "create"}
         client={clientModalState?.client ?? null}
+        nafCategories={nafCategoriesQuery.data}
+        isLoadingNafCategories={nafCategoriesQuery.isLoading}
         onSubmit={handleSubmitClientModal}
         onCancel={handleCloseClientModal}
         isProcessing={createClientMutation.isPending || updateClientMutation.isPending}

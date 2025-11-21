@@ -40,3 +40,14 @@ npm run preview
 - Liste des alertes récentes (`/admin/alerts/recent`).
 - Déclenchement de la synchronisation unifiée (`/admin/sync`).
 - Envoi d'un e-mail de test pour valider la configuration SMTP (`/admin/email/test`).
+- Pilotage des catégories/sous-catégories NAF et des abonnements clients (`/admin/naf-*`).
+
+## Gestion des catégories NAF et abonnements clients
+
+La vue **Clients** regroupe désormais deux panneaux : la gestion des comptes clients et l'orchestrateur des catégories/sous-catégories NAF. Ce module permet de contrôler précisément quelles alertes sont reçues par chaque client.
+
+1. **Catégories NAF** : utilisez le bouton « Ajouter une catégorie » pour créer un conteneur logique (nom + ordre d'affichage). Chaque carte affiche le nombre d'abonnements actifs et propose l'édition ou la suppression (protégée par confirmation).
+2. **Sous-catégories** : ouvrez le bouton « Ajouter une sous-catégorie » (ou l'icône « + » sur une carte) pour définir le code/label NAF, le prix mensuel, l'ordre et l'état actif/inactif. Les sous-catégories sont rattachées à une catégorie et peuvent être désactivées sans suppression définitive.
+3. **Abonnements client** : dans le formulaire d'édition de client, la section « Abonnements NAF » liste les sous-catégories actives. Cochez/decochez les souscriptions puis sauvegardez pour que l'API propage la configuration.
+
+> ℹ️ Les appels réseau reposent sur les endpoints `/admin/naf-categories*` et `/admin/naf-sub-categories*` documentés dans la collection Postman backend. Le front applique automatiquement le jeton `X-Admin-Token` renseigné dans l'UI.

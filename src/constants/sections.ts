@@ -1,4 +1,11 @@
-export type SectionKey = "dashboard" | "sync" | "alerts" | "clients" | "emails" | "establishments";
+export type SectionKey =
+  | "dashboard"
+  | "sync"
+  | "alerts"
+  | "clients"
+  | "naf-config"
+  | "emails"
+  | "establishments";
 
 export interface SectionDefinition {
   key: SectionKey;
@@ -12,6 +19,7 @@ export const NAV_SECTIONS: ReadonlyArray<SectionDefinition> = [
   { key: "sync", label: "Synchronisations", description: "Historique & états" },
   { key: "alerts", label: "Alertes", description: "Suivi des notifications" },
   { key: "clients", label: "Clients", description: "Destinataires par client" },
+  { key: "naf-config", label: "Config NAF", description: "Catégories et souscriptions" },
   { key: "emails", label: "E-mails", description: "Configuration & tests" },
   { key: "establishments", label: "Etablissements", description: "Recherche & actions" },
 ];

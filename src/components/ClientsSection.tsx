@@ -91,6 +91,7 @@ export const ClientsSection = ({
                 <th>Client</th>
                 <th>Période d'activation</th>
                 <th>Destinataires</th>
+                <th>Abonnements NAF</th>
                 <th>Statistiques</th>
                 <th>Actions</th>
               </tr>
@@ -126,6 +127,19 @@ export const ClientsSection = ({
                           {client.recipients.map((recipient) => (
                             <span key={recipient.id} className="chip">
                               {recipient.email}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                    <td>
+                      {client.subscriptions.length === 0 ? (
+                        <span className="small muted">Aucun code NAF sélectionné</span>
+                      ) : (
+                        <div className="chip-list">
+                          {client.subscriptions.map((subscription) => (
+                            <span key={subscription.subcategoryId} className="chip">
+                              {subscription.subcategory.nafCode} · {subscription.subcategory.name}
                             </span>
                           ))}
                         </div>

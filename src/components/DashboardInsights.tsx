@@ -64,6 +64,7 @@ export const DashboardInsights = ({
   const apiVolumeSeries = metrics ? metrics.dailyApiCalls.slice(-windowSize) : [];
   const alertSeries = metrics ? metrics.dailyAlerts.slice(-windowSize) : [];
   const googleStatusSeries = metrics ? metrics.dailyGoogleStatuses.slice(-windowSize) : [];
+  const categoryBreakdown = metrics ? metrics.nafCategoryBreakdown : [];
 
   const runOutcomeChartData = runOutcomeSeries.map((item) => ({
     key: item.date,
@@ -375,6 +376,38 @@ export const DashboardInsights = ({
                 </ul>
               ) : (
                 <p className="muted">Aucun etablissements enregistre.</p>
+              )}
+            </article>
+
+            <article className="insight-card">
+              <h3>Categories suivies</h3>
+              {categoryBreakdown.length > 0 ? (
+                <div className="category-breakdown">
+                  {categoryBreakdown.map((category) => (
+                    <div key={category.categoryId} className="category-panel">
+                      <div className="category-panel-header">
+                        <strong>{category.name}</strong>
+                        <span className="muted small">
+                          {formatNumber(category.totalEstablishments)} etablissements
+                        </span>
+                      </div>
+                      {category.subcategories.length > 0 ? (
+                        <ul className="metric-list">
+                          {category.subcategories.map((sub) => (
+                            <li key={sub.subcategoryId}>
+                              <strong>{formatNumber(sub.establishmentCount)}</strong>
+                              {sub.name} ({sub.nafCode})
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="muted small">Aucune sous-categorie active.</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="muted">Aucune categorie configuree.</p>
               )}
             </article>
           </div>
