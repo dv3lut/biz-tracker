@@ -13,6 +13,7 @@
   - Possibilité de vérifier le `service informations` avant de lancer (`check_for_updates`) afin d’éviter un run s’il n’y a pas de nouveautés.
   - Scheduler interne (`SyncScheduler`) démarré avec l’API : scrute périodiquement les mises à jour (`sync.auto_poll_minutes`) et respecte un délai minimum `sync.minimum_delay_minutes` avant de relancer.
   - Reprise via `SyncState.last_cursor`, suivi des traitements via `SyncState.last_treated_max` et fenêtre incrémentale via `SyncState.last_creation_date`.
+  - Le périmètre métier découle des entrées actives dans `naf_subcategories` : `_load_active_naf_codes` lit tous les codes (`is_active=true`) et les applique au builder de requête Sirene. Plus aucun code NAF n’est défini dans `.env`, ce qui garantit que le front/back restent alignés sur la même table de référence.
   - `_collect_sync` journalise chaque page, incrémente `api_call_count`, `fetched_records`, `created_records`, met à jour `SyncState` après commit partiel et sécurise la reprise même en cas de plantage intermédiaire.
   - Les mises à jour de SIRET existants sont détectées (diff des champs) puis comptabilisées dans `sync_runs.updated_records` avec log structuré `sync.updated_establishments.batch`.
   - Les correspondances Google sont catégorisées : `google_immediate_matched_count` pour les créations du run, `google_late_matched_count` pour le backlog.
@@ -29,11 +30,13 @@
   - Chaque run enregistre les compteurs Google (file totale, éligibles, correspondances, backlog) dans `sync_runs` pour exploitation API/UI.
   - Export XLSX disponible via `build_google_places_workbook` et l’endpoint `GET /admin/google/places-export` (paramètres obligatoires `start_date` et `end_date` au format ISO `YYYY-MM-DD`, filtrage basé sur `establishments.date_creation`).
   - Statuts persistés dans `establishments.google_check_status` : `pending`, `found`, `not_found`, `insufficient`, `type_mismatch` (fiches rejetées car la catégorie Google ne correspond pas au NAF attendu), plus `other` comme garde-fou lors des agrégations.
-  - Les catégories Google acceptées sont configurables via `GOOGLE__ALLOWED_PLACE_TYPES` (liste fallback) et `GOOGLE__PLACE_TYPE_RULES` (JSON `prefixe_naf -> [types...]`). Ces variables peuvent être alignées avec `SIRENE__RESTAURANT_NAF_CODES` pour éviter toute divergence lors d’un changement de périmètre.
+  - Les contrôles de cohérence ne s’appuient plus sur une liste statique de types Google. `_resolve_expected_keywords` extrait des mots-clés depuis `naf_subcategories`/`naf_categories` (noms + descriptions) ainsi que depuis le libellé NAF stocké sur l’établissement, puis `_matches_expected_google_category` compare ces mots-clés aux `types` remontés par Google (tokenisation + `SequenceMatcher`).
+  - Les types génériques (`point_of_interest`, `store`, `food`, etc.) sont ignorés, ce qui réduit les faux positifs. Le seuil de similarité est piloté par `GOOGLE__CATEGORY_SIMILARITY_THRESHOLD` (par défaut `0.72`), valeur à ajuster si l’on détecte des rejets injustifiés ou, au contraire, des correspondances trop permissives.
 - **Observabilité** :
   - Les logs sont sérialisés en JSON (service `observability.log_event`) et peuvent être expédiés directement vers Elasticsearch (`LOGGING__ELASTICSEARCH__*`).
   - Les événements suivent la convention `event.name` (`sync.run.*`, `sync.new_establishment`, `sync.google.*`, `sync.updated_establishment*`, `sync.alert.created`, `alerts.email.*`, `sync.summary.email.*`, `scheduler.*`, `email.test_sent`) pour alimenter Kibana.
 - **Analytics API** : `GET /admin/stats/dashboard` centralise les agrégations (séries journalières, répartition Google globale et du dernier run, alertes envoyées, états administratifs). Les schémas Pydantic `DashboardMetrics` et `DashboardRunBreakdown` décrivent ces payloads.
+  - Le payload inclut également `naf_category_breakdown` (par catégorie et sous-catégorie NAF actives) pour suivre l’équilibre des établissements suivis côté back-office.
 - **API** : FastAPI (`app/api`) exposant des routes d’admin sécurisées par jeton (`X-Admin-Token` configurable). Les dépendances gèrent les sessions SQLAlchemy et les contrôles d’accès.
   - Nouveaux endpoints : `GET /admin/google/places-export` (XLSX), `GET /admin/stats/dashboard` (agrégations journalières) et journalisation `sync.google.summary`.
 - **CORS** : middleware FastAPI activé. La liste des origines autorisées est configurable via `API__ALLOWED_ORIGINS` (liste JSON ou chaîne séparée par des virgules, valeur par défaut `http://localhost:5173`).

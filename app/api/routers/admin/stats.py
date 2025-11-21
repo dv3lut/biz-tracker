@@ -284,6 +284,59 @@ def get_dashboard_metrics(
         key = status or "INCONNU"
         establishment_breakdown[key] = int(count or 0)
 
+    naf_category_rows = (
+        session.execute(
+            select(
+                models.NafCategory.id.label("category_id"),
+                models.NafCategory.name.label("category_name"),
+                models.NafSubCategory.id.label("subcategory_id"),
+                models.NafSubCategory.name.label("subcategory_name"),
+                models.NafSubCategory.naf_code.label("naf_code"),
+                func.count(models.Establishment.siret).label("establishment_count"),
+            )
+            .join(models.NafSubCategory, models.NafSubCategory.category_id == models.NafCategory.id)
+            .outerjoin(
+                models.Establishment,
+                func.upper(models.Establishment.naf_code) == func.upper(models.NafSubCategory.naf_code),
+            )
+            .where(models.NafSubCategory.is_active.is_(True))
+            .group_by(
+                models.NafCategory.id,
+                models.NafCategory.name,
+                models.NafSubCategory.id,
+                models.NafSubCategory.name,
+                models.NafSubCategory.naf_code,
+            )
+            .order_by(models.NafCategory.name.asc(), models.NafSubCategory.name.asc())
+        )
+        .all()
+    )
+
+    naf_category_breakdown: list[dict[str, object]] = []
+    category_map: dict[object, dict[str, object]] = {}
+    for row in naf_category_rows:
+        category_id = row.category_id
+        sub_count = int(row.establishment_count or 0)
+        category_entry = category_map.get(category_id)
+        if not category_entry:
+            category_entry = {
+                "category_id": category_id,
+                "name": row.category_name,
+                "total_establishments": 0,
+                "subcategories": [],
+            }
+            category_map[category_id] = category_entry
+            naf_category_breakdown.append(category_entry)
+        category_entry["total_establishments"] = int(category_entry["total_establishments"]) + sub_count
+        category_entry.setdefault("subcategories", []).append(
+            {
+                "subcategory_id": row.subcategory_id,
+                "naf_code": row.naf_code,
+                "name": row.subcategory_name,
+                "establishment_count": sub_count,
+            }
+        )
+
     return DashboardMetrics(
         latest_run=serialized_last_run,
         latest_run_breakdown=latest_run_breakdown,
@@ -294,4 +347,5 @@ def get_dashboard_metrics(
         daily_google_statuses=daily_google_statuses,
         google_status_breakdown=GoogleStatusBreakdown(**global_google_counts),
         establishment_status_breakdown=establishment_breakdown,
+        naf_category_breakdown=naf_category_breakdown,
     )

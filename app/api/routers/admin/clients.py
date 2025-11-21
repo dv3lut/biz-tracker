@@ -36,11 +36,18 @@ def _normalize_name(name: str) -> str:
     return normalized
 
 
+def _client_eager_load() -> tuple[selectinload, ...]:
+    return (
+        selectinload(models.Client.recipients),
+        selectinload(models.Client.subscriptions).selectinload(models.ClientSubscription.subcategory),
+    )
+
+
 def _get_client_or_404(session: Session, client_id: UUID) -> models.Client:
     stmt = (
         select(models.Client)
         .where(models.Client.id == client_id)
-        .options(selectinload(models.Client.recipients))
+        .options(*_client_eager_load())
     )
     client = session.execute(stmt).scalar_one_or_none()
     if client is None:
@@ -61,9 +68,50 @@ def _apply_recipients(client: models.Client, recipients: list[str]) -> None:
     client.recipients = updated
 
 
+def _apply_subscriptions(session: Session, client: models.Client, subscription_ids: list[UUID]) -> None:
+    unique_ids: list[UUID] = []
+    seen: set[UUID] = set()
+    for sub_id in subscription_ids:
+        if sub_id in seen:
+            continue
+        seen.add(sub_id)
+        unique_ids.append(sub_id)
+
+    if not unique_ids:
+        client.subscriptions = []
+        return
+
+    stmt = (
+        select(models.NafSubCategory)
+        .where(
+            models.NafSubCategory.id.in_(unique_ids),
+            models.NafSubCategory.is_active.is_(True),
+        )
+    )
+    subcategories = session.execute(stmt).scalars().all()
+    found_ids = {subcategory.id for subcategory in subcategories}
+    missing = set(unique_ids) - found_ids
+    if missing:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sous-catégorie introuvable ou inactive.")
+
+    ordering = {identifier: index for index, identifier in enumerate(unique_ids)}
+    subcategories.sort(key=lambda sub: ordering[sub.id])
+
+    current = {subscription.subcategory_id: subscription for subscription in client.subscriptions}
+    updated: list[models.ClientSubscription] = []
+    for subcategory in subcategories:
+        existing = current.get(subcategory.id)
+        if existing is not None:
+            updated.append(existing)
+            continue
+        updated.append(models.ClientSubscription(subcategory_id=subcategory.id, subcategory=subcategory))
+
+    client.subscriptions = updated
+
+
 @router.get("/clients", response_model=list[ClientOut], summary="Lister les clients configurés")
 def list_clients(session: Session = Depends(get_db_session)) -> list[ClientOut]:
-    stmt = select(models.Client).options(selectinload(models.Client.recipients)).order_by(models.Client.name)
+    stmt = select(models.Client).options(*_client_eager_load()).order_by(models.Client.name)
     clients = session.execute(stmt).scalars().all()
     return [ClientOut.model_validate(client) for client in clients]
 
@@ -87,6 +135,7 @@ def create_client(payload: ClientCreate, session: Session = Depends(get_db_sessi
     client = models.Client(name=name, start_date=payload.start_date, end_date=payload.end_date)
     session.add(client)
     _apply_recipients(client, payload.recipients)
+    _apply_subscriptions(session, client, payload.subscription_ids)
 
     try:
         session.flush()
@@ -117,6 +166,9 @@ def update_client(
 
     if payload.recipients is not None:
         _apply_recipients(client, payload.recipients)
+
+    if payload.subscription_ids is not None:
+        _apply_subscriptions(session, client, payload.subscription_ids)
 
     try:
         session.flush()

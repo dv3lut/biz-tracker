@@ -13,6 +13,8 @@ from app.db import models
 from app.services.email_service import EmailService
 from app.observability import log_event
 from app.services.client_service import (
+    ClientEmailPayload,
+    assign_establishments_to_clients,
     collect_client_emails,
     dispatch_email_to_clients,
     get_active_clients,
@@ -29,6 +31,7 @@ class AlertService:
         self._session = session
         self._run = run
         self._email_service = EmailService()
+        self._subcategory_lookup: dict[str, tuple[str | None, str | None]] | None = None
 
     def create_google_alerts(self, establishments: Sequence[models.Establishment]) -> list[models.Alert]:
         if not establishments:
@@ -61,9 +64,8 @@ class AlertService:
         message = "\n".join(message_lines).strip()
         _ALERT_LOGGER.info(message)
 
-        client_subject = f"[{self._run.scope_key}] {len(establishments)} fiche(s) Google détectée(s)"
-        admin_subject = f"{client_subject} - administration"
-        client_text_body, client_html_body = self._render_client_email(establishments)
+        base_client_subject = f"[{self._run.scope_key}] {len(establishments)} fiche(s) Google détectée(s)"
+        admin_subject = f"{base_client_subject} - administration"
         admin_text_body, admin_html_body = self._render_admin_email(establishments)
 
         email_enabled = self._email_service.is_enabled()
@@ -73,8 +75,29 @@ class AlertService:
         eligible_clients = [client for client in active_clients if any(recipient.email for recipient in client.recipients)]
         admin_recipients = get_admin_emails(self._session)
 
-        all_recipient_addresses = collect_client_emails(eligible_clients)
-        combined_recipient_addresses = sorted({*all_recipient_addresses, *admin_recipients})
+        assignment_map, filtering_applied = assign_establishments_to_clients(eligible_clients, establishments)
+        client_payloads: list[ClientEmailPayload] = []
+        for client in eligible_clients:
+            matches = assignment_map.get(client.id, [])
+            if not matches and not filtering_applied:
+                matches = list(establishments)
+            if not matches:
+                continue
+            subject = f"[{self._run.scope_key}] {len(matches)} fiche(s) Google détectée(s)"
+            text_body, html_body = self._render_client_email(matches)
+            client_payloads.append(
+                ClientEmailPayload(
+                    client=client,
+                    subject=subject,
+                    text_body=text_body,
+                    html_body=html_body,
+                    establishments=matches,
+                )
+            )
+
+        targeted_clients = [payload.client for payload in client_payloads]
+        targeted_recipient_addresses = collect_client_emails(targeted_clients)
+        combined_recipient_addresses = sorted({*targeted_recipient_addresses, *admin_recipients})
         for alert in alerts:
             alert.recipients = combined_recipient_addresses
 
@@ -91,13 +114,12 @@ class AlertService:
             client_skip_reason = "no_clients"
         elif not eligible_clients:
             client_skip_reason = "no_active_recipients"
+        elif not client_payloads:
+            client_skip_reason = "no_matching_subscriptions" if filtering_applied else "no_active_recipients"
         else:
             dispatch_result = dispatch_email_to_clients(
                 self._email_service,
-                eligible_clients,
-                client_subject,
-                client_text_body,
-                html_body=client_html_body,
+                client_payloads,
             )
 
             if dispatch_result.delivered:
@@ -117,7 +139,7 @@ class AlertService:
                     "alerts.email.sent",
                     run_id=str(self._run.id),
                     scope_key=self._run.scope_key,
-                    recipient_count=len(all_recipient_addresses),
+                    recipient_count=len(targeted_recipient_addresses),
                     clients=[str(client.id) for client in dispatch_result.delivered],
                     failures=[
                         {"client_id": str(client.id), "error": str(exc)}
@@ -141,7 +163,7 @@ class AlertService:
                         run_id=str(self._run.id),
                         scope_key=self._run.scope_key,
                         reason=client_skip_reason,
-                        recipient_count=len(all_recipient_addresses),
+                        recipient_count=len(targeted_recipient_addresses),
                         failures=[
                             {"client_id": str(client.id), "error": str(exc)}
                             for client, exc in dispatch_result.failed
@@ -154,7 +176,7 @@ class AlertService:
                 run_id=str(self._run.id),
                 scope_key=self._run.scope_key,
                 reason=client_skip_reason,
-                recipient_count=len(all_recipient_addresses),
+                recipient_count=len(targeted_recipient_addresses),
             )
 
         admin_skip_reason: str | None = None
@@ -241,6 +263,9 @@ class AlertService:
             f"- {establishment.name or '(nom indisponible)'}",
             f"  SIRET: {establishment.siret} | NAF: {establishment.naf_code or 'N/A'}",
         ]
+        subcategory_label = self._format_subcategory_label(establishment.naf_code)
+        if subcategory_label:
+            lines.append(f"  Sous-catégorie Biz Tracker: {subcategory_label}")
         address_parts = [
             element
             for element in [
@@ -308,12 +333,15 @@ class AlertService:
             name = establishment.name or "(nom indisponible)"
             street_line, commune_line = self._format_address_lines(establishment)
             google_url = establishment.google_place_url
+            subcategory_label = self._format_subcategory_label(establishment.naf_code)
 
             lines.append(f"- {name}")
             if street_line:
                 lines.append(f"  {street_line}")
             if commune_line:
                 lines.append(f"  {commune_line}")
+            if subcategory_label:
+                lines.append(f"  Catégorie : {subcategory_label}")
             if google_url:
                 lines.append(f"  Fiche Google : {google_url}")
             else:
@@ -327,6 +355,10 @@ class AlertService:
                 item_html.append(f"<div>{escape(street_line)}</div>")
             if commune_line:
                 item_html.append(f"<div>{escape(commune_line)}</div>")
+            if subcategory_label:
+                item_html.append(
+                    f"<div style=\"color:#93c5fd;\">Sous-catégorie : {escape(subcategory_label)}</div>"
+                )
             if google_url:
                 link = escape(google_url)
                 item_html.append(
@@ -394,6 +426,7 @@ class AlertService:
             )
             google_url = establishment.google_place_url
             google_id = establishment.google_place_id or ""
+            subcategory_label = self._format_subcategory_label(establishment.naf_code)
 
             address_section = [f"<strong>{escape(name)}</strong>"]
             if street_line:
@@ -404,6 +437,8 @@ class AlertService:
             ident_section = [f"SIRET&nbsp;: {escape(siret)}", f"NAF&nbsp;: {escape(naf_code)}"]
             if naf_label:
                 ident_section.append(escape(naf_label))
+            if subcategory_label:
+                ident_section.append(f"Sous-catégorie Biz Tracker&nbsp;: {escape(subcategory_label)}")
             ident_section.append(f"Création&nbsp;: {escape(creation_date)}")
 
             google_section: list[str] = []
@@ -459,3 +494,41 @@ class AlertService:
             .limit(1)
         )
         return self._session.execute(stmt).first() is not None
+
+    def _get_subcategory_lookup(self) -> dict[str, tuple[str | None, str | None]]:
+        if self._subcategory_lookup is not None:
+            return self._subcategory_lookup
+
+        rows = (
+            self._session.execute(
+                select(
+                    models.NafSubCategory.naf_code,
+                    models.NafSubCategory.name,
+                    models.NafCategory.name,
+                )
+                .join(models.NafCategory, models.NafCategory.id == models.NafSubCategory.category_id)
+                .where(models.NafSubCategory.is_active.is_(True))
+            ).all()
+        )
+        lookup: dict[str, tuple[str | None, str | None]] = {}
+        for naf_code, sub_name, category_name in rows:
+            if not naf_code:
+                continue
+            lookup[naf_code.strip().upper()] = (category_name, sub_name)
+        self._subcategory_lookup = lookup
+        return lookup
+
+    def _resolve_subcategory_info(self, naf_code: str | None) -> tuple[str | None, str | None]:
+        if not naf_code:
+            return None, None
+        key = naf_code.strip().upper()
+        if not key:
+            return None, None
+        lookup = self._get_subcategory_lookup()
+        return lookup.get(key, (None, None))
+
+    def _format_subcategory_label(self, naf_code: str | None) -> str | None:
+        category_name, subcategory_name = self._resolve_subcategory_info(naf_code)
+        if subcategory_name and category_name and category_name != subcategory_name:
+            return f"{subcategory_name} ({category_name})"
+        return subcategory_name or category_name

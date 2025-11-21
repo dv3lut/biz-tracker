@@ -5,7 +5,7 @@ from datetime import datetime, date as Date
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator, model_validator
 
 
 class SyncRunOut(BaseModel):
@@ -114,6 +114,23 @@ class GoogleStatusBreakdown(BaseModel):
     other: int = Field(default=0, description="Statuts inattendus ou transitoires.")
 
 
+class NafSubCategoryStats(BaseModel):
+    subcategory_id: UUID = Field(description="Identifiant de la sous-catégorie NAF.")
+    naf_code: str = Field(description="Code NAF exact suivi par Biz Tracker.")
+    name: str = Field(description="Libellé lisible de la sous-catégorie.")
+    establishment_count: int = Field(description="Nombre d'établissements correspondant à ce code NAF.")
+
+
+class NafCategoryStats(BaseModel):
+    category_id: UUID = Field(description="Identifiant de la catégorie regroupant plusieurs NAF.")
+    name: str = Field(description="Nom commercial de la catégorie.")
+    total_establishments: int = Field(description="Total d'établissements rattachés aux sous-catégories de cette catégorie.")
+    subcategories: list[NafSubCategoryStats] = Field(
+        default_factory=list,
+        description="Détail par sous-catégorie NAF.",
+    )
+
+
 class DashboardRunBreakdown(BaseModel):
     run_id: UUID = Field(description="Identifiant du run analysé.")
     started_at: datetime = Field(description="Horodatage de démarrage du run.")
@@ -141,6 +158,10 @@ class DashboardMetrics(BaseModel):
     daily_google_statuses: list[DailyGoogleStatusPoint] = Field(default_factory=list, description="Répartition quotidienne des statuts Google.")
     google_status_breakdown: GoogleStatusBreakdown = Field(description="Répartition globale des statuts Google.")
     establishment_status_breakdown: dict[str, int] = Field(default_factory=dict, description="Répartition des établissements par état administratif.")
+    naf_category_breakdown: list[NafCategoryStats] = Field(
+        default_factory=list,
+        description="Répartition des établissements par catégorie et sous-catégorie NAF.",
+    )
 
 
 class RunEstablishmentSummary(BaseModel):
@@ -191,12 +212,76 @@ class SyncRunReport(BaseModel):
     email: RunEmailSummary | None = None
 
 
+class NafSubCategoryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    category_id: UUID
+    name: str
+    naf_code: str
+    price_cents: int
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+    @computed_field
+    @property
+    def price_eur(self) -> float:
+        return round(self.price_cents / 100, 2)
+
+
+class NafCategoryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    name: str
+    description: str | None
+    created_at: datetime
+    updated_at: datetime
+    subcategories: list[NafSubCategoryOut] = Field(default_factory=list)
+
+
+class NafCategoryCreate(BaseModel):
+    name: str
+    description: str | None = None
+
+
+class NafCategoryUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+
+
+class NafSubCategoryCreate(BaseModel):
+    category_id: UUID
+    name: str
+    naf_code: str
+    price_eur: float = Field(ge=0, description="Tarif de référence en euros TTC.")
+    is_active: bool = True
+
+
+class NafSubCategoryUpdate(BaseModel):
+    category_id: UUID | None = None
+    name: str | None = None
+    naf_code: str | None = None
+    price_eur: float | None = Field(default=None, ge=0)
+    is_active: bool | None = None
+
+
 class ClientRecipientOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
     email: str
     created_at: datetime
+
+
+class ClientSubscriptionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    client_id: UUID
+    subcategory_id: UUID
+    created_at: datetime
+    subcategory: NafSubCategoryOut
 
 
 class ClientOut(BaseModel):
@@ -211,6 +296,7 @@ class ClientOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     recipients: list[ClientRecipientOut]
+    subscriptions: list[ClientSubscriptionOut]
 
 
 class ClientCreate(BaseModel):
@@ -218,6 +304,10 @@ class ClientCreate(BaseModel):
     start_date: Date
     end_date: Date | None = None
     recipients: list[str] = Field(default_factory=list, description="Liste d'adresses e-mail associées au client.")
+    subscription_ids: list[UUID] = Field(
+        default_factory=list,
+        description="Identifiants des sous-catégories NAF auxquelles le client est abonné.",
+    )
 
 
 class ClientUpdate(BaseModel):
@@ -225,6 +315,10 @@ class ClientUpdate(BaseModel):
     start_date: Date | None = None
     end_date: Date | None = None
     recipients: list[str] | None = Field(default=None, description="Remplace la liste complète des destinataires lorsqu'elle est fournie.")
+    subscription_ids: list[UUID] | None = Field(
+        default=None,
+        description="Remplace complètement la liste des sous-catégories souscrites lorsqu'elle est fournie.",
+    )
 
 
 class AdminEmailConfig(BaseModel):

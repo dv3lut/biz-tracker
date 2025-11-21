@@ -5,6 +5,7 @@ from datetime import date, datetime
 from typing import Sequence
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import models
@@ -16,8 +17,15 @@ from .context import UpdatedEstablishmentInfo
 class SyncPersistenceMixin:
     """Expose reusable persistence helpers leveraged by the sync collector."""
 
-    def _build_restaurant_query(self, *, since_creation: date | None = None) -> str:
-        naf_terms = [f"activitePrincipaleEtablissement:{code}" for code in self._settings.sirene.restaurant_naf_codes]
+    _naf_code_cache: list[str] | None = None
+
+    def _build_restaurant_query(self, naf_codes: Sequence[str], *, since_creation: date | None = None) -> str:
+        normalized_codes = [code.strip() for code in naf_codes if code and code.strip()]
+        if not normalized_codes:
+            raise RuntimeError("Aucun code NAF actif n'est disponible pour construire la requête Sirene.")
+
+        unique_codes = sorted(set(normalized_codes))
+        naf_terms = [f"activitePrincipaleEtablissement:{code}" for code in unique_codes]
         naf_query = " OR ".join(naf_terms)
         if len(naf_terms) > 1:
             naf_query = f"({naf_query})"
@@ -28,6 +36,28 @@ class SyncPersistenceMixin:
             clauses.append(creation_clause)
 
         return " AND ".join(clauses)
+
+    def _load_active_naf_codes(self, session: Session) -> list[str]:
+        cached = getattr(self, "_naf_code_cache", None)
+        if cached:
+            return cached
+
+        rows = (
+            session.execute(
+                select(models.NafSubCategory.naf_code)
+                .where(models.NafSubCategory.is_active.is_(True))
+                .order_by(models.NafSubCategory.naf_code.asc())
+            )
+            .scalars()
+            .all()
+        )
+        naf_codes = [code for code in rows if code]
+        if not naf_codes:
+            raise RuntimeError(
+                "Impossible de lancer la synchronisation : aucune sous-catégorie NAF active n'est configurée en base."
+            )
+        self._naf_code_cache = naf_codes
+        return naf_codes
 
     def _build_fields_parameter(self) -> str:
         fields = {

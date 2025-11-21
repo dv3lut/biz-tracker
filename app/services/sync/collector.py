@@ -22,7 +22,8 @@ class SyncCollectorMixin(SyncPersistenceMixin):
         state = context.state
         months_back = max(self._settings.sync.months_back, 1)
         since_creation = self._compute_since_creation(state, months_back=months_back)
-        query = self._build_restaurant_query(since_creation=since_creation)
+        naf_codes = self._load_active_naf_codes(context.session)
+        query = self._build_restaurant_query(naf_codes, since_creation=since_creation)
         checksum = sha256_digest(query)
         context.run.query_checksum = checksum
 
@@ -37,6 +38,7 @@ class SyncCollectorMixin(SyncPersistenceMixin):
             )
             state.last_cursor = None
             state.cursor_completed = False
+            state.last_creation_date = None
         state.query_checksum = checksum
 
         latest_treated = self._fetch_latest_treated(context.client)

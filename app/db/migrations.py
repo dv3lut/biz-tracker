@@ -42,6 +42,43 @@ def run_schema_upgrades(engine: Engine) -> None:
         )
         """,
         """
+        CREATE TABLE IF NOT EXISTS naf_categories (
+            id UUID PRIMARY KEY,
+            name VARCHAR(255) NOT NULL UNIQUE,
+            description TEXT,
+            created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS naf_subcategories (
+            id UUID PRIMARY KEY,
+            category_id UUID NOT NULL REFERENCES naf_categories(id) ON DELETE CASCADE,
+            name VARCHAR(255) NOT NULL,
+            naf_code VARCHAR(10) NOT NULL UNIQUE,
+            price_cents INTEGER NOT NULL DEFAULT 0,
+            is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS ix_naf_subcategories_category_id
+        ON naf_subcategories (category_id)
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS ix_naf_subcategories_naf_code
+        ON naf_subcategories (naf_code)
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS client_subscriptions (
+            client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+            subcategory_id UUID NOT NULL REFERENCES naf_subcategories(id) ON DELETE CASCADE,
+            created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+            PRIMARY KEY (client_id, subcategory_id)
+        )
+        """,
+        """
         ALTER TABLE establishments
         ADD COLUMN IF NOT EXISTS google_place_id VARCHAR(128)
         """,
@@ -86,10 +123,10 @@ def run_schema_upgrades(engine: Engine) -> None:
         ALTER TABLE sync_state
         ADD COLUMN IF NOT EXISTS last_creation_date DATE
         """,
-    """
-    ALTER TABLE sync_runs
-    ADD COLUMN IF NOT EXISTS google_api_call_count INTEGER DEFAULT 0
-    """,
+        """
+        ALTER TABLE sync_runs
+        ADD COLUMN IF NOT EXISTS google_api_call_count INTEGER DEFAULT 0
+        """,
         """
         ALTER TABLE sync_runs
         ADD COLUMN IF NOT EXISTS google_immediate_matched_count INTEGER DEFAULT 0
@@ -105,6 +142,18 @@ def run_schema_upgrades(engine: Engine) -> None:
         """
         ALTER TABLE sync_runs
         ADD COLUMN IF NOT EXISTS summary JSONB
+        """,
+        """
+        ALTER TABLE IF EXISTS naf_categories
+        DROP COLUMN IF EXISTS order_index
+        """,
+        """
+        ALTER TABLE IF EXISTS naf_subcategories
+        DROP COLUMN IF EXISTS order_index
+        """,
+        """
+        ALTER TABLE IF EXISTS naf_subcategories
+        DROP COLUMN IF EXISTS naf_label
         """,
         """
         CREATE TABLE IF NOT EXISTS google_retry_config (

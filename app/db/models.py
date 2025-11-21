@@ -186,6 +186,12 @@ class Client(Base):
         cascade="all, delete-orphan",
         order_by="ClientRecipient.email",
     )
+    subscriptions: Mapped[list["ClientSubscription"]] = relationship(
+        "ClientSubscription",
+        back_populates="client",
+        cascade="all, delete-orphan",
+        single_parent=True,
+    )
 
 
 class ClientRecipient(Base):
@@ -199,6 +205,71 @@ class ClientRecipient(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
     client: Mapped[Client] = relationship("Client", back_populates="recipients")
+
+
+class NafCategory(Base):
+    """High-level grouping for NAF subcategories and pricing."""
+
+    __tablename__ = "naf_categories"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    subcategories: Mapped[list["NafSubCategory"]] = relationship(
+        "NafSubCategory",
+        back_populates="category",
+        order_by="NafSubCategory.naf_code",
+    )
+
+
+class NafSubCategory(Base):
+    """Leaf NAF code entry attached to a category with pricing."""
+
+    __tablename__ = "naf_subcategories"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    category_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("naf_categories.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    naf_code: Mapped[str] = mapped_column(String(10), unique=True, nullable=False, index=True)
+    price_cents: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    category: Mapped[NafCategory] = relationship("NafCategory", back_populates="subcategories")
+    subscriptions: Mapped[list["ClientSubscription"]] = relationship(
+        "ClientSubscription",
+        back_populates="subcategory",
+    )
+
+
+class ClientSubscription(Base):
+    """Association table linking clients to the NAF subcategories they subscribe to."""
+
+    __tablename__ = "client_subscriptions"
+
+    client_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("clients.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    subcategory_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("naf_subcategories.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    client: Mapped[Client] = relationship("Client", back_populates="subscriptions")
+    subcategory: Mapped[NafSubCategory] = relationship("NafSubCategory", back_populates="subscriptions")
 
 
 class AdminRecipient(Base):

@@ -21,7 +21,6 @@ class SireneSettings(BaseModel):
         description="Maximal number of API calls per minute, enforced via a software rate limiter.",
     )
     page_size: int = Field(default=1000, ge=1, le=1000)
-    restaurant_naf_codes: List[str] = Field(default_factory=lambda: ["56.10A"])
     request_timeout_seconds: int = Field(default=30, ge=1)
     current_period_date: str = Field(
         default="2100-01-01",
@@ -30,15 +29,6 @@ class SireneSettings(BaseModel):
             "evaluated on their current value."
         ),
     )
-
-    @field_validator("restaurant_naf_codes", mode="before")
-    @classmethod
-    def _split_naf_codes(cls, value: object) -> List[str]:
-        if isinstance(value, str):
-            return [item.strip() for item in value.split(",") if item.strip()]
-        if isinstance(value, list):
-            return value
-        return ["56.10A"]
 
 
 class DatabaseSettings(BaseModel):
@@ -108,35 +98,6 @@ class EmailSettings(BaseModel):
         return self
 
 
-def _default_allowed_place_types() -> List[str]:
-    return [
-        "restaurant",
-        "meal_takeaway",
-        "meal_delivery",
-        "food",
-        "fast_food",
-        "pizza",
-        "sandwich_shop",
-        "cafe",
-        "bakery",
-    ]
-
-
-def _default_place_type_rules() -> Dict[str, List[str]]:
-    return {
-        "5610": _default_allowed_place_types(),
-        "5621": [
-            "meal_delivery",
-            "meal_takeaway",
-            "caterer",
-            "restaurant",
-            "food",
-        ],
-        "5629": _default_allowed_place_types() + ["food_court"],
-        "5630": ["bar", "night_club", "pub", "cafe", "restaurant"],
-    }
-
-
 class GoogleSettings(BaseModel):
     api_key: Optional[str] = Field(default=None, description="API key used to call Google Places APIs.")
     find_place_url: str = Field(
@@ -169,13 +130,11 @@ class GoogleSettings(BaseModel):
         ge=1,
         description="Maximum number of establishments rechecked for Google data during a single sync run.",
     )
-    allowed_place_types: List[str] = Field(
-        default_factory=_default_allowed_place_types,
-        description="Liste de types Google Places acceptés par défaut (fallback si aucune règle spécifique ne correspond).",
-    )
-    place_type_rules: Dict[str, List[str]] = Field(
-        default_factory=_default_place_type_rules,
-        description="Associe un préfixe de code NAF aux types Google Places attendus (JSON configurable).",
+    category_similarity_threshold: float = Field(
+        default=0.72,
+        ge=0.0,
+        le=1.0,
+        description="Seuil de similarité minimale entre les mots-clés NAF et les types Google retournés par Google Places.",
     )
 
     @property

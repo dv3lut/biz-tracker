@@ -18,7 +18,13 @@ from app.api.schemas import (
 from app.config import get_settings
 from app.db import models
 from app.observability import log_event
-from app.services.client_service import collect_client_emails, dispatch_email_to_clients, get_active_clients
+from app.services.client_service import (
+    ClientEmailPayload,
+    collect_client_emails,
+    dispatch_email_to_clients,
+    filter_clients_for_naf_code,
+    get_active_clients,
+)
 from app.services.email_service import EmailService
 from app.services.google_business_service import GoogleBusinessService
 from app.services.export_service import build_google_places_workbook
@@ -62,13 +68,17 @@ def manual_google_check(
 
     active_clients = get_active_clients(session)
     eligible_clients = [client for client in active_clients if any(recipient.email for recipient in client.recipients)]
-    configured_recipients = collect_client_emails(eligible_clients)
-    if not configured_recipients:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Aucun destinataire configuré.")
-
     establishment = session.get(models.Establishment, siret)
     if establishment is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Établissement introuvable.")
+
+    subscribed_clients, filtering_applied = filter_clients_for_naf_code(eligible_clients, establishment.naf_code)
+    configured_recipients = collect_client_emails(subscribed_clients)
+    if not configured_recipients:
+        message = "Aucun destinataire configuré."
+        if filtering_applied:
+            message = "Aucun client abonné à ce code NAF n'a de destinataire configuré."
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
 
     google_service = GoogleBusinessService(session)
     try:
@@ -104,7 +114,18 @@ def manual_google_check(
             )
         body = "\n".join(message_lines)
 
-        dispatch_result = dispatch_email_to_clients(email_service, eligible_clients, subject, body)
+        payloads = [
+            ClientEmailPayload(
+                client=client,
+                subject=subject,
+                text_body=body,
+                html_body=None,
+                establishments=[establishment],
+            )
+            for client in subscribed_clients
+        ]
+
+        dispatch_result = dispatch_email_to_clients(email_service, payloads)
         partial_failure = bool(dispatch_result.failed)
 
         for client, exc in dispatch_result.failed:

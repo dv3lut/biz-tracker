@@ -2,13 +2,14 @@
 from __future__ import annotations
 
 import logging
+import re
 import unicodedata
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from difflib import SequenceMatcher
 from typing import Callable, Iterable, Sequence
 
-from app.utils.business_types import is_micro_company, normalize_place_types
+from app.utils.business_types import is_micro_company
 
 ProgressCallback = Callable[[int, int, int, int, int], None]
 _PLACEHOLDER_TOKENS = {"ND"}
@@ -75,19 +76,9 @@ class GoogleBusinessService:
         self._session = session
         self._settings = get_settings().google
         self._retry_config: GoogleRetryRuntimeConfig = load_runtime_google_retry_config(session)
-        self._default_allowed_place_types = normalize_place_types(self._settings.allowed_place_types)
-        if not self._default_allowed_place_types:
-            self._default_allowed_place_types = {"restaurant"}
-        self._place_type_rules: list[tuple[str, set[str]]] = []
-        raw_rules = self._settings.place_type_rules or {}
-        for prefix, types in raw_rules.items():
-            if not prefix:
-                continue
-            normalized_types = normalize_place_types(types)
-            if not normalized_types:
-                continue
-            self._place_type_rules.append((prefix, normalized_types))
-        self._place_type_rules.sort(key=lambda item: len(item[0]), reverse=True)
+        self._category_similarity_threshold = self._settings.category_similarity_threshold
+        self._neutral_google_types = {"point_of_interest", "establishment", "store", "food"}
+        self._naf_keyword_map = self._load_naf_keyword_map()
         if not self._settings.enabled:
             self._client: GooglePlacesClient | None = None
             self._rate_limiter = None
@@ -300,7 +291,7 @@ class GoogleBusinessService:
             return None
 
         best_candidate: GoogleMatch | None = None
-        allowed_types = self._resolve_allowed_google_types(establishment)
+        expected_keywords = self._resolve_expected_keywords(establishment)
         type_mismatch_detected = False
         for candidate in candidates:
             place_id = candidate.get("place_id")
@@ -320,14 +311,14 @@ class GoogleBusinessService:
                 continue
             raw_types = details.get("types")
             google_types = raw_types if isinstance(raw_types, list) else []
-            if not self._matches_allowed_google_types(google_types, allowed_types):
+            if not self._matches_expected_google_category(google_types, expected_keywords):
                 type_mismatch_detected = True
                 _LOGGER.debug(
-                    "Fiche Google %s ignorée pour %s : types %s incompatibles avec NAF %s",
+                    "Fiche Google %s ignorée pour %s : types %s incompatibles avec les mots-clés %s",
                     place_id,
                     establishment.siret,
                     google_types,
-                    establishment.naf_code,
+                    sorted(expected_keywords) if expected_keywords else [],
                 )
                 continue
             url = details.get("url") or details.get("website")
@@ -433,27 +424,114 @@ class GoogleBusinessService:
     def _is_micro_business(self, establishment: models.Establishment) -> bool:
         return is_micro_company(establishment.categorie_entreprise, establishment.categorie_juridique)
 
-    def _resolve_allowed_google_types(self, establishment: models.Establishment) -> set[str]:
-        naf_code = self._normalize_naf_code(establishment.naf_code)
-        for prefix, allowed in self._place_type_rules:
-            if naf_code.startswith(prefix):
-                return allowed if allowed else self._default_allowed_place_types
-        return self._default_allowed_place_types
+    def _matches_expected_google_category(
+        self,
+        google_types: Iterable[str] | None,
+        expected_keywords: set[str],
+    ) -> bool:
+        if not expected_keywords:
+            return True
+        if not google_types:
+            return True
+        candidate_tokens: list[str] = []
+        for raw_type in google_types:
+            if not isinstance(raw_type, str):
+                continue
+            normalized = raw_type.strip().lower()
+            if not normalized or normalized in self._neutral_google_types:
+                continue
+            candidate_tokens.append(normalized)
+            candidate_tokens.extend(self._split_google_type_tokens(normalized))
+        if not candidate_tokens:
+            return True
+        for token in candidate_tokens:
+            if self._token_matches_keywords(token, expected_keywords):
+                return True
+        return False
 
-    def _normalize_naf_code(self, naf_code: str | None) -> str:
+    def _token_matches_keywords(self, token: str, keywords: set[str]) -> bool:
+        if token in keywords:
+            return True
+        for keyword in keywords:
+            if not keyword:
+                continue
+            if keyword in token or token in keyword:
+                return True
+            similarity = SequenceMatcher(None, token, keyword).ratio()
+            if similarity >= self._category_similarity_threshold:
+                return True
+        return False
+
+    def _resolve_expected_keywords(self, establishment: models.Establishment) -> set[str]:
+        keywords = set()
+        keywords |= self._tokenize_text(establishment.naf_libelle)
+        naf_code = self._sanitize_naf_code(establishment.naf_code)
+        if naf_code:
+            keywords |= self._naf_keyword_map.get(naf_code, set())
+        return keywords
+
+    def _load_naf_keyword_map(self) -> dict[str, set[str]]:
+        stmt = (
+            select(
+                models.NafSubCategory.naf_code,
+                models.NafSubCategory.name,
+                models.NafCategory.name,
+                models.NafCategory.description,
+            )
+            .join(models.NafCategory, models.NafCategory.id == models.NafSubCategory.category_id)
+            .where(models.NafSubCategory.is_active.is_(True))
+        )
+        mapping: dict[str, set[str]] = {}
+        for naf_code, sub_name, category_name, category_description in self._session.execute(stmt):
+            normalized_code = self._sanitize_naf_code(naf_code)
+            if not normalized_code:
+                continue
+            keywords = self._tokenize_text(sub_name)
+            keywords |= self._tokenize_text(category_name)
+            keywords |= self._tokenize_text(category_description)
+            if keywords:
+                mapping[normalized_code] = keywords
+        return mapping
+
+    def _sanitize_naf_code(self, naf_code: str | None) -> str:
         if not naf_code:
             return ""
         return "".join(ch for ch in naf_code.upper() if ch.isalnum())
 
-    def _matches_allowed_google_types(self, google_types: Iterable[str] | None, allowed_types: set[str]) -> bool:
-        if not allowed_types:
-            return True
-        if not google_types:
-            return True
-        normalized_types = {value.lower().strip() for value in google_types if isinstance(value, str)}
-        if not normalized_types:
-            return True
-        return bool(normalized_types & allowed_types)
+    def _split_google_type_tokens(self, google_type: str) -> set[str]:
+        tokens: set[str] = set()
+        if not google_type:
+            return tokens
+        fragments = re.split(r"[^a-z0-9]+", google_type)
+        for fragment in fragments:
+            if len(fragment) >= 3:
+                tokens.add(fragment)
+        return tokens
+
+    def _tokenize_text(self, value: str | None) -> set[str]:
+        if not value:
+            return set()
+        normalized = _normalize(value)
+        tokens: set[str] = set()
+        for fragment in re.split(r"[^a-z0-9]+", normalized):
+            if len(fragment) < 3:
+                continue
+            tokens.update(self._expand_keyword_variants(fragment))
+        return tokens
+
+    def _expand_keyword_variants(self, token: str) -> set[str]:
+        variants = {token}
+        if len(token) > 3 and token.endswith("s"):
+            variants.add(token[:-1])
+        if len(token) > 4 and token.endswith("es"):
+            variants.add(token[:-2])
+        if len(token) > 4 and token.endswith("ies"):
+            variants.add(token[:-3] + "y")
+        if len(token) > 5 and token.endswith("ation"):
+            variants.add(token[:-5] + "ant")
+        if len(token) > 5 and token.endswith("erie"):
+            variants.add(token[:-4] + "er")
+        return variants
 
     def _build_query(self, establishment: models.Establishment) -> str:
         parts = [

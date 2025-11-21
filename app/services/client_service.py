@@ -1,15 +1,18 @@
 """Helpers to manage client and admin email recipients."""
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Sequence
+from uuid import UUID
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.db import models
 from app.services.email_service import EmailService
+from app.utils.naf import normalize_naf_code
 
 
 def get_active_clients(session: Session) -> list[models.Client]:
@@ -18,7 +21,10 @@ def get_active_clients(session: Session) -> list[models.Client]:
     today = date.today()
     stmt = (
         select(models.Client)
-        .options(selectinload(models.Client.recipients))
+        .options(
+            selectinload(models.Client.recipients),
+            selectinload(models.Client.subscriptions).selectinload(models.ClientSubscription.subcategory),
+        )
         .where(
             models.Client.start_date <= today,
             or_(models.Client.end_date.is_(None), models.Client.end_date >= today),
@@ -51,7 +57,14 @@ def get_admin_emails(session: Session) -> list[str]:
 def get_all_clients(session: Session) -> list[models.Client]:
     """Return every client with recipients eagerly loaded."""
 
-    stmt = select(models.Client).options(selectinload(models.Client.recipients)).order_by(models.Client.name)
+    stmt = (
+        select(models.Client)
+        .options(
+            selectinload(models.Client.recipients),
+            selectinload(models.Client.subscriptions).selectinload(models.ClientSubscription.subcategory),
+        )
+        .order_by(models.Client.name)
+    )
     return list(session.execute(stmt).scalars())
 
 
@@ -74,15 +87,82 @@ class ClientDispatchResult:
     sent_at: datetime | None
 
 
+@dataclass
+class ClientEmailPayload:
+    client: models.Client
+    subject: str
+    text_body: str
+    html_body: str | None = None
+    establishments: Sequence[models.Establishment] | None = None
+
+
+def build_subscription_index(
+    clients: Sequence[models.Client],
+) -> tuple[dict[UUID, set[str]], dict[str, list[models.Client]]]:
+    """Return mapping client->codes and code->clients for active subscriptions."""
+
+    subscription_map: dict[UUID, set[str]] = {}
+    code_index: dict[str, list[models.Client]] = {}
+    for client in clients:
+        codes: set[str] = set()
+        for subscription in getattr(client, "subscriptions", []) or []:
+            subcategory = subscription.subcategory
+            if not subcategory or not subcategory.is_active:
+                continue
+            code = normalize_naf_code(subcategory.naf_code)
+            if not code:
+                continue
+            codes.add(code)
+            code_index.setdefault(code, []).append(client)
+        if codes:
+            subscription_map[client.id] = codes
+    return subscription_map, code_index
+
+
+def filter_clients_for_naf_code(
+    clients: Sequence[models.Client],
+    naf_code: str | None,
+) -> tuple[list[models.Client], bool]:
+    """Return clients subscribed to the provided code and whether filtering occurred."""
+
+    subscription_map, code_index = build_subscription_index(clients)
+    normalized = normalize_naf_code(naf_code)
+    if not subscription_map or not normalized:
+        return list(clients), False
+    return list(code_index.get(normalized, [])), True
+
+
+def assign_establishments_to_clients(
+    clients: Sequence[models.Client],
+    establishments: Sequence[models.Establishment],
+) -> tuple[dict[UUID, list[models.Establishment]], bool]:
+    """Map establishments to clients according to active subscriptions."""
+
+    subscription_map, code_index = build_subscription_index(clients)
+    if not subscription_map:
+        return {client.id: list(establishments) for client in clients if establishments}, False
+
+    assignments: dict[UUID, list[models.Establishment]] = defaultdict(list)
+    seen_sirets: dict[UUID, set[str]] = defaultdict(set)
+    for establishment in establishments:
+        code = normalize_naf_code(establishment.naf_code)
+        if not code:
+            continue
+        for client in code_index.get(code, []):
+            if establishment.siret in seen_sirets[client.id]:
+                continue
+            seen_sirets[client.id].add(establishment.siret)
+            assignments[client.id].append(establishment)
+
+    filtered = {client_id: items for client_id, items in assignments.items() if items}
+    return filtered, True
+
+
 def dispatch_email_to_clients(
     email_service: EmailService,
-    clients: Sequence[models.Client],
-    subject: str,
-    body: str,
-    *,
-    html_body: str | None = None,
+    payloads: Sequence[ClientEmailPayload],
 ) -> ClientDispatchResult:
-    """Send a message to each client and update counters."""
+    """Send segmented messages to clients and update counters."""
 
     delivered: list[models.Client] = []
     failed: list[tuple[models.Client, Exception]] = []
@@ -90,7 +170,8 @@ def dispatch_email_to_clients(
     timestamp: datetime | None = None
     today = date.today()
 
-    for client in clients:
+    for payload in payloads:
+        client = payload.client
         if not is_client_active(client, on_date=today):
             continue
         recipients = [recipient.email for recipient in client.recipients if recipient.email]
@@ -99,7 +180,7 @@ def dispatch_email_to_clients(
         if timestamp is None:
             timestamp = datetime.utcnow()
         try:
-            email_service.send(subject, body, recipients, html_body=html_body)
+            email_service.send(payload.subject, payload.text_body, recipients, html_body=payload.html_body)
         except Exception as exc:  # noqa: BLE001 - let caller handle logging
             failed.append((client, exc))
             continue

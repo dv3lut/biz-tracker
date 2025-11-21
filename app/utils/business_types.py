@@ -1,8 +1,6 @@
 """Helpers for classifying establishments by legal/company categories."""
 from __future__ import annotations
 
-from typing import Iterable
-
 _MICRO_COMPANY_CATEGORY = "ME"
 _INDIVIDUAL_LEGAL_PREFIXES: tuple[str, ...] = ("1",)
 
@@ -34,18 +32,3 @@ def is_micro_company(company_category: str | None, legal_category: str | None) -
     if (company_category or "").strip().upper() == _MICRO_COMPANY_CATEGORY:
         return True
     return is_individual_company(legal_category)
-
-
-def normalize_place_types(values: Iterable[str] | None) -> set[str]:
-    """Normalize Google place types to lowercase tokens."""
-
-    result: set[str] = set()
-    if not values:
-        return result
-    for value in values:
-        if not value:
-            continue
-        token = value.strip().lower()
-        if token:
-            result.add(token)
-    return result
