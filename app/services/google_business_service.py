@@ -5,16 +5,22 @@ import logging
 import re
 import unicodedata
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from difflib import SequenceMatcher
 from typing import Callable, Iterable, Sequence
 
 from app.utils.business_types import is_micro_company
+from app.utils.google_listing import normalize_listing_age_status
 
 ProgressCallback = Callable[[int, int, int, int, int], None]
 _PLACEHOLDER_TOKENS = {"ND"}
 _PROGRESS_BATCH_SIZE = 10
 _TYPE_MISMATCH_STATUS = "type_mismatch"
+_PLACE_DETAILS_FIELDS = (
+    "url,website,name,formatted_address,types,business_status,opening_hours,current_opening_hours,"
+    "reviews,user_ratings_total"
+)
+_LISTING_AGE_THRESHOLD_DAYS = 45
 
 
 def _sanitize_placeholder(value: str | None) -> str:
@@ -57,6 +63,9 @@ class GoogleMatch:
     place_id: str
     place_url: str | None
     confidence: float
+    listing_origin_at: datetime | None
+    listing_origin_source: str
+    listing_age_status: str
 
 
 @dataclass
@@ -142,6 +151,9 @@ class GoogleBusinessService:
                     establishment.google_place_url = result.place_url
                     establishment.google_last_found_at = now
                     newly_found.append(establishment)
+                establishment.google_listing_origin_at = result.listing_origin_at
+                establishment.google_listing_origin_source = result.listing_origin_source or "unknown"
+                establishment.google_listing_age_status = result.listing_age_status or "unknown"
                 establishment.google_check_status = "found"
 
             processed_count += 1
@@ -193,6 +205,9 @@ class GoogleBusinessService:
         else:
             _LOGGER.debug("Résultat Google Places trouvé sans URL exploitable pour %s", establishment.siret)
             establishment.google_check_status = "found"
+        establishment.google_listing_origin_at = result.listing_origin_at
+        establishment.google_listing_origin_source = result.listing_origin_source or "unknown"
+        establishment.google_listing_age_status = result.listing_age_status or "unknown"
         self._session.flush()
         return result
 
@@ -325,7 +340,21 @@ class GoogleBusinessService:
             if not url:
                 _LOGGER.debug("Place %s trouvée mais sans URL exploitable.", place_id)
                 url = None
-            match = GoogleMatch(establishment, place_id, url, confidence)
+            origin_at, origin_source, assumed_recent = self._extract_listing_origin(details)
+            listing_status = self._compute_listing_age_status(
+                establishment,
+                origin_at,
+                assumed_recent=assumed_recent,
+            )
+            match = GoogleMatch(
+                establishment,
+                place_id,
+                url,
+                confidence,
+                listing_origin_at=origin_at,
+                listing_origin_source=origin_source,
+                listing_age_status=listing_status,
+            )
             if best_candidate is None or confidence > best_candidate.confidence:
                 best_candidate = match
         if best_candidate is None and type_mismatch_detected:
@@ -337,7 +366,7 @@ class GoogleBusinessService:
         try:
             self._rate_limiter.acquire()
             self._record_api_call()
-            details = self._client.get_place_details(place_id, fields="url,website,name,formatted_address,types")
+            details = self._client.get_place_details(place_id, fields=_PLACE_DETAILS_FIELDS)
         except GooglePlacesError:
             raise
         if not details:
@@ -447,6 +476,97 @@ class GoogleBusinessService:
         for token in candidate_tokens:
             if self._token_matches_keywords(token, expected_keywords):
                 return True
+        return False
+
+    def _extract_listing_origin(self, details: dict[str, object]) -> tuple[datetime | None, str, bool]:
+        origin_candidates: list[tuple[datetime, str]] = []
+        for key in ("current_opening_hours", "opening_hours"):
+            hours = details.get(key)
+            if not isinstance(hours, dict):
+                continue
+            periods = hours.get("periods")
+            if not isinstance(periods, list):
+                continue
+            for date_value in self._iter_period_dates(periods):
+                if date_value:
+                    origin_candidates.append((date_value, "opening_period"))
+        if origin_candidates:
+            origin_candidates.sort(key=lambda item: item[0])
+            best = origin_candidates[0]
+            return best[0], best[1], False
+
+        reviews = details.get("reviews")
+        review_dates: list[datetime] = []
+        if isinstance(reviews, list):
+            for review in reviews:
+                if not isinstance(review, dict):
+                    continue
+                timestamp = review.get("time")
+                if isinstance(timestamp, (int, float)):
+                    dt = datetime.fromtimestamp(timestamp, tz=timezone.utc).replace(tzinfo=None)
+                    review_dates.append(dt)
+        if review_dates:
+            review_dates.sort()
+            return review_dates[0], "review", False
+
+        if self._should_assume_recent_listing(details):
+            return None, "assumed_recent", True
+
+        return None, "unknown", False
+
+    def _iter_period_dates(self, periods: list[object]) -> Iterable[datetime | None]:
+        for period in periods:
+            if not isinstance(period, dict):
+                continue
+            open_info = period.get("open")
+            if not isinstance(open_info, dict):
+                continue
+            token = open_info.get("date")
+            parsed = self._parse_google_period_date(token)
+            yield parsed
+
+    @staticmethod
+    def _parse_google_period_date(token: object) -> datetime | None:
+        if not isinstance(token, str) or len(token) != 8 or not token.isdigit():
+            return None
+        try:
+            parsed = datetime.strptime(token, "%Y%m%d")
+        except ValueError:
+            return None
+        return parsed
+
+    def _compute_listing_age_status(
+        self,
+        establishment: models.Establishment,
+        origin_at: datetime | None,
+        *,
+        assumed_recent: bool = False,
+    ) -> str:
+        if origin_at is None:
+            if assumed_recent:
+                return normalize_listing_age_status("recent_creation")
+            return normalize_listing_age_status("unknown")
+        creation_date = self._resolve_creation_date(establishment)
+        if creation_date is None:
+            return normalize_listing_age_status("unknown")
+        reference = datetime.combine(creation_date, datetime.min.time())
+        delta_days = (reference - origin_at).days
+        if delta_days >= _LISTING_AGE_THRESHOLD_DAYS:
+            return normalize_listing_age_status("buyback_suspected")
+        return normalize_listing_age_status("recent_creation")
+
+    def _should_assume_recent_listing(self, details: dict[str, object]) -> bool:
+        reviews = details.get("reviews")
+        reviews_info_missing = reviews is None
+        if isinstance(reviews, list):
+            reviews_info_missing = False
+            if len(reviews) == 0:
+                return True
+        ratings_total = details.get("user_ratings_total")
+        if isinstance(ratings_total, (int, float)):
+            return ratings_total <= 0
+        if reviews_info_missing and ratings_total is None:
+            return True
         return False
 
     def _token_matches_keywords(self, token: str, keywords: set[str]) -> bool:

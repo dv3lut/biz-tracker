@@ -9,6 +9,7 @@ from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 
 from app.db import models
+from app.utils.google_listing import describe_listing_age_status
 from app.utils.urls import build_annuaire_etablissement_url
 
 
@@ -80,6 +81,7 @@ def build_google_places_workbook(
             "Code postal",
             "Catégorie",
             "Lien Google",
+            "Statut fiche Google",
         ]
     else:
         headers = [
@@ -95,6 +97,8 @@ def build_google_places_workbook(
             "Statut Google",
             "Dernière vérification",
             "Dernière détection",
+            "Origine fiche Google",
+            "Statut fiche Google",
             "Run de création",
             "Run le plus récent",
             "Vu en premier",
@@ -118,6 +122,7 @@ def build_google_places_workbook(
                     _format_subcategory_label(establishment.naf_code, subcategory_lookup)
                     or establishment.naf_libelle,
                     google_url,
+                    describe_listing_age_status(establishment.google_listing_age_status),
                 ]
             )
             _apply_hyperlink(sheet, sheet.max_row, 7, google_url)
@@ -137,6 +142,8 @@ def build_google_places_workbook(
                 establishment.google_check_status,
                 _format_datetime(establishment.google_last_checked_at),
                 _format_datetime(establishment.google_last_found_at),
+                _format_datetime(establishment.google_listing_origin_at),
+                describe_listing_age_status(establishment.google_listing_age_status),
                 str(establishment.created_run_id) if establishment.created_run_id else None,
                 str(establishment.last_run_id) if establishment.last_run_id else None,
                 _format_datetime(establishment.first_seen_at),

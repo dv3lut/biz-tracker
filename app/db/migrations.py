@@ -108,6 +108,28 @@ def run_schema_upgrades(engine: Engine) -> None:
         SET google_check_status = 'pending'
         WHERE google_check_status IS NULL
         """,
+    """
+    ALTER TABLE establishments
+    ADD COLUMN IF NOT EXISTS google_listing_origin_at TIMESTAMP
+    """,
+    """
+    ALTER TABLE establishments
+    ADD COLUMN IF NOT EXISTS google_listing_origin_source VARCHAR(32) DEFAULT 'unknown'
+    """,
+    """
+    ALTER TABLE establishments
+    ADD COLUMN IF NOT EXISTS google_listing_age_status VARCHAR(32) DEFAULT 'unknown'
+    """,
+    """
+    UPDATE establishments
+    SET google_listing_age_status = 'unknown'
+    WHERE google_listing_age_status IS NULL
+    """,
+    """
+    UPDATE establishments
+    SET google_listing_origin_source = 'unknown'
+    WHERE google_listing_origin_source IS NULL
+    """,
         """
         ALTER TABLE sync_runs
         ADD COLUMN IF NOT EXISTS google_queue_count INTEGER DEFAULT 0

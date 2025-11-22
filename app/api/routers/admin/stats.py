@@ -11,6 +11,7 @@ from app.api.dependencies import get_db_session
 from app.api.schemas import (
     DashboardMetrics,
     DashboardRunBreakdown,
+    GoogleListingAgeBreakdown,
     GoogleStatusBreakdown,
     StatsSummary,
 )
@@ -112,6 +113,26 @@ def get_dashboard_metrics(
             bucket = key if key in run_google_counts else "other"
             run_google_counts[bucket] += int(count or 0)
 
+        run_listing_rows = (
+            session.execute(
+                select(
+                    models.Establishment.google_listing_age_status,
+                    func.count(models.Establishment.siret),
+                )
+                .where(
+                    models.Establishment.created_run_id == last_run.id,
+                    models.Establishment.google_check_status == "found",
+                )
+                .group_by(models.Establishment.google_listing_age_status)
+            )
+            .all()
+        )
+        run_listing_counts = {"buyback_suspected": 0, "recent_creation": 0, "unknown": 0}
+        for status, count in run_listing_rows:
+            key = status or "unknown"
+            bucket = key if key in run_listing_counts else "unknown"
+            run_listing_counts[bucket] += int(count or 0)
+
         alerts_row = session.execute(
             select(
                 func.count(models.Alert.id).label("created"),
@@ -132,6 +153,9 @@ def get_dashboard_metrics(
             google_insufficient=run_google_counts["insufficient"],
             google_pending=run_google_counts["pending"],
             google_other=run_google_counts["other"],
+            listing_buyback=run_listing_counts["buyback_suspected"],
+            listing_recent=run_listing_counts["recent_creation"],
+            listing_unknown=run_listing_counts["unknown"],
             alerts_created=int(alerts_row.created or 0),
             alerts_sent=int(alerts_row.sent or 0),
         )
@@ -270,6 +294,23 @@ def get_dashboard_metrics(
         bucket = key if key in global_google_counts else "other"
         global_google_counts[bucket] += int(count or 0)
 
+    listing_age_rows = (
+        session.execute(
+            select(
+                models.Establishment.google_listing_age_status,
+                func.count(models.Establishment.siret),
+            )
+            .where(models.Establishment.google_check_status == "found")
+            .group_by(models.Establishment.google_listing_age_status)
+        )
+        .all()
+    )
+    listing_age_counts = {"buyback_suspected": 0, "recent_creation": 0, "unknown": 0}
+    for status, count in listing_age_rows:
+        key = status or "unknown"
+        bucket = key if key in listing_age_counts else "unknown"
+        listing_age_counts[bucket] += int(count or 0)
+
     establishment_rows = (
         session.execute(
             select(
@@ -346,6 +387,7 @@ def get_dashboard_metrics(
         daily_run_outcomes=daily_run_outcomes,
         daily_google_statuses=daily_google_statuses,
         google_status_breakdown=GoogleStatusBreakdown(**global_google_counts),
+        listing_age_breakdown=GoogleListingAgeBreakdown(**listing_age_counts),
         establishment_status_breakdown=establishment_breakdown,
         naf_category_breakdown=naf_category_breakdown,
     )

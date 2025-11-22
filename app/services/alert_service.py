@@ -20,6 +20,7 @@ from app.services.client_service import (
     get_active_clients,
     get_admin_emails,
 )
+from app.utils.google_listing import describe_listing_age_status
 from app.utils.urls import build_annuaire_etablissement_url
 
 _ALERT_LOGGER = logging.getLogger("alerts")
@@ -243,6 +244,10 @@ class AlertService:
             "naf_code": establishment.naf_code,
             "naf_libelle": establishment.naf_libelle,
             "date_creation": establishment.date_creation.isoformat() if establishment.date_creation else None,
+            "google_listing_origin_at": establishment.google_listing_origin_at.isoformat()
+            if establishment.google_listing_origin_at
+            else None,
+            "google_listing_age_status": establishment.google_listing_age_status,
             "adresse": {
                 "numero_voie": establishment.numero_voie,
                 "type_voie": establishment.type_voie,
@@ -296,6 +301,12 @@ class AlertService:
             lines.append(f"  Création: {establishment.date_creation.isoformat()}")
         if include_google and establishment.google_place_url:
             lines.append(f"  Google: {establishment.google_place_url}")
+        if establishment.google_place_url:
+            status_label, origin = self._describe_listing_age(establishment)
+            if origin:
+                lines.append(f"  Statut fiche Google : {status_label} (origine {origin})")
+            else:
+                lines.append(f"  Statut fiche Google : {status_label}")
         return lines
 
     def _format_address_lines(self, establishment: models.Establishment) -> tuple[str | None, str | None]:
@@ -323,6 +334,13 @@ class AlertService:
     def _get_siret_display_and_url(self, siret: str | None) -> tuple[str, str | None]:
         siret_display = siret or "N/A"
         return siret_display, build_annuaire_etablissement_url(siret)
+
+    def _describe_listing_age(self, establishment: models.Establishment) -> tuple[str, str | None]:
+        label = describe_listing_age_status(establishment.google_listing_age_status)
+        origin = (
+            establishment.google_listing_origin_at.isoformat() if establishment.google_listing_origin_at else None
+        )
+        return label, origin
 
     def _render_client_email(self, establishments: Sequence[models.Establishment]) -> tuple[str, str]:
         lines: list[str] = [
@@ -357,6 +375,12 @@ class AlertService:
                 lines.append(f"  Fiche Google : {google_url}")
             else:
                 lines.append("  Fiche Google : en cours de disponibilité")
+            status_label, origin = self._describe_listing_age(establishment)
+            if google_url:
+                if origin:
+                    lines.append(f"  Statut fiche Google : {status_label} (origine {origin})")
+                else:
+                    lines.append(f"  Statut fiche Google : {status_label}")
             lines.append("")
 
             item_html = [
@@ -379,6 +403,11 @@ class AlertService:
                 item_html.append(
                     "<div style=\"color:#6b7280;\">Lien Google indisponible pour le moment</div>"
                 )
+            status_label, origin = self._describe_listing_age(establishment)
+            status_parts = [f"Statut fiche Google : {escape(status_label)}"]
+            if origin:
+                status_parts.append(f"<span style=\"color:#9ca3af;\">(origine {escape(origin)})</span>")
+            item_html.append(f"<div>{' '.join(status_parts)}</div>")
             html_parts.append(
                 "<li style=\"margin-bottom:16px;\">" + "".join(item_html) + "</li>"
             )
@@ -468,6 +497,11 @@ class AlertService:
                 google_section.append("Lien indisponible")
             if google_id:
                 google_section.append(f"ID&nbsp;: {escape(google_id)}")
+            status_label, origin = self._describe_listing_age(establishment)
+            status_line = f"Statut&nbsp;: {escape(status_label)}"
+            if origin:
+                status_line += f" (origine {escape(origin)})"
+            google_section.append(status_line)
 
             html_parts.append(
                 "<tr>"

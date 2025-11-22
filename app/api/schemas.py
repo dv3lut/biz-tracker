@@ -114,6 +114,12 @@ class GoogleStatusBreakdown(BaseModel):
     other: int = Field(default=0, description="Statuts inattendus ou transitoires.")
 
 
+class GoogleListingAgeBreakdown(BaseModel):
+    buyback_suspected: int = Field(default=0, description="Nombre d'établissements dont la fiche semble dater d'un rachat.")
+    recent_creation: int = Field(default=0, description="Nombre d'établissements avec fiche créée récemment.")
+    unknown: int = Field(default=0, description="Nombre d'établissements sans information d'âge de fiche.")
+
+
 class NafSubCategoryStats(BaseModel):
     subcategory_id: UUID = Field(description="Identifiant de la sous-catégorie NAF.")
     naf_code: str = Field(description="Code NAF exact suivi par Biz Tracker.")
@@ -144,6 +150,9 @@ class DashboardRunBreakdown(BaseModel):
     google_insufficient: int = Field(description="Nouveaux établissements sans identité exploitable pour Google.")
     google_pending: int = Field(description="Nouveaux établissements encore en file d'attente Google.")
     google_other: int = Field(description="Nouveaux établissements avec un statut Google inattendu.")
+    listing_buyback: int = Field(description="Fiches suspectées de rachat sur le run.")
+    listing_recent: int = Field(description="Fiches probablement créées lors de l'ouverture.")
+    listing_unknown: int = Field(description="Fiches sans information d'âge sur le run.")
     alerts_created: int = Field(description="Alertes créées pendant le run.")
     alerts_sent: int = Field(description="Alertes envoyées pendant le run.")
 
@@ -157,6 +166,7 @@ class DashboardMetrics(BaseModel):
     daily_run_outcomes: list[DailyRunOutcomePoint] = Field(default_factory=list, description="Créations et mises à jour quotidiennes.")
     daily_google_statuses: list[DailyGoogleStatusPoint] = Field(default_factory=list, description="Répartition quotidienne des statuts Google.")
     google_status_breakdown: GoogleStatusBreakdown = Field(description="Répartition globale des statuts Google.")
+    listing_age_breakdown: GoogleListingAgeBreakdown = Field(description="Répartition globale des fiches Google par ancienneté relative.")
     establishment_status_breakdown: dict[str, int] = Field(default_factory=dict, description="Répartition des établissements par état administratif.")
     naf_category_breakdown: list[NafCategoryStats] = Field(
         default_factory=list,
@@ -362,6 +372,9 @@ class EstablishmentOut(BaseModel):
     google_last_checked_at: datetime | None
     google_last_found_at: datetime | None
     google_check_status: str
+    google_listing_origin_at: datetime | None
+    google_listing_origin_source: str | None
+    google_listing_age_status: str | None
     is_sole_proprietorship: bool
 
 

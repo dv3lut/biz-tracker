@@ -17,3 +17,9 @@
 - Les run récents distinguent désormais les correspondances Google immédiates (créations du jour) des rattrapages ultérieurs, et comptent les établissements déjà présents mais modifiés.
 - Une synthèse e-mail (statistiques + top 10) est diffusée aux destinataires renseignés dans `admin_recipients` après chaque run réussi lorsque SMTP est opérationnel.
 - **Prochaines évolutions envisagées** : enrichir les alertes (cartographie, scoring), exposer un dashboard public ou des intégrations externes, compléter le monitoring (SLA, volumétrie API Google).
+
+## Statuts d'ancienneté des fiches Google
+
+- `recent_creation` : la date d'origine de la fiche (ou, à défaut, l'absence totale d'avis Google) suggère une création concomitante avec l'établissement Sirene. On considère également comme "récents" les listings dont `user_ratings_total` vaut 0 ou pour lesquels l'API retourne explicitement une liste d'avis vide.
+- `buyback_suspected` : la fiche Google est datée d'au moins 45 jours avant la date de création Sirene (ou `first_seen_at`) ce qui laisse supposer un rachat/reprise d'activité.
+- `unknown` : impossible d'établir l'âge relatif (Google ne retourne ni périodes d'ouverture ni avis exploitables **et** nous ne disposons pas d'une date de création Sirene fiable). Dans ce cas aucun signal n'est affiché aux utilisateurs.

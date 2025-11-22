@@ -85,6 +85,9 @@ class Establishment(Base):
     google_last_checked_at: Mapped[datetime | None] = mapped_column(DateTime)
     google_last_found_at: Mapped[datetime | None] = mapped_column(DateTime)
     google_check_status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False)
+    google_listing_origin_at: Mapped[datetime | None] = mapped_column(DateTime)
+    google_listing_origin_source: Mapped[str] = mapped_column(String(32), default="unknown", nullable=False)
+    google_listing_age_status: Mapped[str] = mapped_column(String(32), default="unknown", nullable=False)
 
     alerts: Mapped[list["Alert"]] = relationship("Alert", back_populates="establishment")
 
