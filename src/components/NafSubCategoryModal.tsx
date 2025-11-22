@@ -5,6 +5,7 @@ import type { NafCategory, NafSubCategory } from "../types";
 export type NafSubCategoryFormPayload = {
   categoryId: string;
   name: string;
+  description: string | null;
   nafCode: string;
   priceEur: number;
   isActive: boolean;
@@ -13,6 +14,7 @@ export type NafSubCategoryFormPayload = {
 type FormState = {
   categoryId: string;
   name: string;
+  description: string;
   nafCode: string;
   priceEur: string;
   isActive: boolean;
@@ -34,6 +36,7 @@ type TextField = Exclude<keyof FormState, "isActive">;
 const EMPTY_STATE: FormState = {
   categoryId: "",
   name: "",
+  description: "",
   nafCode: "",
   priceEur: "",
   isActive: true,
@@ -60,6 +63,7 @@ export const NafSubCategoryModal = ({
       setFormState({
         categoryId: subcategory.categoryId,
         name: subcategory.name,
+        description: subcategory.description ?? "",
         nafCode: subcategory.nafCode,
         priceEur: subcategory.priceEur.toString(),
         isActive: subcategory.isActive,
@@ -80,7 +84,7 @@ export const NafSubCategoryModal = ({
   }, [formState]);
 
   const handleChange = (field: TextField) =>
-    (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
       setFormState((current) => ({ ...current, [field]: event.target.value }));
     };
 
@@ -92,6 +96,7 @@ export const NafSubCategoryModal = ({
     const payload: NafSubCategoryFormPayload = {
       categoryId: formState.categoryId,
       name: formState.name.trim(),
+      description: formState.description.trim() ? formState.description.trim() : null,
       nafCode: formState.nafCode.trim(),
       priceEur: Number(formState.priceEur),
       isActive: formState.isActive,
@@ -143,6 +148,15 @@ export const NafSubCategoryModal = ({
                   onChange={handleChange("name")}
                   placeholder="Ex : Nouvelles ouvertures Paris"
                   required
+                />
+              </div>
+              <div className="form-field">
+                <span className="input-label">Description</span>
+                <textarea
+                  value={formState.description}
+                  onChange={handleChange("description")}
+                  placeholder="Note interne pour mieux identifier cette sous-catégorie"
+                  rows={3}
                 />
               </div>
               <div className="form-field">

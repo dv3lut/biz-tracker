@@ -24,6 +24,7 @@ import {
 import { AdminTokenPrompt } from "./components/AdminTokenPrompt";
 import { EstablishmentDetailModal } from "./components/EstablishmentDetailModal";
 import { SyncRunDetailModal } from "./components/SyncRunDetailModal";
+import { GoogleExportModal } from "./components/GoogleExportModal";
 import { ClientModal, type ClientFormSubmitPayload } from "./components/ClientModal";
 import { SidebarNav } from "./components/layout/SidebarNav";
 import { AppHeader } from "./components/layout/AppHeader";
@@ -116,6 +117,8 @@ const App = () => {
   const [isExportingGooglePlaces, setIsExportingGooglePlaces] = useState(false);
   const [googleExportStartDate, setGoogleExportStartDate] = useState<string>(() => getDefaultGoogleExportRange().start);
   const [googleExportEndDate, setGoogleExportEndDate] = useState<string>(() => getDefaultGoogleExportRange().end);
+  const [googleExportMode, setGoogleExportMode] = useState<"admin" | "client">("client");
+  const [isGoogleExportModalOpen, setGoogleExportModalOpen] = useState(false);
   const [runDetailModal, setRunDetailModal] = useState<RunDetailModalState | null>(null);
   const [clientModalState, setClientModalState] = useState<{ mode: "create" | "edit"; client: Client | null } | null>(
     null,
@@ -1080,40 +1083,49 @@ const App = () => {
     [setErrorMessage, setFeedbackMessage],
   );
 
+  const handleGoogleExportModeChange = useCallback((mode: "admin" | "client") => {
+    setGoogleExportMode(mode);
+    setErrorMessage(null);
+    setFeedbackMessage(null);
+  }, []);
+
   const handleExportGooglePlaces = useCallback(async () => {
     if (!isAuthenticated) {
       setTokenError("Merci de saisir un jeton administrateur.");
-      return;
+      return false;
     }
     if (!googleExportStartDate || !googleExportEndDate) {
       setErrorMessage("Merci de renseigner une date de début et une date de fin pour l'export Google Places.");
       setFeedbackMessage(null);
-      return;
+      return false;
     }
     if (googleExportStartDate > googleExportEndDate) {
       setErrorMessage("La date de début doit précéder (ou être égale à) la date de fin.");
       setFeedbackMessage(null);
-      return;
+      return false;
     }
     setIsExportingGooglePlaces(true);
     try {
       const blob = await googleApi.exportPlaces({
         startDate: googleExportStartDate,
         endDate: googleExportEndDate,
+        mode: googleExportMode,
       });
       const url = window.URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
       const today = new Date().toISOString().slice(0, 10);
-      anchor.download = `biz-tracker-google-places-${today}.xlsx`;
+      anchor.download = `biz-tracker-google-places-${googleExportMode}-${today}.xlsx`;
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
       window.URL.revokeObjectURL(url);
       setFeedbackMessage("Export Google Places téléchargé.");
       setErrorMessage(null);
+      return true;
     } catch (error) {
       showError(error);
+      return false;
     } finally {
       setIsExportingGooglePlaces(false);
     }
@@ -1121,11 +1133,29 @@ const App = () => {
     isAuthenticated,
     googleExportStartDate,
     googleExportEndDate,
+    googleExportMode,
     showError,
     setTokenError,
     setErrorMessage,
     setFeedbackMessage,
   ]);
+
+  const handleOpenGoogleExportModal = useCallback(() => {
+    setFeedbackMessage(null);
+    setErrorMessage(null);
+    setGoogleExportModalOpen(true);
+  }, [setFeedbackMessage, setErrorMessage, setGoogleExportModalOpen]);
+
+  const handleCloseGoogleExportModal = useCallback(() => {
+    setGoogleExportModalOpen(false);
+  }, [setGoogleExportModalOpen]);
+
+  const handleConfirmGoogleExport = useCallback(async () => {
+    const success = await handleExportGooglePlaces();
+    if (success) {
+      setGoogleExportModalOpen(false);
+    }
+  }, [handleExportGooglePlaces, setGoogleExportModalOpen]);
 
   if (!adminToken) {
     return <AdminTokenPrompt onSubmit={handleTokenSubmit} errorMessage={tokenError} />;
@@ -1168,12 +1198,8 @@ const App = () => {
                 onRefreshStats={() => statsQuery.refetch()}
                 onTriggerSync={handleTriggerSync}
                 isTriggeringSync={syncMutation.isPending}
-                onExportGooglePlaces={handleExportGooglePlaces}
+                onOpenGoogleExportModal={handleOpenGoogleExportModal}
                 isExportingGooglePlaces={isExportingGooglePlaces}
-                googleExportStartDate={googleExportStartDate}
-                googleExportEndDate={googleExportEndDate}
-                onGoogleExportStartDateChange={handleGoogleExportStartDateChange}
-                onGoogleExportEndDateChange={handleGoogleExportEndDateChange}
                 googleRetryConfig={googleRetryConfigQuery.data}
                 isGoogleRetryConfigLoading={googleRetryConfigQuery.isLoading}
                 isGoogleRetryConfigRefreshing={googleRetryConfigIsRefreshing}
@@ -1345,6 +1371,19 @@ const App = () => {
         errorMessage={runDetailModal?.error ?? null}
         onSelectRun={handleSelectRunFromModal}
         onClose={handleCloseRunDetailModal}
+      />
+
+      <GoogleExportModal
+        isOpen={isGoogleExportModalOpen}
+        startDate={googleExportStartDate}
+        endDate={googleExportEndDate}
+        mode={googleExportMode}
+        isSubmitting={isExportingGooglePlaces}
+        onClose={handleCloseGoogleExportModal}
+        onStartDateChange={handleGoogleExportStartDateChange}
+        onEndDateChange={handleGoogleExportEndDateChange}
+        onModeChange={handleGoogleExportModeChange}
+        onSubmit={handleConfirmGoogleExport}
       />
     </>
   );

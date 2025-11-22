@@ -5,6 +5,7 @@ export type NafSubCategoryResponse = {
   id: string;
   category_id: string;
   name: string;
+  description: string | null;
   naf_code: string;
   price_cents: number;
   price_eur: number;
@@ -31,6 +32,7 @@ export interface NafSubCategoryCreatePayload {
   categoryId: string;
   name: string;
   nafCode: string;
+  description?: string | null;
   priceEur: number;
   isActive?: boolean;
 }
@@ -39,6 +41,7 @@ export interface NafSubCategoryUpdatePayload {
   categoryId?: string;
   name?: string;
   nafCode?: string;
+  description?: string | null;
   priceEur?: number;
   isActive?: boolean;
 }
@@ -47,6 +50,7 @@ export const mapNafSubCategoryResponse = (subcategory: NafSubCategoryResponse): 
   id: subcategory.id,
   categoryId: subcategory.category_id,
   name: subcategory.name,
+  description: subcategory.description,
   nafCode: subcategory.naf_code,
   priceCents: subcategory.price_cents,
   priceEur: subcategory.price_eur,
@@ -73,6 +77,7 @@ const serializeSubCategoryCreatePayload = (payload: NafSubCategoryCreatePayload)
   category_id: payload.categoryId,
   name: payload.name,
   naf_code: payload.nafCode,
+  description: payload.description ?? null,
   price_eur: payload.priceEur,
   is_active: payload.isActive ?? true,
 });
@@ -87,6 +92,9 @@ const serializeSubCategoryUpdatePayload = (payload: NafSubCategoryUpdatePayload)
   }
   if (payload.nafCode !== undefined) {
     body.naf_code = payload.nafCode;
+  }
+  if (payload.description !== undefined) {
+    body.description = payload.description ?? null;
   }
   if (payload.priceEur !== undefined) {
     body.price_eur = payload.priceEur;

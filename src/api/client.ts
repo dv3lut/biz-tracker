@@ -811,7 +811,7 @@ export const adminApi = {
     };
   },
 
-  async exportGooglePlaces(params: { startDate: string; endDate: string }): Promise<Blob> {
+  async exportGooglePlaces(params: { startDate: string; endDate: string; mode?: "admin" | "client" }): Promise<Blob> {
     const headers = new Headers();
     headers.set("Accept", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
 
@@ -823,6 +823,9 @@ export const adminApi = {
     const url = new URL("/admin/google/places-export", API_BASE_URL);
     url.searchParams.set("start_date", params.startDate);
     url.searchParams.set("end_date", params.endDate);
+    if (params.mode) {
+      url.searchParams.set("mode", params.mode);
+    }
 
     const response = await fetch(url.toString(), { headers });
     if (!response.ok) {

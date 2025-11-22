@@ -214,6 +214,7 @@ export const NafConfigView = ({
       const basePayload: NafSubCategoryCreatePayload = {
         categoryId: payload.categoryId,
         name: payload.name,
+        description: payload.description ?? null,
         nafCode: payload.nafCode,
         priceEur: payload.priceEur,
         isActive: payload.isActive,
@@ -222,6 +223,7 @@ export const NafConfigView = ({
         const updatePayload: NafSubCategoryUpdatePayload = {
           categoryId: basePayload.categoryId,
           name: basePayload.name,
+          description: basePayload.description,
           nafCode: basePayload.nafCode,
           priceEur: basePayload.priceEur,
           isActive: basePayload.isActive,

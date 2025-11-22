@@ -41,6 +41,12 @@ table tbody tr.clickable:hover {
   gap: 1.5rem;
 }
 
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
 .modal-content section h3 {
   margin: 0 0 0.5rem;
 }

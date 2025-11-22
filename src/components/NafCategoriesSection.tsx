@@ -1,6 +1,10 @@
 import type { NafCategory, NafSubCategory } from "../types";
 import { formatCurrency } from "../utils/format";
 
+const truncateText = (text: string, maxLength: number): string => {
+  return text.length > maxLength ? `${text.substring(0, maxLength)}…` : text;
+};
+
 type Props = {
   categories?: NafCategory[];
   isLoading: boolean;
@@ -123,29 +127,36 @@ export const NafCategoriesSection = ({
                   <table>
                     <thead>
                       <tr>
-                        <th>Nom</th>
-                        <th>Code NAF</th>
-                        <th>Tarif</th>
-                        <th>Statut</th>
-                        <th>Actions</th>
+                        <th style={{ width: "auto" }}>Nom</th>
+                        <th style={{ width: "120px", whiteSpace: "nowrap" }}>Code NAF</th>
+                        <th style={{ width: "110px", whiteSpace: "nowrap" }}>Tarif</th>
+                        <th style={{ width: "100px", whiteSpace: "nowrap" }}>Statut</th>
+                        <th style={{ width: "110px", whiteSpace: "nowrap" }}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {category.subcategories.map((subcategory) => (
                         <tr key={subcategory.id}>
                           <td>
-                            <strong>{subcategory.name}</strong>
+                            <div style={{ minWidth: "200px" }}>
+                              <strong>{subcategory.name}</strong>
+                              {subcategory.description ? (
+                                <p className="small muted" title={subcategory.description}>
+                                  {truncateText(subcategory.description, 150)}
+                                </p>
+                              ) : null}
+                            </div>
                           </td>
-                          <td>
+                          <td style={{ whiteSpace: "nowrap" }}>
                             <span className="badge">{subcategory.nafCode}</span>
                           </td>
-                          <td>{formatCurrency(subcategory.priceEur)}</td>
-                          <td>
+                          <td style={{ whiteSpace: "nowrap" }}>{formatCurrency(subcategory.priceEur)}</td>
+                          <td style={{ whiteSpace: "nowrap" }}>
                             <span className={`badge status-${subcategory.isActive ? "success" : "error"}`}>
                               {subcategory.isActive ? "Active" : "Inactive"}
                             </span>
                           </td>
-                          <td>
+                          <td style={{ whiteSpace: "nowrap" }}>
                             <div className="card-actions">
                               <button type="button" className="ghost" onClick={() => onEditSubCategory(subcategory)}>
                                 Modifier

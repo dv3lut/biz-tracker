@@ -10,12 +10,8 @@ export type DashboardViewProps = {
   onRefreshStats: () => void;
   onTriggerSync: () => void;
   isTriggeringSync: boolean;
-  onExportGooglePlaces: () => void;
+  onOpenGoogleExportModal: () => void;
   isExportingGooglePlaces: boolean;
-  googleExportStartDate: string;
-  googleExportEndDate: string;
-  onGoogleExportStartDateChange: (value: string) => void;
-  onGoogleExportEndDateChange: (value: string) => void;
   googleRetryConfig: GoogleRetryConfig | undefined;
   isGoogleRetryConfigLoading: boolean;
   isGoogleRetryConfigRefreshing: boolean;
@@ -46,12 +42,8 @@ export const DashboardView = ({
   onRefreshStats,
   onTriggerSync,
   isTriggeringSync,
-  onExportGooglePlaces,
+  onOpenGoogleExportModal,
   isExportingGooglePlaces,
-  googleExportStartDate,
-  googleExportEndDate,
-  onGoogleExportStartDateChange,
-  onGoogleExportEndDateChange,
   googleRetryConfig,
   isGoogleRetryConfigLoading,
   isGoogleRetryConfigRefreshing,
@@ -84,12 +76,8 @@ export const DashboardView = ({
           onRefresh={onRefreshStats}
           onTriggerSync={onTriggerSync}
           isTriggering={isTriggeringSync}
-          onExportGooglePlaces={onExportGooglePlaces}
+          onOpenGoogleExportModal={onOpenGoogleExportModal}
           isExportingGooglePlaces={isExportingGooglePlaces}
-          googleExportStartDate={googleExportStartDate}
-          googleExportEndDate={googleExportEndDate}
-          onGoogleExportStartDateChange={onGoogleExportStartDateChange}
-          onGoogleExportEndDateChange={onGoogleExportEndDateChange}
           feedbackMessage={feedbackMessage}
           errorMessage={errorMessage}
           isRefreshing={hasActiveRun && isStatsRefreshing}

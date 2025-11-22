@@ -12,12 +12,8 @@ type Props = {
   onRefresh: () => void;
   onTriggerSync: () => void;
   isTriggering: boolean;
-  onExportGooglePlaces: () => void;
+  onOpenGoogleExportModal: () => void;
   isExportingGooglePlaces: boolean;
-  googleExportStartDate: string;
-  googleExportEndDate: string;
-  onGoogleExportStartDateChange: (value: string) => void;
-  onGoogleExportEndDateChange: (value: string) => void;
   feedbackMessage: string | null;
   errorMessage: string | null;
   isRefreshing: boolean;
@@ -150,12 +146,8 @@ export const StatsSummaryCard = ({
   onRefresh,
   onTriggerSync,
   isTriggering,
-  onExportGooglePlaces,
+  onOpenGoogleExportModal,
   isExportingGooglePlaces,
-  googleExportStartDate,
-  googleExportEndDate,
-  onGoogleExportStartDateChange,
-  onGoogleExportEndDateChange,
   feedbackMessage,
   errorMessage,
   isRefreshing,
@@ -173,7 +165,7 @@ export const StatsSummaryCard = ({
         <button
           type="button"
           className="ghost"
-          onClick={onExportGooglePlaces}
+          onClick={onOpenGoogleExportModal}
           disabled={isExportingGooglePlaces}
           title="Télécharger un export Excel des fiches Google détectées"
         >
@@ -190,29 +182,6 @@ export const StatsSummaryCard = ({
         </button>
       </div>
     </header>
-
-    <div className="export-google-form">
-      <label>
-        <span className="input-label">Créé à partir du</span>
-        <input
-          type="date"
-          value={googleExportStartDate}
-          onChange={(event) => onGoogleExportStartDateChange(event.target.value)}
-          required
-        />
-      </label>
-      <label>
-        <span className="input-label">Jusqu'au</span>
-        <input
-          type="date"
-          value={googleExportEndDate}
-          min={googleExportStartDate || undefined}
-          onChange={(event) => onGoogleExportEndDateChange(event.target.value)}
-          required
-        />
-      </label>
-      <p className="muted small">Filtre appliqué sur la date de création Sirene.</p>
-    </div>
 
     {feedbackMessage && <p className="feedback success">{feedbackMessage}</p>}
     {errorMessage && <p className="feedback error">{errorMessage}</p>}

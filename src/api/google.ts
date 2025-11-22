@@ -6,6 +6,7 @@ import { EstablishmentResponse, mapEstablishment } from "./establishments";
 type GooglePlacesExportParams = {
   startDate: string;
   endDate: string;
+  mode?: "admin" | "client";
 };
 
 interface ManualGoogleCheckResponse {
@@ -85,6 +86,9 @@ export const googleApi = {
     const url = new URL("/admin/google/places-export", baseUrl);
     url.searchParams.set("start_date", params.startDate);
     url.searchParams.set("end_date", params.endDate);
+    if (params.mode) {
+      url.searchParams.set("mode", params.mode);
+    }
 
     const response = await fetch(url.toString(), { headers });
     if (!response.ok) {
