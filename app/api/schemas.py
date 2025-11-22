@@ -218,6 +218,7 @@ class NafSubCategoryOut(BaseModel):
     id: UUID
     category_id: UUID
     name: str
+    description: str | None
     naf_code: str
     price_cents: int
     is_active: bool
@@ -255,6 +256,7 @@ class NafSubCategoryCreate(BaseModel):
     category_id: UUID
     name: str
     naf_code: str
+    description: str | None = None
     price_eur: float = Field(ge=0, description="Tarif de référence en euros TTC.")
     is_active: bool = True
 
@@ -263,6 +265,7 @@ class NafSubCategoryUpdate(BaseModel):
     category_id: UUID | None = None
     name: str | None = None
     naf_code: str | None = None
+    description: str | None = None
     price_eur: float | None = Field(default=None, ge=0)
     is_active: bool | None = None
 

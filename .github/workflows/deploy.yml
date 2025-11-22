@@ -50,3 +50,4 @@ jobs:
             docker-compose pull
             docker-compose down
             docker-compose up -d
+            docker-compose exec biztracker-back python -m app init-db

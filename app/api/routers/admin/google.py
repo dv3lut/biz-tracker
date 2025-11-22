@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from typing import Literal
 
-from fastapi import APIRouter, Body, Depends, HTTPException, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
@@ -193,6 +194,7 @@ def manual_google_check(
 def export_google_places(
     start_date: date | None = None,
     end_date: date | None = None,
+    mode: Literal["admin", "client"] = Query("admin", alias="mode"),
     session: Session = Depends(get_db_session),
 ) -> StreamingResponse:
     if (start_date and not end_date) or (end_date and not start_date):
@@ -215,8 +217,8 @@ def export_google_places(
             )
         )
         .order_by(
-            models.Establishment.google_last_found_at.desc().nullslast(),
-            models.Establishment.last_seen_at.desc(),
+            models.Establishment.date_creation.asc().nullslast(),
+            models.Establishment.name.asc().nullslast(),
         )
     )
 
@@ -226,9 +228,14 @@ def export_google_places(
         stmt = stmt.where(models.Establishment.date_creation <= end_date)
 
     establishments = session.execute(stmt).scalars().all()
-    workbook_stream = build_google_places_workbook(establishments)
+    subcategory_lookup = _load_subcategory_lookup(session) if mode == "client" else None
+    workbook_stream = build_google_places_workbook(
+        establishments,
+        mode=mode,
+        subcategory_lookup=subcategory_lookup,
+    )
     timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
-    filename = f"biz-tracker-google-places-{timestamp}.xlsx"
+    filename = f"biz-tracker-google-places-{mode}-{timestamp}.xlsx"
 
     log_event(
         "export.google.places",
@@ -236,6 +243,7 @@ def export_google_places(
         filename=filename,
         start_date=start_date.isoformat() if start_date else None,
         end_date=end_date.isoformat() if end_date else None,
+        mode=mode,
     )
 
     headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
@@ -244,6 +252,29 @@ def export_google_places(
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers=headers,
     )
+
+
+def _load_subcategory_lookup(session: Session) -> dict[str, tuple[str | None, str | None]]:
+    rows = (
+        session.execute(
+            select(
+                models.NafSubCategory.naf_code,
+                models.NafSubCategory.name,
+                models.NafCategory.name,
+            )
+            .join(models.NafCategory, models.NafCategory.id == models.NafSubCategory.category_id)
+            .where(models.NafSubCategory.is_active.is_(True))
+        ).all()
+    )
+    lookup: dict[str, tuple[str | None, str | None]] = {}
+    for naf_code, sub_name, category_name in rows:
+        if not naf_code:
+            continue
+        token = naf_code.strip().upper()
+        if not token:
+            continue
+        lookup[token] = (category_name, sub_name)
+    return lookup
 
 
 @router.get(

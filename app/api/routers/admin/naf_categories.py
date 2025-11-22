@@ -125,9 +125,11 @@ def create_naf_subcategory(payload: NafSubCategoryCreate, session: Session = Dep
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 
     price_cents = euros_to_cents(payload.price_eur)
+    description = (payload.description.strip() or None) if payload.description is not None else None
     subcategory = models.NafSubCategory(
         category_id=category.id,
         name=name,
+        description=description,
         naf_code=naf_code,
         price_cents=price_cents,
         is_active=payload.is_active,
@@ -169,6 +171,8 @@ def update_naf_subcategory(
         subcategory.price_cents = euros_to_cents(payload.price_eur)
     if payload.is_active is not None:
         subcategory.is_active = payload.is_active
+    if payload.description is not None:
+        subcategory.description = payload.description.strip() or None
 
     try:
         session.flush()

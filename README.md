@@ -28,6 +28,10 @@ Solution de veille sur les nouveaux établissements de restauration (NAF 56.10A)
    ```bash
    docker compose up -d biz-tracker-db
    ```
+   Si vous déployez l'API directement via Docker Compose (service `biztracker-back`), lancez immédiatement l'initialisation depuis le conteneur backend pour appliquer les migrations :
+   ```bash
+   docker compose exec biztracker-back python -m app init-db
+   ```
 4. **Créer votre fichier `.env`** à partir du template :
    ```bash
    cp .env.example .env
@@ -38,6 +42,43 @@ Solution de veille sur les nouveaux établissements de restauration (NAF 56.10A)
    python -m app init-db
    ```
    Cette commande applique également les colonnes manquantes si vous avez mis à jour le projet.
+
+## Exporter / restaurer la base PostgreSQL
+
+1. **Générer un dump sur le serveur**
+   1. Connectez-vous au serveur (`ssh user@host`) et placez-vous dans `biz-tracker-back/`.
+   2. Assurez-vous que Docker Compose tourne (`docker compose ps`).
+   3. Exécutez un dump logique (format custom recommandé) depuis le conteneur PostgreSQL :
+      ```bash
+      docker compose exec biz-tracker-db \
+        pg_dump --format=custom --no-owner \
+        --username "$DATABASE__USER" --dbname "$DATABASE__NAME" \
+        --file /tmp/biz-tracker.dump
+      ```
+      (Les variables proviennent de `.env`. Adaptez-les si nécessaire.)
+
+2. **Rapatrier le fichier en local**
+   ```bash
+   scp user@host:/tmp/biz-tracker.dump ./biz-tracker.dump
+   ```
+
+3. **Restaurer dans votre environnement local**
+   1. Lancez votre PostgreSQL Docker (`docker compose up -d biz-tracker-db`).
+   2. Chargez le dump soit depuis l'hôte, soit directement dans le conteneur :
+      ```bash
+      pg_restore --clean --no-owner \
+        --host localhost --port 15432 \
+        --username "$DATABASE__USER" --dbname "$DATABASE__NAME" \
+        biz-tracker.dump
+      ```
+      ou
+      ```bash
+      docker compose exec -T biz-tracker-db \
+        pg_restore --clean --no-owner \
+        --username "$DATABASE__USER" --dbname "$DATABASE__NAME" \
+        < biz-tracker.dump
+      ```
+   3. Terminez par `python -m app init-db` (ou la commande `docker compose exec biztracker-back …`) pour appliquer les migrations locales et recréer les extensions éventuelles.
 
 ## Commandes disponibles
 

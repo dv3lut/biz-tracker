@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 from io import BytesIO
-from typing import Iterable
+from typing import Iterable, Literal, Mapping
 
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
@@ -27,42 +27,103 @@ def _compose_address(establishment: models.Establishment) -> str:
     return " ".join(filter(None, parts)).strip()
 
 
-def build_google_places_workbook(establishments: Iterable[models.Establishment]) -> BytesIO:
+def _format_date(value: object | None) -> str | None:
+    if not value:
+        return None
+    formatter = getattr(value, "isoformat", None)
+    if callable(formatter):
+        return formatter()
+    return str(value)
+
+
+def _format_subcategory_label(
+    naf_code: str | None,
+    lookup: Mapping[str, tuple[str | None, str | None]] | None,
+) -> str | None:
+    if not naf_code or not lookup:
+        return None
+    token = naf_code.strip().upper()
+    if not token:
+        return None
+    category_name, subcategory_name = lookup.get(token, (None, None))
+    if subcategory_name and category_name and category_name != subcategory_name:
+        return f"{subcategory_name} ({category_name})"
+    return subcategory_name or category_name
+
+
+def build_google_places_workbook(
+    establishments: Iterable[models.Establishment],
+    *,
+    mode: Literal["admin", "client"] = "admin",
+    subcategory_lookup: Mapping[str, tuple[str | None, str | None]] | None = None,
+) -> BytesIO:
     """Generate an Excel workbook listing establishments enriched with Google Places."""
 
     workbook = Workbook()
     sheet = workbook.active
-    sheet.title = "Google Places"
-    headers = [
-        "SIRET",
-        "Nom",
-        "Adresse",
-        "Code postal",
-        "Commune",
-        "Pays",
-        "Google Place ID",
-        "Google Place URL",
-        "Statut Google",
-        "Dernière vérification",
-        "Dernière détection",
-        "Run de création",
-        "Run le plus récent",
-        "Vu en premier",
-        "Vu en dernier",
-    ]
+    sheet.title = "Google Places (clients)" if mode == "client" else "Google Places (admin)"
+    if mode == "client":
+        headers = [
+            "Date création",
+            "Nom",
+            "Adresse",
+            "Commune",
+            "Code postal",
+            "Catégorie",
+            "Lien Google",
+        ]
+    else:
+        headers = [
+            "Date création",
+            "SIRET",
+            "Nom",
+            "Adresse",
+            "Code postal",
+            "Commune",
+            "Pays",
+            "Google Place ID",
+            "Google Place URL",
+            "Statut Google",
+            "Dernière vérification",
+            "Dernière détection",
+            "Run de création",
+            "Run le plus récent",
+            "Vu en premier",
+            "Vu en dernier",
+        ]
     sheet.append(headers)
 
     for establishment in establishments:
+        creation_date = _format_date(establishment.date_creation)
+        address = _compose_address(establishment)
+        commune = establishment.libelle_commune or establishment.libelle_commune_etranger
+        google_url = establishment.google_place_url
+        if mode == "client":
+            sheet.append(
+                [
+                    creation_date,
+                    establishment.name,
+                    address,
+                    commune,
+                    establishment.code_postal,
+                    _format_subcategory_label(establishment.naf_code, subcategory_lookup)
+                    or establishment.naf_libelle,
+                    google_url,
+                ]
+            )
+            continue
+
         sheet.append(
             [
+                creation_date,
                 establishment.siret,
                 establishment.name,
-                _compose_address(establishment),
+                address,
                 establishment.code_postal,
-                establishment.libelle_commune or establishment.libelle_commune_etranger,
+                commune,
                 establishment.code_pays,
                 establishment.google_place_id,
-                establishment.google_place_url,
+                google_url,
                 establishment.google_check_status,
                 _format_datetime(establishment.google_last_checked_at),
                 _format_datetime(establishment.google_last_found_at),

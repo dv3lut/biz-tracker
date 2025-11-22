@@ -265,7 +265,7 @@ class AlertService:
         ]
         subcategory_label = self._format_subcategory_label(establishment.naf_code)
         if subcategory_label:
-            lines.append(f"  Sous-catégorie Biz Tracker: {subcategory_label}")
+            lines.append(f"  Catégorie : {subcategory_label}")
         address_parts = [
             element
             for element in [
@@ -438,7 +438,7 @@ class AlertService:
             if naf_label:
                 ident_section.append(escape(naf_label))
             if subcategory_label:
-                ident_section.append(f"Sous-catégorie Biz Tracker&nbsp;: {escape(subcategory_label)}")
+                ident_section.append(f"Catégorie&nbsp;: {escape(subcategory_label)}")
             ident_section.append(f"Création&nbsp;: {escape(creation_date)}")
 
             google_section: list[str] = []

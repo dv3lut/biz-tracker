@@ -55,12 +55,17 @@ def run_schema_upgrades(engine: Engine) -> None:
             id UUID PRIMARY KEY,
             category_id UUID NOT NULL REFERENCES naf_categories(id) ON DELETE CASCADE,
             name VARCHAR(255) NOT NULL,
+            description TEXT,
             naf_code VARCHAR(10) NOT NULL UNIQUE,
             price_cents INTEGER NOT NULL DEFAULT 0,
             is_active BOOLEAN NOT NULL DEFAULT TRUE,
             created_at TIMESTAMP NOT NULL DEFAULT NOW(),
             updated_at TIMESTAMP NOT NULL DEFAULT NOW()
         )
+        """,
+        """
+        ALTER TABLE IF EXISTS naf_subcategories
+        ADD COLUMN IF NOT EXISTS description TEXT
         """,
         """
         CREATE INDEX IF NOT EXISTS ix_naf_subcategories_category_id

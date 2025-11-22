@@ -238,6 +238,7 @@ class NafSubCategory(Base):
         index=True,
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
     naf_code: Mapped[str] = mapped_column(String(10), unique=True, nullable=False, index=True)
     price_cents: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

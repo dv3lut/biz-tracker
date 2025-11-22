@@ -475,6 +475,7 @@ class GoogleBusinessService:
             select(
                 models.NafSubCategory.naf_code,
                 models.NafSubCategory.name,
+                models.NafSubCategory.description,
                 models.NafCategory.name,
                 models.NafCategory.description,
             )
@@ -482,11 +483,12 @@ class GoogleBusinessService:
             .where(models.NafSubCategory.is_active.is_(True))
         )
         mapping: dict[str, set[str]] = {}
-        for naf_code, sub_name, category_name, category_description in self._session.execute(stmt):
+        for naf_code, sub_name, sub_description, category_name, category_description in self._session.execute(stmt):
             normalized_code = self._sanitize_naf_code(naf_code)
             if not normalized_code:
                 continue
             keywords = self._tokenize_text(sub_name)
+            keywords |= self._tokenize_text(sub_description)
             keywords |= self._tokenize_text(category_name)
             keywords |= self._tokenize_text(category_description)
             if keywords:
