@@ -30,3 +30,7 @@ htmlcov/
 
 # Docker
 volumes/
+
+sql/backups/*.sql.gz
+sql/backups/*.sql
+sql/restore.sh

@@ -25,12 +25,21 @@ class SyncScheduler:
         self._thread: threading.Thread | None = None
 
     def start(self) -> None:
+        if self._settings.is_local:
+            _LOGGER.info("Automatic synchronisation disabled in local environment.")
+            log_event(
+                "scheduler.disabled",
+                scope_key=self._settings.sync.scope_key,
+                reason="local_environment",
+            )
+            return
         if not self._settings.sync.auto_enabled:
             _LOGGER.info("Automatic synchronisation disabled via configuration.")
             log_event(
                 "scheduler.disabled",
                 scope_key=self._settings.sync.scope_key,
                 minutes=self._settings.sync.auto_poll_minutes,
+                reason="config_disabled",
             )
             return
         with self._lock:

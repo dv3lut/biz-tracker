@@ -9,6 +9,7 @@ from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 
 from app.db import models
+from app.utils.urls import build_annuaire_etablissement_url
 
 
 def _format_datetime(value: object | None) -> str | None:
@@ -49,6 +50,14 @@ def _format_subcategory_label(
     if subcategory_name and category_name and category_name != subcategory_name:
         return f"{subcategory_name} ({category_name})"
     return subcategory_name or category_name
+
+
+def _apply_hyperlink(sheet, row_index: int, column_index: int, url: str | None) -> None:
+    if not url:
+        return
+    cell = sheet.cell(row=row_index, column=column_index)
+    cell.hyperlink = url
+    cell.style = "Hyperlink"
 
 
 def build_google_places_workbook(
@@ -111,6 +120,7 @@ def build_google_places_workbook(
                     google_url,
                 ]
             )
+            _apply_hyperlink(sheet, sheet.max_row, 7, google_url)
             continue
 
         sheet.append(
@@ -133,6 +143,9 @@ def build_google_places_workbook(
                 _format_datetime(establishment.last_seen_at),
             ]
         )
+        row_idx = sheet.max_row
+        _apply_hyperlink(sheet, row_idx, 2, build_annuaire_etablissement_url(establishment.siret))
+        _apply_hyperlink(sheet, row_idx, 9, google_url)
 
     sheet.freeze_panes = "A2"
 
@@ -206,6 +219,7 @@ def build_alerts_workbook(alerts: Iterable[models.Alert]) -> BytesIO:
                 payload_str,
             ]
         )
+        _apply_hyperlink(sheet, sheet.max_row, 4, build_annuaire_etablissement_url(establishment.siret))
 
     sheet.freeze_panes = "A2"
 

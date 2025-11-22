@@ -20,6 +20,7 @@ from app.services.client_service import (
     get_active_clients,
     get_admin_emails,
 )
+from app.utils.urls import build_annuaire_etablissement_url
 
 _ALERT_LOGGER = logging.getLogger("alerts")
 
@@ -259,9 +260,15 @@ class AlertService:
         }
 
     def _format_lines(self, establishment: models.Establishment, *, include_google: bool = False) -> list[str]:
+        siret_display, siret_url = self._get_siret_display_and_url(establishment.siret)
+        siret_line = f"  SIRET: {siret_display}"
+        if siret_url:
+            siret_line += f" ({siret_url})"
+        naf_code = establishment.naf_code or "N/A"
+
         lines = [
             f"- {establishment.name or '(nom indisponible)'}",
-            f"  SIRET: {establishment.siret} | NAF: {establishment.naf_code or 'N/A'}",
+            f"{siret_line} | NAF: {naf_code}",
         ]
         subcategory_label = self._format_subcategory_label(establishment.naf_code)
         if subcategory_label:
@@ -312,6 +319,10 @@ class AlertService:
         street_line = " ".join(street_parts) or None
         commune_line = " ".join(commune_parts) or None
         return street_line, commune_line
+
+    def _get_siret_display_and_url(self, siret: str | None) -> tuple[str, str | None]:
+        siret_display = siret or "N/A"
+        return siret_display, build_annuaire_etablissement_url(siret)
 
     def _render_client_email(self, establishments: Sequence[models.Establishment]) -> tuple[str, str]:
         lines: list[str] = [
@@ -418,7 +429,7 @@ class AlertService:
 
             name = establishment.name or "(nom indisponible)"
             street_line, commune_line = self._format_address_lines(establishment)
-            siret = establishment.siret or "N/A"
+            siret_display, siret_url = self._get_siret_display_and_url(establishment.siret)
             naf_code = establishment.naf_code or "N/A"
             naf_label = establishment.naf_libelle or ""
             creation_date = (
@@ -434,7 +445,13 @@ class AlertService:
             if commune_line:
                 address_section.append(f"<div>{escape(commune_line)}</div>")
 
-            ident_section = [f"SIRET&nbsp;: {escape(siret)}", f"NAF&nbsp;: {escape(naf_code)}"]
+            if siret_url:
+                ident_section = [
+                    f"SIRET&nbsp;: <a href=\"{escape(siret_url)}\" style=\"color:#2563eb;text-decoration:none;\">{escape(siret_display)}</a>"
+                ]
+            else:
+                ident_section = [f"SIRET&nbsp;: {escape(siret_display)}"]
+            ident_section.append(f"NAF&nbsp;: {escape(naf_code)}")
             if naf_label:
                 ident_section.append(escape(naf_label))
             if subcategory_label:

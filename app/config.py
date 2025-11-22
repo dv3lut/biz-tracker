@@ -272,6 +272,11 @@ class Settings(BaseSettings):
         extra="allow",
     )
 
+    environment: str = Field(
+        default="production",
+        validation_alias=AliasChoices("environment", "app_environment", "runtime_environment"),
+        description="Deployment environment hint (set to 'local' to disable background workers).",
+    )
     database: DatabaseSettings
     sirene: SireneSettings
     email: EmailSettings = Field(default_factory=EmailSettings)
@@ -279,6 +284,10 @@ class Settings(BaseSettings):
     logging: LoggingSettings = Field(default_factory=LoggingSettings)
     api: ApiSettings = Field(default_factory=ApiSettings)
     google: GoogleSettings = Field(default_factory=GoogleSettings)
+
+    @property
+    def is_local(self) -> bool:
+        return self.environment.strip().lower() == "local"
 
 
 @lru_cache()

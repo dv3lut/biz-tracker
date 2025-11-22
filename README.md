@@ -36,7 +36,7 @@ Solution de veille sur les nouveaux établissements de restauration (NAF 56.10A)
    ```bash
    cp .env.example .env
    ```
-   Renseignez au minimum `SIRENE__API_TOKEN` et, si besoin, adaptez l’URL de base, la configuration SMTP ou les paramètres PostgreSQL. Le champ `EMAIL__PROVIDER` permet de basculer rapidement entre `mailhog` (dev local), `mailjet` (production) ou `custom`. Pour activer l’enrichissement Google, renseignez `GOOGLE__API_KEY` avec une clé Places valide (voir section ci-dessous).
+   Renseignez au minimum `SIRENE__API_TOKEN` et, si besoin, adaptez l’URL de base, la configuration SMTP ou les paramètres PostgreSQL. Définissez `APP_ENVIRONMENT=local` lorsque vous travaillez en développement afin de désactiver les synchronisations automatiques : seules les requêtes manuelles (`POST /admin/sync` ou `python -m app sync`) seront alors exécutées. Le champ `EMAIL__PROVIDER` permet de basculer rapidement entre `mailhog` (dev local), `mailjet` (production) ou `custom`. Pour activer l’enrichissement Google, renseignez `GOOGLE__API_KEY` avec une clé Places valide (voir section ci-dessous).
 5. **Initialiser / mettre à niveau la base** :
    ```bash
    python -m app init-db
@@ -50,35 +50,23 @@ Solution de veille sur les nouveaux établissements de restauration (NAF 56.10A)
    2. Assurez-vous que Docker Compose tourne (`docker compose ps`).
    3. Exécutez un dump logique (format custom recommandé) depuis le conteneur PostgreSQL :
       ```bash
-      docker compose exec biz-tracker-db \
-        pg_dump --format=custom --no-owner \
-        --username "$DATABASE__USER" --dbname "$DATABASE__NAME" \
-        --file /tmp/biz-tracker.dump
+      bash backup.sh
       ```
       (Les variables proviennent de `.env`. Adaptez-les si nécessaire.)
 
 2. **Rapatrier le fichier en local**
+  En local :
    ```bash
-   scp user@host:/tmp/biz-tracker.dump ./biz-tracker.dump
+   scp root@145.223.118.21:./biz-tracker-back/backups/{filename} ./sql/backups
    ```
 
 3. **Restaurer dans votre environnement local**
    1. Lancez votre PostgreSQL Docker (`docker compose up -d biz-tracker-db`).
    2. Chargez le dump soit depuis l'hôte, soit directement dans le conteneur :
       ```bash
-      pg_restore --clean --no-owner \
-        --host localhost --port 15432 \
-        --username "$DATABASE__USER" --dbname "$DATABASE__NAME" \
-        biz-tracker.dump
+      ./sql/restore.sh biz_tracker_db-backup-202511221748.sql.gz password_here
       ```
-      ou
-      ```bash
-      docker compose exec -T biz-tracker-db \
-        pg_restore --clean --no-owner \
-        --username "$DATABASE__USER" --dbname "$DATABASE__NAME" \
-        < biz-tracker.dump
-      ```
-   3. Terminez par `python -m app init-db` (ou la commande `docker compose exec biztracker-back …`) pour appliquer les migrations locales et recréer les extensions éventuelles.
+   3. Terminez par `python -m app init-db` si nécessaire pour appliquer les migrations locales.
 
 ## Commandes disponibles
 
@@ -101,7 +89,7 @@ Des cibles `Makefile` équivalentes existent (`make init-db`, `make sync`, `make
 4. **Alerting** (`AlertService.create_google_alerts`) : création des entrées `alerts`, logging structuré et envoi SMTP si la configuration est valide et qu'un run précédent a déjà abouti.
 5. **Finalisation** (`SyncService._finish_run`) : passage du run en `success`, mise à jour des curseurs `SyncState` (curseur Sirene, `dateDernierTraitementMaximum`, `last_creation_date`). En cas d'exception, rollback et statut `failed` garantissent la reprise.
 
-Le scheduler (`SyncScheduler`) applique cette séquence automatiquement selon `sync.auto_poll_minutes`, tout en respectant `sync.minimum_delay_minutes` entre deux exécutions.
+Le scheduler (`SyncScheduler`) applique cette séquence automatiquement selon `sync.auto_poll_minutes`, tout en respectant `sync.minimum_delay_minutes` entre deux exécutions. Il se désactive automatiquement lorsque `APP_ENVIRONMENT=local` pour éviter tout déclenchement implicite en développement.
 
 ## API HTTP (admin seulement)
 
