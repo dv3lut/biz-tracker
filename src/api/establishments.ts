@@ -21,6 +21,9 @@ export interface EstablishmentResponse {
   google_place_url: string | null;
   google_last_checked_at: string | null;
   google_last_found_at: string | null;
+  google_listing_origin_at: string | null;
+  google_listing_origin_source: string | null;
+  google_listing_age_status: string | null;
   google_check_status: string;
   is_sole_proprietorship: boolean;
 }
@@ -82,6 +85,9 @@ export const mapEstablishment = (payload: EstablishmentResponse): Establishment 
   googlePlaceUrl: payload.google_place_url,
   googleLastCheckedAt: payload.google_last_checked_at,
   googleLastFoundAt: payload.google_last_found_at,
+  googleListingOriginAt: payload.google_listing_origin_at,
+  googleListingOriginSource: payload.google_listing_origin_source,
+  googleListingAgeStatus: payload.google_listing_age_status,
   googleCheckStatus: payload.google_check_status,
   isSoleProprietorship: payload.is_sole_proprietorship,
 });

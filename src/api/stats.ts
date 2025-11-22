@@ -6,6 +6,7 @@ import {
   DailyMetricPoint,
   DailyRunOutcomePoint,
   GoogleStatusBreakdown,
+  GoogleListingAgeBreakdown,
   NafCategoryStat,
   StatsSummary,
 } from "../types";
@@ -61,6 +62,12 @@ interface GoogleStatusBreakdownResponse {
   other: number;
 }
 
+interface GoogleListingAgeBreakdownResponse {
+  buyback_suspected: number;
+  recent_creation: number;
+  unknown: number;
+}
+
 interface NafSubCategoryStatResponse {
   subcategory_id: string;
   naf_code: string;
@@ -88,6 +95,9 @@ interface DashboardRunBreakdownResponse {
   google_insufficient: number;
   google_pending: number;
   google_other: number;
+  listing_buyback: number;
+  listing_recent: number;
+  listing_unknown: number;
   alerts_created: number;
   alerts_sent: number;
 }
@@ -101,6 +111,7 @@ interface DashboardMetricsResponse {
   daily_run_outcomes: DailyRunOutcomePointResponse[];
   daily_google_statuses: DailyGoogleStatusPointResponse[];
   google_status_breakdown: GoogleStatusBreakdownResponse;
+  listing_age_breakdown: GoogleListingAgeBreakdownResponse;
   establishment_status_breakdown: Record<string, number>;
   naf_category_breakdown: NafCategoryStatResponse[];
 }
@@ -155,6 +166,14 @@ const mapGoogleStatusBreakdown = (
   other: payload.other,
 });
 
+const mapGoogleListingAgeBreakdown = (
+  payload: GoogleListingAgeBreakdownResponse,
+): GoogleListingAgeBreakdown => ({
+  buybackSuspected: payload.buyback_suspected,
+  recentCreation: payload.recent_creation,
+  unknown: payload.unknown,
+});
+
 const mapNafSubCategoryStat = (
   payload: NafSubCategoryStatResponse,
 ): NafCategoryStat["subcategories"][number] => ({
@@ -186,6 +205,9 @@ const mapDashboardRunBreakdown = (
   googleInsufficient: payload.google_insufficient,
   googlePending: payload.google_pending,
   googleOther: payload.google_other,
+  listingBuyback: payload.listing_buyback,
+  listingRecent: payload.listing_recent,
+  listingUnknown: payload.listing_unknown,
   alertsCreated: payload.alerts_created,
   alertsSent: payload.alerts_sent,
 });
@@ -209,6 +231,7 @@ const mapDashboardMetrics = (payload: DashboardMetricsResponse): DashboardMetric
   dailyRunOutcomes: payload.daily_run_outcomes.map(mapDailyRunOutcomePoint),
   dailyGoogleStatuses: payload.daily_google_statuses.map(mapDailyGoogleStatusPoint),
   googleStatusBreakdown: mapGoogleStatusBreakdown(payload.google_status_breakdown),
+  listingAgeBreakdown: mapGoogleListingAgeBreakdown(payload.listing_age_breakdown),
   establishmentStatusBreakdown: payload.establishment_status_breakdown,
   nafCategoryBreakdown: payload.naf_category_breakdown.map(mapNafCategoryStat),
 });

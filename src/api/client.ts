@@ -17,6 +17,7 @@ import {
   DailyRunOutcomePoint,
   GoogleStatusBreakdown,
   DashboardRunBreakdown,
+  GoogleListingAgeBreakdown,
   RunSummary,
   RunSummaryEstablishment,
   RunSummaryUpdatedEstablishment,
@@ -207,6 +208,12 @@ interface GoogleStatusBreakdownResponse {
   other: number;
 }
 
+interface GoogleListingAgeBreakdownResponse {
+  buyback_suspected: number;
+  recent_creation: number;
+  unknown: number;
+}
+
 interface DashboardRunBreakdownResponse {
   run_id: string;
   started_at: string;
@@ -220,6 +227,9 @@ interface DashboardRunBreakdownResponse {
   google_insufficient: number;
   google_pending: number;
   google_other: number;
+  listing_buyback: number;
+  listing_recent: number;
+  listing_unknown: number;
   alerts_created: number;
   alerts_sent: number;
 }
@@ -233,6 +243,7 @@ interface DashboardMetricsResponse {
   daily_run_outcomes: DailyRunOutcomePointResponse[];
   daily_google_statuses: DailyGoogleStatusPointResponse[];
   google_status_breakdown: GoogleStatusBreakdownResponse;
+  listing_age_breakdown: GoogleListingAgeBreakdownResponse;
   establishment_status_breakdown: Record<string, number>;
   naf_category_breakdown: NafCategoryStatResponse[];
 }
@@ -271,6 +282,9 @@ interface EstablishmentResponse {
   google_place_url: string | null;
   google_last_checked_at: string | null;
   google_last_found_at: string | null;
+  google_listing_origin_at: string | null;
+  google_listing_origin_source: string | null;
+  google_listing_age_status: string | null;
   google_check_status: string;
   is_sole_proprietorship: boolean;
 }
@@ -531,6 +545,14 @@ const toGoogleStatusBreakdown = (payload: GoogleStatusBreakdownResponse): Google
   other: payload.other,
 });
 
+const toGoogleListingAgeBreakdown = (
+  payload: GoogleListingAgeBreakdownResponse,
+): GoogleListingAgeBreakdown => ({
+  buybackSuspected: payload.buyback_suspected,
+  recentCreation: payload.recent_creation,
+  unknown: payload.unknown,
+});
+
 const toDashboardRunBreakdown = (payload: DashboardRunBreakdownResponse): DashboardRunBreakdown => ({
   runId: payload.run_id,
   startedAt: payload.started_at,
@@ -546,6 +568,9 @@ const toDashboardRunBreakdown = (payload: DashboardRunBreakdownResponse): Dashbo
   googleOther: payload.google_other,
   alertsCreated: payload.alerts_created,
   alertsSent: payload.alerts_sent,
+  listingBuyback: payload.listing_buyback,
+  listingRecent: payload.listing_recent,
+  listingUnknown: payload.listing_unknown,
 });
 
 const toDashboardMetrics = (payload: DashboardMetricsResponse): DashboardMetrics => ({
@@ -557,6 +582,7 @@ const toDashboardMetrics = (payload: DashboardMetricsResponse): DashboardMetrics
   dailyRunOutcomes: payload.daily_run_outcomes.map(toDailyRunOutcomePoint),
   dailyGoogleStatuses: payload.daily_google_statuses.map(toDailyGoogleStatusPoint),
   googleStatusBreakdown: toGoogleStatusBreakdown(payload.google_status_breakdown),
+  listingAgeBreakdown: toGoogleListingAgeBreakdown(payload.listing_age_breakdown),
   establishmentStatusBreakdown: payload.establishment_status_breakdown,
   nafCategoryBreakdown: payload.naf_category_breakdown.map(toNafCategoryStat),
 });
@@ -596,6 +622,9 @@ const toEstablishment = (payload: EstablishmentResponse): Establishment => ({
   googleLastCheckedAt: payload.google_last_checked_at,
   googleLastFoundAt: payload.google_last_found_at,
   googleCheckStatus: payload.google_check_status,
+  googleListingOriginAt: payload.google_listing_origin_at,
+  googleListingOriginSource: payload.google_listing_origin_source,
+  googleListingAgeStatus: payload.google_listing_age_status,
   isSoleProprietorship: payload.is_sole_proprietorship,
 });
 

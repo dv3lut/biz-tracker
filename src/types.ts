@@ -101,6 +101,12 @@ export interface GoogleStatusBreakdown {
   other: number;
 }
 
+export interface GoogleListingAgeBreakdown {
+  buybackSuspected: number;
+  recentCreation: number;
+  unknown: number;
+}
+
 export interface NafSubCategoryStat {
   subcategoryId: string;
   nafCode: string;
@@ -128,6 +134,9 @@ export interface DashboardRunBreakdown {
   googleInsufficient: number;
   googlePending: number;
   googleOther: number;
+  listingBuyback: number;
+  listingRecent: number;
+  listingUnknown: number;
   alertsCreated: number;
   alertsSent: number;
 }
@@ -210,6 +219,7 @@ export interface DashboardMetrics {
   dailyRunOutcomes: DailyRunOutcomePoint[];
   dailyGoogleStatuses: DailyGoogleStatusPoint[];
   googleStatusBreakdown: GoogleStatusBreakdown;
+  listingAgeBreakdown: GoogleListingAgeBreakdown;
   establishmentStatusBreakdown: Record<string, number>;
   nafCategoryBreakdown: NafCategoryStat[];
 }
@@ -241,6 +251,9 @@ export interface Establishment {
   googleLastCheckedAt: string | null;
   googleLastFoundAt: string | null;
   googleCheckStatus: string;
+  googleListingOriginAt: string | null;
+  googleListingOriginSource: string | null;
+  googleListingAgeStatus: string | null;
   isSoleProprietorship: boolean;
 }
 

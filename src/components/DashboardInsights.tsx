@@ -340,6 +340,25 @@ export const DashboardInsights = ({
             </article>
 
             <article className="insight-card">
+              <h3>Anciennete des fiches (dernier run)</h3>
+              {metrics.latestRunBreakdown ? (
+                <ul className="metric-list">
+                  <li>
+                    <strong>{formatNumber(metrics.latestRunBreakdown.listingBuyback)}</strong> rachat presume
+                  </li>
+                  <li>
+                    <strong>{formatNumber(metrics.latestRunBreakdown.listingRecent)}</strong> creation recente
+                  </li>
+                  <li>
+                    <strong>{formatNumber(metrics.latestRunBreakdown.listingUnknown)}</strong> statut inconnu
+                  </li>
+                </ul>
+              ) : (
+                <p className="muted">Aucun enrichissement recense.</p>
+              )}
+            </article>
+
+            <article className="insight-card">
               <h3>Google (global)</h3>
               <ul className="metric-list">
                 <li>
@@ -360,6 +379,25 @@ export const DashboardInsights = ({
                   </li>
                 ) : null}
               </ul>
+            </article>
+
+            <article className="insight-card">
+              <h3>Anciennete des fiches Google</h3>
+              {metrics.listingAgeBreakdown ? (
+                <ul className="metric-list">
+                  <li>
+                    <strong>{formatNumber(metrics.listingAgeBreakdown.buybackSuspected)}</strong> rachat presume
+                  </li>
+                  <li>
+                    <strong>{formatNumber(metrics.listingAgeBreakdown.recentCreation)}</strong> creation recente
+                  </li>
+                  <li>
+                    <strong>{formatNumber(metrics.listingAgeBreakdown.unknown)}</strong> statut inconnu
+                  </li>
+                </ul>
+              ) : (
+                <p className="muted">Aucune donnee disponible.</p>
+              )}
             </article>
 
             <article className="insight-card">
