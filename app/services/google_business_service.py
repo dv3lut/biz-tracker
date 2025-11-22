@@ -20,7 +20,7 @@ _PLACE_DETAILS_FIELDS = (
     "url,website,name,formatted_address,types,business_status,opening_hours,current_opening_hours,"
     "reviews,user_ratings_total"
 )
-_LISTING_AGE_THRESHOLD_DAYS = 45
+_LISTING_AGE_THRESHOLD_DAYS = 365
 
 
 def _sanitize_placeholder(value: str | None) -> str:
