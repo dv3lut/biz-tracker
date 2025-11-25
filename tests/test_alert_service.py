@@ -1,7 +1,7 @@
 """Unit tests for the AlertService filtering logic."""
 from __future__ import annotations
 
-from contextlib import contextmanager, ExitStack
+from contextlib import ExitStack, contextmanager
 from types import SimpleNamespace
 import unittest
 from unittest.mock import MagicMock, patch
@@ -10,20 +10,18 @@ from app.services.alert_service import AlertService
 
 
 class AlertServiceFilteringTests(unittest.TestCase):
-    """Ensure alert creation honours the recent-only toggle."""
+    """Ensure alert creation filters correctly based on Google status."""
 
     def setUp(self) -> None:
         self.session = MagicMock()
         self.run = SimpleNamespace(id="run-1", scope_key="restaurants")
 
     @contextmanager
-    def _patched_dependencies(self, recent_only: bool):
+    def _patched_dependencies(self):
         stack = ExitStack()
-        settings = SimpleNamespace(google=SimpleNamespace(alerts_only_recent_creations=recent_only))
         email_service = MagicMock()
         email_service.is_enabled.return_value = False
         email_service.is_configured.return_value = False
-        stack.enter_context(patch("app.services.alert_service.get_settings", return_value=settings))
         stack.enter_context(patch("app.services.alert_service.EmailService", return_value=email_service))
         stack.enter_context(patch("app.services.alert_service.get_active_clients", return_value=[]))
         stack.enter_context(patch("app.services.alert_service.get_admin_emails", return_value=[]))
@@ -71,39 +69,28 @@ class AlertServiceFilteringTests(unittest.TestCase):
             date_dernier_traitement_etablissement=None,
         )
 
-    def test_returns_empty_when_no_recent_listing_and_flag_enabled(self) -> None:
+    def test_returns_empty_when_no_found_listing(self) -> None:
         establishments = [
             self._make_establishment("not_recent_creation", suffix="1"),
-            self._make_establishment("unknown", suffix="2"),
+            self._make_establishment("recent_creation", suffix="2"),
         ]
+        establishments[0].google_check_status = "pending"
+        establishments[1].google_check_status = "not_found"
 
-        with self._patched_dependencies(recent_only=True):
+        with self._patched_dependencies():
             service = AlertService(self.session, self.run)
             alerts = service.create_google_alerts(establishments)
 
         self.assertEqual(alerts, [])
         self.session.add.assert_not_called()
 
-    def test_keeps_only_recent_listing_when_flag_enabled(self) -> None:
+    def test_keeps_all_found_listings(self) -> None:
         establishments = [
             self._make_establishment("not_recent_creation", suffix="1"),
             self._make_establishment("recent_creation", suffix="2"),
         ]
 
-        with self._patched_dependencies(recent_only=True):
-            service = AlertService(self.session, self.run)
-            alerts = service.create_google_alerts(establishments)
-
-        self.assertEqual(len(alerts), 1)
-        self.session.add.assert_called_once()
-
-    def test_keeps_all_listings_when_flag_disabled(self) -> None:
-        establishments = [
-            self._make_establishment("not_recent_creation", suffix="1"),
-            self._make_establishment("recent_creation", suffix="2"),
-        ]
-
-        with self._patched_dependencies(recent_only=False):
+        with self._patched_dependencies():
             service = AlertService(self.session, self.run)
             alerts = service.create_google_alerts(establishments)
 
@@ -117,7 +104,7 @@ class AlertServiceFilteringTests(unittest.TestCase):
         ]
         establishments[1].google_check_status = "type_mismatch"
 
-        with self._patched_dependencies(recent_only=False):
+        with self._patched_dependencies():
             service = AlertService(self.session, self.run)
             alerts = service.create_google_alerts(establishments)
 

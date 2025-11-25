@@ -20,6 +20,13 @@
 
 ## Statuts d'ancienneté des fiches Google
 
-- `recent_creation` : la date d'origine de la fiche (ou, à défaut, l'absence totale d'avis Google) suggère une création concomitante avec l'établissement Sirene. On considère également comme "récents" les listings dont `user_ratings_total` vaut 0 ou pour lesquels l'API retourne explicitement une liste d'avis vide.
+- `recent_creation` : la date d'origine de la fiche (ou, à défaut, l'absence totale d'avis Google) suggère une création concomitante avec l'établissement Sirene. On considère également comme « récents » les listings dont `user_ratings_total` vaut 0 ou pour lesquels l'API retourne explicitement une liste d'avis vide.
+- `recent_creation_missing_contact` : cas particuliers des fiches récentes pour lesquelles aucun canal de contact exploitable n'a été identifié (pas de numéro de téléphone, pas d'URL). Elles restent prioritaires côté prospection mais nécessitent un traitement dédié.
 - `not_recent_creation` : la fiche Google présente des signaux d'ancienneté (avis plus anciens que 2 semaines, volume d'avis significatif, date d'origine bien antérieure) et correspond à une création ancienne par rapport au SIRET recensé.
 - `unknown` : impossible d'établir l'âge relatif (Google ne retourne ni périodes d'ouverture ni avis exploitables **et** nous ne disposons pas d'une date de création Sirene fiable). Dans ce cas aucun signal n'est affiché aux utilisateurs.
+
+Les équipes peuvent désormais sélectionner explicitement les statuts à inclure :
+
+- Chaque client possède un champ `listing_statuses` (JSONB) qui détermine les alertes et exports auxquels il a accès. Les valeurs sont limitées aux trois statuts filtrables (`recent_creation`, `recent_creation_missing_contact`, `not_recent_creation`).
+- La modale d'export Google propose les mêmes cases à cocher. L'API refuse les requêtes qui n'incluent aucun statut, ce qui garantit un échantillon cohérent entre exports, alertes et e-mails.
+- Les statuts `unknown` restent pris en compte dans les agrégats (dashboard, monitoring) mais ne sont pas exportables tant qu'un signal exploitable n'a pas été identifié.

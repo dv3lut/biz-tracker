@@ -15,6 +15,7 @@ def run_schema_upgrades(engine: Engine) -> None:
             name VARCHAR(255) NOT NULL UNIQUE,
             start_date DATE NOT NULL,
             end_date DATE,
+            listing_statuses JSONB NOT NULL DEFAULT '["recent_creation","recent_creation_missing_contact","not_recent_creation"]'::jsonb,
             emails_sent_count INTEGER NOT NULL DEFAULT 0,
             last_email_sent_at TIMESTAMP,
             created_at TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -149,6 +150,10 @@ def run_schema_upgrades(engine: Engine) -> None:
     """
     ALTER TABLE establishments
     ADD COLUMN IF NOT EXISTS google_contact_website VARCHAR(512)
+    """,
+    """
+    ALTER TABLE clients
+    ADD COLUMN IF NOT EXISTS listing_statuses JSONB NOT NULL DEFAULT '["recent_creation","recent_creation_missing_contact","not_recent_creation"]'::jsonb
     """,
         """
         ALTER TABLE sync_runs

@@ -132,7 +132,12 @@ def create_client(payload: ClientCreate, session: Session = Depends(get_db_sessi
     name = _normalize_name(payload.name)
     _validate_activation_window(payload.start_date, payload.end_date)
 
-    client = models.Client(name=name, start_date=payload.start_date, end_date=payload.end_date)
+    client = models.Client(
+        name=name,
+        start_date=payload.start_date,
+        end_date=payload.end_date,
+        listing_statuses=list(payload.listing_statuses),
+    )
     session.add(client)
     _apply_recipients(client, payload.recipients)
     _apply_subscriptions(session, client, payload.subscription_ids)
@@ -163,6 +168,8 @@ def update_client(
         client.name = _normalize_name(payload.name)
     client.start_date = start_date
     client.end_date = end_date
+    if payload.listing_statuses is not None:
+        client.listing_statuses = list(payload.listing_statuses)
 
     if payload.recipients is not None:
         _apply_recipients(client, payload.recipients)

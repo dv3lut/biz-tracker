@@ -10,6 +10,13 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 from app.utils.business_types import is_individual_company
+from app.utils.google_listing import default_listing_statuses
+
+
+def _default_client_listing_statuses() -> list[str]:
+    """Provide a fresh copy of the default listing statuses for alerts."""
+
+    return default_listing_statuses()
 
 
 class Establishment(Base):
@@ -184,6 +191,11 @@ class Client(Base):
     name: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
     end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    listing_statuses: Mapped[list[str]] = mapped_column(
+        JSONB,
+        default=_default_client_listing_statuses,
+        nullable=False,
+    )
     emails_sent_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     last_email_sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)

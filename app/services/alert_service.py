@@ -9,7 +9,6 @@ from typing import Sequence
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.config import get_settings
 from app.db import models
 from app.services.email_service import EmailService
 from app.observability import log_event
@@ -21,7 +20,7 @@ from app.services.client_service import (
     get_active_clients,
     get_admin_emails,
 )
-from app.utils.google_listing import describe_listing_age_status, normalize_listing_age_status
+from app.utils.google_listing import describe_listing_age_status
 from app.utils.urls import build_annuaire_etablissement_url
 
 _ALERT_LOGGER = logging.getLogger("alerts")
@@ -35,8 +34,6 @@ class AlertService:
         self._run = run
         self._email_service = EmailService()
         self._subcategory_lookup: dict[str, tuple[str | None, str | None]] | None = None
-        settings = get_settings()
-        self._recent_listing_alerts_only = settings.google.alerts_only_recent_creations
 
     def create_google_alerts(self, establishments: Sequence[models.Establishment]) -> list[models.Alert]:
         if not establishments:
@@ -47,12 +44,6 @@ class AlertService:
             for item in establishments
             if (item.google_check_status or "").lower() == "found"
         ]
-        if self._recent_listing_alerts_only:
-            filtered_establishments = [
-                item
-                for item in filtered_establishments
-                if normalize_listing_age_status(item.google_listing_age_status) == "recent_creation"
-            ]
         if not filtered_establishments:
             return []
 
@@ -94,11 +85,11 @@ class AlertService:
         eligible_clients = [client for client in active_clients if any(recipient.email for recipient in client.recipients)]
         admin_recipients = get_admin_emails(self._session)
 
-        assignment_map, filtering_applied = assign_establishments_to_clients(eligible_clients, filtered_establishments)
+        assignment_map, filters_configured = assign_establishments_to_clients(eligible_clients, filtered_establishments)
         client_payloads: list[ClientEmailPayload] = []
         for client in eligible_clients:
             matches = assignment_map.get(client.id, [])
-            if not matches and not filtering_applied:
+            if not matches and not filters_configured:
                 matches = list(filtered_establishments)
             if not matches:
                 continue
@@ -134,7 +125,7 @@ class AlertService:
         elif not eligible_clients:
             client_skip_reason = "no_active_recipients"
         elif not client_payloads:
-            client_skip_reason = "no_matching_subscriptions" if filtering_applied else "no_active_recipients"
+            client_skip_reason = "no_matching_filters" if filters_configured else "no_active_recipients"
         else:
             dispatch_result = dispatch_email_to_clients(
                 self._email_service,

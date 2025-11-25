@@ -12,6 +12,12 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.db import models
 from app.services.email_service import EmailService
+from app.utils.google_listing import (
+    FILTERABLE_LISTING_STATUSES,
+    default_listing_statuses,
+    normalize_listing_age_status,
+    normalize_listing_status_filters,
+)
 from app.utils.naf import normalize_naf_code
 
 
@@ -96,6 +102,41 @@ class ClientEmailPayload:
     establishments: Sequence[models.Establishment] | None = None
 
 
+def resolve_client_listing_statuses(client: models.Client) -> list[str]:
+    """Return the normalized list of listing statuses allowed for a client."""
+
+    raw_statuses = getattr(client, "listing_statuses", None)
+    try:
+        statuses = normalize_listing_status_filters(raw_statuses)
+    except ValueError:
+        statuses = []
+    if not statuses:
+        return default_listing_statuses()
+    return statuses
+
+
+def client_allows_listing_status(client: models.Client, listing_status: str | None) -> bool:
+    """Return True if the client's filters include the provided listing status."""
+
+    normalized_status = normalize_listing_age_status(listing_status)
+    allowed = resolve_client_listing_statuses(client)
+    return normalized_status in allowed
+
+
+def filter_clients_by_listing_status(
+    clients: Sequence[models.Client],
+    listing_status: str | None,
+) -> tuple[list[models.Client], bool]:
+    """Filter clients according to the provided listing status and flag if filtering occurred."""
+
+    if not clients:
+        return [], False
+    normalized_status = normalize_listing_age_status(listing_status)
+    filtered = [client for client in clients if client_allows_listing_status(client, normalized_status)]
+    filtering_applied = len(filtered) != len(clients)
+    return filtered, filtering_applied
+
+
 def build_subscription_index(
     clients: Sequence[models.Client],
 ) -> tuple[dict[UUID, set[str]], dict[str, list[models.Client]]]:
@@ -136,26 +177,62 @@ def assign_establishments_to_clients(
     clients: Sequence[models.Client],
     establishments: Sequence[models.Establishment],
 ) -> tuple[dict[UUID, list[models.Establishment]], bool]:
-    """Map establishments to clients according to active subscriptions."""
+    """Map establishments to clients according to subscriptions and allowed listing statuses."""
 
     subscription_map, code_index = build_subscription_index(clients)
-    if not subscription_map:
-        return {client.id: list(establishments) for client in clients if establishments}, False
+    status_map: dict[UUID, set[str]] = {}
+    status_filtering_enabled = False
+    for client in clients:
+        statuses = set(resolve_client_listing_statuses(client))
+        status_map[client.id] = statuses
+        if len(statuses) < len(FILTERABLE_LISTING_STATUSES):
+            status_filtering_enabled = True
 
-    assignments: dict[UUID, list[models.Establishment]] = defaultdict(list)
+    filters_configured = bool(subscription_map) or status_filtering_enabled
+
+    if not establishments:
+        return {}, filters_configured
+
+    if not subscription_map:
+        assignments: dict[UUID, list[models.Establishment]] = {}
+        for client in clients:
+            allowed_statuses = status_map.get(client.id, set())
+            matches = [
+                establishment
+                for establishment in establishments
+                if _establishment_matches_listing_status(establishment, allowed_statuses)
+            ]
+            if matches:
+                assignments[client.id] = matches
+        return assignments, filters_configured
+
+    assignments = defaultdict(list)
     seen_sirets: dict[UUID, set[str]] = defaultdict(set)
     for establishment in establishments:
         code = normalize_naf_code(establishment.naf_code)
         if not code:
             continue
         for client in code_index.get(code, []):
+            allowed_statuses = status_map.get(client.id, set())
+            if not _establishment_matches_listing_status(establishment, allowed_statuses):
+                continue
             if establishment.siret in seen_sirets[client.id]:
                 continue
             seen_sirets[client.id].add(establishment.siret)
             assignments[client.id].append(establishment)
 
     filtered = {client_id: items for client_id, items in assignments.items() if items}
-    return filtered, True
+    return filtered, filters_configured
+
+
+def _establishment_matches_listing_status(
+    establishment: models.Establishment,
+    allowed_statuses: set[str],
+) -> bool:
+    normalized = normalize_listing_age_status(getattr(establishment, "google_listing_age_status", None))
+    if not allowed_statuses:
+        return normalized in FILTERABLE_LISTING_STATUSES
+    return normalized in allowed_statuses
 
 
 def dispatch_email_to_clients(

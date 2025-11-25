@@ -136,10 +136,6 @@ class GoogleSettings(BaseModel):
         le=1.0,
         description="Seuil de similarité minimale entre les mots-clés NAF et les types Google retournés par Google Places.",
     )
-    alerts_only_recent_creations: bool = Field(
-        default=False,
-        description="Limite les alertes et exports aux fiches marquées comme 'création récente'.",
-    )
 
     @property
     def enabled(self) -> bool:

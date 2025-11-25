@@ -2,12 +2,15 @@
 from __future__ import annotations
 
 from datetime import datetime, date as Date
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator, model_validator
 
 from app.services.sync.mode import SyncMode
+from app.utils.google_listing import default_listing_statuses, normalize_listing_status_filters
+
+ListingStatus = Literal["recent_creation", "recent_creation_missing_contact", "not_recent_creation"]
 
 
 class SyncRunOut(BaseModel):
@@ -334,6 +337,7 @@ class ClientOut(BaseModel):
     name: str
     start_date: Date
     end_date: Date | None
+    listing_statuses: list[ListingStatus]
     emails_sent_count: int
     last_email_sent_at: datetime | None
     created_at: datetime
@@ -346,22 +350,51 @@ class ClientCreate(BaseModel):
     name: str
     start_date: Date
     end_date: Date | None = None
+    listing_statuses: list[ListingStatus] = Field(
+        default_factory=default_listing_statuses,
+        description="Statuts des fiches Google à inclure dans les alertes et exports clients.",
+    )
     recipients: list[str] = Field(default_factory=list, description="Liste d'adresses e-mail associées au client.")
     subscription_ids: list[UUID] = Field(
         default_factory=list,
         description="Identifiants des sous-catégories NAF auxquelles le client est abonné.",
     )
 
+    @field_validator("listing_statuses")
+    @classmethod
+    def _validate_listing_statuses(cls, value: list[str]) -> list[ListingStatus]:
+        statuses = normalize_listing_status_filters(value)
+        if not statuses:
+            raise ValueError("Sélectionnez au moins un statut de fiche Google.")
+        return statuses
+
 
 class ClientUpdate(BaseModel):
     name: str | None = None
     start_date: Date | None = None
     end_date: Date | None = None
+    listing_statuses: list[ListingStatus] | None = Field(
+        default=None,
+        description="Remplace la liste complète des statuts lorsqu'elle est fournie.",
+    )
     recipients: list[str] | None = Field(default=None, description="Remplace la liste complète des destinataires lorsqu'elle est fournie.")
     subscription_ids: list[UUID] | None = Field(
         default=None,
         description="Remplace complètement la liste des sous-catégories souscrites lorsqu'elle est fournie.",
     )
+
+    @field_validator("listing_statuses")
+    @classmethod
+    def _validate_update_listing_statuses(
+        cls,
+        value: list[str] | None,
+    ) -> list[ListingStatus] | None:
+        if value is None:
+            return None
+        statuses = normalize_listing_status_filters(value)
+        if not statuses:
+            raise ValueError("Sélectionnez au moins un statut de fiche Google.")
+        return statuses
 
 
 class AdminEmailConfig(BaseModel):

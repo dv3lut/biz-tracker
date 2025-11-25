@@ -6,6 +6,7 @@
 - Optionnel : configurer l’envoi d’e-mails (`EMAIL__ENABLED=true` + SMTP). Utiliser `EMAIL__PROVIDER=mailhog` en local (lancer `docker compose up -d biz-tracker-mailhog`, interface http://localhost:8025) et `EMAIL__PROVIDER=mailjet` en production (identifiant = API key, mot de passe = secret key, expéditeur validé côté Mailjet).
 - Ajuster `SYNC__CREATION_OVERLAP_DAYS` (défaut : 3) pour rejouer davantage ou moins de jours autour du dernier `last_creation_date` et éviter les trous dus aux retards de publication.
 - Optionnel : activer l’enrichissement Google Places en définissant `GOOGLE__API_KEY` (clé API avec Places + Geocoding activées et facturation). Sans clé, le service reste inactif.
+- Pour chaque client, définir les statuts de fiches Google souhaités (`recent_creation`, `recent_creation_missing_contact`, `not_recent_creation`) directement dans l’UI. Cette sélection conditionne les alertes envoyées et les exports générés pour ce client.
 
 ## Exécutions
 - **Initiale** : `python -m app sync --no-check-for-updates` pour forcer une collecte complète (chaque run repart désormais de zéro).
@@ -18,6 +19,7 @@
 - Les statistiques et états sont consultables via l’API (`GET /admin/stats/summary`, `/admin/stats/dashboard`, `/admin/sync-runs`, `/admin/sync-state`, `/admin/alerts/recent`).
 - `POST /admin/email/test` permet de vérifier la configuration SMTP active (destinataires admin par défaut, sinon clients actifs ou ceux fournis dans le corps de la requête).
 - `GET /admin/google/places-export` retourne un export Excel des établissements disposant d’une fiche Google (utilisé après la première synchronisation massive).
+- `GET /admin/google/places-export` accepte aussi `listing_statuses=...` (query multi-valeurs). Si aucun statut n’est fourni, l’API renverra une erreur 422 ; utiliser la modale front pour rester aligné avec la configuration par défaut.
 - `GET /admin/alerts/export?days=30` produit un Excel des alertes dont l'établissement a été créé dans la fenêtre demandée (filtre sur `date_creation` plutôt que sur la date d'alerte).
 - L’enrichissement Google journalise `sync.google.*`; surveiller les quotas et les éventuelles réponses `OVER_QUERY_LIMIT` côté logs applicatifs.
 - À la fin de chaque run réussi, une synthèse texte est envoyée aux entrées `admin_recipients` (si le service e-mail est actif et configuré). Le message récapitule les volumes récupérés, les mises à jour, les correspondances Google immédiates vs tardives et les principales alertes.

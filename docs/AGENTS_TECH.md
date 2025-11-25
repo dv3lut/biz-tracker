@@ -1,7 +1,7 @@
 # Choix techniques
 
 - **Langage & runtime** : Python 3.11+, organisation modulaire (`app/clients`, `app/services`, `app/db`).
-- **Config** : Pydantic Settings (v2) + `.env` avec séparateur `__` pour les sous-structures (ex. `SIRENE__API_TOKEN`). Paramètres API disponibles via `API__*` (host, port, header, admin token, activation des docs).
+- **Config** : Pydantic Settings (v2) + `.env` avec séparateur `__` pour les sous-structures (ex. `SIRENE__API_TOKEN`). Paramètres API disponibles via `API__*` (host, port, header, admin token, activation des docs). Le flag historique `GOOGLE__ALERTS_ONLY_RECENT_CREATIONS` a été retiré : le filtrage se fait désormais côté clients et exports via les statuts sélectionnés.
 - **HTTP** : `requests` + `RateLimiter` logiciel + retry sur statuts 429/5xx (back-off exponentiel).
 - **Persistence** : PostgreSQL (Docker Compose) + SQLAlchemy 2.0 (ORM classique).
   - Tables principales : `establishments`, `sync_runs`, `sync_state`, `alerts`.
@@ -25,12 +25,13 @@
   - Envoi SMTP optionnel (classe `EmailService`, désactivée si `EMAIL__ENABLED=false`) avec presets `EMAIL__PROVIDER` (`mailhog`, `mailjet`, `custom`) et endpoint de validation `POST /admin/email/test`.
   - Les destinataires sont pilotés depuis la base (`client_recipients` pour les alertes, `admin_recipients` pour les synthèses) et le tout premier run supprime les envois pour éviter un afflux massif.
   - Export Excel ciblé via `GET /admin/alerts/export?days=X` (filtre sur `establishments.date_creation`) pour suivre les créations récentes indépendamment de la date d’alerte.
+  - Chaque client dispose du champ JSONB `listing_statuses`. `ClientService.resolve_client_listing_statuses` applique par défaut la liste entière (`recent_creation`, `recent_creation_missing_contact`, `not_recent_creation`) et rejette toute tentative d'enregistrer une sélection vide. Les alertes, exports clients et e-mails se basent exclusivement sur ces statuts autorisés.
 - **Rapport e-mail** : `_send_run_summary_email` diffuse une synthèse quotidienne aux entrées `admin_recipients` (si SMTP actif/configuré), avec fallback silencieux en cas d’absence de destinataires.
 - **Enrichissement Google Places** :
   - Service `GoogleBusinessService` + `GooglePlacesClient` activé lorsque `GOOGLE__API_KEY` est défini (Places API + Geocoding API requis côté Google Cloud).
   - Paramètres ajustables via `.env` (`GOOGLE__*`). Sans clé, aucune requête n’est émise et les colonnes Google restent à `pending`.
   - Chaque run enregistre les compteurs Google (file totale, éligibles, correspondances, backlog) dans `sync_runs` pour exploitation API/UI.
-  - Export XLSX disponible via `build_google_places_workbook` et l’endpoint `GET /admin/google/places-export` (paramètres obligatoires `start_date` et `end_date` au format ISO `YYYY-MM-DD`, filtrage + tri sur `establishments.date_creation`). Le paramètre `mode` permet de choisir `admin` (tous les champs techniques, défaut) ou `client` (mêmes informations que l’e-mail client : nom, adresse, Catégorie, lien Google).
+  - Export XLSX disponible via `build_google_places_workbook` et l’endpoint `GET /admin/google/places-export` (paramètres obligatoires `start_date` et `end_date` au format ISO `YYYY-MM-DD`, filtrage + tri sur `establishments.date_creation`). Le paramètre `mode` permet de choisir `admin` (tous les champs techniques, défaut) ou `client` (mêmes informations que l’e-mail client : nom, adresse, Catégorie, lien Google). `listing_statuses` est une nouvelle query optionnelle acceptant 1 à 3 valeurs ; l’API normalise la sélection et refuse toute requête vide afin de rester alignée avec la configuration des clients.
   - Statuts persistés dans `establishments.google_check_status` : `pending`, `found`, `not_found`, `insufficient`, `type_mismatch` (fiches rejetées car la catégorie Google ne correspond pas au NAF attendu), plus `other` comme garde-fou lors des agrégations.
   - Les contrôles de cohérence ne s’appuient plus sur une liste statique de types Google. `_resolve_expected_keywords` extrait des mots-clés depuis `naf_subcategories`/`naf_categories` (noms + descriptions) ainsi que depuis le libellé NAF stocké sur l’établissement, puis `_matches_expected_google_category` compare ces mots-clés aux `types` remontés par Google (tokenisation + `SequenceMatcher`).
   - Même en cas de `type_mismatch`, la fiche la plus pertinente est désormais persistée (`google_place_id`, `google_place_url`, `google_listing_origin_*`, `google_listing_age_status`, confiances) pour faciliter l’audit.
@@ -55,3 +56,4 @@
   - La section établissements affiche désormais un indicateur "Entreprise individuelle" et permet de filtrer la liste sur ce critère (paramètre `is_individual`).
   - `DashboardInsights` exploite `GET /admin/stats/dashboard` (30 jours par défaut, fenêtre réduite à 14 jours sur les graphiques) et s’appuie sur un composant `BarChart` CSS-only (pas de librairie externe) pour afficher les séries.
   - Les métriques sont formatées via `utils/format.ts`; les footnotes (nombre de runs par jour) sont calculées côté front pour garder le payload compact.
+  - `ClientModal` et `GoogleExportModal` exposent des cases à cocher « Statuts de fiches Google » synchronisées avec l’API (`listing_statuses`). `ClientModal` exige qu’au moins un statut soit coché avant de valider, tandis que `GoogleExportModal` reprend la sélection globale et la transmet à `GET /admin/google/places-export`.

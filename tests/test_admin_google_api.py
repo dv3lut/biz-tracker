@@ -85,6 +85,9 @@ class ManualGoogleCheckRouteTests(TestCase):
         establishment.created_run_id = None
         establishment.last_run_id = None
         establishment.google_match_confidence = 0.95
+        establishment.google_contact_phone = None
+        establishment.google_contact_email = None
+        establishment.google_contact_website = None
         
         session = MagicMock()
         session.get.return_value = establishment
@@ -107,15 +110,17 @@ class ManualGoogleCheckRouteTests(TestCase):
 
         # Mock collect_client_emails to return no client emails (only admin)
         with patch("app.api.routers.admin.google.get_admin_emails") as mock_get_admin_emails, \
-             patch("app.api.routers.admin.google.get_active_clients") as mock_get_active_clients, \
-             patch("app.api.routers.admin.google.filter_clients_for_naf_code") as mock_filter_clients, \
-             patch("app.api.routers.admin.google.collect_client_emails") as mock_collect_client_emails, \
-             patch("app.api.routers.admin.google.dispatch_email_to_clients") as mock_dispatch_email, \
-             patch("app.api.routers.admin.google.EstablishmentOut") as mock_establishment_out:
+            patch("app.api.routers.admin.google.get_active_clients") as mock_get_active_clients, \
+            patch("app.api.routers.admin.google.filter_clients_for_naf_code") as mock_filter_clients, \
+            patch("app.api.routers.admin.google.filter_clients_by_listing_status") as mock_filter_by_status, \
+            patch("app.api.routers.admin.google.collect_client_emails") as mock_collect_client_emails, \
+            patch("app.api.routers.admin.google.dispatch_email_to_clients") as mock_dispatch_email, \
+            patch("app.api.routers.admin.google.EstablishmentOut") as mock_establishment_out:
             
             mock_get_admin_emails.return_value = ["admin1@example.com", "admin2@example.com"]
             mock_get_active_clients.return_value = []
             mock_filter_clients.return_value = ([], False)
+            mock_filter_by_status.return_value = ([], False)
             mock_collect_client_emails.return_value = []
             
             # Mock dispatch result (no client emails)
@@ -147,10 +152,7 @@ class ManualGoogleCheckRouteTests(TestCase):
 class GoogleExportRouteTests(TestCase):
     @patch("app.api.routers.admin.google.build_google_places_workbook")
     @patch("app.api.routers.admin.google.log_event")
-    @patch("app.api.routers.admin.google.get_settings")
-    def test_export_skips_type_mismatch(self, mock_get_settings, mock_log_event, mock_build_workbook) -> None:
-        settings = SimpleNamespace(google=SimpleNamespace(alerts_only_recent_creations=False))
-        mock_get_settings.return_value = settings
+    def test_export_skips_type_mismatch(self, mock_log_event, mock_build_workbook) -> None:
 
         type_mismatch = SimpleNamespace(
             google_check_status="type_mismatch",
@@ -176,4 +178,36 @@ class GoogleExportRouteTests(TestCase):
         exported = mock_build_workbook.call_args[0][0]
         self.assertEqual(exported, [found])
         mock_build_workbook.assert_called_once()
+        mock_log_event.assert_called_once()
+
+    @patch("app.api.routers.admin.google.build_google_places_workbook")
+    @patch("app.api.routers.admin.google.log_event")
+    def test_export_filters_by_listing_status(self, mock_log_event, mock_build_workbook) -> None:
+        recent = SimpleNamespace(
+            google_check_status="found",
+            google_listing_age_status="recent_creation",
+        )
+        legacy = SimpleNamespace(
+            google_check_status="found",
+            google_listing_age_status="not_recent_creation",
+        )
+
+        scalars = MagicMock()
+        scalars.all.return_value = [recent, legacy]
+        execution = MagicMock()
+        execution.scalars.return_value = scalars
+        session = MagicMock()
+        session.execute.return_value = execution
+
+        mock_build_workbook.return_value = BytesIO(b"test")
+
+        response = export_google_places(
+            mode="admin",
+            listing_statuses=["recent_creation"],
+            session=session,
+        )
+
+        self.assertIsNotNone(response)
+        exported = mock_build_workbook.call_args[0][0]
+        self.assertEqual(exported, [recent])
         mock_log_event.assert_called_once()

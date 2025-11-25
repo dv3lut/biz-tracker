@@ -5,6 +5,7 @@ from datetime import date, datetime
 from typing import Literal
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
+from fastapi.params import Query as QueryInfo
 from fastapi.responses import StreamingResponse
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
@@ -14,6 +15,7 @@ from app.api.schemas import (
     EstablishmentOut,
     GoogleRetryConfigOut,
     GoogleRetryConfigUpdate,
+    ListingStatus,
     ManualGoogleCheckResponse,
 )
 from app.config import get_settings
@@ -23,6 +25,7 @@ from app.services.client_service import (
     ClientEmailPayload,
     collect_client_emails,
     dispatch_email_to_clients,
+    filter_clients_by_listing_status,
     filter_clients_for_naf_code,
     get_active_clients,
     get_admin_emails,
@@ -36,6 +39,7 @@ from app.services.google_retry_config import (
     serialize_google_retry_config,
     update_google_retry_config,
 )
+from app.utils.google_listing import normalize_listing_age_status, normalize_listing_status_filters
 
 from .common import format_establishment_summary
 
@@ -89,14 +93,26 @@ def manual_google_check(
 
         active_clients = get_active_clients(session)
         eligible_clients = [client for client in active_clients if any(recipient.email for recipient in client.recipients)]
-        subscribed_clients, filtering_applied = filter_clients_for_naf_code(eligible_clients, establishment.naf_code)
+        subscribed_clients, naf_filtering_applied = filter_clients_for_naf_code(eligible_clients, establishment.naf_code)
+        subscribed_clients, status_filtering_applied = filter_clients_by_listing_status(
+            subscribed_clients,
+            establishment.google_listing_age_status,
+        )
+        filtering_applied = naf_filtering_applied or status_filtering_applied
         configured_recipients = collect_client_emails(subscribed_clients)
         
         # Only raise an error if there are neither client recipients nor admin recipients
         if not configured_recipients and not admin_emails:
-            message = "Aucun destinataire configuré."
-            if filtering_applied:
+            if naf_filtering_applied and status_filtering_applied:
+                message = (
+                    "Aucun client abonné à ce code NAF et autorisé pour ce statut n'a de destinataire configuré."
+                )
+            elif naf_filtering_applied:
                 message = "Aucun client abonné à ce code NAF n'a de destinataire configuré."
+            elif status_filtering_applied:
+                message = "Aucun client autorisé pour ce statut de fiche n'a de destinataire configuré."
+            else:
+                message = "Aucun destinataire configuré."
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
 
     google_service = GoogleBusinessService(session)
@@ -254,9 +270,12 @@ def export_google_places(
     start_date: date | None = None,
     end_date: date | None = None,
     mode: Literal["admin", "client"] = Query("admin", alias="mode"),
+    listing_statuses: list[ListingStatus] | None = Query(
+        None,
+        description="Liste de statuts de fiche Google à inclure dans l'export.",
+    ),
     session: Session = Depends(get_db_session),
 ) -> StreamingResponse:
-    settings = get_settings()
     if (start_date and not end_date) or (end_date and not start_date):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -267,6 +286,18 @@ def export_google_places(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="La date de début doit être antérieure ou égale à la date de fin.",
         )
+
+    raw_listing_statuses = listing_statuses.default if isinstance(listing_statuses, QueryInfo) else listing_statuses
+    try:
+        selected_statuses = normalize_listing_status_filters(raw_listing_statuses)
+    except ValueError as exc:  # surface as HTTP error
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    if not selected_statuses:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Sélectionnez au moins un statut de fiche Google.",
+        )
+    allowed_statuses = set(selected_statuses)
 
     stmt = (
         select(models.Establishment)
@@ -292,12 +323,11 @@ def export_google_places(
     establishments = [
         est for est in establishments if (est.google_check_status or "").lower() == "found"
     ]
-    if settings.google.alerts_only_recent_creations:
-        establishments = [
-            est
-            for est in establishments
-            if (est.google_listing_age_status or "").lower() == "recent_creation"
-        ]
+    establishments = [
+        est
+        for est in establishments
+        if normalize_listing_age_status(est.google_listing_age_status) in allowed_statuses
+    ]
     subcategory_lookup = _load_subcategory_lookup(session) if mode == "client" else None
     workbook_stream = build_google_places_workbook(
         establishments,
@@ -314,6 +344,7 @@ def export_google_places(
         start_date=start_date.isoformat() if start_date else None,
         end_date=end_date.isoformat() if end_date else None,
         mode=mode,
+        listing_statuses=selected_statuses,
     )
 
     headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
