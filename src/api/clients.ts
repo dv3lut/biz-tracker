@@ -1,4 +1,4 @@
-import type { Client } from "../types";
+import type { Client, ListingStatus } from "../types";
 import { mapNafSubCategoryResponse, type NafSubCategoryResponse } from "./naf";
 import { request } from "./http";
 
@@ -13,6 +13,7 @@ type ClientResponse = {
   name: string;
   start_date: string;
   end_date: string | null;
+  listing_statuses: string[];
   emails_sent_count: number;
   last_email_sent_at: string | null;
   created_at: string;
@@ -32,6 +33,7 @@ export interface ClientCreatePayload {
   name: string;
   startDate: string;
   endDate?: string | null;
+  listingStatuses: ListingStatus[];
   recipients: string[];
   subscriptionIds: string[];
 }
@@ -40,6 +42,7 @@ export interface ClientUpdatePayload {
   name?: string;
   startDate?: string;
   endDate?: string | null;
+  listingStatuses?: ListingStatus[];
   recipients?: string[];
   subscriptionIds?: string[];
 }
@@ -50,6 +53,7 @@ const mapClient = (client: ClientResponse): Client => {
     name: client.name,
     startDate: client.start_date,
     endDate: client.end_date,
+  listingStatuses: (client.listing_statuses ?? []) as ListingStatus[],
     emailsSentCount: client.emails_sent_count,
     lastEmailSentAt: client.last_email_sent_at,
     createdAt: client.created_at,
@@ -72,6 +76,7 @@ const serializeCreatePayload = (payload: ClientCreatePayload) => ({
   name: payload.name,
   start_date: payload.startDate,
   end_date: payload.endDate ?? null,
+  listing_statuses: payload.listingStatuses,
   recipients: payload.recipients,
   subscription_ids: payload.subscriptionIds,
 });
@@ -86,6 +91,9 @@ const serializeUpdatePayload = (payload: ClientUpdatePayload) => {
   }
   if (payload.endDate !== undefined) {
     body.end_date = payload.endDate;
+  }
+  if (payload.listingStatuses !== undefined) {
+    body.listing_statuses = payload.listingStatuses;
   }
   if (payload.recipients !== undefined) {
     body.recipients = payload.recipients;

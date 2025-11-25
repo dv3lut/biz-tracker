@@ -1,5 +1,7 @@
 export type SyncMode = "full" | "sirene_only";
 
+export type ListingStatus = "recent_creation" | "recent_creation_missing_contact" | "not_recent_creation";
+
 export interface SyncRun {
   id: string;
   scopeKey: string;
@@ -373,6 +375,7 @@ export interface Client {
   name: string;
   startDate: string;
   endDate: string | null;
+  listingStatuses: ListingStatus[];
   emailsSentCount: number;
   lastEmailSentAt: string | null;
   createdAt: string;

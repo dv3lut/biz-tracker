@@ -1,5 +1,6 @@
 import { Client } from "../types";
 import { formatDate, formatDateTime, formatNumber } from "../utils/format";
+import { LISTING_STATUS_LABELS } from "../constants/listingStatuses";
 
 type Props = {
   clients?: Client[];
@@ -92,6 +93,7 @@ export const ClientsSection = ({
                 <th>Période d'activation</th>
                 <th>Destinataires</th>
                 <th>Abonnements NAF</th>
+                <th>Statuts Google</th>
                 <th>Statistiques</th>
                 <th>Actions</th>
               </tr>
@@ -140,6 +142,19 @@ export const ClientsSection = ({
                           {client.subscriptions.map((subscription) => (
                             <span key={subscription.subcategoryId} className="chip">
                               {subscription.subcategory.nafCode} · {subscription.subcategory.name}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                    <td>
+                      {client.listingStatuses.length === 0 ? (
+                        <span className="small muted">Tous les statuts</span>
+                      ) : (
+                        <div className="chip-list">
+                          {client.listingStatuses.map((status) => (
+                            <span key={status} className="chip">
+                              {LISTING_STATUS_LABELS[status] ?? status}
                             </span>
                           ))}
                         </div>

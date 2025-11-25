@@ -1,4 +1,4 @@
-import { GoogleCheckResult, GoogleRetryConfig, GoogleRetryRule } from "../types";
+import { GoogleCheckResult, GoogleRetryConfig, GoogleRetryRule, ListingStatus } from "../types";
 import { getAdminToken } from "./auth";
 import { ApiError, request } from "./http";
 import { EstablishmentResponse, mapEstablishment } from "./establishments";
@@ -7,6 +7,7 @@ type GooglePlacesExportParams = {
   startDate: string;
   endDate: string;
   mode?: "admin" | "client";
+  listingStatuses?: ListingStatus[];
 };
 
 type ManualGoogleCheckOptions = {
@@ -97,6 +98,11 @@ export const googleApi = {
     url.searchParams.set("end_date", params.endDate);
     if (params.mode) {
       url.searchParams.set("mode", params.mode);
+    }
+    if (params.listingStatuses && params.listingStatuses.length > 0) {
+      params.listingStatuses.forEach((status) => {
+        url.searchParams.append("listing_statuses", status);
+      });
     }
 
     const response = await fetch(url.toString(), { headers });

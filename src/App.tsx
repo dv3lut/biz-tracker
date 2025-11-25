@@ -46,6 +46,7 @@ import {
   EstablishmentDetail,
   EstablishmentIndividualFilter,
   Client,
+  ListingStatus,
   NafCategory,
   GoogleCheckResult,
   GoogleRetryConfig,
@@ -56,6 +57,7 @@ import {
   SyncState,
 } from "./types";
 import { NAV_SECTIONS, type SectionKey } from "./constants/sections";
+import { DEFAULT_LISTING_STATUSES } from "./constants/listingStatuses";
 import { useRefreshIndicator } from "./hooks/useRefreshIndicator";
 
 type RunDetailModalState = {
@@ -125,6 +127,9 @@ const App = () => {
   const [googleExportStartDate, setGoogleExportStartDate] = useState<string>(() => getDefaultGoogleExportRange().start);
   const [googleExportEndDate, setGoogleExportEndDate] = useState<string>(() => getDefaultGoogleExportRange().end);
   const [googleExportMode, setGoogleExportMode] = useState<"admin" | "client">("client");
+  const [googleExportListingStatuses, setGoogleExportListingStatuses] = useState<ListingStatus[]>(
+    () => [...DEFAULT_LISTING_STATUSES],
+  );
   const [isGoogleExportModalOpen, setGoogleExportModalOpen] = useState(false);
   const [runDetailModal, setRunDetailModal] = useState<RunDetailModalState | null>(null);
   const [isSyncModeModalOpen, setSyncModeModalOpen] = useState(false);
@@ -160,7 +165,8 @@ const App = () => {
     const { start, end } = getDefaultGoogleExportRange();
     setGoogleExportStartDate(start);
     setGoogleExportEndDate(end);
-  }, [setGoogleExportStartDate, setGoogleExportEndDate]);
+    setGoogleExportListingStatuses([...DEFAULT_LISTING_STATUSES]);
+  }, [setGoogleExportStartDate, setGoogleExportEndDate, setGoogleExportListingStatuses]);
 
   const handleUnauthorized = useCallback(() => {
     clearAdminToken();
@@ -984,6 +990,7 @@ const App = () => {
             name: payload.name,
             startDate: payload.startDate,
             endDate: payload.endDate,
+            listingStatuses: payload.listingStatuses,
             recipients: payload.recipients,
             subscriptionIds: payload.subscriptionIds,
           },
@@ -993,6 +1000,7 @@ const App = () => {
           name: payload.name,
           startDate: payload.startDate,
           endDate: payload.endDate,
+          listingStatuses: payload.listingStatuses,
           recipients: payload.recipients,
           subscriptionIds: payload.subscriptionIds,
         });
@@ -1169,6 +1177,12 @@ const App = () => {
     setFeedbackMessage(null);
   }, []);
 
+  const handleGoogleExportListingStatusesChange = useCallback((statuses: ListingStatus[]) => {
+    setGoogleExportListingStatuses(statuses);
+    setErrorMessage(null);
+    setFeedbackMessage(null);
+  }, []);
+
   const handleExportGooglePlaces = useCallback(async () => {
     if (!isAuthenticated) {
       setTokenError("Merci de saisir un jeton administrateur.");
@@ -1184,12 +1198,18 @@ const App = () => {
       setFeedbackMessage(null);
       return false;
     }
+    if (googleExportListingStatuses.length === 0) {
+      setErrorMessage("Merci de sélectionner au moins un statut de fiche Google.");
+      setFeedbackMessage(null);
+      return false;
+    }
     setIsExportingGooglePlaces(true);
     try {
       const blob = await googleApi.exportPlaces({
         startDate: googleExportStartDate,
         endDate: googleExportEndDate,
         mode: googleExportMode,
+        listingStatuses: googleExportListingStatuses,
       });
       const url = window.URL.createObjectURL(blob);
       const anchor = document.createElement("a");
@@ -1214,6 +1234,7 @@ const App = () => {
     googleExportStartDate,
     googleExportEndDate,
     googleExportMode,
+    googleExportListingStatuses,
     showError,
     setTokenError,
     setErrorMessage,
@@ -1490,11 +1511,13 @@ const App = () => {
         startDate={googleExportStartDate}
         endDate={googleExportEndDate}
         mode={googleExportMode}
+        listingStatuses={googleExportListingStatuses}
         isSubmitting={isExportingGooglePlaces}
         onClose={handleCloseGoogleExportModal}
         onStartDateChange={handleGoogleExportStartDateChange}
         onEndDateChange={handleGoogleExportEndDateChange}
         onModeChange={handleGoogleExportModeChange}
+        onListingStatusesChange={handleGoogleExportListingStatusesChange}
         onSubmit={handleConfirmGoogleExport}
       />
     </>

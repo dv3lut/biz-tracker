@@ -1,12 +1,14 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
-import { Client, NafCategory } from "../types";
+import { Client, ListingStatus, NafCategory } from "../types";
 import { formatNumber, formatDateTime } from "../utils/format";
+import { DEFAULT_LISTING_STATUSES, LISTING_STATUS_OPTIONS } from "../constants/listingStatuses";
 
 type FormState = {
   name: string;
   startDate: string;
   endDate: string;
+  listingStatuses: ListingStatus[];
   recipientsText: string;
   subscriptionIds: string[];
 };
@@ -15,6 +17,7 @@ type SubmitPayload = {
   name: string;
   startDate: string;
   endDate: string | null;
+  listingStatuses: ListingStatus[];
   recipients: string[];
   subscriptionIds: string[];
 };
@@ -34,6 +37,7 @@ const EMPTY_STATE: FormState = {
   name: "",
   startDate: "",
   endDate: "",
+  listingStatuses: DEFAULT_LISTING_STATUSES,
   recipientsText: "",
   subscriptionIds: [],
 };
@@ -68,6 +72,7 @@ export const ClientModal = ({
         name: client.name,
         startDate: client.startDate,
         endDate: client.endDate ?? "",
+        listingStatuses: client.listingStatuses?.length ? client.listingStatuses : DEFAULT_LISTING_STATUSES,
         recipientsText: client.recipients.map((recipient) => recipient.email).join("\n"),
         subscriptionIds: client.subscriptions.map((subscription) => subscription.subcategoryId),
       });
@@ -77,8 +82,8 @@ export const ClientModal = ({
   }, [client, isOpen, mode]);
 
   const isValid = useMemo(() => {
-    return Boolean(formState.name.trim() && formState.startDate);
-  }, [formState.name, formState.startDate]);
+    return Boolean(formState.name.trim() && formState.startDate && formState.listingStatuses.length > 0);
+  }, [formState.name, formState.startDate, formState.listingStatuses.length]);
 
   const handleChange = (field: keyof FormState) => (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFormState((current) => ({ ...current, [field]: event.target.value }));
@@ -93,6 +98,7 @@ export const ClientModal = ({
       name: formState.name.trim(),
       startDate: formState.startDate,
       endDate: formState.endDate ? formState.endDate : null,
+      listingStatuses: formState.listingStatuses,
       recipients: splitRecipients(formState.recipientsText),
       subscriptionIds: formState.subscriptionIds,
     };
@@ -107,6 +113,24 @@ export const ClientModal = ({
       }
       return { ...current, subscriptionIds: [...current.subscriptionIds, subcategoryId] };
     });
+  };
+
+  const handleToggleListingStatus = (status: ListingStatus) => () => {
+    setFormState((current) => {
+      const exists = current.listingStatuses.includes(status);
+      if (exists) {
+        const next = current.listingStatuses.filter((item) => item !== status);
+        if (next.length === 0) {
+          return current;
+        }
+        return { ...current, listingStatuses: next };
+      }
+      return { ...current, listingStatuses: [...current.listingStatuses, status] };
+    });
+  };
+
+  const handleSelectAllStatuses = () => {
+    setFormState((current) => ({ ...current, listingStatuses: [...DEFAULT_LISTING_STATUSES] }));
   };
 
   const handleToggleCategory = (categoryId: string) => () => {
@@ -186,6 +210,30 @@ export const ClientModal = ({
                 onChange={handleChange("recipientsText")}
                 placeholder="client@example.com"
               />
+            </div>
+          </section>
+
+          <section>
+            <h3>Statuts des fiches Google</h3>
+            <p className="muted small">Sélectionnez les statuts qui déclenchent des alertes pour ce client.</p>
+            <div className="listing-status-grid">
+              {LISTING_STATUS_OPTIONS.map((option) => {
+                const checked = formState.listingStatuses.includes(option.value);
+                return (
+                  <label key={option.value} className="listing-status-option">
+                    <input type="checkbox" checked={checked} onChange={handleToggleListingStatus(option.value)} />
+                    <div>
+                      <strong>{option.label}</strong>
+                      <div className="muted small">{option.description}</div>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+            <div className="card-actions" style={{ justifyContent: "flex-start", marginTop: "0.5rem" }}>
+              <button type="button" className="ghost" onClick={handleSelectAllStatuses}>
+                Tout sélectionner
+              </button>
             </div>
           </section>
 
