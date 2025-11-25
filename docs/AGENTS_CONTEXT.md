@@ -21,5 +21,5 @@
 ## Statuts d'ancienneté des fiches Google
 
 - `recent_creation` : la date d'origine de la fiche (ou, à défaut, l'absence totale d'avis Google) suggère une création concomitante avec l'établissement Sirene. On considère également comme "récents" les listings dont `user_ratings_total` vaut 0 ou pour lesquels l'API retourne explicitement une liste d'avis vide.
-- `buyback_suspected` : la fiche Google est datée d'au moins 45 jours avant la date de création Sirene (ou `first_seen_at`) ce qui laisse supposer un rachat/reprise d'activité.
+- `not_recent_creation` : la fiche Google présente des signaux d'ancienneté (avis plus anciens que 2 semaines, volume d'avis significatif, date d'origine bien antérieure) et correspond à une création ancienne par rapport au SIRET recensé.
 - `unknown` : impossible d'établir l'âge relatif (Google ne retourne ni périodes d'ouverture ni avis exploitables **et** nous ne disposons pas d'une date de création Sirene fiable). Dans ce cas aucun signal n'est affiché aux utilisateurs.

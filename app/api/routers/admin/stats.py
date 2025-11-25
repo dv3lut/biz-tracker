@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db_session
@@ -127,9 +127,15 @@ def get_dashboard_metrics(
             )
             .all()
         )
-        run_listing_counts = {"buyback_suspected": 0, "recent_creation": 0, "unknown": 0}
+        run_listing_counts = {
+            "recent_creation": 0,
+            "not_recent_creation": 0,
+            "unknown": 0,
+        }
         for status, count in run_listing_rows:
             key = status or "unknown"
+            if key == "buyback_suspected":
+                key = "not_recent_creation"
             bucket = key if key in run_listing_counts else "unknown"
             run_listing_counts[bucket] += int(count or 0)
 
@@ -153,8 +159,8 @@ def get_dashboard_metrics(
             google_insufficient=run_google_counts["insufficient"],
             google_pending=run_google_counts["pending"],
             google_other=run_google_counts["other"],
-            listing_buyback=run_listing_counts["buyback_suspected"],
             listing_recent=run_listing_counts["recent_creation"],
+            listing_not_recent=run_listing_counts["not_recent_creation"],
             listing_unknown=run_listing_counts["unknown"],
             alerts_created=int(alerts_row.created or 0),
             alerts_sent=int(alerts_row.sent or 0),
@@ -305,9 +311,15 @@ def get_dashboard_metrics(
         )
         .all()
     )
-    listing_age_counts = {"buyback_suspected": 0, "recent_creation": 0, "unknown": 0}
+    listing_age_counts = {
+        "recent_creation": 0,
+        "not_recent_creation": 0,
+        "unknown": 0,
+    }
     for status, count in listing_age_rows:
         key = status or "unknown"
+        if key == "buyback_suspected":
+            key = "not_recent_creation"
         bucket = key if key in listing_age_counts else "unknown"
         listing_age_counts[bucket] += int(count or 0)
 
@@ -334,6 +346,60 @@ def get_dashboard_metrics(
                 models.NafSubCategory.name.label("subcategory_name"),
                 models.NafSubCategory.naf_code.label("naf_code"),
                 func.count(models.Establishment.siret).label("establishment_count"),
+                func.sum(
+                    case((models.Establishment.google_check_status == "found", 1), else_=0)
+                ).label("google_found_count"),
+                func.sum(
+                    case((models.Establishment.google_check_status == "not_found", 1), else_=0)
+                ).label("google_not_found_count"),
+                func.sum(
+                    case((models.Establishment.google_check_status == "insufficient", 1), else_=0)
+                ).label("google_insufficient_count"),
+                func.sum(
+                    case((models.Establishment.google_check_status == "pending", 1), else_=0)
+                ).label("google_pending_count"),
+                func.sum(
+                    case((models.Establishment.google_check_status == "type_mismatch", 1), else_=0)
+                ).label("google_type_mismatch_count"),
+                func.sum(
+                    case(
+                        (
+                            models.Establishment.google_check_status.notin_(
+                                ["found", "not_found", "insufficient", "pending", "type_mismatch"]
+                            ),
+                            1,
+                        ),
+                        else_=0,
+                    )
+                ).label("google_other_count"),
+                func.sum(
+                    case(
+                        (
+                            (
+                                models.Establishment.google_check_status == "found"
+                            )
+                            & (models.Establishment.google_listing_age_status == "recent_creation"),
+                            1,
+                        ),
+                        else_=0,
+                    )
+                ).label("listing_recent_count"),
+                func.sum(
+                    case(
+                        (
+                            (
+                                models.Establishment.google_check_status == "found"
+                            )
+                            & (
+                                models.Establishment.google_listing_age_status.in_(
+                                    ["not_recent_creation", "buyback_suspected"]
+                                )
+                            ),
+                            1,
+                        ),
+                        else_=0,
+                    )
+                ).label("listing_not_recent_count"),
             )
             .join(models.NafSubCategory, models.NafSubCategory.category_id == models.NafCategory.id)
             .outerjoin(
@@ -358,6 +424,15 @@ def get_dashboard_metrics(
     for row in naf_category_rows:
         category_id = row.category_id
         sub_count = int(row.establishment_count or 0)
+        google_found = int(row.google_found_count or 0)
+        google_not_found = int(row.google_not_found_count or 0)
+        google_insufficient = int(row.google_insufficient_count or 0)
+        google_pending = int(row.google_pending_count or 0)
+        google_other = int(row.google_other_count or 0)
+        google_type_mismatch = int(row.google_type_mismatch_count or 0)
+        listing_recent = int(row.listing_recent_count or 0)
+        listing_not_recent = int(row.listing_not_recent_count or 0)
+        listing_unknown = max(0, google_found - listing_recent - listing_not_recent)
         category_entry = category_map.get(category_id)
         if not category_entry:
             category_entry = {
@@ -375,6 +450,15 @@ def get_dashboard_metrics(
                 "naf_code": row.naf_code,
                 "name": row.subcategory_name,
                 "establishment_count": sub_count,
+                "google_found": google_found,
+                "google_not_found": google_not_found,
+                "google_insufficient": google_insufficient,
+                "google_pending": google_pending,
+                "google_type_mismatch": google_type_mismatch,
+                "google_other": google_other,
+                "listing_recent": listing_recent,
+                "listing_not_recent": listing_not_recent,
+                "listing_unknown": listing_unknown,
             }
         )
 

@@ -11,6 +11,7 @@ from app.config import get_settings
 from app.db import Base, get_engine, session_scope
 from app.db.migrations import run_schema_upgrades
 from app.logging_config import configure_logging
+from app.services.sync.mode import SyncMode
 from app.services.sync_service import SyncService
 from app.db import models
 
@@ -30,20 +31,21 @@ def init_db() -> None:
     typer.echo("Tables créées (si nécessaire).")
 
 
-def _execute_sync(check_for_updates: bool) -> None:
+def _execute_sync(check_for_updates: bool, mode: SyncMode) -> None:
     configure_logging()
     service = SyncService()
     with session_scope() as session:
         run = service.prepare_sync_run(
             session,
             check_informations=check_for_updates,
+            mode=mode,
         )
         if run is None:
             typer.echo("Aucune mise à jour à synchroniser.")
             return
         run_id = run.id
 
-    typer.echo(f"Synchronisation programmée: run={run_id}")
+    typer.echo(f"Synchronisation programmée: run={run_id} mode={mode.value}")
     service.execute_sync_run(run_id, triggered_by="cli")
 
     with session_scope() as session:
@@ -59,10 +61,16 @@ def sync(
         "--check-for-updates/--no-check-for-updates",
         help="Annule automatiquement si aucune nouvelle donnée n'est disponible côté Sirene.",
     ),
+    mode: SyncMode = typer.Option(
+        SyncMode.FULL,
+        "--mode",
+        case_sensitive=False,
+        help="Mode d'exécution: 'full' déclenche Google, 'sirene_only' le désactive.",
+    ),
 ) -> None:
     """Lancer la synchronisation unifiée des restaurants."""
 
-    _execute_sync(check_for_updates=check_for_updates)
+    _execute_sync(check_for_updates=check_for_updates, mode=mode)
 
 
 @cli.command("sync-full", hidden=True)
@@ -71,7 +79,7 @@ def sync_full_legacy(
     """Alias rétrocompatibilité vers la synchronisation unifiée."""
 
     typer.echo("Commande 'sync-full' obsolète. Utilisation de 'sync'.")
-    _execute_sync(check_for_updates=False)
+    _execute_sync(check_for_updates=False, mode=SyncMode.FULL)
 
 
 @cli.command("sync-incremental", hidden=True)
@@ -79,7 +87,7 @@ def sync_incremental_legacy() -> None:
     """Alias rétrocompatibilité vers la synchronisation unifiée."""
 
     typer.echo("Commande 'sync-incremental' obsolète. Utilisation de 'sync'.")
-    _execute_sync(check_for_updates=False)
+    _execute_sync(check_for_updates=False, mode=SyncMode.FULL)
 
 
 @cli.command("serve")

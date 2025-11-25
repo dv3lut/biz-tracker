@@ -7,6 +7,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator, model_validator
 
+from app.services.sync.mode import SyncMode
+
 
 class SyncRunOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -15,6 +17,7 @@ class SyncRunOut(BaseModel):
     scope_key: str
     run_type: str
     status: str
+    mode: SyncMode
     started_at: datetime
     finished_at: datetime | None
     api_call_count: int
@@ -37,6 +40,11 @@ class SyncRunOut(BaseModel):
     progress: float | None = None
     estimated_remaining_seconds: float | None = None
     estimated_completion_at: datetime | None = None
+
+    @computed_field
+    @property
+    def google_enabled(self) -> bool:
+        return self.mode != SyncMode.SIRENE_ONLY
 
 
 class SyncStateOut(BaseModel):
@@ -115,8 +123,8 @@ class GoogleStatusBreakdown(BaseModel):
 
 
 class GoogleListingAgeBreakdown(BaseModel):
-    buyback_suspected: int = Field(default=0, description="Nombre d'établissements dont la fiche semble dater d'un rachat.")
     recent_creation: int = Field(default=0, description="Nombre d'établissements avec fiche créée récemment.")
+    not_recent_creation: int = Field(default=0, description="Nombre d'établissements dont la fiche semble antérieure à l'ouverture (création ancienne).")
     unknown: int = Field(default=0, description="Nombre d'établissements sans information d'âge de fiche.")
 
 
@@ -125,6 +133,15 @@ class NafSubCategoryStats(BaseModel):
     naf_code: str = Field(description="Code NAF exact suivi par Biz Tracker.")
     name: str = Field(description="Libellé lisible de la sous-catégorie.")
     establishment_count: int = Field(description="Nombre d'établissements correspondant à ce code NAF.")
+    google_found: int = Field(description="Nombre d'établissements avec fiche Google identifiée.")
+    google_not_found: int = Field(description="Nombre d'établissements sans fiche Google trouvée.")
+    google_insufficient: int = Field(description="Nombre d'établissements dont l'identité est insuffisante pour Google.")
+    google_pending: int = Field(description="Nombre d'établissements encore en file d'attente Google.")
+    google_type_mismatch: int = Field(description="Nombre d'établissements rejetés car la catégorie Google ne correspond pas au NAF attendu.")
+    google_other: int = Field(description="Nombre d'établissements avec un statut Google inattendu.")
+    listing_recent: int = Field(description="Fiches Google considérées comme création récente (dernier run).")
+    listing_not_recent: int = Field(description="Fiches Google considérées comme création ancienne ou reprise.")
+    listing_unknown: int = Field(description="Fiches Google sans information fiable sur l'ancienneté.")
 
 
 class NafCategoryStats(BaseModel):
@@ -150,8 +167,8 @@ class DashboardRunBreakdown(BaseModel):
     google_insufficient: int = Field(description="Nouveaux établissements sans identité exploitable pour Google.")
     google_pending: int = Field(description="Nouveaux établissements encore en file d'attente Google.")
     google_other: int = Field(description="Nouveaux établissements avec un statut Google inattendu.")
-    listing_buyback: int = Field(description="Fiches suspectées de rachat sur le run.")
     listing_recent: int = Field(description="Fiches probablement créées lors de l'ouverture.")
+    listing_not_recent: int = Field(description="Fiches déjà existantes avant la création recensée (création ancienne).")
     listing_unknown: int = Field(description="Fiches sans information d'âge sur le run.")
     alerts_created: int = Field(description="Alertes créées pendant le run.")
     alerts_sent: int = Field(description="Alertes envoyées pendant le run.")
@@ -247,6 +264,7 @@ class NafCategoryOut(BaseModel):
     id: UUID
     name: str
     description: str | None
+    keywords: list[str] = Field(default_factory=list, description="Mots-clés supplémentaires pour l'appariement Google.")
     created_at: datetime
     updated_at: datetime
     subcategories: list[NafSubCategoryOut] = Field(default_factory=list)
@@ -255,11 +273,13 @@ class NafCategoryOut(BaseModel):
 class NafCategoryCreate(BaseModel):
     name: str
     description: str | None = None
+    keywords: list[str] = Field(default_factory=list, description="Mots-clés additionnels (un mot/phrase par entrée).")
 
 
 class NafCategoryUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
+    keywords: list[str] | None = Field(default=None, description="Remplace la liste complète des mots-clés lorsqu'elle est fournie.")
 
 
 class NafSubCategoryCreate(BaseModel):
@@ -347,6 +367,10 @@ class SyncRequest(BaseModel):
         default=False,
         description="Vérifie le service informations Sirene et annule si aucune mise à jour n'est disponible.",
     )
+    mode: SyncMode = Field(
+        default=SyncMode.FULL,
+        description="Mode d'exécution: 'full' exécute l'enrichissement Google, 'sirene_only' le désactive.",
+    )
 
 
 class EstablishmentOut(BaseModel):
@@ -372,6 +396,8 @@ class EstablishmentOut(BaseModel):
     google_last_checked_at: datetime | None
     google_last_found_at: datetime | None
     google_check_status: str
+    google_match_confidence: float | None
+    google_category_match_confidence: float | None
     google_listing_origin_at: datetime | None
     google_listing_origin_source: str | None
     google_listing_age_status: str | None

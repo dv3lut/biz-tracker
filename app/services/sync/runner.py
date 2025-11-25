@@ -13,6 +13,7 @@ from app.db import models
 from app.db.session import session_scope
 from app.observability import log_event, serialize_sync_run
 from app.services.sync.context import SyncContext, SyncResult
+from app.services.sync.mode import DEFAULT_SYNC_MODE
 
 from .preparation import SyncRunPreparationMixin
 from .utils import log_and_print
@@ -27,13 +28,14 @@ class SyncRunnerMixin(SyncRunPreparationMixin):
         self,
         session: Session,
     ) -> models.SyncRun:
-        run, state = self._initialize_sync_run(session, status="running")
+        run, state = self._initialize_sync_run(session, status="running", mode=DEFAULT_SYNC_MODE)
         context = self._build_context(session, run, state)
         log_event(
             "sync.run.started",
             run_id=str(run.id),
             scope_key=run.scope_key,
             triggered_by="cli",
+            mode=context.mode.value,
             run=serialize_sync_run(run),
         )
         started_at = time.perf_counter()
@@ -56,6 +58,7 @@ class SyncRunnerMixin(SyncRunPreparationMixin):
                 run_id=str(run.id),
                 scope_key=run.scope_key,
                 status=run.status,
+                mode=result.mode.value,
                 duration_seconds=duration,
                 result=self._serialize_result(result, email_summary),
                 run=serialize_sync_run(run),
@@ -100,6 +103,7 @@ class SyncRunnerMixin(SyncRunPreparationMixin):
                     run_id=str(run.id),
                     scope_key=run.scope_key,
                     triggered_by=triggered_by,
+                    mode=run.mode,
                     run=serialize_sync_run(run),
                 )
                 log_and_print(logging.INFO, "Synchronisation démarrée (run=%s)", run.id)
@@ -126,6 +130,7 @@ class SyncRunnerMixin(SyncRunPreparationMixin):
                         scope_key=run.scope_key,
                         status=run.status,
                         triggered_by=triggered_by,
+                        mode=result.mode.value,
                         duration_seconds=duration,
                         result=self._serialize_result(result, email_summary),
                         run=serialize_sync_run(run),
@@ -180,7 +185,9 @@ class SyncRunnerMixin(SyncRunPreparationMixin):
             "new_establishment_count": len(result.new_establishments),
             "updated_establishment_count": len(result.updated_establishments),
             "google_match_count": result.google_matched_count,
+            "mode": result.mode.value,
             "google": {
+                "enabled": result.mode.google_enabled,
                 "queue_count": result.google_queue_count,
                 "eligible_count": result.google_eligible_count,
                 "matched_count": result.google_matched_count,

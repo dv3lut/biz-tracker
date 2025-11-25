@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.clients.sirene_client import SireneClient
 from app.config import Settings
 from app.db import models
+from app.services.sync.mode import SyncMode
 
 
 @dataclass
@@ -21,6 +22,7 @@ class SyncContext:
     state: models.SyncState
     client: SireneClient
     settings: Settings
+    mode: SyncMode
 
 
 @dataclass
@@ -35,6 +37,7 @@ class UpdatedEstablishmentInfo:
 class SyncResult:
     """Aggregate the outcome of a synchronization run."""
 
+    mode: SyncMode
     last_treated: datetime | None
     new_establishments: list[models.Establishment]
     new_establishment_payloads: list[dict[str, object]]

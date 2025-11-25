@@ -25,6 +25,7 @@ from app.services.client_service import (
     dispatch_email_to_clients,
     filter_clients_for_naf_code,
     get_active_clients,
+    get_admin_emails,
 )
 from app.services.email_service import EmailService
 from app.services.google_business_service import GoogleBusinessService
@@ -44,10 +45,15 @@ router = APIRouter(tags=["admin"])
 @router.post(
     "/establishments/{siret}/google-check",
     response_model=ManualGoogleCheckResponse,
-    summary="Vérifier un établissement via Google Places et envoyer une alerte",
+    summary="Relancer une vérification Google Places et (optionnel) notifier les clients",
 )
 def manual_google_check(
     siret: str,
+    notify_clients: bool = Query(
+        True,
+        alias="notify_clients",
+        description="Envoie également un e-mail aux clients abonnés lorsque la fiche est trouvée.",
+    ),
     session: Session = Depends(get_db_session),
 ) -> ManualGoogleCheckResponse:
     settings = get_settings()
@@ -58,28 +64,40 @@ def manual_google_check(
             detail="L'enrichissement Google est désactivé ou la clé API est absente.",
         )
 
-    email_service = EmailService()
-    if not email_service.is_enabled():
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Le service e-mail est désactivé.")
-    if not email_service.is_configured():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Configuration SMTP incomplète (hôte ou adresse expéditeur manquants).",
-        )
-
-    active_clients = get_active_clients(session)
-    eligible_clients = [client for client in active_clients if any(recipient.email for recipient in client.recipients)]
     establishment = session.get(models.Establishment, siret)
     if establishment is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Établissement introuvable.")
 
-    subscribed_clients, filtering_applied = filter_clients_for_naf_code(eligible_clients, establishment.naf_code)
-    configured_recipients = collect_client_emails(subscribed_clients)
-    if not configured_recipients:
-        message = "Aucun destinataire configuré."
-        if filtering_applied:
-            message = "Aucun client abonné à ce code NAF n'a de destinataire configuré."
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
+    subscribed_clients: list[models.Client] = []
+    configured_recipients: list[str] = []
+    filtering_applied = False
+    email_service: EmailService | None = None
+    admin_emails: list[str] = []
+
+    if notify_clients:
+        email_service = EmailService()
+        if not email_service.is_enabled():
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Le service e-mail est désactivé.")
+        if not email_service.is_configured():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Configuration SMTP incomplète (hôte ou adresse expéditeur manquants).",
+            )
+
+        # Get admin recipients for admin notification email
+        admin_emails = get_admin_emails(session)
+
+        active_clients = get_active_clients(session)
+        eligible_clients = [client for client in active_clients if any(recipient.email for recipient in client.recipients)]
+        subscribed_clients, filtering_applied = filter_clients_for_naf_code(eligible_clients, establishment.naf_code)
+        configured_recipients = collect_client_emails(subscribed_clients)
+        
+        # Only raise an error if there are neither client recipients nor admin recipients
+        if not configured_recipients and not admin_emails:
+            message = "Aucun destinataire configuré."
+            if filtering_applied:
+                message = "Aucun client abonné à ce code NAF n'a de destinataire configuré."
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
 
     google_service = GoogleBusinessService(session)
     try:
@@ -95,8 +113,10 @@ def manual_google_check(
     place_id = establishment.google_place_id
 
     email_sent = False
+    admin_email_sent = False
     partial_failure = False
-    if found:
+    if notify_clients and found:
+        assert email_service is not None  # placate type checker
         subject = (
             f"[{settings.sync.scope_key}] Page Google détectée pour "
             f"{establishment.name or establishment.siret}"
@@ -114,6 +134,38 @@ def manual_google_check(
                 "  Attention : Google Places n'a pas fourni d'URL publique pour cette fiche (Place ID uniquement).",
             )
         body = "\n".join(message_lines)
+
+        # Send email to admins first
+        if admin_emails:
+            admin_subject = f"[{settings.sync.scope_key}] Check Google relancé: {establishment.name or establishment.siret}"
+            admin_message_lines = [
+                "Un check Google manuel a été relancé depuis l'administration.",
+                "",
+                f"Établissement: {establishment.name or establishment.siret} ({establishment.siret})",
+                f"NAF: {establishment.naf_code or 'N/A'}",
+                "",
+                f"Résultat: {'Fiche trouvée' if found else 'Aucune fiche détectée'}",
+            ]
+            if found:
+                admin_message_lines.append(f"Place ID: {establishment.google_place_id or 'N/A'}")
+                if establishment.google_place_url:
+                    admin_message_lines.append(f"URL: {establishment.google_place_url}")
+            admin_body = "\n".join(admin_message_lines)
+            try:
+                email_service.send(admin_subject, admin_body, admin_emails)
+                admin_email_sent = True
+                log_event(
+                    "manual_google.admin_email.sent",
+                    siret=siret,
+                    admin_count=len(admin_emails),
+                )
+            except Exception as exc:
+                log_event(
+                    "manual_google.admin_email.error",
+                    siret=siret,
+                    error_type=type(exc).__name__,
+                    error_message=str(exc),
+                )
 
         payloads = [
             ClientEmailPayload(
@@ -140,7 +192,8 @@ def manual_google_check(
 
         if dispatch_result.delivered:
             email_sent = True
-        else:
+        elif configured_recipients:
+            # Only fail if there were client recipients but dispatch failed
             session.rollback()
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
@@ -150,16 +203,19 @@ def manual_google_check(
     if check_status == "insufficient":
         message = "Informations insuffisantes pour lancer une recherche Google."
     elif found:
-        if email_sent:
-            if partial_failure:
-                message = (
-                    "Une page Google a été trouvée. Certains clients n'ont pas pu être notifiés, "
-                    "consultez les logs pour les détails."
-                )
+        if notify_clients:
+            if email_sent:
+                if partial_failure:
+                    message = (
+                        "Une page Google a été trouvée. Certains clients n'ont pas pu être notifiés, "
+                        "consultez les logs pour les détails."
+                    )
+                else:
+                    message = "Une page Google a été trouvée et les destinataires ont été notifiés."
             else:
-                message = "Une page Google a été trouvée et les destinataires ont été notifiés."
+                message = "Une page Google a été trouvée mais aucun e-mail n'a été envoyé."
         else:
-            message = "Une page Google a été trouvée mais aucun e-mail n'a été envoyé."
+            message = "Une page Google a été trouvée. Aucune notification client n'a été envoyée."
     else:
         message = "Aucune page Google n'a été trouvée pour cet établissement."
 
@@ -168,8 +224,11 @@ def manual_google_check(
         siret=siret,
         found=found,
         email_sent=email_sent,
+        admin_email_sent=admin_email_sent,
         partial_failure=partial_failure,
         configured_recipients=len(configured_recipients),
+        admin_recipients=len(admin_emails),
+        notify_clients=notify_clients,
         place_id=place_id,
         place_url=place_url,
         check_status=check_status,
@@ -197,6 +256,7 @@ def export_google_places(
     mode: Literal["admin", "client"] = Query("admin", alias="mode"),
     session: Session = Depends(get_db_session),
 ) -> StreamingResponse:
+    settings = get_settings()
     if (start_date and not end_date) or (end_date and not start_date):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -214,7 +274,8 @@ def export_google_places(
             or_(
                 models.Establishment.google_place_url.is_not(None),
                 models.Establishment.google_place_id.is_not(None),
-            )
+            ),
+            models.Establishment.google_check_status == "found",
         )
         .order_by(
             models.Establishment.date_creation.asc().nullslast(),
@@ -228,6 +289,15 @@ def export_google_places(
         stmt = stmt.where(models.Establishment.date_creation <= end_date)
 
     establishments = session.execute(stmt).scalars().all()
+    establishments = [
+        est for est in establishments if (est.google_check_status or "").lower() == "found"
+    ]
+    if settings.google.alerts_only_recent_creations:
+        establishments = [
+            est
+            for est in establishments
+            if (est.google_listing_age_status or "").lower() == "recent_creation"
+        ]
     subcategory_lookup = _load_subcategory_lookup(session) if mode == "client" else None
     workbook_stream = build_google_places_workbook(
         establishments,

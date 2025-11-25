@@ -2,15 +2,29 @@
 from __future__ import annotations
 
 import logging
-import re
-import unicodedata
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
-from difflib import SequenceMatcher
+from datetime import date, datetime, timedelta
 from typing import Callable, Iterable, Sequence
 
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.clients.google_places_client import GooglePlacesClient, GooglePlacesError
+from app.config import get_settings
+from app.db import models
+from app.services.google_business import (
+    build_place_query,
+    compute_confidence,
+    compute_listing_age_status,
+    extract_listing_origin,
+    extract_ratings_total,
+    matches_expected_google_category,
+    should_assume_recent_listing,
+    tokenize_text,
+)
+from app.services.rate_limiter import RateLimiter
+from app.services.google_retry_config import GoogleRetryRuntimeConfig, load_runtime_google_retry_config
 from app.utils.business_types import is_micro_company
-from app.utils.google_listing import normalize_listing_age_status
 
 ProgressCallback = Callable[[int, int, int, int, int], None]
 _PLACEHOLDER_TOKENS = {"ND"}
@@ -20,41 +34,9 @@ _PLACE_DETAILS_FIELDS = (
     "url,website,name,formatted_address,types,business_status,opening_hours,current_opening_hours,"
     "reviews,user_ratings_total"
 )
-_LISTING_AGE_THRESHOLD_DAYS = 365
 
-
-def _sanitize_placeholder(value: str | None) -> str:
-    if not value:
-        return ""
-    cleaned = value.strip()
-    if not cleaned:
-        return ""
-    normalized = "".join(ch for ch in cleaned.upper() if ch.isalnum())
-    if not normalized:
-        return ""
-    if normalized in _PLACEHOLDER_TOKENS:
-        return ""
-    if len(normalized) % 2 == 0 and all(normalized[i : i + 2] == "ND" for i in range(0, len(normalized), 2)):
-        return ""
-    return cleaned
-
-from sqlalchemy import select
-from sqlalchemy.orm import Session
-
-from app.clients.google_places_client import GooglePlacesClient, GooglePlacesError
-from app.config import get_settings
-from app.db import models
-from app.services.rate_limiter import RateLimiter
-from app.services.google_retry_config import GoogleRetryRuntimeConfig, load_runtime_google_retry_config
 
 _LOGGER = logging.getLogger(__name__)
-
-
-def _normalize(value: str | None) -> str:
-    if not value:
-        return ""
-    normalized = unicodedata.normalize("NFKD", value)
-    return "".join(ch for ch in normalized if not unicodedata.combining(ch)).lower().strip()
 
 
 @dataclass
@@ -63,9 +45,11 @@ class GoogleMatch:
     place_id: str
     place_url: str | None
     confidence: float
+    category_confidence: float | None
     listing_origin_at: datetime | None
     listing_origin_source: str
     listing_age_status: str
+    status_override: str | None = None
 
 
 @dataclass
@@ -138,24 +122,13 @@ class GoogleBusinessService:
 
         processed_count = 0
         for establishment in lookup_targets:
-            result = self._lookup(establishment)
-            establishment.google_last_checked_at = now
-            if not result:
-                if establishment.google_check_status not in {"found", _TYPE_MISMATCH_STATUS}:
-                    establishment.google_check_status = "not_found"
-            else:
-                if not result.place_url:
-                    _LOGGER.debug("Résultat Google Places sans URL exploitable pour %s", establishment.siret)
-                else:
-                    establishment.google_place_id = result.place_id
-                    establishment.google_place_url = result.place_url
-                    establishment.google_last_found_at = now
-                    newly_found.append(establishment)
-                establishment.google_listing_origin_at = result.listing_origin_at
-                establishment.google_listing_origin_source = result.listing_origin_source or "unknown"
-                establishment.google_listing_age_status = result.listing_age_status or "unknown"
-                establishment.google_check_status = "found"
-
+            result = self._lookup(establishment, now=now)
+            result = self._apply_lookup_result(
+                establishment,
+                result,
+                now,
+                newly_found=newly_found,
+            )
             processed_count += 1
             matched_count = len(newly_found)
             pending_count = max(queue_count - processed_count, 0)
@@ -189,25 +162,9 @@ class GoogleBusinessService:
             self._session.flush()
             return None
 
-        result = self._lookup(establishment)
-        establishment.google_last_checked_at = now
-        if not result:
-            if establishment.google_check_status not in {"found", _TYPE_MISMATCH_STATUS}:
-                establishment.google_check_status = "not_found"
-            self._session.flush()
-            return None
-
-        establishment.google_place_id = result.place_id
-        if result.place_url:
-            establishment.google_place_url = result.place_url
-            establishment.google_last_found_at = now
-            establishment.google_check_status = "found"
-        else:
-            _LOGGER.debug("Résultat Google Places trouvé sans URL exploitable pour %s", establishment.siret)
-            establishment.google_check_status = "found"
-        establishment.google_listing_origin_at = result.listing_origin_at
-        establishment.google_listing_origin_source = result.listing_origin_source or "unknown"
-        establishment.google_listing_age_status = result.listing_age_status or "unknown"
+        establishment.google_match_confidence = None
+        result = self._lookup(establishment, now=now)
+        result = self._apply_lookup_result(establishment, result, now)
         self._session.flush()
         return result
 
@@ -288,9 +245,12 @@ class GoogleBusinessService:
             return True
         return self._is_retry_due(establishment, now)
 
-    def _lookup(self, establishment: models.Establishment) -> GoogleMatch | None:
+    def _lookup(self, establishment: models.Establishment, *, now: datetime | None = None) -> GoogleMatch | None:
+        if now is None:
+            now = datetime.utcnow()
         assert self._client is not None and self._rate_limiter is not None
-        query = self._build_query(establishment)
+        query = build_place_query(establishment, _PLACEHOLDER_TOKENS)
+        establishment.google_match_confidence = None
         if not query:
             establishment.google_check_status = "insufficient"
             establishment.google_last_checked_at = establishment.google_last_checked_at or datetime.utcnow()
@@ -306,6 +266,9 @@ class GoogleBusinessService:
             return None
 
         best_candidate: GoogleMatch | None = None
+        best_mismatch_candidate: GoogleMatch | None = None
+        best_confidence: float | None = None
+        best_category_confidence: float | None = None
         expected_keywords = self._resolve_expected_keywords(establishment)
         type_mismatch_detected = False
         for candidate in candidates:
@@ -315,18 +278,41 @@ class GoogleBusinessService:
             if not place_id or not name:
                 continue
             confidence = self._compute_confidence(establishment, name, formatted_address)
+            if best_confidence is None or confidence > best_confidence:
+                best_confidence = confidence
             if confidence < self._settings.min_match_confidence:
                 continue
             try:
                 details = self._fetch_details(place_id)
             except GooglePlacesError as exc:
-                _LOGGER.warning("Lecture des détails Google Places échouée pour %s (place=%s): %s", establishment.siret, place_id, exc)
+                _LOGGER.warning(
+                    "Lecture des détails Google Places échouée pour %s (place=%s): %s",
+                    establishment.siret,
+                    place_id,
+                    exc,
+                )
                 continue
             if not details:
                 continue
+            url = details.get("url") or details.get("website")
+            if not url:
+                _LOGGER.debug("Place %s trouvée mais sans URL exploitable.", place_id)
+                url = None
+            origin_at, origin_source, assumed_recent, review_dates = extract_listing_origin(details)
+            listing_status = self._compute_listing_age_status(
+                review_dates,
+                extract_ratings_total(details),
+                assumed_recent,
+                now,
+            )
             raw_types = details.get("types")
             google_types = raw_types if isinstance(raw_types, list) else []
-            if not self._matches_expected_google_category(google_types, expected_keywords):
+            matches_category, category_similarity = self._matches_expected_google_category(google_types, expected_keywords)
+            if category_similarity is not None and (
+                best_category_confidence is None or category_similarity > best_category_confidence
+            ):
+                best_category_confidence = category_similarity
+            if not matches_category:
                 type_mismatch_detected = True
                 _LOGGER.debug(
                     "Fiche Google %s ignorée pour %s : types %s incompatibles avec les mots-clés %s",
@@ -335,31 +321,78 @@ class GoogleBusinessService:
                     google_types,
                     sorted(expected_keywords) if expected_keywords else [],
                 )
+                mismatch_match = GoogleMatch(
+                    establishment,
+                    place_id,
+                    url,
+                    confidence=confidence,
+                    category_confidence=category_similarity,
+                    listing_origin_at=origin_at,
+                    listing_origin_source=origin_source,
+                    listing_age_status=listing_status,
+                    status_override=_TYPE_MISMATCH_STATUS,
+                )
+                if best_mismatch_candidate is None or confidence > best_mismatch_candidate.confidence:
+                    best_mismatch_candidate = mismatch_match
                 continue
-            url = details.get("url") or details.get("website")
-            if not url:
-                _LOGGER.debug("Place %s trouvée mais sans URL exploitable.", place_id)
-                url = None
-            origin_at, origin_source, assumed_recent = self._extract_listing_origin(details)
-            listing_status = self._compute_listing_age_status(
-                establishment,
-                origin_at,
-                assumed_recent=assumed_recent,
-            )
             match = GoogleMatch(
                 establishment,
                 place_id,
                 url,
                 confidence,
+                category_confidence=category_similarity,
                 listing_origin_at=origin_at,
                 listing_origin_source=origin_source,
                 listing_age_status=listing_status,
             )
             if best_candidate is None or confidence > best_candidate.confidence:
                 best_candidate = match
+        establishment.google_match_confidence = best_confidence if best_confidence is not None else None
+        establishment.google_category_match_confidence = (
+            best_category_confidence if best_category_confidence is not None else None
+        )
+        if best_candidate is None and best_mismatch_candidate is not None:
+            best_candidate = best_mismatch_candidate
         if best_candidate is None and type_mismatch_detected:
             establishment.google_check_status = _TYPE_MISMATCH_STATUS
+            return None
+        if best_candidate is not None:
+            if best_candidate.category_confidence is None and best_category_confidence is not None:
+                best_candidate.category_confidence = best_category_confidence
         return best_candidate
+
+    def _apply_lookup_result(
+        self,
+        establishment: models.Establishment,
+        result: GoogleMatch | None,
+        now: datetime,
+        *,
+        newly_found: list[models.Establishment] | None = None,
+    ) -> GoogleMatch | None:
+        establishment.google_last_checked_at = now
+        if not result:
+            if establishment.google_check_status not in {"found", _TYPE_MISMATCH_STATUS}:
+                establishment.google_check_status = "not_found"
+            return None
+
+        establishment.google_place_id = result.place_id
+        if result.place_url:
+            establishment.google_place_url = result.place_url
+            establishment.google_last_found_at = now
+        else:
+            _LOGGER.debug("Résultat Google Places trouvé sans URL exploitable pour %s", establishment.siret)
+
+        new_status = result.status_override or "found"
+        establishment.google_check_status = new_status
+        if new_status == "found" and newly_found is not None:
+            newly_found.append(establishment)
+
+        establishment.google_listing_origin_at = result.listing_origin_at
+        establishment.google_listing_origin_source = result.listing_origin_source or "unknown"
+        establishment.google_listing_age_status = result.listing_age_status or "unknown"
+        if result.category_confidence is not None:
+            establishment.google_category_match_confidence = result.category_confidence
+        return result
 
     def _fetch_details(self, place_id: str) -> dict[str, object] | None:
         assert self._client is not None and self._rate_limiter is not None
@@ -453,164 +486,67 @@ class GoogleBusinessService:
     def _is_micro_business(self, establishment: models.Establishment) -> bool:
         return is_micro_company(establishment.categorie_entreprise, establishment.categorie_juridique)
 
-    def _matches_expected_google_category(
-        self,
-        google_types: Iterable[str] | None,
-        expected_keywords: set[str],
-    ) -> bool:
-        if not expected_keywords:
-            return True
-        if not google_types:
-            return True
-        candidate_tokens: list[str] = []
-        for raw_type in google_types:
-            if not isinstance(raw_type, str):
-                continue
-            normalized = raw_type.strip().lower()
-            if not normalized or normalized in self._neutral_google_types:
-                continue
-            candidate_tokens.append(normalized)
-            candidate_tokens.extend(self._split_google_type_tokens(normalized))
-        if not candidate_tokens:
-            return True
-        for token in candidate_tokens:
-            if self._token_matches_keywords(token, expected_keywords):
-                return True
-        return False
-
-    def _extract_listing_origin(self, details: dict[str, object]) -> tuple[datetime | None, str, bool]:
-        origin_candidates: list[tuple[datetime, str]] = []
-        for key in ("current_opening_hours", "opening_hours"):
-            hours = details.get(key)
-            if not isinstance(hours, dict):
-                continue
-            periods = hours.get("periods")
-            if not isinstance(periods, list):
-                continue
-            for date_value in self._iter_period_dates(periods):
-                if date_value:
-                    origin_candidates.append((date_value, "opening_period"))
-        if origin_candidates:
-            origin_candidates.sort(key=lambda item: item[0])
-            best = origin_candidates[0]
-            return best[0], best[1], False
-
-        reviews = details.get("reviews")
-        review_dates: list[datetime] = []
-        if isinstance(reviews, list):
-            for review in reviews:
-                if not isinstance(review, dict):
-                    continue
-                timestamp = review.get("time")
-                if isinstance(timestamp, (int, float)):
-                    dt = datetime.fromtimestamp(timestamp, tz=timezone.utc).replace(tzinfo=None)
-                    review_dates.append(dt)
-        if review_dates:
-            review_dates.sort()
-            return review_dates[0], "review", False
-
-        if self._should_assume_recent_listing(details):
-            return None, "assumed_recent", True
-
-        return None, "unknown", False
-
-    def _iter_period_dates(self, periods: list[object]) -> Iterable[datetime | None]:
-        for period in periods:
-            if not isinstance(period, dict):
-                continue
-            open_info = period.get("open")
-            if not isinstance(open_info, dict):
-                continue
-            token = open_info.get("date")
-            parsed = self._parse_google_period_date(token)
-            yield parsed
-
-    @staticmethod
-    def _parse_google_period_date(token: object) -> datetime | None:
-        if not isinstance(token, str) or len(token) != 8 or not token.isdigit():
-            return None
-        try:
-            parsed = datetime.strptime(token, "%Y%m%d")
-        except ValueError:
-            return None
-        return parsed
-
-    def _compute_listing_age_status(
-        self,
-        establishment: models.Establishment,
-        origin_at: datetime | None,
-        *,
-        assumed_recent: bool = False,
-    ) -> str:
-        if origin_at is None:
-            if assumed_recent:
-                return normalize_listing_age_status("recent_creation")
-            return normalize_listing_age_status("unknown")
-        creation_date = self._resolve_creation_date(establishment)
-        if creation_date is None:
-            return normalize_listing_age_status("unknown")
-        reference = datetime.combine(creation_date, datetime.min.time())
-        delta_days = (reference - origin_at).days
-        if delta_days >= _LISTING_AGE_THRESHOLD_DAYS:
-            return normalize_listing_age_status("buyback_suspected")
-        return normalize_listing_age_status("recent_creation")
-
-    def _should_assume_recent_listing(self, details: dict[str, object]) -> bool:
-        reviews = details.get("reviews")
-        reviews_info_missing = reviews is None
-        if isinstance(reviews, list):
-            reviews_info_missing = False
-            if len(reviews) == 0:
-                return True
-        ratings_total = details.get("user_ratings_total")
-        if isinstance(ratings_total, (int, float)):
-            return ratings_total <= 0
-        if reviews_info_missing and ratings_total is None:
-            return True
-        return False
-
-    def _token_matches_keywords(self, token: str, keywords: set[str]) -> bool:
-        if token in keywords:
-            return True
-        for keyword in keywords:
-            if not keyword:
-                continue
-            if keyword in token or token in keyword:
-                return True
-            similarity = SequenceMatcher(None, token, keyword).ratio()
-            if similarity >= self._category_similarity_threshold:
-                return True
-        return False
-
     def _resolve_expected_keywords(self, establishment: models.Establishment) -> set[str]:
         keywords = set()
-        keywords |= self._tokenize_text(establishment.naf_libelle)
+        keywords |= tokenize_text(establishment.naf_libelle)
         naf_code = self._sanitize_naf_code(establishment.naf_code)
         if naf_code:
             keywords |= self._naf_keyword_map.get(naf_code, set())
         return keywords
+
+    def _compute_confidence(self, establishment: models.Establishment, name: str, formatted_address: str) -> float:
+        return compute_confidence(establishment, name, formatted_address)
+
+    def _matches_expected_google_category(
+        self,
+        google_types: Sequence[str],
+        expected_keywords: set[str],
+    ) -> tuple[bool, float | None]:
+        return matches_expected_google_category(
+            google_types,
+            expected_keywords,
+            neutral_types=self._neutral_google_types,
+            similarity_threshold=self._category_similarity_threshold,
+        )
+
+    def _compute_listing_age_status(
+        self,
+        review_dates: Sequence[datetime],
+        ratings_total: int | None,
+        assumed_recent: bool,
+        now: datetime,
+    ) -> str:
+        return compute_listing_age_status(
+            list(review_dates),
+            ratings_total=ratings_total,
+            assumed_recent=assumed_recent,
+            now=now,
+        )
+
+    def _should_assume_recent_listing(self, details: dict[str, object]) -> bool:
+        return should_assume_recent_listing(details)
 
     def _load_naf_keyword_map(self) -> dict[str, set[str]]:
         stmt = (
             select(
                 models.NafSubCategory.naf_code,
                 models.NafSubCategory.name,
-                models.NafSubCategory.description,
                 models.NafCategory.name,
-                models.NafCategory.description,
+                models.NafCategory.keywords,
             )
             .join(models.NafCategory, models.NafCategory.id == models.NafSubCategory.category_id)
             .where(models.NafSubCategory.is_active.is_(True))
         )
         mapping: dict[str, set[str]] = {}
-        for naf_code, sub_name, sub_description, category_name, category_description in self._session.execute(stmt):
+        for naf_code, sub_name, category_name, category_keywords in self._session.execute(stmt):
             normalized_code = self._sanitize_naf_code(naf_code)
             if not normalized_code:
                 continue
-            keywords = self._tokenize_text(sub_name)
-            keywords |= self._tokenize_text(sub_description)
-            keywords |= self._tokenize_text(category_name)
-            keywords |= self._tokenize_text(category_description)
+            keywords = tokenize_text(sub_name)
+            keywords |= tokenize_text(category_name)
+            if category_keywords:
+                for keyword in category_keywords:
+                    keywords |= tokenize_text(keyword)
             if keywords:
                 mapping[normalized_code] = keywords
         return mapping
@@ -620,64 +556,3 @@ class GoogleBusinessService:
             return ""
         return "".join(ch for ch in naf_code.upper() if ch.isalnum())
 
-    def _split_google_type_tokens(self, google_type: str) -> set[str]:
-        tokens: set[str] = set()
-        if not google_type:
-            return tokens
-        fragments = re.split(r"[^a-z0-9]+", google_type)
-        for fragment in fragments:
-            if len(fragment) >= 3:
-                tokens.add(fragment)
-        return tokens
-
-    def _tokenize_text(self, value: str | None) -> set[str]:
-        if not value:
-            return set()
-        normalized = _normalize(value)
-        tokens: set[str] = set()
-        for fragment in re.split(r"[^a-z0-9]+", normalized):
-            if len(fragment) < 3:
-                continue
-            tokens.update(self._expand_keyword_variants(fragment))
-        return tokens
-
-    def _expand_keyword_variants(self, token: str) -> set[str]:
-        variants = {token}
-        if len(token) > 3 and token.endswith("s"):
-            variants.add(token[:-1])
-        if len(token) > 4 and token.endswith("es"):
-            variants.add(token[:-2])
-        if len(token) > 4 and token.endswith("ies"):
-            variants.add(token[:-3] + "y")
-        if len(token) > 5 and token.endswith("ation"):
-            variants.add(token[:-5] + "ant")
-        if len(token) > 5 and token.endswith("erie"):
-            variants.add(token[:-4] + "er")
-        return variants
-
-    def _build_query(self, establishment: models.Establishment) -> str:
-        parts = [
-            _sanitize_placeholder(establishment.name),
-            _sanitize_placeholder(establishment.libelle_commune),
-        ]
-        if not parts[-1]:
-            parts[-1] = _sanitize_placeholder(establishment.libelle_commune_etranger)
-        parts.append(_sanitize_placeholder(establishment.code_postal))
-        filtered = [part for part in parts if part]
-        return " ".join(filtered)
-
-    def _compute_confidence(self, establishment: models.Establishment, candidate_name: str, candidate_address: str | None) -> float:
-        ref_name = _normalize(establishment.name)
-        cand_name = _normalize(candidate_name)
-        if not ref_name or not cand_name:
-            return 0.0
-        name_score = SequenceMatcher(None, ref_name, cand_name).ratio()
-
-        score = name_score
-        if establishment.code_postal and candidate_address:
-            if establishment.code_postal in candidate_address:
-                score = min(1.0, score + 0.1)
-        if establishment.libelle_commune and candidate_address:
-            if _normalize(establishment.libelle_commune) in _normalize(candidate_address):
-                score = min(1.0, score + 0.1)
-        return score

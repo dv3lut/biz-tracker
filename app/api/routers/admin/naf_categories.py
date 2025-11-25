@@ -30,6 +30,25 @@ def _normalize_name(value: str, *, field: str) -> str:
     return normalized
 
 
+def _normalize_keywords(raw_keywords: list[str] | None) -> list[str]:
+    if not raw_keywords:
+        return []
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for keyword in raw_keywords:
+        if keyword is None:
+            continue
+        token = keyword.strip()
+        if not token:
+            continue
+        lowered = token.lower()
+        if lowered in seen:
+            continue
+        seen.add(lowered)
+        normalized.append(token)
+    return normalized
+
+
 def _get_category_or_404(session: Session, category_id: UUID) -> models.NafCategory:
     stmt = (
         select(models.NafCategory)
@@ -68,7 +87,8 @@ def list_naf_categories(session: Session = Depends(get_db_session)) -> list[NafC
 )
 def create_naf_category(payload: NafCategoryCreate, session: Session = Depends(get_db_session)) -> NafCategoryOut:
     name = _normalize_name(payload.name, field="nom")
-    category = models.NafCategory(name=name, description=payload.description)
+    keywords = _normalize_keywords(payload.keywords)
+    category = models.NafCategory(name=name, description=payload.description, keywords=keywords)
     session.add(category)
 
     try:
@@ -92,6 +112,8 @@ def update_naf_category(
         category.name = _normalize_name(payload.name, field="nom")
     if payload.description is not None:
         category.description = payload.description.strip() or None
+    if payload.keywords is not None:
+        category.keywords = _normalize_keywords(payload.keywords)
 
     try:
         session.flush()

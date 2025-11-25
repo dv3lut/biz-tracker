@@ -55,7 +55,6 @@ class SyncCollectorMixin(SyncPersistenceMixin):
         cursor_value = state.last_cursor if state.last_cursor and not state.cursor_completed else "*"
         tri = "dateCreationEtablissement desc"
 
-        alert_service = AlertService(context.session, context.run)
         page_result = collect_pages(
             self,
             context,
@@ -77,96 +76,125 @@ class SyncCollectorMixin(SyncPersistenceMixin):
         alerts_created: list[models.Alert] = []
         page_count = page_result.page_count
 
-        google_service = GoogleBusinessService(context.session)
-        last_google_progress: tuple[int, int, int, int, int] | None = None
+        google_queue_count = 0
+        google_eligible_count = 0
+        google_matched_count = 0
+        google_pending_count = 0
+        google_api_call_count = 0
 
-        def update_google_progress(
-            queue_count: int,
-            eligible_count: int,
-            processed_count: int,
-            matched_count: int,
-            pending_count: int,
-        ) -> None:
-            nonlocal last_google_progress
-            snapshot = (queue_count, eligible_count, processed_count, matched_count, pending_count)
-            if snapshot == last_google_progress:
-                return
-            last_google_progress = snapshot
-            context.run.google_queue_count = queue_count
-            context.run.google_eligible_count = eligible_count
-            context.run.google_matched_count = matched_count
-            context.run.google_pending_count = pending_count
-            context.session.flush()
-            context.session.commit()
+        if context.mode.google_enabled:
+            alert_service = AlertService(context.session, context.run)
+            google_service = GoogleBusinessService(context.session)
+            last_google_progress: tuple[int, int, int, int, int] | None = None
 
-        try:
-            enrichment = google_service.enrich(new_entities_total, progress_callback=update_google_progress)
-        finally:
-            google_service.close()
+            def update_google_progress(
+                queue_count: int,
+                eligible_count: int,
+                processed_count: int,
+                matched_count: int,
+                pending_count: int,
+            ) -> None:
+                nonlocal last_google_progress
+                snapshot = (queue_count, eligible_count, processed_count, matched_count, pending_count)
+                if snapshot == last_google_progress:
+                    return
+                last_google_progress = snapshot
+                context.run.google_queue_count = queue_count
+                context.run.google_eligible_count = eligible_count
+                context.run.google_matched_count = matched_count
+                context.run.google_pending_count = pending_count
+                context.session.flush()
+                context.session.commit()
 
-        context.run.google_queue_count = enrichment.queue_count
-        context.run.google_eligible_count = enrichment.eligible_count
-        context.run.google_matched_count = enrichment.matched_count
-        context.run.google_pending_count = enrichment.remaining_count
-        context.run.google_api_call_count = enrichment.api_call_count
+            try:
+                enrichment = google_service.enrich(new_entities_total, progress_callback=update_google_progress)
+            finally:
+                google_service.close()
 
-        log_event(
-            "sync.google.summary",
-            run_id=str(context.run.id),
-            scope_key=context.run.scope_key,
-            queue_count=enrichment.queue_count,
-            eligible_count=enrichment.eligible_count,
-            matched_count=enrichment.matched_count,
-            remaining_count=enrichment.remaining_count,
-            api_call_count=enrichment.api_call_count,
-            new_establishment_count=len(new_entities_total),
-        )
+            google_queue_count = enrichment.queue_count
+            google_eligible_count = enrichment.eligible_count
+            google_matched_count = enrichment.matched_count
+            google_pending_count = enrichment.remaining_count
+            google_api_call_count = enrichment.api_call_count
 
-        if enrichment.matches:
-            for match in enrichment.matches:
-                if match.created_run_id == context.run.id:
-                    google_immediate_matches.append(match)
-                else:
-                    google_late_matches.append(match)
-            context.run.google_immediate_matched_count = len(google_immediate_matches)
-            context.run.google_late_matched_count = len(google_late_matches)
+            context.run.google_queue_count = google_queue_count
+            context.run.google_eligible_count = google_eligible_count
+            context.run.google_matched_count = google_matched_count
+            context.run.google_pending_count = google_pending_count
+            context.run.google_api_call_count = google_api_call_count
 
-            google_matches_payload = [serialize_establishment(item) for item in enrichment.matches]
             log_event(
-                "sync.google.enrichment",
+                "sync.google.summary",
                 run_id=str(context.run.id),
                 scope_key=context.run.scope_key,
-                matched_count=len(google_matches_payload),
-                immediate_matched_count=context.run.google_immediate_matched_count,
-                late_matched_count=context.run.google_late_matched_count,
-                establishments=google_matches_payload,
+                queue_count=google_queue_count,
+                eligible_count=google_eligible_count,
+                matched_count=google_matched_count,
+                remaining_count=google_pending_count,
+                api_call_count=google_api_call_count,
+                new_establishment_count=len(new_entities_total),
             )
-            for match_payload in google_matches_payload:
-                log_event(
-                    "sync.google.match",
-                    run_id=str(context.run.id),
-                    scope_key=context.run.scope_key,
-                    establishment=match_payload,
-                )
 
-            alerts = alert_service.create_google_alerts(enrichment.matches)
-            if alerts:
-                alerts_created.extend(alerts)
-                alerts_payload = [serialize_alert(alert) for alert in alerts]
+            if enrichment.matches:
+                for match in enrichment.matches:
+                    if match.created_run_id == context.run.id:
+                        google_immediate_matches.append(match)
+                    else:
+                        google_late_matches.append(match)
+                context.run.google_immediate_matched_count = len(google_immediate_matches)
+                context.run.google_late_matched_count = len(google_late_matches)
+
+                google_matches_payload = [serialize_establishment(item) for item in enrichment.matches]
                 log_event(
-                    "sync.alerts.created",
+                    "sync.google.enrichment",
                     run_id=str(context.run.id),
                     scope_key=context.run.scope_key,
-                    count=len(alerts_payload),
-                    alerts=alerts_payload,
+                    matched_count=len(google_matches_payload),
+                    immediate_matched_count=context.run.google_immediate_matched_count,
+                    late_matched_count=context.run.google_late_matched_count,
+                    establishments=google_matches_payload,
                 )
-                for alert_payload in alerts_payload:
+                for match_payload in google_matches_payload:
                     log_event(
-                        "sync.alert.created",
+                        "sync.google.match",
                         run_id=str(context.run.id),
                         scope_key=context.run.scope_key,
-                        alert=alert_payload,
+                        establishment=match_payload,
                     )
+
+                alerts = alert_service.create_google_alerts(enrichment.matches)
+                if alerts:
+                    alerts_created.extend(alerts)
+                    alerts_payload = [serialize_alert(alert) for alert in alerts]
+                    log_event(
+                        "sync.alerts.created",
+                        run_id=str(context.run.id),
+                        scope_key=context.run.scope_key,
+                        count=len(alerts_payload),
+                        alerts=alerts_payload,
+                    )
+                    for alert_payload in alerts_payload:
+                        log_event(
+                            "sync.alert.created",
+                            run_id=str(context.run.id),
+                            scope_key=context.run.scope_key,
+                            alert=alert_payload,
+                        )
+        else:
+            log_event(
+                "sync.google.skipped",
+                run_id=str(context.run.id),
+                scope_key=context.run.scope_key,
+                reason="mode_sirene_only",
+            )
+            context.run.google_queue_count = 0
+            context.run.google_eligible_count = 0
+            context.run.google_matched_count = 0
+            context.run.google_pending_count = 0
+            context.run.google_api_call_count = 0
+            context.run.google_immediate_matched_count = 0
+            context.run.google_late_matched_count = 0
+
         context.session.commit()
 
         alerts_sent_count = sum(1 for alert in alerts_created if alert.sent_at)
@@ -181,11 +209,11 @@ class SyncCollectorMixin(SyncPersistenceMixin):
             created_records=context.run.created_records,
             updated_records=context.run.updated_records,
             api_call_count=context.run.api_call_count,
-            google_queue_count=enrichment.queue_count,
-            google_eligible_count=enrichment.eligible_count,
-            google_matched_count=enrichment.matched_count,
-            google_pending_count=enrichment.remaining_count,
-            google_api_call_count=enrichment.api_call_count,
+            google_queue_count=google_queue_count,
+            google_eligible_count=google_eligible_count,
+            google_matched_count=google_matched_count,
+            google_pending_count=google_pending_count,
+            google_api_call_count=google_api_call_count,
             google_immediate_matched_count=context.run.google_immediate_matched_count,
             google_late_matched_count=context.run.google_late_matched_count,
             alerts_created=len(alerts_created),
@@ -194,6 +222,7 @@ class SyncCollectorMixin(SyncPersistenceMixin):
         )
 
         return SyncResult(
+            mode=context.mode,
             last_treated=latest_treated,
             new_establishments=new_entities_total,
             new_establishment_payloads=new_entities_payload,
@@ -207,11 +236,11 @@ class SyncCollectorMixin(SyncPersistenceMixin):
             page_count=page_count,
             duration_seconds=duration,
             max_creation_date=page_result.max_creation_date,
-            google_queue_count=enrichment.queue_count,
-            google_eligible_count=enrichment.eligible_count,
-            google_matched_count=enrichment.matched_count,
-            google_pending_count=enrichment.remaining_count,
-            google_api_call_count=enrichment.api_call_count,
+            google_queue_count=google_queue_count,
+            google_eligible_count=google_eligible_count,
+            google_matched_count=google_matched_count,
+            google_pending_count=google_pending_count,
+            google_api_call_count=google_api_call_count,
             alerts_sent_count=alerts_sent_count,
         )
 

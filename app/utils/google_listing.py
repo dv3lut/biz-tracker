@@ -4,8 +4,8 @@ from __future__ import annotations
 from typing import Final
 
 LISTING_AGE_STATUS_LABELS: Final[dict[str, str]] = {
-    "buyback_suspected": "Rachat suspecté",
     "recent_creation": "Création récente",
+    "not_recent_creation": "Création ancienne",
     "unknown": "Non déterminé",
 }
 
@@ -16,6 +16,9 @@ def normalize_listing_age_status(value: str | None) -> str:
     if not value:
         return "unknown"
     token = value.strip().lower()
+    if token == "buyback_suspected":
+        # Conserve la compatibilité avec les anciennes données persistées.
+        return "not_recent_creation"
     return token if token in LISTING_AGE_STATUS_LABELS else "unknown"
 
 

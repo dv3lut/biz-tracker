@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from app.config import get_settings
 from app.db import models
 from app.db.session import session_scope
+from app.services.sync.mode import DEFAULT_SYNC_MODE
 from app.services.sync_service import SyncService
 from app.observability import log_event
 
@@ -110,6 +111,7 @@ class SyncScheduler:
             run = self._service.prepare_sync_run(
                 session,
                 check_informations=True,
+                mode=DEFAULT_SYNC_MODE,
             )
             if not run:
                 _LOGGER.debug("No synchronisation to trigger automatically (informations service up-to-date).")

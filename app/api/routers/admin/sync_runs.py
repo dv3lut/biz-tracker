@@ -60,12 +60,14 @@ def trigger_sync_run(
     run = service.prepare_sync_run(
         session,
         check_informations=payload.check_for_updates,
+        mode=payload.mode,
     )
     if run is None:
         log_event(
             "sync.run.request_no_updates",
             scope_key=scope_key,
             check_informations=payload.check_for_updates,
+            mode=payload.mode.value,
         )
         raise HTTPException(status_code=status.HTTP_202_ACCEPTED, detail="Aucune mise à jour disponible.")
 
@@ -78,6 +80,7 @@ def trigger_sync_run(
         run_id=str(run.id),
         scope_key=scope_key,
         check_informations=payload.check_for_updates,
+        mode=payload.mode.value,
     )
 
     background_tasks.add_task(

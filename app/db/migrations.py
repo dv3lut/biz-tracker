@@ -108,6 +108,14 @@ def run_schema_upgrades(engine: Engine) -> None:
         SET google_check_status = 'pending'
         WHERE google_check_status IS NULL
         """,
+        """
+        ALTER TABLE establishments
+        ADD COLUMN IF NOT EXISTS google_match_confidence DOUBLE PRECISION
+        """,
+        """
+        ALTER TABLE establishments
+        ADD COLUMN IF NOT EXISTS google_category_match_confidence DOUBLE PRECISION
+        """,
     """
     ALTER TABLE establishments
     ADD COLUMN IF NOT EXISTS google_listing_origin_at TIMESTAMP
@@ -146,6 +154,10 @@ def run_schema_upgrades(engine: Engine) -> None:
         ALTER TABLE sync_runs
         ADD COLUMN IF NOT EXISTS google_pending_count INTEGER DEFAULT 0
         """,
+    """
+    ALTER TABLE sync_runs
+    ADD COLUMN IF NOT EXISTS mode VARCHAR(32) NOT NULL DEFAULT 'full'
+    """,
         """
         ALTER TABLE sync_state
         ADD COLUMN IF NOT EXISTS last_creation_date DATE
@@ -181,6 +193,15 @@ def run_schema_upgrades(engine: Engine) -> None:
         """
         ALTER TABLE IF EXISTS naf_subcategories
         DROP COLUMN IF EXISTS naf_label
+        """,
+        """
+        ALTER TABLE IF EXISTS naf_categories
+        ADD COLUMN IF NOT EXISTS keywords JSONB NOT NULL DEFAULT '[]'::jsonb
+        """,
+        """
+        UPDATE naf_categories
+        SET keywords = '[]'::jsonb
+        WHERE keywords IS NULL
         """,
         """
         CREATE TABLE IF NOT EXISTS google_retry_config (

@@ -9,6 +9,7 @@ from typing import Sequence
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.db import models
 from app.services.email_service import EmailService
 from app.observability import log_event
@@ -20,7 +21,7 @@ from app.services.client_service import (
     get_active_clients,
     get_admin_emails,
 )
-from app.utils.google_listing import describe_listing_age_status
+from app.utils.google_listing import describe_listing_age_status, normalize_listing_age_status
 from app.utils.urls import build_annuaire_etablissement_url
 
 _ALERT_LOGGER = logging.getLogger("alerts")
@@ -34,13 +35,29 @@ class AlertService:
         self._run = run
         self._email_service = EmailService()
         self._subcategory_lookup: dict[str, tuple[str | None, str | None]] | None = None
+        settings = get_settings()
+        self._recent_listing_alerts_only = settings.google.alerts_only_recent_creations
 
     def create_google_alerts(self, establishments: Sequence[models.Establishment]) -> list[models.Alert]:
         if not establishments:
             return []
 
+        filtered_establishments = [
+            item
+            for item in establishments
+            if (item.google_check_status or "").lower() == "found"
+        ]
+        if self._recent_listing_alerts_only:
+            filtered_establishments = [
+                item
+                for item in filtered_establishments
+                if normalize_listing_age_status(item.google_listing_age_status) == "recent_creation"
+            ]
+        if not filtered_establishments:
+            return []
+
         alerts: list[models.Alert] = []
-        for establishment in establishments:
+        for establishment in filtered_establishments:
             payload = self._build_payload(establishment)
             payload["google_place_url"] = establishment.google_place_url
             payload["google_place_id"] = establishment.google_place_id
@@ -59,16 +76,16 @@ class AlertService:
             "Pages Google My Business associées détectées:",
             "",
         ]
-        for establishment in establishments:
+        for establishment in filtered_establishments:
             message_lines.extend(self._format_lines(establishment, include_google=True))
             message_lines.append("")
 
         message = "\n".join(message_lines).strip()
         _ALERT_LOGGER.info(message)
 
-        base_client_subject = f"[{self._run.scope_key}] {len(establishments)} fiche(s) Google détectée(s)"
+        base_client_subject = f"[{self._run.scope_key}] {len(filtered_establishments)} fiche(s) Google détectée(s)"
         admin_subject = f"{base_client_subject} - administration"
-        admin_text_body, admin_html_body = self._render_admin_email(establishments)
+        admin_text_body, admin_html_body = self._render_admin_email(filtered_establishments)
 
         email_enabled = self._email_service.is_enabled()
         email_configured = self._email_service.is_configured()
@@ -77,12 +94,12 @@ class AlertService:
         eligible_clients = [client for client in active_clients if any(recipient.email for recipient in client.recipients)]
         admin_recipients = get_admin_emails(self._session)
 
-        assignment_map, filtering_applied = assign_establishments_to_clients(eligible_clients, establishments)
+        assignment_map, filtering_applied = assign_establishments_to_clients(eligible_clients, filtered_establishments)
         client_payloads: list[ClientEmailPayload] = []
         for client in eligible_clients:
             matches = assignment_map.get(client.id, [])
             if not matches and not filtering_applied:
-                matches = list(establishments)
+                matches = list(filtered_establishments)
             if not matches:
                 continue
             subject = f"[{self._run.scope_key}] {len(matches)} fiche(s) Google détectée(s)"

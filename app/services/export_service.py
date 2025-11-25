@@ -94,6 +94,7 @@ def build_google_places_workbook(
             "Pays",
             "Google Place ID",
             "Google Place URL",
+            "Score correspondance",
             "Statut Google",
             "Dernière vérification",
             "Dernière détection",
@@ -139,6 +140,7 @@ def build_google_places_workbook(
                 establishment.code_pays,
                 establishment.google_place_id,
                 google_url,
+                round(establishment.google_match_confidence, 3) if establishment.google_match_confidence is not None else None,
                 establishment.google_check_status,
                 _format_datetime(establishment.google_last_checked_at),
                 _format_datetime(establishment.google_last_found_at),
@@ -152,7 +154,7 @@ def build_google_places_workbook(
         )
         row_idx = sheet.max_row
         _apply_hyperlink(sheet, row_idx, 2, build_annuaire_etablissement_url(establishment.siret))
-        _apply_hyperlink(sheet, row_idx, 9, google_url)
+        _apply_hyperlink(sheet, row_idx, 10, google_url)
 
     sheet.freeze_panes = "A2"
 

@@ -11,6 +11,7 @@ from app.clients.sirene_client import SireneClient
 from app.db import models
 from app.observability import log_event, serialize_sync_run
 from app.services.sync.context import SyncContext
+from app.services.sync.mode import DEFAULT_SYNC_MODE, SyncMode
 from app.utils.dates import parse_datetime
 
 from .utils import normalize_text
@@ -26,6 +27,7 @@ class SyncRunPreparationMixin:
         session: Session,
         *,
         check_informations: bool = False,
+        mode: SyncMode = DEFAULT_SYNC_MODE,
     ) -> Optional[models.SyncRun]:
         state = self._get_or_create_state(session, self._settings.sync.scope_key)
         latest_treated: datetime | None = None
@@ -48,6 +50,7 @@ class SyncRunPreparationMixin:
             session,
             status="pending",
             state=state,
+            mode=mode,
         )
         if latest_treated:
             run.notes = f"dateDernierTraitementMaximum: {latest_treated.isoformat()}"
@@ -57,6 +60,7 @@ class SyncRunPreparationMixin:
             scope_key=run.scope_key,
             status=run.status,
             check_informations=check_informations,
+            mode=mode.value,
             run=serialize_sync_run(run),
         )
         return run
@@ -94,6 +98,7 @@ class SyncRunPreparationMixin:
         *,
         status: str,
         state: Optional[models.SyncState] = None,
+        mode: SyncMode = DEFAULT_SYNC_MODE,
     ) -> tuple[models.SyncRun, models.SyncState]:
         scope_key = self._settings.sync.scope_key
         state = state or self._get_or_create_state(session, scope_key)
@@ -114,6 +119,7 @@ class SyncRunPreparationMixin:
             scope_key=scope_key,
             run_type="sync",
             initial_status=status,
+            mode=mode,
         )
 
         state.last_cursor = None
@@ -137,8 +143,9 @@ class SyncRunPreparationMixin:
         scope_key: str,
         run_type: str,
         initial_status: str,
+        mode: SyncMode = DEFAULT_SYNC_MODE,
     ) -> models.SyncRun:
-        run = models.SyncRun(scope_key=scope_key, run_type=run_type, status=initial_status)
+        run = models.SyncRun(scope_key=scope_key, run_type=run_type, status=initial_status, mode=mode.value)
         session.add(run)
         session.flush()
         return run
@@ -194,4 +201,15 @@ class SyncRunPreparationMixin:
 
     def _build_context(self, session: Session, run: models.SyncRun, state: models.SyncState) -> SyncContext:
         client = SireneClient()
-        return SyncContext(session=session, run=run, state=state, client=client, settings=self._settings)
+        try:
+            mode = SyncMode(run.mode)
+        except ValueError:
+            mode = DEFAULT_SYNC_MODE
+        return SyncContext(
+            session=session,
+            run=run,
+            state=state,
+            client=client,
+            settings=self._settings,
+            mode=mode,
+        )

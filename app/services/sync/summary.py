@@ -10,6 +10,7 @@ from app.db import models
 from app.observability import log_event
 from app.services.client_service import get_admin_emails
 from app.services.email_service import EmailService
+from app.services.sync.mode import SyncMode
 
 from .context import SyncResult
 
@@ -30,6 +31,7 @@ class SyncSummaryMixin:
                 "google_status": establishment.google_check_status,
                 "google_place_url": establishment.google_place_url,
                 "google_place_id": establishment.google_place_id,
+                "google_match_confidence": establishment.google_match_confidence,
                 "created_run_id": str(establishment.created_run_id) if establishment.created_run_id else None,
                 "first_seen_at": establishment.first_seen_at.isoformat() if establishment.first_seen_at else None,
                 "last_seen_at": establishment.last_seen_at.isoformat() if establishment.last_seen_at else None,
@@ -65,6 +67,8 @@ class SyncSummaryMixin:
                 "sent": result.alerts_sent_count,
             },
         }
+        summary_stats["mode"] = run.mode
+        summary_stats["google"]["enabled"] = run.mode != SyncMode.SIRENE_ONLY
 
         return {
             "run": {
@@ -75,6 +79,7 @@ class SyncSummaryMixin:
                 "finished_at": run.finished_at.isoformat() if run.finished_at else None,
                 "duration_seconds": result.duration_seconds,
                 "page_count": result.page_count,
+                "mode": run.mode,
             },
             "stats": summary_stats,
             "samples": samples,
@@ -140,6 +145,8 @@ class SyncSummaryMixin:
         google_stats = stats.get("google", {})
         alerts_stats = stats.get("alerts", {})
         samples = summary.get("samples", {})
+        google_enabled = bool(google_stats.get("enabled", True))
+        mode_label = run_data.get("mode") or stats.get("mode") or "full"
 
         def format_sample(sample: dict[str, Any], *, include_changes: bool = False) -> str:
             name = sample.get("name") or "(nom indisponible)"
@@ -155,6 +162,9 @@ class SyncSummaryMixin:
             place_url = sample.get("google_place_url")
             if place_url:
                 line += f" | {place_url}"
+            match_confidence = sample.get("google_match_confidence")
+            if match_confidence is not None:
+                line += f" | score: {float(match_confidence):.2f}"
             if include_changes and sample.get("changed_fields"):
                 changes = ", ".join(sample["changed_fields"])
                 line += f" | champs: {changes}"
@@ -163,6 +173,7 @@ class SyncSummaryMixin:
         lines = [
             f"Synthèse du run {run_data.get('id', run.id)} ({run.scope_key})",
             f"Statut: {run_data.get('status', run.status)}",
+            f"Mode: {mode_label}",
             f"Début: {run_data.get('started_at')}",
             f"Fin: {run_data.get('finished_at')}",
             f"Durée: {run_data.get('duration_seconds')} s",
@@ -175,16 +186,27 @@ class SyncSummaryMixin:
             f"- Appels API: {stats.get('api_call_count')}",
             "",
             "Google Places:",
-            f"- Appels API Google: {google_stats.get('api_call_count')}",
-            f"- Correspondances immédiates: {google_stats.get('immediate_matches')}",
-            f"- Correspondances tardives: {google_stats.get('late_matches')}",
-            f"- Total correspondances: {google_stats.get('matched_count')}",
-            f"- En file d'attente: {google_stats.get('pending_count')}",
-            "",
-            "Alertes:",
-            f"- Créées: {alerts_stats.get('created')}",
-            f"- Envoyées: {alerts_stats.get('sent')}",
         ]
+        if not google_enabled:
+            lines.append("- Désactivé (mode Sirene-only)")
+        else:
+            lines.extend(
+                [
+                    f"- Appels API Google: {google_stats.get('api_call_count')}",
+                    f"- Correspondances immédiates: {google_stats.get('immediate_matches')}",
+                    f"- Correspondances tardives: {google_stats.get('late_matches')}",
+                    f"- Total correspondances: {google_stats.get('matched_count')}",
+                    f"- En file d'attente: {google_stats.get('pending_count')}",
+                ]
+            )
+        lines.extend(
+            [
+                "",
+                "Alertes:",
+                f"- Créées: {alerts_stats.get('created')}",
+                f"- Envoyées: {alerts_stats.get('sent')}",
+            ]
+        )
 
         new_samples = samples.get("new_establishments", [])
         if new_samples:

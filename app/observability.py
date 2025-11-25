@@ -112,6 +112,7 @@ def serialize_establishment(establishment: "Any") -> dict[str, Any]:
             "last_checked_at": establishment.google_last_checked_at,
             "last_found_at": establishment.google_last_found_at,
             "check_status": establishment.google_check_status,
+            "match_confidence": establishment.google_match_confidence,
         },
         "run": {
             "created_run_id": str(establishment.created_run_id) if establishment.created_run_id else None,

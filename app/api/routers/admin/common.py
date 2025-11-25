@@ -88,6 +88,8 @@ def format_establishment_summary(establishment: models.Establishment, *, include
             lines.append(f"  Google: {establishment.google_place_url}")
         if establishment.google_place_id:
             lines.append(f"  Place ID: {establishment.google_place_id}")
+        if establishment.google_match_confidence is not None:
+            lines.append(f"  Score correspondance: {establishment.google_match_confidence:.2f}")
     return lines
 
 

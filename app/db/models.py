@@ -4,7 +4,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, date
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -85,6 +85,8 @@ class Establishment(Base):
     google_last_checked_at: Mapped[datetime | None] = mapped_column(DateTime)
     google_last_found_at: Mapped[datetime | None] = mapped_column(DateTime)
     google_check_status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False)
+    google_match_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    google_category_match_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
     google_listing_origin_at: Mapped[datetime | None] = mapped_column(DateTime)
     google_listing_origin_source: Mapped[str] = mapped_column(String(32), default="unknown", nullable=False)
     google_listing_age_status: Mapped[str] = mapped_column(String(32), default="unknown", nullable=False)
@@ -107,6 +109,7 @@ class SyncRun(Base):
     scope_key: Mapped[str] = mapped_column(String(255), index=True)
     run_type: Mapped[str] = mapped_column(String(50), index=True)
     status: Mapped[str] = mapped_column(String(50), index=True)
+    mode: Mapped[str] = mapped_column(String(32), default="full", nullable=False)
     started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime)
     last_cursor: Mapped[str | None] = mapped_column(Text)
@@ -218,6 +221,7 @@ class NafCategory(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    keywords: Mapped[list[str]] = mapped_column(JSONB, default=list, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
