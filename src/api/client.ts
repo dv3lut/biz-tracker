@@ -217,6 +217,7 @@ interface GoogleStatusBreakdownResponse {
 
 interface GoogleListingAgeBreakdownResponse {
   recent_creation: number;
+  recent_creation_missing_contact: number;
   not_recent_creation: number;
   unknown: number;
 }
@@ -235,6 +236,7 @@ interface DashboardRunBreakdownResponse {
   google_pending: number;
   google_other: number;
   listing_recent: number;
+  listing_recent_missing_contact: number;
   listing_not_recent: number;
   listing_unknown: number;
   alerts_created: number;
@@ -267,6 +269,7 @@ interface NafSubCategoryStatResponse {
   google_type_mismatch: number;
   google_other: number;
   listing_recent: number;
+  listing_recent_missing_contact: number;
   listing_not_recent: number;
   listing_unknown: number;
 }
@@ -296,6 +299,9 @@ interface EstablishmentResponse {
   last_run_id: string | null;
   google_place_id: string | null;
   google_place_url: string | null;
+  google_contact_phone: string | null;
+  google_contact_email: string | null;
+  google_contact_website: string | null;
   google_match_confidence: number | null;
   google_last_checked_at: string | null;
   google_last_found_at: string | null;
@@ -572,6 +578,7 @@ const toGoogleListingAgeBreakdown = (
   payload: GoogleListingAgeBreakdownResponse,
 ): GoogleListingAgeBreakdown => ({
   recentCreation: payload.recent_creation,
+  recentCreationMissingContact: payload.recent_creation_missing_contact,
   notRecentCreation: payload.not_recent_creation,
   unknown: payload.unknown,
 });
@@ -592,6 +599,7 @@ const toDashboardRunBreakdown = (payload: DashboardRunBreakdownResponse): Dashbo
   alertsCreated: payload.alerts_created,
   alertsSent: payload.alerts_sent,
   listingRecent: payload.listing_recent,
+  listingRecentMissingContact: payload.listing_recent_missing_contact,
   listingNotRecent: payload.listing_not_recent,
   listingUnknown: payload.listing_unknown,
 });
@@ -622,6 +630,7 @@ const toNafSubCategoryStat = (payload: NafSubCategoryStatResponse): NafSubCatego
   googleTypeMismatch: payload.google_type_mismatch,
   googleOther: payload.google_other,
   listingRecent: payload.listing_recent,
+  listingRecentMissingContact: payload.listing_recent_missing_contact,
   listingNotRecent: payload.listing_not_recent,
   listingUnknown: payload.listing_unknown,
 });
@@ -658,6 +667,9 @@ const toEstablishment = (payload: EstablishmentResponse): Establishment => ({
   googleListingOriginAt: payload.google_listing_origin_at,
   googleListingOriginSource: payload.google_listing_origin_source,
   googleListingAgeStatus: payload.google_listing_age_status,
+  googleContactPhone: payload.google_contact_phone,
+  googleContactEmail: payload.google_contact_email,
+  googleContactWebsite: payload.google_contact_website,
   isSoleProprietorship: payload.is_sole_proprietorship,
 });
 

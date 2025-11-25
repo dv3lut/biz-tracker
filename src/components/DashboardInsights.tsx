@@ -346,6 +346,9 @@ export const DashboardInsights = ({
                     <strong>{formatNumber(metrics.latestRunBreakdown.listingRecent)}</strong> creation recente
                   </li>
                   <li>
+                    <strong>{formatNumber(metrics.latestRunBreakdown.listingRecentMissingContact)}</strong> creation recente sans contact
+                  </li>
+                  <li>
                     <strong>{formatNumber(metrics.latestRunBreakdown.listingNotRecent)}</strong> creation ancienne
                   </li>
                   <li>
@@ -386,6 +389,9 @@ export const DashboardInsights = ({
                 <ul className="metric-list">
                   <li>
                     <strong>{formatNumber(metrics.listingAgeBreakdown.recentCreation)}</strong> creation recente
+                  </li>
+                  <li>
+                    <strong>{formatNumber(metrics.listingAgeBreakdown.recentCreationMissingContact)}</strong> creation recente sans contact
                   </li>
                   <li>
                     <strong>{formatNumber(metrics.listingAgeBreakdown.notRecentCreation)}</strong> creation ancienne

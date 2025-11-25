@@ -107,6 +107,7 @@ export interface GoogleStatusBreakdown {
 
 export interface GoogleListingAgeBreakdown {
   recentCreation: number;
+  recentCreationMissingContact: number;
   notRecentCreation: number;
   unknown: number;
 }
@@ -123,6 +124,7 @@ export interface NafSubCategoryStat {
   googleTypeMismatch: number;
   googleOther: number;
   listingRecent: number;
+  listingRecentMissingContact: number;
   listingNotRecent: number;
   listingUnknown: number;
 }
@@ -148,6 +150,7 @@ export interface DashboardRunBreakdown {
   googlePending: number;
   googleOther: number;
   listingRecent: number;
+  listingRecentMissingContact: number;
   listingNotRecent: number;
   listingUnknown: number;
   alertsCreated: number;
@@ -273,6 +276,9 @@ export interface Establishment {
   googleListingOriginAt: string | null;
   googleListingOriginSource: string | null;
   googleListingAgeStatus: string | null;
+  googleContactPhone: string | null;
+  googleContactEmail: string | null;
+  googleContactWebsite: string | null;
   isSoleProprietorship: boolean;
 }
 

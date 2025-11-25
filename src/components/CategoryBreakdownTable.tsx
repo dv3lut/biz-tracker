@@ -9,6 +9,7 @@ const METRIC_COLUMNS: Array<{ key: MetricKey; label: string }> = [
   { key: "googlePending", label: "En attente" },
   { key: "googleOther", label: "Autres statuts" },
   { key: "listingRecent", label: "Création récente" },
+  { key: "listingRecentMissingContact", label: "Création récente sans contact" },
   { key: "listingNotRecent", label: "Création ancienne" },
   { key: "listingUnknown", label: "Ancienneté inconnue" },
 ];
@@ -21,6 +22,7 @@ type MetricKey =
   | "googlePending"
   | "googleOther"
   | "listingRecent"
+  | "listingRecentMissingContact"
   | "listingNotRecent"
   | "listingUnknown";
 
@@ -53,6 +55,7 @@ export const CategoryBreakdownTable = ({ categories }: Props) => {
             googlePending: 0,
             googleOther: 0,
             listingRecent: 0,
+            listingRecentMissingContact: 0,
             listingNotRecent: 0,
             listingUnknown: 0,
           },

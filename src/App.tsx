@@ -134,6 +134,7 @@ const App = () => {
   );
   const [googleRetryConfigFeedback, setGoogleRetryConfigFeedback] = useState<string | null>(null);
   const [googleRetryConfigMessageError, setGoogleRetryConfigMessageError] = useState<string | null>(null);
+  const [isSidebarCollapsed, setSidebarCollapsed] = useState(false);
   const queryClient = useQueryClient();
   const isAuthenticated = Boolean(adminToken);
   const requestAdminToken = useCallback(() => {
@@ -1265,10 +1266,20 @@ const App = () => {
     ? ((deleteEstablishmentMutation.variables as string | null | undefined) ?? null)
     : null;
 
+  const handleToggleSidebar = useCallback(() => {
+    setSidebarCollapsed((value) => !value);
+  }, []);
+
   return (
     <>
-      <div className="app-frame">
-        <SidebarNav sections={NAV_SECTIONS} activeSection={activeSection} onSelect={setActiveSection} />
+      <div className={`app-frame${isSidebarCollapsed ? " app-frame--sidebar-collapsed" : ""}`}>
+        <SidebarNav
+          sections={NAV_SECTIONS}
+          activeSection={activeSection}
+          onSelect={setActiveSection}
+          collapsed={isSidebarCollapsed}
+          onToggleCollapse={handleToggleSidebar}
+        />
         <div className="app-frame-content">
           <AppHeader onTokenReset={handleTokenReset} />
           <main className="app-main">

@@ -22,6 +22,7 @@ const LISTING_STATUS_COLUMNS: Array<{
   tone: StatusTone;
 }> = [
   { key: "listingRecent", label: "Création récente", tone: "success" },
+  { key: "listingRecentMissingContact", label: "Création récente sans contact", tone: "pending" },
   { key: "listingNotRecent", label: "Création ancienne", tone: "warning" },
   { key: "listingUnknown", label: "Ancienneté inconnue", tone: "muted" },
 ];
@@ -34,7 +35,11 @@ type StatusMetricKey =
   | "googleTypeMismatch"
   | "googleOther";
 
-type ListingMetricKey = "listingRecent" | "listingNotRecent" | "listingUnknown";
+type ListingMetricKey =
+  | "listingRecent"
+  | "listingRecentMissingContact"
+  | "listingNotRecent"
+  | "listingUnknown";
 
 type StatusTone = "success" | "warning" | "danger" | "pending" | "muted";
 
@@ -62,6 +67,7 @@ const buildCategoryTotals = (category: NafCategoryStat) => {
     googleTypeMismatch: sumMetric(category.subcategories, "googleTypeMismatch"),
     googleOther: sumMetric(category.subcategories, "googleOther"),
     listingRecent: sumMetric(category.subcategories, "listingRecent"),
+    listingRecentMissingContact: sumMetric(category.subcategories, "listingRecentMissingContact"),
     listingNotRecent: sumMetric(category.subcategories, "listingNotRecent"),
     listingUnknown: sumMetric(category.subcategories, "listingUnknown"),
   };

@@ -64,6 +64,7 @@ interface GoogleStatusBreakdownResponse {
 
 interface GoogleListingAgeBreakdownResponse {
   recent_creation: number;
+  recent_creation_missing_contact: number;
   not_recent_creation: number;
   unknown: number;
 }
@@ -80,6 +81,7 @@ interface NafSubCategoryStatResponse {
   google_type_mismatch: number;
   google_other: number;
   listing_recent: number;
+  listing_recent_missing_contact: number;
   listing_not_recent: number;
   listing_unknown: number;
 }
@@ -105,6 +107,7 @@ interface DashboardRunBreakdownResponse {
   google_pending: number;
   google_other: number;
   listing_recent: number;
+  listing_recent_missing_contact: number;
   listing_not_recent: number;
   listing_unknown: number;
   alerts_created: number;
@@ -179,6 +182,7 @@ const mapGoogleListingAgeBreakdown = (
   payload: GoogleListingAgeBreakdownResponse,
 ): GoogleListingAgeBreakdown => ({
   recentCreation: payload.recent_creation,
+  recentCreationMissingContact: payload.recent_creation_missing_contact,
   notRecentCreation: payload.not_recent_creation,
   unknown: payload.unknown,
 });
@@ -197,6 +201,7 @@ const mapNafSubCategoryStat = (
   googleTypeMismatch: payload.google_type_mismatch,
   googleOther: payload.google_other,
   listingRecent: payload.listing_recent,
+  listingRecentMissingContact: payload.listing_recent_missing_contact,
   listingNotRecent: payload.listing_not_recent,
   listingUnknown: payload.listing_unknown,
 });
@@ -224,6 +229,7 @@ const mapDashboardRunBreakdown = (
   googlePending: payload.google_pending,
   googleOther: payload.google_other,
   listingRecent: payload.listing_recent,
+  listingRecentMissingContact: payload.listing_recent_missing_contact,
   listingNotRecent: payload.listing_not_recent,
   listingUnknown: payload.listing_unknown,
   alertsCreated: payload.alerts_created,
