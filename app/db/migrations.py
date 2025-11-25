@@ -138,6 +138,18 @@ def run_schema_upgrades(engine: Engine) -> None:
     SET google_listing_origin_source = 'unknown'
     WHERE google_listing_origin_source IS NULL
     """,
+    """
+    ALTER TABLE establishments
+    ADD COLUMN IF NOT EXISTS google_contact_phone VARCHAR(64)
+    """,
+    """
+    ALTER TABLE establishments
+    ADD COLUMN IF NOT EXISTS google_contact_email VARCHAR(255)
+    """,
+    """
+    ALTER TABLE establishments
+    ADD COLUMN IF NOT EXISTS google_contact_website VARCHAR(512)
+    """,
         """
         ALTER TABLE sync_runs
         ADD COLUMN IF NOT EXISTS google_queue_count INTEGER DEFAULT 0

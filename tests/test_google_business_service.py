@@ -49,6 +49,26 @@ class GoogleListingAgeStatusTests(unittest.TestCase):
 
         self.assertEqual(status, "recent_creation")
 
+    def test_recent_listing_without_contacts_is_flagged(self) -> None:
+        adjusted = self.service._adjust_listing_status_for_contacts(
+            "recent_creation",
+            contact_phone=None,
+            contact_email=None,
+            contact_website=None,
+        )
+
+        self.assertEqual(adjusted, "recent_creation_missing_contact")
+
+    def test_recent_listing_with_contacts_keeps_status(self) -> None:
+        adjusted = self.service._adjust_listing_status_for_contacts(
+            "recent_creation",
+            contact_phone="+33102030405",
+            contact_email=None,
+            contact_website=None,
+        )
+
+        self.assertEqual(adjusted, "recent_creation")
+
     def test_not_recent_status_when_reviews_are_old(self) -> None:
         now = datetime(2024, 1, 15, 12, 0, 0)
         review_dates = [now - timedelta(days=30)]
@@ -206,6 +226,7 @@ class GoogleConfidencePersistenceTests(unittest.TestCase):
                     "url": "https://maps.google.com/?cid=123",
                     "reviews": [],
                     "user_ratings_total": 0,
+                    "website": "https://chez-paul.fr",
                 }
 
         self.service._client = DummyClient()

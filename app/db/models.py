@@ -90,6 +90,9 @@ class Establishment(Base):
     google_listing_origin_at: Mapped[datetime | None] = mapped_column(DateTime)
     google_listing_origin_source: Mapped[str] = mapped_column(String(32), default="unknown", nullable=False)
     google_listing_age_status: Mapped[str] = mapped_column(String(32), default="unknown", nullable=False)
+    google_contact_phone: Mapped[str | None] = mapped_column(String(64))
+    google_contact_email: Mapped[str | None] = mapped_column(String(255))
+    google_contact_website: Mapped[str | None] = mapped_column(String(512))
 
     alerts: Mapped[list["Alert"]] = relationship("Alert", back_populates="establishment")
 

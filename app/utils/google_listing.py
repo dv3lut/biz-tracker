@@ -5,6 +5,7 @@ from typing import Final
 
 LISTING_AGE_STATUS_LABELS: Final[dict[str, str]] = {
     "recent_creation": "Création récente",
+    "recent_creation_missing_contact": "Création récente (contact manquant)",
     "not_recent_creation": "Création ancienne",
     "unknown": "Non déterminé",
 }

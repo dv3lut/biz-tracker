@@ -30,9 +30,10 @@ ProgressCallback = Callable[[int, int, int, int, int], None]
 _PLACEHOLDER_TOKENS = {"ND"}
 _PROGRESS_BATCH_SIZE = 10
 _TYPE_MISMATCH_STATUS = "type_mismatch"
+_RECENT_NO_CONTACT_STATUS = "recent_creation_missing_contact"
 _PLACE_DETAILS_FIELDS = (
     "url,website,name,formatted_address,types,business_status,opening_hours,current_opening_hours,"
-    "reviews,user_ratings_total"
+    "reviews,user_ratings_total,formatted_phone_number,international_phone_number"
 )
 
 
@@ -50,6 +51,9 @@ class GoogleMatch:
     listing_origin_source: str
     listing_age_status: str
     status_override: str | None = None
+    contact_phone: str | None = None
+    contact_email: str | None = None
+    contact_website: str | None = None
 
 
 @dataclass
@@ -294,7 +298,8 @@ class GoogleBusinessService:
                 continue
             if not details:
                 continue
-            url = details.get("url") or details.get("website")
+            contact_phone, contact_email, contact_website = self._extract_contact_details(details)
+            url = details.get("url") or contact_website
             if not url:
                 _LOGGER.debug("Place %s trouvée mais sans URL exploitable.", place_id)
                 url = None
@@ -304,6 +309,12 @@ class GoogleBusinessService:
                 extract_ratings_total(details),
                 assumed_recent,
                 now,
+            )
+            listing_status = self._adjust_listing_status_for_contacts(
+                listing_status,
+                contact_phone=contact_phone,
+                contact_email=contact_email,
+                contact_website=contact_website,
             )
             raw_types = details.get("types")
             google_types = raw_types if isinstance(raw_types, list) else []
@@ -331,6 +342,9 @@ class GoogleBusinessService:
                     listing_origin_source=origin_source,
                     listing_age_status=listing_status,
                     status_override=_TYPE_MISMATCH_STATUS,
+                    contact_phone=contact_phone,
+                    contact_email=contact_email,
+                    contact_website=contact_website,
                 )
                 if best_mismatch_candidate is None or confidence > best_mismatch_candidate.confidence:
                     best_mismatch_candidate = mismatch_match
@@ -344,6 +358,9 @@ class GoogleBusinessService:
                 listing_origin_at=origin_at,
                 listing_origin_source=origin_source,
                 listing_age_status=listing_status,
+                contact_phone=contact_phone,
+                contact_email=contact_email,
+                contact_website=contact_website,
             )
             if best_candidate is None or confidence > best_candidate.confidence:
                 best_candidate = match
@@ -392,6 +409,9 @@ class GoogleBusinessService:
         establishment.google_listing_age_status = result.listing_age_status or "unknown"
         if result.category_confidence is not None:
             establishment.google_category_match_confidence = result.category_confidence
+        establishment.google_contact_phone = result.contact_phone
+        establishment.google_contact_email = result.contact_email
+        establishment.google_contact_website = result.contact_website
         return result
 
     def _fetch_details(self, place_id: str) -> dict[str, object] | None:
@@ -525,6 +545,40 @@ class GoogleBusinessService:
 
     def _should_assume_recent_listing(self, details: dict[str, object]) -> bool:
         return should_assume_recent_listing(details)
+
+    def _extract_contact_details(self, details: dict[str, object]) -> tuple[str | None, str | None, str | None]:
+        phone = details.get("formatted_phone_number")
+        if isinstance(phone, str):
+            phone = phone.strip() or None
+        if not phone:
+            alt_phone = details.get("international_phone_number")
+            if isinstance(alt_phone, str):
+                phone = alt_phone.strip() or None
+        email = None
+        for key in ("email", "business_email", "contact_email"):
+            raw = details.get(key)
+            if isinstance(raw, str) and raw.strip():
+                email = raw.strip()
+                break
+        website = details.get("website")
+        if isinstance(website, str) and website.strip():
+            website = website.strip()
+        else:
+            website = None
+        return phone, email, website
+
+    def _adjust_listing_status_for_contacts(
+        self,
+        listing_status: str,
+        *,
+        contact_phone: str | None,
+        contact_email: str | None,
+        contact_website: str | None,
+    ) -> str:
+        normalized = listing_status or "unknown"
+        if normalized == "recent_creation" and not any([contact_phone, contact_email, contact_website]):
+            return _RECENT_NO_CONTACT_STATUS
+        return normalized
 
     def _load_naf_keyword_map(self) -> dict[str, set[str]]:
         stmt = (

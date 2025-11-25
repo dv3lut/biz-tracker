@@ -129,6 +129,7 @@ def get_dashboard_metrics(
         )
         run_listing_counts = {
             "recent_creation": 0,
+            "recent_creation_missing_contact": 0,
             "not_recent_creation": 0,
             "unknown": 0,
         }
@@ -160,6 +161,7 @@ def get_dashboard_metrics(
             google_pending=run_google_counts["pending"],
             google_other=run_google_counts["other"],
             listing_recent=run_listing_counts["recent_creation"],
+            listing_recent_missing_contact=run_listing_counts["recent_creation_missing_contact"],
             listing_not_recent=run_listing_counts["not_recent_creation"],
             listing_unknown=run_listing_counts["unknown"],
             alerts_created=int(alerts_row.created or 0),
@@ -313,6 +315,7 @@ def get_dashboard_metrics(
     )
     listing_age_counts = {
         "recent_creation": 0,
+        "recent_creation_missing_contact": 0,
         "not_recent_creation": 0,
         "unknown": 0,
     }
@@ -391,6 +394,20 @@ def get_dashboard_metrics(
                                 models.Establishment.google_check_status == "found"
                             )
                             & (
+                                models.Establishment.google_listing_age_status == "recent_creation_missing_contact"
+                            ),
+                            1,
+                        ),
+                        else_=0,
+                    )
+                ).label("listing_recent_missing_contact_count"),
+                func.sum(
+                    case(
+                        (
+                            (
+                                models.Establishment.google_check_status == "found"
+                            )
+                            & (
                                 models.Establishment.google_listing_age_status.in_(
                                     ["not_recent_creation", "buyback_suspected"]
                                 )
@@ -431,8 +448,9 @@ def get_dashboard_metrics(
         google_other = int(row.google_other_count or 0)
         google_type_mismatch = int(row.google_type_mismatch_count or 0)
         listing_recent = int(row.listing_recent_count or 0)
+        listing_recent_missing_contact = int(row.listing_recent_missing_contact_count or 0)
         listing_not_recent = int(row.listing_not_recent_count or 0)
-        listing_unknown = max(0, google_found - listing_recent - listing_not_recent)
+        listing_unknown = max(0, google_found - listing_recent - listing_recent_missing_contact - listing_not_recent)
         category_entry = category_map.get(category_id)
         if not category_entry:
             category_entry = {
@@ -457,6 +475,7 @@ def get_dashboard_metrics(
                 "google_type_mismatch": google_type_mismatch,
                 "google_other": google_other,
                 "listing_recent": listing_recent,
+                "listing_recent_missing_contact": listing_recent_missing_contact,
                 "listing_not_recent": listing_not_recent,
                 "listing_unknown": listing_unknown,
             }

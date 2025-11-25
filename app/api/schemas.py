@@ -124,6 +124,10 @@ class GoogleStatusBreakdown(BaseModel):
 
 class GoogleListingAgeBreakdown(BaseModel):
     recent_creation: int = Field(default=0, description="Nombre d'établissements avec fiche créée récemment.")
+    recent_creation_missing_contact: int = Field(
+        default=0,
+        description="Nombre d'établissements dont la fiche semble récente mais sans canal de contact exploitable.",
+    )
     not_recent_creation: int = Field(default=0, description="Nombre d'établissements dont la fiche semble antérieure à l'ouverture (création ancienne).")
     unknown: int = Field(default=0, description="Nombre d'établissements sans information d'âge de fiche.")
 
@@ -140,6 +144,9 @@ class NafSubCategoryStats(BaseModel):
     google_type_mismatch: int = Field(description="Nombre d'établissements rejetés car la catégorie Google ne correspond pas au NAF attendu.")
     google_other: int = Field(description="Nombre d'établissements avec un statut Google inattendu.")
     listing_recent: int = Field(description="Fiches Google considérées comme création récente (dernier run).")
+    listing_recent_missing_contact: int = Field(
+        description="Fiches Google récentes mais sans contact disponible (dernier run)."
+    )
     listing_not_recent: int = Field(description="Fiches Google considérées comme création ancienne ou reprise.")
     listing_unknown: int = Field(description="Fiches Google sans information fiable sur l'ancienneté.")
 
@@ -168,6 +175,9 @@ class DashboardRunBreakdown(BaseModel):
     google_pending: int = Field(description="Nouveaux établissements encore en file d'attente Google.")
     google_other: int = Field(description="Nouveaux établissements avec un statut Google inattendu.")
     listing_recent: int = Field(description="Fiches probablement créées lors de l'ouverture.")
+    listing_recent_missing_contact: int = Field(
+        description="Fiches récentes dépourvues d'information de contact fiable."
+    )
     listing_not_recent: int = Field(description="Fiches déjà existantes avant la création recensée (création ancienne).")
     listing_unknown: int = Field(description="Fiches sans information d'âge sur le run.")
     alerts_created: int = Field(description="Alertes créées pendant le run.")
@@ -401,6 +411,9 @@ class EstablishmentOut(BaseModel):
     google_listing_origin_at: datetime | None
     google_listing_origin_source: str | None
     google_listing_age_status: str | None
+    google_contact_phone: str | None
+    google_contact_email: str | None
+    google_contact_website: str | None
     is_sole_proprietorship: bool
 
 
