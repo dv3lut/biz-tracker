@@ -9,6 +9,10 @@ type GooglePlacesExportParams = {
   mode?: "admin" | "client";
 };
 
+type ManualGoogleCheckOptions = {
+  notifyClients?: boolean;
+};
+
 interface ManualGoogleCheckResponse {
   found: boolean;
   email_sent: boolean;
@@ -53,13 +57,18 @@ const serializeConfig = (payload: GoogleRetryConfig): GoogleRetryConfigResponse 
 });
 
 export const googleApi = {
-  async checkEstablishment(siret: string): Promise<GoogleCheckResult> {
-    const { data } = await request<ManualGoogleCheckResponse>(
-      `/admin/establishments/${encodeURIComponent(siret)}/google-check`,
-      {
-        method: "POST",
-      },
-    );
+  async checkEstablishment(siret: string, options?: ManualGoogleCheckOptions): Promise<GoogleCheckResult> {
+    const params = new URLSearchParams();
+    if (options?.notifyClients === false) {
+      params.set("notify_clients", "false");
+    }
+    const queryString = params.toString();
+    const path = `/admin/establishments/${encodeURIComponent(siret)}/google-check${
+      queryString ? `?${queryString}` : ""
+    }`;
+    const { data } = await request<ManualGoogleCheckResponse>(path, {
+      method: "POST",
+    });
     return {
       found: data.found,
       emailSent: data.email_sent,

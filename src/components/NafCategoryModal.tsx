@@ -5,6 +5,7 @@ import type { NafCategory } from "../types";
 export type NafCategoryFormPayload = {
   name: string;
   description: string | null;
+  keywords: string[];
 };
 
 type Props = {
@@ -19,11 +20,24 @@ type Props = {
 type FormState = {
   name: string;
   description: string;
+  keywordsText: string;
 };
 
 const EMPTY_STATE: FormState = {
   name: "",
   description: "",
+  keywordsText: "",
+};
+
+const splitKeywords = (value: string): string[] => {
+  return Array.from(
+    new Set(
+      value
+        .split(/[\n,;]/)
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0),
+    ),
+  );
 };
 
 export const NafCategoryModal = ({ isOpen, mode, category, onSubmit, onCancel, isProcessing }: Props) => {
@@ -38,6 +52,7 @@ export const NafCategoryModal = ({ isOpen, mode, category, onSubmit, onCancel, i
       setFormState({
         name: category.name,
         description: category.description ?? "",
+        keywordsText: (category.keywords ?? []).join("\n"),
       });
     } else {
       setFormState(EMPTY_STATE);
@@ -58,6 +73,7 @@ export const NafCategoryModal = ({ isOpen, mode, category, onSubmit, onCancel, i
     const payload: NafCategoryFormPayload = {
       name: formState.name.trim(),
       description: formState.description.trim() ? formState.description.trim() : null,
+      keywords: splitKeywords(formState.keywordsText),
     };
     onSubmit(payload);
   };
@@ -98,6 +114,18 @@ export const NafCategoryModal = ({ isOpen, mode, category, onSubmit, onCancel, i
                 onChange={handleChange("description")}
                 placeholder="Notes internes visibles dans l'UI."
               />
+            </div>
+            <div className="form-field">
+              <span className="input-label">Mots-clés additionnels</span>
+              <textarea
+                rows={4}
+                value={formState.keywordsText}
+                onChange={handleChange("keywordsText")}
+                placeholder="Un mot ou une expression par ligne"
+              />
+              <p className="small muted">
+                Ces mots-clés complètent le nom/description afin d'améliorer le rapprochement avec les catégories Google.
+              </p>
             </div>
           </section>
 

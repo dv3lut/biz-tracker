@@ -23,6 +23,7 @@ import {
   RunSummaryUpdatedEstablishment,
   NafCategoryStat,
   NafSubCategoryStat,
+  SyncMode,
 } from "../types";
 
 export class ApiError extends Error {
@@ -41,6 +42,7 @@ interface SyncRunResponse {
   scope_key: string;
   run_type: string;
   status: string;
+  mode: SyncMode;
   started_at: string;
   finished_at: string | null;
   api_call_count: number;
@@ -63,6 +65,7 @@ interface SyncRunResponse {
   estimated_remaining_seconds: number | null;
   estimated_completion_at: string | null;
   summary: RunSummaryResponse | null;
+  google_enabled: boolean;
 }
 
 interface RunSummaryResponse {
@@ -76,6 +79,7 @@ interface RunSummaryMetaResponse {
   id: string;
   scope_key: string;
   status: string;
+  mode: SyncMode;
   started_at: string | null;
   finished_at: string | null;
   duration_seconds: number;
@@ -83,6 +87,7 @@ interface RunSummaryMetaResponse {
 }
 
 interface RunSummaryStatsResponse {
+  mode: SyncMode;
   fetched_records: number;
   created_records: number;
   updated_records: number;
@@ -92,6 +97,7 @@ interface RunSummaryStatsResponse {
 }
 
 interface RunSummaryGoogleStatsResponse {
+  enabled: boolean;
   api_call_count: number;
   queue_count: number;
   eligible_count: number;
@@ -122,6 +128,7 @@ interface RunSummaryEstablishmentResponse {
   google_status: string | null;
   google_place_url: string | null;
   google_place_id: string | null;
+  google_match_confidence: number | null;
   created_run_id: string | null;
   first_seen_at: string | null;
   last_seen_at: string | null;
@@ -209,8 +216,8 @@ interface GoogleStatusBreakdownResponse {
 }
 
 interface GoogleListingAgeBreakdownResponse {
-  buyback_suspected: number;
   recent_creation: number;
+  not_recent_creation: number;
   unknown: number;
 }
 
@@ -227,8 +234,8 @@ interface DashboardRunBreakdownResponse {
   google_insufficient: number;
   google_pending: number;
   google_other: number;
-  listing_buyback: number;
   listing_recent: number;
+  listing_not_recent: number;
   listing_unknown: number;
   alerts_created: number;
   alerts_sent: number;
@@ -253,6 +260,15 @@ interface NafSubCategoryStatResponse {
   naf_code: string;
   name: string;
   establishment_count: number;
+  google_found: number;
+  google_not_found: number;
+  google_insufficient: number;
+  google_pending: number;
+  google_type_mismatch: number;
+  google_other: number;
+  listing_recent: number;
+  listing_not_recent: number;
+  listing_unknown: number;
 }
 
 interface NafCategoryStatResponse {
@@ -280,6 +296,7 @@ interface EstablishmentResponse {
   last_run_id: string | null;
   google_place_id: string | null;
   google_place_url: string | null;
+  google_match_confidence: number | null;
   google_last_checked_at: string | null;
   google_last_found_at: string | null;
   google_listing_origin_at: string | null;
@@ -387,6 +404,7 @@ const toRunSummaryEstablishment = (payload: RunSummaryEstablishmentResponse): Ru
   googleStatus: payload.google_status ?? null,
   googlePlaceUrl: payload.google_place_url ?? null,
   googlePlaceId: payload.google_place_id ?? null,
+  googleMatchConfidence: payload.google_match_confidence ?? null,
   createdRunId: payload.created_run_id ?? null,
   firstSeenAt: payload.first_seen_at ?? null,
   lastSeenAt: payload.last_seen_at ?? null,
@@ -404,17 +422,20 @@ const toRunSummary = (payload: RunSummaryResponse): RunSummary => ({
     id: payload.run.id,
     scopeKey: payload.run.scope_key,
     status: payload.run.status,
+    mode: payload.run.mode,
     startedAt: payload.run.started_at,
     finishedAt: payload.run.finished_at,
     durationSeconds: payload.run.duration_seconds,
     pageCount: payload.run.page_count,
   },
   stats: {
+    mode: payload.stats.mode,
     fetchedRecords: payload.stats.fetched_records,
     createdRecords: payload.stats.created_records,
     updatedRecords: payload.stats.updated_records,
     apiCallCount: payload.stats.api_call_count,
     google: {
+      enabled: payload.stats.google.enabled,
       apiCallCount: payload.stats.google.api_call_count,
       queueCount: payload.stats.google.queue_count,
       eligibleCount: payload.stats.google.eligible_count,
@@ -449,6 +470,7 @@ const toSyncRun = (payload: SyncRunResponse): SyncRun => ({
   scopeKey: payload.scope_key,
   runType: payload.run_type,
   status: payload.status,
+  mode: payload.mode,
   startedAt: payload.started_at,
   finishedAt: payload.finished_at,
   apiCallCount: payload.api_call_count,
@@ -470,6 +492,7 @@ const toSyncRun = (payload: SyncRunResponse): SyncRun => ({
   progress: payload.progress,
   estimatedRemainingSeconds: payload.estimated_remaining_seconds,
   estimatedCompletionAt: payload.estimated_completion_at,
+  googleEnabled: payload.google_enabled,
   summary: payload.summary ? toRunSummary(payload.summary) : null,
 });
 
@@ -548,8 +571,8 @@ const toGoogleStatusBreakdown = (payload: GoogleStatusBreakdownResponse): Google
 const toGoogleListingAgeBreakdown = (
   payload: GoogleListingAgeBreakdownResponse,
 ): GoogleListingAgeBreakdown => ({
-  buybackSuspected: payload.buyback_suspected,
   recentCreation: payload.recent_creation,
+  notRecentCreation: payload.not_recent_creation,
   unknown: payload.unknown,
 });
 
@@ -568,8 +591,8 @@ const toDashboardRunBreakdown = (payload: DashboardRunBreakdownResponse): Dashbo
   googleOther: payload.google_other,
   alertsCreated: payload.alerts_created,
   alertsSent: payload.alerts_sent,
-  listingBuyback: payload.listing_buyback,
   listingRecent: payload.listing_recent,
+  listingNotRecent: payload.listing_not_recent,
   listingUnknown: payload.listing_unknown,
 });
 
@@ -592,6 +615,15 @@ const toNafSubCategoryStat = (payload: NafSubCategoryStatResponse): NafSubCatego
   nafCode: payload.naf_code,
   name: payload.name,
   establishmentCount: payload.establishment_count,
+  googleFound: payload.google_found,
+  googleNotFound: payload.google_not_found,
+  googleInsufficient: payload.google_insufficient,
+  googlePending: payload.google_pending,
+  googleTypeMismatch: payload.google_type_mismatch,
+  googleOther: payload.google_other,
+  listingRecent: payload.listing_recent,
+  listingNotRecent: payload.listing_not_recent,
+  listingUnknown: payload.listing_unknown,
 });
 
 const toNafCategoryStat = (payload: NafCategoryStatResponse): NafCategoryStat => ({
@@ -619,6 +651,7 @@ const toEstablishment = (payload: EstablishmentResponse): Establishment => ({
   lastRunId: payload.last_run_id,
   googlePlaceId: payload.google_place_id,
   googlePlaceUrl: payload.google_place_url,
+  googleMatchConfidence: payload.google_match_confidence,
   googleLastCheckedAt: payload.google_last_checked_at,
   googleLastFoundAt: payload.google_last_found_at,
   googleCheckStatus: payload.google_check_status,
@@ -752,6 +785,9 @@ export const adminApi = {
     const requestBody: Record<string, unknown> = {};
     if (payload.checkForUpdates !== undefined) {
       requestBody.check_for_updates = payload.checkForUpdates;
+    }
+    if (payload.mode) {
+      requestBody.mode = payload.mode;
     }
     const { data, status } = await request<SyncRunResponse | { detail?: string }>("/admin/sync", {
       method: "POST",

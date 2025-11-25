@@ -40,6 +40,14 @@ export const computeSireneProgress = (run: SyncRun): SireneProgress => {
 };
 
 export const computeGoogleProgress = (run: SyncRun): GoogleProgress => {
+  if (!run.googleEnabled) {
+    return {
+      value: null,
+      processed: 0,
+      total: null,
+      pending: 0,
+    };
+  }
   const totalCandidate = run.googleQueueCount > 0 ? run.googleQueueCount : run.googleEligibleCount;
   const total = totalCandidate > 0 ? totalCandidate : null;
   const pending = Math.max(run.googlePendingCount, 0);

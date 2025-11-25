@@ -18,6 +18,7 @@ type NafCategoryResponse = {
   id: string;
   name: string;
   description: string | null;
+  keywords: string[] | null;
   created_at: string;
   updated_at: string;
   subcategories: NafSubCategoryResponse[];
@@ -26,6 +27,7 @@ type NafCategoryResponse = {
 export interface NafCategoryPayload {
   name: string;
   description?: string | null;
+  keywords: string[];
 }
 
 export interface NafSubCategoryCreatePayload {
@@ -63,6 +65,7 @@ const mapCategoryResponse = (category: NafCategoryResponse): NafCategory => ({
   id: category.id,
   name: category.name,
   description: category.description,
+  keywords: category.keywords ?? [],
   createdAt: category.created_at,
   updatedAt: category.updated_at,
   subcategories: (category.subcategories || []).map(mapNafSubCategoryResponse),
@@ -71,6 +74,7 @@ const mapCategoryResponse = (category: NafCategoryResponse): NafCategory => ({
 const serializeCategoryPayload = (payload: NafCategoryPayload) => ({
   name: payload.name,
   description: payload.description ?? null,
+  keywords: payload.keywords,
 });
 
 const serializeSubCategoryCreatePayload = (payload: NafSubCategoryCreatePayload) => ({

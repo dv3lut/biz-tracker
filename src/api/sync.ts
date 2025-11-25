@@ -2,6 +2,7 @@ import {
   RunSummary,
   RunSummaryEstablishment,
   RunSummaryUpdatedEstablishment,
+  SyncMode,
   SyncRequestPayload,
   SyncRun,
   SyncState,
@@ -13,6 +14,7 @@ export interface SyncRunResponse {
   scope_key: string;
   run_type: string;
   status: string;
+  mode: SyncMode;
   started_at: string;
   finished_at: string | null;
   api_call_count: number;
@@ -35,6 +37,7 @@ export interface SyncRunResponse {
   estimated_remaining_seconds: number | null;
   estimated_completion_at: string | null;
   summary: RunSummaryResponse | null;
+  google_enabled: boolean;
 }
 
 export interface RunSummaryResponse {
@@ -48,6 +51,7 @@ interface RunSummaryMetaResponse {
   id: string;
   scope_key: string;
   status: string;
+  mode: SyncMode;
   started_at: string | null;
   finished_at: string | null;
   duration_seconds: number;
@@ -55,6 +59,7 @@ interface RunSummaryMetaResponse {
 }
 
 interface RunSummaryStatsResponse {
+  mode: SyncMode;
   fetched_records: number;
   created_records: number;
   updated_records: number;
@@ -64,6 +69,7 @@ interface RunSummaryStatsResponse {
 }
 
 interface RunSummaryGoogleStatsResponse {
+  enabled: boolean;
   api_call_count: number;
   queue_count: number;
   eligible_count: number;
@@ -94,6 +100,7 @@ interface RunSummaryEstablishmentResponse {
   google_status: string | null;
   google_place_url: string | null;
   google_place_id: string | null;
+  google_match_confidence: number | null;
   created_run_id: string | null;
   first_seen_at: string | null;
   last_seen_at: string | null;
@@ -141,6 +148,7 @@ const mapRunSummaryEstablishment = (
   googleStatus: payload.google_status ?? null,
   googlePlaceUrl: payload.google_place_url ?? null,
   googlePlaceId: payload.google_place_id ?? null,
+  googleMatchConfidence: payload.google_match_confidence ?? null,
   createdRunId: payload.created_run_id ?? null,
   firstSeenAt: payload.first_seen_at ?? null,
   lastSeenAt: payload.last_seen_at ?? null,
@@ -158,17 +166,20 @@ const mapRunSummary = (payload: RunSummaryResponse): RunSummary => ({
     id: payload.run.id,
     scopeKey: payload.run.scope_key,
     status: payload.run.status,
+    mode: payload.run.mode,
     startedAt: payload.run.started_at,
     finishedAt: payload.run.finished_at,
     durationSeconds: payload.run.duration_seconds,
     pageCount: payload.run.page_count,
   },
   stats: {
+    mode: payload.stats.mode,
     fetchedRecords: payload.stats.fetched_records,
     createdRecords: payload.stats.created_records,
     updatedRecords: payload.stats.updated_records,
     apiCallCount: payload.stats.api_call_count,
     google: {
+      enabled: payload.stats.google.enabled,
       apiCallCount: payload.stats.google.api_call_count,
       queueCount: payload.stats.google.queue_count,
       eligibleCount: payload.stats.google.eligible_count,
@@ -207,6 +218,7 @@ export const mapSyncRun = (payload: SyncRunResponse): SyncRun => ({
   scopeKey: payload.scope_key,
   runType: payload.run_type,
   status: payload.status,
+  mode: payload.mode,
   startedAt: payload.started_at,
   finishedAt: payload.finished_at,
   apiCallCount: payload.api_call_count,
@@ -228,6 +240,7 @@ export const mapSyncRun = (payload: SyncRunResponse): SyncRun => ({
   progress: payload.progress,
   estimatedRemainingSeconds: payload.estimated_remaining_seconds,
   estimatedCompletionAt: payload.estimated_completion_at,
+  googleEnabled: payload.google_enabled,
   summary: payload.summary ? mapRunSummary(payload.summary) : null,
 });
 
@@ -268,6 +281,9 @@ export const syncApi = {
     const body: Record<string, unknown> = {};
     if (payload.checkForUpdates !== undefined) {
       body.check_for_updates = payload.checkForUpdates;
+    }
+    if (payload.mode) {
+      body.mode = payload.mode;
     }
     const { data, status } = await request<SyncRunResponse | { detail?: string }>("/admin/sync", {
       method: "POST",

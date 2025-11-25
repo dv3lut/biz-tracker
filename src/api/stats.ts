@@ -63,8 +63,8 @@ interface GoogleStatusBreakdownResponse {
 }
 
 interface GoogleListingAgeBreakdownResponse {
-  buyback_suspected: number;
   recent_creation: number;
+  not_recent_creation: number;
   unknown: number;
 }
 
@@ -73,6 +73,15 @@ interface NafSubCategoryStatResponse {
   naf_code: string;
   name: string;
   establishment_count: number;
+  google_found: number;
+  google_not_found: number;
+  google_insufficient: number;
+  google_pending: number;
+  google_type_mismatch: number;
+  google_other: number;
+  listing_recent: number;
+  listing_not_recent: number;
+  listing_unknown: number;
 }
 
 interface NafCategoryStatResponse {
@@ -95,8 +104,8 @@ interface DashboardRunBreakdownResponse {
   google_insufficient: number;
   google_pending: number;
   google_other: number;
-  listing_buyback: number;
   listing_recent: number;
+  listing_not_recent: number;
   listing_unknown: number;
   alerts_created: number;
   alerts_sent: number;
@@ -169,8 +178,8 @@ const mapGoogleStatusBreakdown = (
 const mapGoogleListingAgeBreakdown = (
   payload: GoogleListingAgeBreakdownResponse,
 ): GoogleListingAgeBreakdown => ({
-  buybackSuspected: payload.buyback_suspected,
   recentCreation: payload.recent_creation,
+  notRecentCreation: payload.not_recent_creation,
   unknown: payload.unknown,
 });
 
@@ -181,6 +190,15 @@ const mapNafSubCategoryStat = (
   nafCode: payload.naf_code,
   name: payload.name,
   establishmentCount: payload.establishment_count,
+  googleFound: payload.google_found,
+  googleNotFound: payload.google_not_found,
+  googleInsufficient: payload.google_insufficient,
+  googlePending: payload.google_pending,
+  googleTypeMismatch: payload.google_type_mismatch,
+  googleOther: payload.google_other,
+  listingRecent: payload.listing_recent,
+  listingNotRecent: payload.listing_not_recent,
+  listingUnknown: payload.listing_unknown,
 });
 
 const mapNafCategoryStat = (payload: NafCategoryStatResponse): NafCategoryStat => ({
@@ -205,8 +223,8 @@ const mapDashboardRunBreakdown = (
   googleInsufficient: payload.google_insufficient,
   googlePending: payload.google_pending,
   googleOther: payload.google_other,
-  listingBuyback: payload.listing_buyback,
   listingRecent: payload.listing_recent,
+  listingNotRecent: payload.listing_not_recent,
   listingUnknown: payload.listing_unknown,
   alertsCreated: payload.alerts_created,
   alertsSent: payload.alerts_sent,

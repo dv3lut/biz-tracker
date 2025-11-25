@@ -19,6 +19,10 @@ type Props = {
   isRefreshing: boolean;
 };
 
+const describeMode = (mode: SyncRun["mode"]): string => {
+  return mode === "sirene_only" ? "Sirene uniquement" : "Complet";
+};
+
 const renderRunDetails = (run: SyncRun | null): ReactNode => {
   if (!run) {
     return <p className="muted">Aucune exécution enregistrée.</p>;
@@ -26,10 +30,12 @@ const renderRunDetails = (run: SyncRun | null): ReactNode => {
 
   const sireneProgress = computeSireneProgress(run);
   const googleProgress = computeGoogleProgress(run);
+  const googleDisabled = !run.googleEnabled;
   const sireneDetails = sireneProgress.total
     ? `${formatNumber(sireneProgress.processed)} / ${formatNumber(sireneProgress.total)} établissements traités`
     : `${formatNumber(sireneProgress.processed)} établissements traités (total inconnu)`;
-  const hasGoogleWork = googleProgress.total !== null || run.googleQueueCount > 0 || run.googleEligibleCount > 0;
+  const hasGoogleWork =
+    !googleDisabled && (googleProgress.total !== null || run.googleQueueCount > 0 || run.googleEligibleCount > 0);
   const googleDetailParts: string[] = [];
   if (googleProgress.total !== null) {
     googleDetailParts.push(
@@ -59,17 +65,27 @@ const renderRunDetails = (run: SyncRun | null): ReactNode => {
             value={googleProgress.value}
             details={<span>{googleDetailParts.join(" · ")}</span>}
           />
+        ) : googleDisabled ? (
+          <p className="muted small">Google Places désactivé pour ce run.</p>
         ) : null}
       </div>
       <dl className="data-grid">
-      <div>
-        <dt>Type</dt>
-        <dd>{run.runType}</dd>
-      </div>
-      <div>
-        <dt>Status</dt>
-        <dd>{run.status}</dd>
-      </div>
+        <div>
+          <dt>Mode</dt>
+          <dd>{describeMode(run.mode)}</dd>
+        </div>
+        <div>
+          <dt>Google Places</dt>
+          <dd>{run.googleEnabled ? "Activé" : "Désactivé"}</dd>
+        </div>
+        <div>
+          <dt>Type</dt>
+          <dd>{run.runType}</dd>
+        </div>
+        <div>
+          <dt>Status</dt>
+          <dd>{run.status}</dd>
+        </div>
       <div>
         <dt>Démarrée</dt>
         <dd>{formatDateTime(run.startedAt)}</dd>
@@ -176,7 +192,7 @@ export const StatsSummaryCard = ({
           className="primary"
           onClick={onTriggerSync}
           disabled={isTriggering}
-          title="Vérifie les mises à jour Sirene avant d'exécuter une synchronisation complète"
+          title="Choisir entre une synchro complète ou Sirene uniquement"
         >
           {isTriggering ? "Déclenchement..." : "Lancer une synchro"}
         </button>

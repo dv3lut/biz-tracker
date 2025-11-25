@@ -101,6 +101,11 @@ export const NafCategoriesSection = ({
                 <div>
                   <strong>{category.name}</strong>
                   {category.description ? <p className="small muted">{category.description}</p> : null}
+                  {category.keywords && category.keywords.length > 0 ? (
+                    <p className="small muted">
+                      Mots-clés : {category.keywords.join(", ")}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="card-actions">
                   <button type="button" className="ghost" onClick={() => onCreateSubCategory(category.id)}>

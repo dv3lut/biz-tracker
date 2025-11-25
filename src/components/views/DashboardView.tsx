@@ -1,7 +1,9 @@
 import { StatsSummaryCard } from "../StatsSummaryCard";
 import { DashboardInsights } from "../DashboardInsights";
+import { StatisticsPanel } from "../StatisticsPanel";
 import { GoogleRetryConfigCard } from "../GoogleRetryConfigCard";
-import type { DashboardMetrics, GoogleRetryConfig, StatsSummary } from "../../types";
+import { ManualGoogleCheckCard } from "../ManualGoogleCheckCard";
+import type { DashboardMetrics, GoogleCheckResult, GoogleRetryConfig, StatsSummary } from "../../types";
 
 export type DashboardViewProps = {
   stats: StatsSummary | undefined;
@@ -33,6 +35,17 @@ export type DashboardViewProps = {
   onSelectDay: (isoDate: string) => void;
   selectedDay: string | null;
   hasActiveRun: boolean;
+  manualGoogleSiret: string;
+  manualGoogleFeedback: string | null;
+  manualGoogleError: string | null;
+  manualGoogleResult: GoogleCheckResult | null;
+  onManualGoogleSiretChange: (value: string) => void;
+  onManualGoogleCheck: (siret: string) => void;
+  manualGoogleNotify: boolean;
+  onManualGoogleNotifyChange: (value: boolean) => void;
+  isManualGoogleCheckPending: boolean;
+  isGoogleCheckPending: boolean;
+  checkingGoogleSiret: string | null;
 };
 
 export const DashboardView = ({
@@ -65,10 +78,21 @@ export const DashboardView = ({
   onSelectDay,
   selectedDay,
   hasActiveRun,
+  manualGoogleSiret,
+  manualGoogleFeedback,
+  manualGoogleError,
+  manualGoogleResult,
+  onManualGoogleSiretChange,
+  onManualGoogleCheck,
+  manualGoogleNotify,
+  onManualGoogleNotifyChange,
+  isManualGoogleCheckPending,
+  isGoogleCheckPending,
+  checkingGoogleSiret,
 }: DashboardViewProps) => {
   return (
     <section className="dashboard-section">
-      <div className="section-grid">
+      <div className="dashboard-grid">
         <StatsSummaryCard
           summary={stats}
           isLoading={isStatsLoading}
@@ -82,6 +106,13 @@ export const DashboardView = ({
           errorMessage={errorMessage}
           isRefreshing={hasActiveRun && isStatsRefreshing}
         />
+        <StatisticsPanel
+          categories={metrics?.nafCategoryBreakdown ?? []}
+          isLoading={isMetricsLoading}
+          error={metricsError}
+          onRefresh={onRefreshMetrics}
+          isRefreshing={hasActiveRun && isMetricsRefreshing}
+        />
         <DashboardInsights
           metrics={metrics}
           isLoading={isMetricsLoading}
@@ -91,6 +122,19 @@ export const DashboardView = ({
           days={days}
           onSelectDay={onSelectDay}
           selectedDay={selectedDay}
+        />
+        <ManualGoogleCheckCard
+          siret={manualGoogleSiret}
+          onSiretChange={onManualGoogleSiretChange}
+          onSubmit={onManualGoogleCheck}
+          notify={manualGoogleNotify}
+          onNotifyChange={onManualGoogleNotifyChange}
+          isSubmitting={isManualGoogleCheckPending}
+          isGlobalSubmitting={isGoogleCheckPending}
+          checkingGoogleSiret={checkingGoogleSiret}
+          feedbackMessage={manualGoogleFeedback}
+          errorMessage={manualGoogleError}
+          result={manualGoogleResult}
         />
       </div>
       <GoogleRetryConfigCard

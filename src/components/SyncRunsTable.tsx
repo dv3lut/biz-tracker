@@ -99,7 +99,8 @@ export const SyncRunsTable = ({
               {runs.map((run) => {
                 const sirene = computeSireneProgress(run);
                 const google = computeGoogleProgress(run);
-                const showGoogle = google.total !== null || run.googleQueueCount > 0 || run.googleEligibleCount > 0;
+                const showGoogle =
+                  run.googleEnabled && (google.total !== null || run.googleQueueCount > 0 || run.googleEligibleCount > 0);
 
                 return (
                   <tr key={run.id}>
@@ -109,6 +110,12 @@ export const SyncRunsTable = ({
                       <span className="small muted">Scope: {run.scopeKey}</span>
                       <br />
                       <span className="small muted">Type: {run.runType}</span>
+                      <br />
+                      <span className="small muted">Mode: {run.mode === "sirene_only" ? "Sirene" : "Complet"}</span>
+                      <br />
+                      <span className="small muted">
+                        Google: {run.googleEnabled ? "Activé" : "Désactivé"}
+                      </span>
                       {run.resumedFromRunId ? (
                         <>
                           <br />
@@ -120,7 +127,11 @@ export const SyncRunsTable = ({
                       <span className={`badge status-${run.status}`}>{run.status}</span>
                       <div className="table-progress">
                         <ProgressBar label="Sirene" value={sirene.value} />
-                        {showGoogle ? <ProgressBar label="Google" tone="success" value={google.value} /> : null}
+                        {showGoogle ? (
+                          <ProgressBar label="Google" tone="success" value={google.value} />
+                        ) : !run.googleEnabled ? (
+                          <span className="small muted">Google désactivé</span>
+                        ) : null}
                       </div>
                       <span className="small muted">Traités: {formatNumber(run.fetchedRecords)}</span>
                       <br />

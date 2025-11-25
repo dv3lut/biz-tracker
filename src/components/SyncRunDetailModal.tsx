@@ -1,6 +1,10 @@
 import { SyncRun } from "../types";
 import { formatDateTime, formatDuration, formatNumber } from "../utils/format";
 
+const describeMode = (mode: SyncRun["mode"]): string => {
+  return mode === "sirene_only" ? "Sirene uniquement" : "Complet";
+};
+
 const formatDisplayDate = (isoDate: string | null | undefined): string => {
   if (!isoDate) {
     return "—";
@@ -60,6 +64,7 @@ export const SyncRunDetailModal = ({
   const googleStats = stats?.google;
   const alertsStats = stats?.alerts;
   const samples = summary?.samples;
+  const googleEnabled = googleStats?.enabled ?? activeRun?.googleEnabled ?? false;
 
   return (
     <div className="modal-overlay">
@@ -119,6 +124,12 @@ export const SyncRunDetailModal = ({
                           <strong>Scope</strong> {activeRun.scopeKey}
                         </li>
                         <li>
+                          <strong>Mode</strong> {describeMode(activeRun.mode)}
+                        </li>
+                        <li>
+                          <strong>Google Places</strong> {googleEnabled ? "Activé" : "Désactivé"}
+                        </li>
+                        <li>
                           <strong>Statut</strong> <span className={`badge status-${activeRun.status}`}>{activeRun.status}</span>
                         </li>
                         <li>
@@ -147,29 +158,33 @@ export const SyncRunDetailModal = ({
 
                     <article className="insight-card">
                       <h3>Google Places</h3>
-                      <ul className="metric-list">
-                        <li>
-                          <strong>Appels API</strong> {formatNumber(googleStats?.apiCallCount ?? activeRun.googleApiCallCount)}
-                        </li>
-                        <li>
-                          <strong>File d'attente</strong> {formatNumber(googleStats?.queueCount ?? activeRun.googleQueueCount)}
-                        </li>
-                        <li>
-                          <strong>Éligibles</strong> {formatNumber(googleStats?.eligibleCount ?? activeRun.googleEligibleCount)}
-                        </li>
-                        <li>
-                          <strong>Correspondances immédiates</strong> {formatNumber(googleStats?.immediateMatches ?? activeRun.googleImmediateMatchedCount)}
-                        </li>
-                        <li>
-                          <strong>Correspondances tardives</strong> {formatNumber(googleStats?.lateMatches ?? activeRun.googleLateMatchedCount)}
-                        </li>
-                        <li>
-                          <strong>Total trouvées</strong> {formatNumber(googleStats?.matchedCount ?? activeRun.googleMatchedCount)}
-                        </li>
-                        <li>
-                          <strong>En attente</strong> {formatNumber(googleStats?.pendingCount ?? activeRun.googlePendingCount)}
-                        </li>
-                      </ul>
+                      {googleEnabled ? (
+                        <ul className="metric-list">
+                          <li>
+                            <strong>Appels API</strong> {formatNumber(googleStats?.apiCallCount ?? activeRun.googleApiCallCount)}
+                          </li>
+                          <li>
+                            <strong>File d'attente</strong> {formatNumber(googleStats?.queueCount ?? activeRun.googleQueueCount)}
+                          </li>
+                          <li>
+                            <strong>Éligibles</strong> {formatNumber(googleStats?.eligibleCount ?? activeRun.googleEligibleCount)}
+                          </li>
+                          <li>
+                            <strong>Correspondances immédiates</strong> {formatNumber(googleStats?.immediateMatches ?? activeRun.googleImmediateMatchedCount)}
+                          </li>
+                          <li>
+                            <strong>Correspondances tardives</strong> {formatNumber(googleStats?.lateMatches ?? activeRun.googleLateMatchedCount)}
+                          </li>
+                          <li>
+                            <strong>Total trouvées</strong> {formatNumber(googleStats?.matchedCount ?? activeRun.googleMatchedCount)}
+                          </li>
+                          <li>
+                            <strong>En attente</strong> {formatNumber(googleStats?.pendingCount ?? activeRun.googlePendingCount)}
+                          </li>
+                        </ul>
+                      ) : (
+                        <p className="muted small">Google désactivé pour ce run.</p>
+                      )}
                     </article>
 
                     <article className="insight-card">

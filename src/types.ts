@@ -1,8 +1,11 @@
+export type SyncMode = "full" | "sirene_only";
+
 export interface SyncRun {
   id: string;
   scopeKey: string;
   runType: string;
   status: string;
+  mode: SyncMode;
   startedAt: string;
   finishedAt: string | null;
   apiCallCount: number;
@@ -24,6 +27,7 @@ export interface SyncRun {
   progress: number | null;
   estimatedRemainingSeconds: number | null;
   estimatedCompletionAt: string | null;
+  googleEnabled: boolean;
   summary: RunSummary | null;
 }
 
@@ -102,8 +106,8 @@ export interface GoogleStatusBreakdown {
 }
 
 export interface GoogleListingAgeBreakdown {
-  buybackSuspected: number;
   recentCreation: number;
+  notRecentCreation: number;
   unknown: number;
 }
 
@@ -112,6 +116,15 @@ export interface NafSubCategoryStat {
   nafCode: string;
   name: string;
   establishmentCount: number;
+  googleFound: number;
+  googleNotFound: number;
+  googleInsufficient: number;
+  googlePending: number;
+  googleTypeMismatch: number;
+  googleOther: number;
+  listingRecent: number;
+  listingNotRecent: number;
+  listingUnknown: number;
 }
 
 export interface NafCategoryStat {
@@ -134,8 +147,8 @@ export interface DashboardRunBreakdown {
   googleInsufficient: number;
   googlePending: number;
   googleOther: number;
-  listingBuyback: number;
   listingRecent: number;
+  listingNotRecent: number;
   listingUnknown: number;
   alertsCreated: number;
   alertsSent: number;
@@ -152,6 +165,7 @@ export interface RunSummaryMeta {
   id: string;
   scopeKey: string;
   status: string;
+  mode: SyncMode;
   startedAt: string | null;
   finishedAt: string | null;
   durationSeconds: number;
@@ -159,11 +173,13 @@ export interface RunSummaryMeta {
 }
 
 export interface RunSummaryStats {
+  mode: SyncMode;
   fetchedRecords: number;
   createdRecords: number;
   updatedRecords: number;
   apiCallCount: number;
   google: {
+    enabled: boolean;
     apiCallCount: number;
     queueCount: number;
     eligibleCount: number;
@@ -194,6 +210,7 @@ export interface RunSummaryEstablishment {
   googleStatus: string | null;
   googlePlaceUrl: string | null;
   googlePlaceId: string | null;
+  googleMatchConfidence: number | null;
   createdRunId: string | null;
   firstSeenAt: string | null;
   lastSeenAt: string | null;
@@ -226,6 +243,7 @@ export interface DashboardMetrics {
 
 export interface SyncRequestPayload {
   checkForUpdates?: boolean;
+  mode?: SyncMode;
 }
 
 export type EstablishmentIndividualFilter = "all" | "individual" | "non_individual";
@@ -251,6 +269,7 @@ export interface Establishment {
   googleLastCheckedAt: string | null;
   googleLastFoundAt: string | null;
   googleCheckStatus: string;
+  googleMatchConfidence: number | null;
   googleListingOriginAt: string | null;
   googleListingOriginSource: string | null;
   googleListingAgeStatus: string | null;
@@ -330,6 +349,7 @@ export interface NafCategory {
   id: string;
   name: string;
   description: string | null;
+  keywords: string[];
   createdAt: string;
   updatedAt: string;
   subcategories: NafSubCategory[];

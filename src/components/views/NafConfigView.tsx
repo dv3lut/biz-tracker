@@ -197,10 +197,10 @@ export const NafConfigView = ({
       if (categoryModalState?.mode === "edit" && categoryModalState.category) {
         updateCategoryMutation.mutate({
           categoryId: categoryModalState.category.id,
-          payload: { name: payload.name, description: payload.description },
+          payload: { name: payload.name, description: payload.description, keywords: payload.keywords },
         });
       } else {
-        createCategoryMutation.mutate({ name: payload.name, description: payload.description });
+        createCategoryMutation.mutate({ name: payload.name, description: payload.description, keywords: payload.keywords });
       }
     },
     [ensureAuthenticated, categoryModalState, updateCategoryMutation, createCategoryMutation],

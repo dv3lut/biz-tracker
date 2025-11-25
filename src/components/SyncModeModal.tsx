@@ -1,0 +1,117 @@
+import { useEffect, useState } from "react";
+
+import { SyncMode } from "../types";
+
+const MODE_OPTIONS: Array<{
+  value: SyncMode;
+  title: string;
+  description: string;
+  impact: string;
+}> = [
+  {
+    value: "full",
+    title: "Mode complet",
+    description: "Télécharge les mises à jour Sirene puis déclenche les enrichissements Google Places.",
+    impact: "Plus long mais garantit des fiches Google actualisées.",
+  },
+  {
+    value: "sirene_only",
+    title: "Mode Sirene uniquement",
+    description: "Capture uniquement les évolutions Sirene. Les appels Google sont ignorés.",
+    impact: "Recommandé pour analyser rapidement une base ou en cas d'incident Google.",
+  },
+];
+
+const getModeLabel = (mode: SyncMode): string => {
+  switch (mode) {
+    case "sirene_only":
+      return "Sirene uniquement";
+    case "full":
+    default:
+      return "Complet";
+  }
+};
+
+type Props = {
+  isOpen: boolean;
+  initialMode: SyncMode;
+  onConfirm: (mode: SyncMode) => void;
+  onCancel: () => void;
+  isSubmitting: boolean;
+};
+
+export const SyncModeModal = ({ isOpen, initialMode, onConfirm, onCancel, isSubmitting }: Props) => {
+  const [mode, setMode] = useState<SyncMode>(initialMode);
+
+  useEffect(() => {
+    if (isOpen) {
+      setMode(initialMode);
+    }
+  }, [initialMode, isOpen]);
+
+  if (!isOpen) {
+    return null;
+  }
+
+  const handleSubmit = () => {
+    onConfirm(mode);
+  };
+
+  return (
+    <div className="modal-overlay" role="dialog" aria-modal="true">
+      <div className="modal">
+        <header className="modal-header">
+          <div>
+            <h2>Choisir le mode de synchronisation</h2>
+            <p className="muted small">Sélectionnez la portée avant de lancer un nouveau traitement.</p>
+          </div>
+          <button type="button" className="ghost" onClick={onCancel} disabled={isSubmitting}>
+            Fermer
+          </button>
+        </header>
+
+        <div className="modal-content">
+          <div className="mode-options">
+            {MODE_OPTIONS.map((option) => {
+              const isSelected = option.value === mode;
+              return (
+                <label key={option.value} className={`mode-option${isSelected ? " selected" : ""}`}>
+                  <div className="mode-option-header">
+                    <input
+                      type="radio"
+                      name="sync-mode"
+                      value={option.value}
+                      checked={isSelected}
+                      onChange={() => setMode(option.value)}
+                      disabled={isSubmitting}
+                    />
+                    <div>
+                      <strong>{option.title}</strong>
+                      <p className="muted small">{option.description}</p>
+                    </div>
+                  </div>
+                  <p className="muted small">{option.impact}</p>
+                </label>
+              );
+            })}
+          </div>
+          <p className="muted small">Mode actuel : {getModeLabel(mode)}</p>
+          {mode === "sirene_only" ? (
+            <p className="muted small">
+              <strong>⚠️ Google désactivé :</strong> aucune fiche ne sera vérifiée ni enrichie pendant ce run.
+            </p>
+          ) : null}
+        </div>
+
+        <footer className="modal-footer">
+          <button type="button" className="ghost" onClick={onCancel} disabled={isSubmitting}>
+            Annuler
+          </button>
+          <button type="button" className="primary" onClick={handleSubmit} disabled={isSubmitting}>
+            {isSubmitting ? "Déclenchement…" : "Lancer la synchro"}
+          </button>
+        </footer>
+      </div>
+    </div>
+  );
+};

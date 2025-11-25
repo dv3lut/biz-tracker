@@ -35,6 +35,7 @@ import { ClientsView } from "./components/views/ClientsView";
 import { EmailsView } from "./components/views/EmailsView";
 import { EstablishmentsView } from "./components/views/EstablishmentsView";
 import { NafConfigView } from "./components/views/NafConfigView";
+import { SyncModeModal } from "./components/SyncModeModal";
 import {
   Alert,
   AdminEmailConfig,
@@ -49,6 +50,7 @@ import {
   GoogleCheckResult,
   GoogleRetryConfig,
   StatsSummary,
+  SyncMode,
   SyncRequestPayload,
   SyncRun,
   SyncState,
@@ -113,6 +115,11 @@ const App = () => {
   const [adminEmailFeedback, setAdminEmailFeedback] = useState<string | null>(null);
   const [adminEmailError, setAdminEmailError] = useState<string | null>(null);
   const [checkingGoogleSiret, setCheckingGoogleSiret] = useState<string | null>(null);
+  const [manualGoogleSiret, setManualGoogleSiret] = useState("");
+  const [manualGoogleNotify, setManualGoogleNotify] = useState(false);
+  const [manualGoogleFeedback, setManualGoogleFeedback] = useState<string | null>(null);
+  const [manualGoogleError, setManualGoogleError] = useState<string | null>(null);
+  const [manualGoogleResult, setManualGoogleResult] = useState<GoogleCheckResult | null>(null);
   const [selectedEstablishmentSiret, setSelectedEstablishmentSiret] = useState<string | null>(null);
   const [isExportingGooglePlaces, setIsExportingGooglePlaces] = useState(false);
   const [googleExportStartDate, setGoogleExportStartDate] = useState<string>(() => getDefaultGoogleExportRange().start);
@@ -120,6 +127,8 @@ const App = () => {
   const [googleExportMode, setGoogleExportMode] = useState<"admin" | "client">("client");
   const [isGoogleExportModalOpen, setGoogleExportModalOpen] = useState(false);
   const [runDetailModal, setRunDetailModal] = useState<RunDetailModalState | null>(null);
+  const [isSyncModeModalOpen, setSyncModeModalOpen] = useState(false);
+  const [pendingSyncMode, setPendingSyncMode] = useState<SyncMode>("full");
   const [clientModalState, setClientModalState] = useState<{ mode: "create" | "edit"; client: Client | null } | null>(
     null,
   );
@@ -168,8 +177,12 @@ const App = () => {
     setClientsError(null);
     setAdminEmailFeedback(null);
     setAdminEmailError(null);
-  setGoogleRetryConfigFeedback(null);
-  setGoogleRetryConfigMessageError(null);
+    setManualGoogleSiret("");
+    setManualGoogleFeedback(null);
+    setManualGoogleError(null);
+    setManualGoogleResult(null);
+    setGoogleRetryConfigFeedback(null);
+    setGoogleRetryConfigMessageError(null);
     setCheckingGoogleSiret(null);
     setSelectedEstablishmentSiret(null);
     setIsExportingGooglePlaces(false);
@@ -177,6 +190,8 @@ const App = () => {
     setAlertsExportDays(30);
     setIsExportingAlerts(false);
     setRunDetailModal(null);
+    setSyncModeModalOpen(false);
+    setPendingSyncMode("full");
     setClientModalState(null);
     setActiveSection("dashboard");
   }, [resetGoogleExportRange]);
@@ -693,16 +708,26 @@ const App = () => {
     onError: showGoogleRetryConfigError,
   });
 
-  const manualGoogleCheckMutation = useMutation<GoogleCheckResult, unknown, { siret: string; source: "alerts" | "establishments" }>({
-    mutationFn: ({ siret }) => googleApi.checkEstablishment(siret),
+  type ManualGoogleCheckSource = "alerts" | "establishments" | "manual";
+  const manualGoogleCheckMutation = useMutation<GoogleCheckResult, unknown, { siret: string; source: ManualGoogleCheckSource; notify?: boolean }>({
+    mutationFn: ({ siret, source, notify }) =>
+      googleApi.checkEstablishment(siret, {
+        notifyClients: notify ?? (source !== "manual"),
+      }),
     onMutate: ({ siret, source }) => {
       setCheckingGoogleSiret(siret);
       if (source === "alerts") {
         setAlertsFeedback(null);
         setAlertsError(null);
       } else {
-        setEstablishmentsFeedback(null);
-        setEstablishmentsError(null);
+        if (source === "establishments") {
+          setEstablishmentsFeedback(null);
+          setEstablishmentsError(null);
+        } else {
+          setManualGoogleFeedback(null);
+          setManualGoogleError(null);
+          setManualGoogleResult(null);
+        }
       }
     },
     onSuccess: (result, variables) => {
@@ -710,9 +735,14 @@ const App = () => {
       if (variables.source === "alerts") {
         setAlertsFeedback(message);
         setAlertsError(null);
-      } else {
+      } else if (variables.source === "establishments") {
         setEstablishmentsFeedback(message);
         setEstablishmentsError(null);
+      } else {
+        setManualGoogleFeedback(message);
+        setManualGoogleError(null);
+        setManualGoogleSiret("");
+        setManualGoogleResult(result);
       }
       alertsQuery.refetch();
       establishmentsQueryResult.refetch();
@@ -727,9 +757,13 @@ const App = () => {
       if (variables.source === "alerts") {
         setAlertsError(message);
         setAlertsFeedback(null);
-      } else {
+      } else if (variables.source === "establishments") {
         setEstablishmentsError(message);
         setEstablishmentsFeedback(null);
+      } else {
+        setManualGoogleError(message);
+        setManualGoogleFeedback(null);
+        setManualGoogleResult(null);
       }
     },
     onSettled: () => {
@@ -750,8 +784,26 @@ const App = () => {
       setTokenError("Merci de saisir un jeton administrateur.");
       return;
     }
-    syncMutation.mutate({ checkForUpdates: true });
-  }, [isAuthenticated, syncMutation, setTokenError]);
+    setSyncModeModalOpen(true);
+  }, [isAuthenticated, setTokenError]);
+
+  const handleCloseSyncModeModal = useCallback(() => {
+    setSyncModeModalOpen(false);
+  }, []);
+
+  const handleConfirmSyncMode = useCallback(
+    (mode: SyncMode) => {
+      if (!isAuthenticated) {
+        setTokenError("Merci de saisir un jeton administrateur.");
+        setSyncModeModalOpen(false);
+        return;
+      }
+      setPendingSyncMode(mode);
+      setSyncModeModalOpen(false);
+      syncMutation.mutate({ checkForUpdates: true, mode });
+    },
+    [isAuthenticated, setTokenError, syncMutation],
+  );
 
   const handleEstablishmentsLimitChange = (limit: number) => {
     setEstablishmentsLimit(limit);
@@ -808,6 +860,30 @@ const App = () => {
       triggerManualGoogleCheck({ siret, source: "alerts" });
     },
     [isAuthenticated, triggerManualGoogleCheck, setTokenError]
+  );
+
+  const handleManualGoogleSiretChange = useCallback(
+    (value: string) => {
+      setManualGoogleSiret(value);
+    },
+    []
+  );
+
+  const handleManualGoogleCheckFromForm = useCallback(
+    (siret: string) => {
+      const normalized = siret.replace(/\s+/g, "").trim();
+      if (!normalized) {
+        setManualGoogleError("Merci de renseigner un numéro de SIRET.");
+        setManualGoogleFeedback(null);
+        return;
+      }
+      if (!isAuthenticated) {
+        setTokenError("Merci de saisir un jeton administrateur.");
+        return;
+      }
+      triggerManualGoogleCheck({ siret: normalized, source: "manual", notify: manualGoogleNotify });
+    },
+    [isAuthenticated, triggerManualGoogleCheck, setTokenError, manualGoogleNotify]
   );
 
   const handleAlertsExportDaysChange = useCallback((value: number) => {
@@ -980,8 +1056,9 @@ const App = () => {
       setClientsError(null);
       setAdminEmailFeedback(null);
       setAdminEmailError(null);
-  setGoogleRetryConfigFeedback(null);
-  setGoogleRetryConfigMessageError(null);
+      setGoogleRetryConfigFeedback(null);
+      setGoogleRetryConfigMessageError(null);
+      setManualGoogleResult(null);
       setCheckingGoogleSiret(null);
       setSelectedEstablishmentSiret(null);
       setAlertsExportDays(30);
@@ -1012,8 +1089,9 @@ const App = () => {
     setClientsError(null);
     setAdminEmailFeedback(null);
     setAdminEmailError(null);
-  setGoogleRetryConfigFeedback(null);
-  setGoogleRetryConfigMessageError(null);
+    setGoogleRetryConfigFeedback(null);
+    setGoogleRetryConfigMessageError(null);
+    setManualGoogleResult(null);
     setCheckingGoogleSiret(null);
     setSelectedEstablishmentSiret(null);
     setRunDetailModal(null);
@@ -1038,8 +1116,9 @@ const App = () => {
     setClientsError,
     setAdminEmailFeedback,
     setAdminEmailError,
-  setGoogleRetryConfigFeedback,
-  setGoogleRetryConfigMessageError,
+    setGoogleRetryConfigFeedback,
+    setGoogleRetryConfigMessageError,
+    setManualGoogleResult,
     setCheckingGoogleSiret,
     setSelectedEstablishmentSiret,
     setRunDetailModal,
@@ -1162,6 +1241,9 @@ const App = () => {
   }
 
   const isCheckingGoogle = manualGoogleCheckMutation.isPending;
+  const isManualGoogleCheckPending =
+    manualGoogleCheckMutation.isPending &&
+    manualGoogleCheckMutation.variables?.source === "manual";
   const isDetailLoading =
     establishmentDetailQuery.isLoading ||
     (establishmentDetailQuery.isFetching && !establishmentDetailQuery.data);
@@ -1221,6 +1303,17 @@ const App = () => {
                 onSelectDay={handleDashboardDaySelect}
                 selectedDay={runDetailModal?.date ?? null}
                 hasActiveRun={isSyncActive}
+                manualGoogleSiret={manualGoogleSiret}
+                manualGoogleFeedback={manualGoogleFeedback}
+                manualGoogleError={manualGoogleError}
+                manualGoogleResult={manualGoogleResult}
+                onManualGoogleSiretChange={handleManualGoogleSiretChange}
+                onManualGoogleCheck={handleManualGoogleCheckFromForm}
+                manualGoogleNotify={manualGoogleNotify}
+                onManualGoogleNotifyChange={setManualGoogleNotify}
+                isManualGoogleCheckPending={isManualGoogleCheckPending}
+                isGoogleCheckPending={isCheckingGoogle}
+                checkingGoogleSiret={checkingGoogleSiret}
               />
             ) : null}
 
@@ -1371,6 +1464,14 @@ const App = () => {
         errorMessage={runDetailModal?.error ?? null}
         onSelectRun={handleSelectRunFromModal}
         onClose={handleCloseRunDetailModal}
+      />
+
+      <SyncModeModal
+        isOpen={isSyncModeModalOpen}
+        initialMode={pendingSyncMode}
+        onConfirm={handleConfirmSyncMode}
+        onCancel={handleCloseSyncModeModal}
+        isSubmitting={syncMutation.isPending}
       />
 
       <GoogleExportModal

@@ -19,6 +19,7 @@ export interface EstablishmentResponse {
   last_run_id: string | null;
   google_place_id: string | null;
   google_place_url: string | null;
+  google_match_confidence: number | null;
   google_last_checked_at: string | null;
   google_last_found_at: string | null;
   google_listing_origin_at: string | null;
@@ -83,6 +84,7 @@ export const mapEstablishment = (payload: EstablishmentResponse): Establishment 
   lastRunId: payload.last_run_id,
   googlePlaceId: payload.google_place_id,
   googlePlaceUrl: payload.google_place_url,
+  googleMatchConfidence: payload.google_match_confidence,
   googleLastCheckedAt: payload.google_last_checked_at,
   googleLastFoundAt: payload.google_last_found_at,
   googleListingOriginAt: payload.google_listing_origin_at,
