@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Callable, Iterable, Sequence
 
@@ -13,58 +12,27 @@ from app.clients.google_places_client import GooglePlacesClient, GooglePlacesErr
 from app.config import get_settings
 from app.db import models
 from app.services.google_business import (
-    build_place_query,
     compute_confidence,
     compute_listing_age_status,
-    extract_listing_origin,
-    extract_ratings_total,
     matches_expected_google_category,
     should_assume_recent_listing,
-    tokenize_text,
 )
+from app.services.google_business.constants import (
+    PROGRESS_BATCH_SIZE,
+    RECENT_NO_CONTACT_STATUS,
+    TYPE_MISMATCH_STATUS,
+)
+from app.services.google_business.keywords import build_naf_keyword_map
+from app.services.google_business.lookup_engine import GoogleLookupEngine
+from app.services.google_business.types import GoogleEnrichmentResult, GoogleMatch
 from app.services.rate_limiter import RateLimiter
 from app.services.google_retry_config import GoogleRetryRuntimeConfig, load_runtime_google_retry_config
 from app.utils.business_types import is_micro_company
 
 ProgressCallback = Callable[[int, int, int, int, int], None]
-_PLACEHOLDER_TOKENS = {"ND"}
-_PROGRESS_BATCH_SIZE = 10
-_TYPE_MISMATCH_STATUS = "type_mismatch"
-_RECENT_NO_CONTACT_STATUS = "recent_creation_missing_contact"
-_PLACE_DETAILS_FIELDS = (
-    "url,website,name,formatted_address,types,business_status,opening_hours,current_opening_hours,"
-    "reviews,user_ratings_total,formatted_phone_number,international_phone_number"
-)
 
 
 _LOGGER = logging.getLogger(__name__)
-
-
-@dataclass
-class GoogleMatch:
-    establishment: models.Establishment
-    place_id: str
-    place_url: str | None
-    confidence: float
-    category_confidence: float | None
-    listing_origin_at: datetime | None
-    listing_origin_source: str
-    listing_age_status: str
-    status_override: str | None = None
-    contact_phone: str | None = None
-    contact_email: str | None = None
-    contact_website: str | None = None
-
-
-@dataclass
-class GoogleEnrichmentResult:
-    matches: list[models.Establishment]
-    queue_count: int
-    eligible_count: int
-    matched_count: int
-    remaining_count: int
-    api_call_count: int
-
 
 class GoogleBusinessService:
     """Lookup Google My Business pages for establishments lacking an association."""
@@ -75,18 +43,67 @@ class GoogleBusinessService:
         self._retry_config: GoogleRetryRuntimeConfig = load_runtime_google_retry_config(session)
         self._category_similarity_threshold = self._settings.category_similarity_threshold
         self._neutral_google_types = {"point_of_interest", "establishment", "store", "food"}
-        self._naf_keyword_map = self._load_naf_keyword_map()
+        self._naf_keyword_map = build_naf_keyword_map(self._session)
+        self._lookup_engine: GoogleLookupEngine | None = None
         if not self._settings.enabled:
             self._client: GooglePlacesClient | None = None
             self._rate_limiter = None
         else:
             self._client = GooglePlacesClient()
             self._rate_limiter = RateLimiter(self._settings.max_calls_per_minute)
+            self._lookup_engine = GoogleLookupEngine(
+                self._session,
+                self._client,
+                self._rate_limiter,
+                self._settings,
+                naf_keyword_map=self._naf_keyword_map,
+                neutral_google_types=self._neutral_google_types,
+                category_similarity_threshold=self._category_similarity_threshold,
+                api_call_hook=self._record_api_call,
+                compute_confidence_func=self._compute_confidence,
+                category_matcher=self._matches_expected_google_category,
+            )
         self._api_call_count = 0
 
     def close(self) -> None:
         if self._client:
             self._client.close()
+
+    def _get_lookup_engine(self) -> GoogleLookupEngine:
+        engine = getattr(self, "_lookup_engine", None)
+        if engine:
+            return engine
+
+        session = getattr(self, "_session", None)
+        client = getattr(self, "_client", None)
+        rate_limiter = getattr(self, "_rate_limiter", None)
+        settings = getattr(self, "_settings", None)
+        if not all([session, client, rate_limiter, settings]):
+            raise RuntimeError("Google lookup engine is not initialised.")
+
+        naf_keyword_map = getattr(self, "_naf_keyword_map", None) or {}
+        neutral_types = getattr(self, "_neutral_google_types", {"point_of_interest", "establishment", "store", "food"})
+        similarity_threshold = getattr(
+            self,
+            "_category_similarity_threshold",
+            getattr(settings, "category_similarity_threshold", 0.72),
+        )
+        api_call_hook = getattr(self, "_record_api_call", lambda: None)
+
+        engine = GoogleLookupEngine(
+            session,
+            client,
+            rate_limiter,
+            settings,
+            naf_keyword_map=naf_keyword_map,
+            neutral_google_types=neutral_types,
+            category_similarity_threshold=similarity_threshold,
+            api_call_hook=api_call_hook,
+            compute_confidence_func=self._compute_confidence,
+            category_matcher=self._matches_expected_google_category,
+        )
+        self._lookup_engine = engine
+        return engine
 
     def enrich(
         self,
@@ -94,7 +111,7 @@ class GoogleBusinessService:
         *,
         progress_callback: ProgressCallback | None = None,
     ) -> GoogleEnrichmentResult:
-        if not self._client or not self._rate_limiter:
+        if not self._client or not self._rate_limiter or not self._lookup_engine:
             return GoogleEnrichmentResult(
                 matches=[],
                 queue_count=0,
@@ -126,8 +143,9 @@ class GoogleBusinessService:
 
         processed_count = 0
         for establishment in lookup_targets:
-            result = self._lookup(establishment, now=now)
-            result = self._apply_lookup_result(
+            assert self._lookup_engine is not None
+            result = self._lookup_engine.lookup(establishment, now=now)
+            result = self._lookup_engine.apply_lookup_result(
                 establishment,
                 result,
                 now,
@@ -137,7 +155,7 @@ class GoogleBusinessService:
             matched_count = len(newly_found)
             pending_count = max(queue_count - processed_count, 0)
             if progress_callback and (
-                processed_count % _PROGRESS_BATCH_SIZE == 0 or processed_count == eligible_count
+                processed_count % PROGRESS_BATCH_SIZE == 0 or processed_count == eligible_count
             ):
                 self._session.flush()
                 progress_callback(queue_count, eligible_count, processed_count, matched_count, pending_count)
@@ -156,7 +174,7 @@ class GoogleBusinessService:
     def manual_check(self, establishment: models.Establishment) -> GoogleMatch | None:
         """Lookup a single establishment without processing the backlog."""
 
-        if not self._client or not self._rate_limiter:
+        if not self._client or not self._rate_limiter or not self._lookup_engine:
             raise GooglePlacesError("Google Places API key is not configured.")
 
         now = datetime.utcnow()
@@ -167,8 +185,8 @@ class GoogleBusinessService:
             return None
 
         establishment.google_match_confidence = None
-        result = self._lookup(establishment, now=now)
-        result = self._apply_lookup_result(establishment, result, now)
+        result = self._lookup_engine.lookup(establishment, now=now)
+        result = self._lookup_engine.apply_lookup_result(establishment, result, now)
         self._session.flush()
         return result
 
@@ -183,7 +201,7 @@ class GoogleBusinessService:
         for establishment in establishments:
             if establishment.google_place_url:
                 continue
-            if establishment.google_check_status == _TYPE_MISMATCH_STATUS:
+            if establishment.google_check_status == TYPE_MISMATCH_STATUS:
                 continue
             if not self._has_searchable_identity(establishment):
                 establishment.google_check_status = "insufficient"
@@ -205,7 +223,7 @@ class GoogleBusinessService:
             .where(
                 models.Establishment.google_place_url.is_(None),
                 models.Establishment.google_check_status != "insufficient",
-                models.Establishment.google_check_status != _TYPE_MISMATCH_STATUS,
+                models.Establishment.google_check_status != TYPE_MISMATCH_STATUS,
             )
             .order_by(
                 models.Establishment.google_last_checked_at.asc().nullsfirst(),
@@ -219,7 +237,7 @@ class GoogleBusinessService:
         for establishment in self._session.scalars(stmt):
             if establishment.siret in exclude:
                 continue
-            if establishment.google_check_status == _TYPE_MISMATCH_STATUS:
+            if establishment.google_check_status == TYPE_MISMATCH_STATUS:
                 continue
             if not self._has_searchable_identity(establishment):
                 establishment.google_check_status = "insufficient"
@@ -241,7 +259,7 @@ class GoogleBusinessService:
     def _should_lookup(self, establishment: models.Establishment, now: datetime, *, is_new: bool = False) -> bool:
         if establishment.google_place_url:
             return False
-        if establishment.google_check_status == _TYPE_MISMATCH_STATUS:
+        if establishment.google_check_status == TYPE_MISMATCH_STATUS:
             return False
         if not self._has_searchable_identity(establishment):
             return False
@@ -250,133 +268,8 @@ class GoogleBusinessService:
         return self._is_retry_due(establishment, now)
 
     def _lookup(self, establishment: models.Establishment, *, now: datetime | None = None) -> GoogleMatch | None:
-        if now is None:
-            now = datetime.utcnow()
-        assert self._client is not None and self._rate_limiter is not None
-        query = build_place_query(establishment, _PLACEHOLDER_TOKENS)
-        establishment.google_match_confidence = None
-        if not query:
-            establishment.google_check_status = "insufficient"
-            establishment.google_last_checked_at = establishment.google_last_checked_at or datetime.utcnow()
-            self._session.flush()
-            return None
-
-        try:
-            self._rate_limiter.acquire()
-            self._record_api_call()
-            candidates = self._client.find_place(query, fields="place_id,name,formatted_address")
-        except GooglePlacesError as exc:
-            _LOGGER.warning("Recherche Google Places échouée pour %s: %s", establishment.siret, exc)
-            return None
-
-        best_candidate: GoogleMatch | None = None
-        best_mismatch_candidate: GoogleMatch | None = None
-        best_confidence: float | None = None
-        best_category_confidence: float | None = None
-        expected_keywords = self._resolve_expected_keywords(establishment)
-        type_mismatch_detected = False
-        for candidate in candidates:
-            place_id = candidate.get("place_id")
-            name = candidate.get("name")
-            formatted_address = candidate.get("formatted_address")
-            if not place_id or not name:
-                continue
-            confidence = self._compute_confidence(establishment, name, formatted_address)
-            if best_confidence is None or confidence > best_confidence:
-                best_confidence = confidence
-            if confidence < self._settings.min_match_confidence:
-                continue
-            try:
-                details = self._fetch_details(place_id)
-            except GooglePlacesError as exc:
-                _LOGGER.warning(
-                    "Lecture des détails Google Places échouée pour %s (place=%s): %s",
-                    establishment.siret,
-                    place_id,
-                    exc,
-                )
-                continue
-            if not details:
-                continue
-            contact_phone, contact_email, contact_website = self._extract_contact_details(details)
-            url = details.get("url") or contact_website
-            if not url:
-                _LOGGER.debug("Place %s trouvée mais sans URL exploitable.", place_id)
-                url = None
-            origin_at, origin_source, assumed_recent, review_dates = extract_listing_origin(details)
-            listing_status = self._compute_listing_age_status(
-                review_dates,
-                extract_ratings_total(details),
-                assumed_recent,
-                now,
-            )
-            listing_status = self._adjust_listing_status_for_contacts(
-                listing_status,
-                contact_phone=contact_phone,
-                contact_email=contact_email,
-                contact_website=contact_website,
-            )
-            raw_types = details.get("types")
-            google_types = raw_types if isinstance(raw_types, list) else []
-            matches_category, category_similarity = self._matches_expected_google_category(google_types, expected_keywords)
-            if category_similarity is not None and (
-                best_category_confidence is None or category_similarity > best_category_confidence
-            ):
-                best_category_confidence = category_similarity
-            if not matches_category:
-                type_mismatch_detected = True
-                _LOGGER.debug(
-                    "Fiche Google %s ignorée pour %s : types %s incompatibles avec les mots-clés %s",
-                    place_id,
-                    establishment.siret,
-                    google_types,
-                    sorted(expected_keywords) if expected_keywords else [],
-                )
-                mismatch_match = GoogleMatch(
-                    establishment,
-                    place_id,
-                    url,
-                    confidence=confidence,
-                    category_confidence=category_similarity,
-                    listing_origin_at=origin_at,
-                    listing_origin_source=origin_source,
-                    listing_age_status=listing_status,
-                    status_override=_TYPE_MISMATCH_STATUS,
-                    contact_phone=contact_phone,
-                    contact_email=contact_email,
-                    contact_website=contact_website,
-                )
-                if best_mismatch_candidate is None or confidence > best_mismatch_candidate.confidence:
-                    best_mismatch_candidate = mismatch_match
-                continue
-            match = GoogleMatch(
-                establishment,
-                place_id,
-                url,
-                confidence,
-                category_confidence=category_similarity,
-                listing_origin_at=origin_at,
-                listing_origin_source=origin_source,
-                listing_age_status=listing_status,
-                contact_phone=contact_phone,
-                contact_email=contact_email,
-                contact_website=contact_website,
-            )
-            if best_candidate is None or confidence > best_candidate.confidence:
-                best_candidate = match
-        establishment.google_match_confidence = best_confidence if best_confidence is not None else None
-        establishment.google_category_match_confidence = (
-            best_category_confidence if best_category_confidence is not None else None
-        )
-        if best_candidate is None and best_mismatch_candidate is not None:
-            best_candidate = best_mismatch_candidate
-        if best_candidate is None and type_mismatch_detected:
-            establishment.google_check_status = _TYPE_MISMATCH_STATUS
-            return None
-        if best_candidate is not None:
-            if best_candidate.category_confidence is None and best_category_confidence is not None:
-                best_candidate.category_confidence = best_category_confidence
-        return best_candidate
+        engine = self._get_lookup_engine()
+        return engine.lookup(establishment, now=now)
 
     def _apply_lookup_result(
         self,
@@ -386,45 +279,13 @@ class GoogleBusinessService:
         *,
         newly_found: list[models.Establishment] | None = None,
     ) -> GoogleMatch | None:
-        establishment.google_last_checked_at = now
-        if not result:
-            if establishment.google_check_status not in {"found", _TYPE_MISMATCH_STATUS}:
-                establishment.google_check_status = "not_found"
-            return None
-
-        establishment.google_place_id = result.place_id
-        if result.place_url:
-            establishment.google_place_url = result.place_url
-            establishment.google_last_found_at = now
-        else:
-            _LOGGER.debug("Résultat Google Places trouvé sans URL exploitable pour %s", establishment.siret)
-
-        new_status = result.status_override or "found"
-        establishment.google_check_status = new_status
-        if new_status == "found" and newly_found is not None:
-            newly_found.append(establishment)
-
-        establishment.google_listing_origin_at = result.listing_origin_at
-        establishment.google_listing_origin_source = result.listing_origin_source or "unknown"
-        establishment.google_listing_age_status = result.listing_age_status or "unknown"
-        if result.category_confidence is not None:
-            establishment.google_category_match_confidence = result.category_confidence
-        establishment.google_contact_phone = result.contact_phone
-        establishment.google_contact_email = result.contact_email
-        establishment.google_contact_website = result.contact_website
-        return result
-
-    def _fetch_details(self, place_id: str) -> dict[str, object] | None:
-        assert self._client is not None and self._rate_limiter is not None
-        try:
-            self._rate_limiter.acquire()
-            self._record_api_call()
-            details = self._client.get_place_details(place_id, fields=_PLACE_DETAILS_FIELDS)
-        except GooglePlacesError:
-            raise
-        if not details:
-            return None
-        return details
+        engine = self._get_lookup_engine()
+        return engine.apply_lookup_result(
+            establishment,
+            result,
+            now,
+            newly_found=newly_found,
+        )
 
     def _record_api_call(self) -> None:
         current = getattr(self, "_api_call_count", 0)
@@ -506,15 +367,12 @@ class GoogleBusinessService:
     def _is_micro_business(self, establishment: models.Establishment) -> bool:
         return is_micro_company(establishment.categorie_entreprise, establishment.categorie_juridique)
 
-    def _resolve_expected_keywords(self, establishment: models.Establishment) -> set[str]:
-        keywords = set()
-        keywords |= tokenize_text(establishment.naf_libelle)
-        naf_code = self._sanitize_naf_code(establishment.naf_code)
-        if naf_code:
-            keywords |= self._naf_keyword_map.get(naf_code, set())
-        return keywords
-
-    def _compute_confidence(self, establishment: models.Establishment, name: str, formatted_address: str) -> float:
+    @staticmethod
+    def _compute_confidence(
+        establishment: models.Establishment,
+        name: str,
+        formatted_address: str,
+    ) -> float:
         return compute_confidence(establishment, name, formatted_address)
 
     def _matches_expected_google_category(
@@ -522,16 +380,23 @@ class GoogleBusinessService:
         google_types: Sequence[str],
         expected_keywords: set[str],
     ) -> tuple[bool, float | None]:
+        neutral_types = getattr(self, "_neutral_google_types", set())
+        similarity_threshold = getattr(
+            self,
+            "_category_similarity_threshold",
+            getattr(getattr(self, "_settings", None), "category_similarity_threshold", 0.72),
+        )
         return matches_expected_google_category(
             google_types,
             expected_keywords,
-            neutral_types=self._neutral_google_types,
-            similarity_threshold=self._category_similarity_threshold,
+            neutral_types=neutral_types,
+            similarity_threshold=similarity_threshold,
         )
 
+    @staticmethod
     def _compute_listing_age_status(
-        self,
         review_dates: Sequence[datetime],
+        *,
         ratings_total: int | None,
         assumed_recent: bool,
         now: datetime,
@@ -543,32 +408,12 @@ class GoogleBusinessService:
             now=now,
         )
 
-    def _should_assume_recent_listing(self, details: dict[str, object]) -> bool:
+    @staticmethod
+    def _should_assume_recent_listing(details: dict[str, object]) -> bool:
         return should_assume_recent_listing(details)
 
-    def _extract_contact_details(self, details: dict[str, object]) -> tuple[str | None, str | None, str | None]:
-        phone = details.get("formatted_phone_number")
-        if isinstance(phone, str):
-            phone = phone.strip() or None
-        if not phone:
-            alt_phone = details.get("international_phone_number")
-            if isinstance(alt_phone, str):
-                phone = alt_phone.strip() or None
-        email = None
-        for key in ("email", "business_email", "contact_email"):
-            raw = details.get(key)
-            if isinstance(raw, str) and raw.strip():
-                email = raw.strip()
-                break
-        website = details.get("website")
-        if isinstance(website, str) and website.strip():
-            website = website.strip()
-        else:
-            website = None
-        return phone, email, website
-
+    @staticmethod
     def _adjust_listing_status_for_contacts(
-        self,
         listing_status: str,
         *,
         contact_phone: str | None,
@@ -577,36 +422,6 @@ class GoogleBusinessService:
     ) -> str:
         normalized = listing_status or "unknown"
         if normalized == "recent_creation" and not any([contact_phone, contact_email, contact_website]):
-            return _RECENT_NO_CONTACT_STATUS
+            return RECENT_NO_CONTACT_STATUS
         return normalized
-
-    def _load_naf_keyword_map(self) -> dict[str, set[str]]:
-        stmt = (
-            select(
-                models.NafSubCategory.naf_code,
-                models.NafSubCategory.name,
-                models.NafCategory.name,
-                models.NafCategory.keywords,
-            )
-            .join(models.NafCategory, models.NafCategory.id == models.NafSubCategory.category_id)
-            .where(models.NafSubCategory.is_active.is_(True))
-        )
-        mapping: dict[str, set[str]] = {}
-        for naf_code, sub_name, category_name, category_keywords in self._session.execute(stmt):
-            normalized_code = self._sanitize_naf_code(naf_code)
-            if not normalized_code:
-                continue
-            keywords = tokenize_text(sub_name)
-            keywords |= tokenize_text(category_name)
-            if category_keywords:
-                for keyword in category_keywords:
-                    keywords |= tokenize_text(keyword)
-            if keywords:
-                mapping[normalized_code] = keywords
-        return mapping
-
-    def _sanitize_naf_code(self, naf_code: str | None) -> str:
-        if not naf_code:
-            return ""
-        return "".join(ch for ch in naf_code.upper() if ch.isalnum())
 

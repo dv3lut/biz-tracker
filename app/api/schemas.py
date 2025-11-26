@@ -1,4 +1,4 @@
-"""Pydantic response schemas for the API layer."""
+"""Legacy placeholder for schemas (should be removed soon)."""
 from __future__ import annotations
 
 from datetime import datetime, date as Date

@@ -1,0 +1,95 @@
+"""Collection des schemas exposés aux routers FastAPI."""
+from __future__ import annotations
+
+from .alerts import AlertOut
+from .clients import (
+    ClientCreate,
+    ClientOut,
+    ClientRecipientOut,
+    ClientSubscriptionOut,
+    ClientUpdate,
+    ListingStatus,
+)
+from .email import AdminEmailConfig, AdminEmailConfigUpdate, EmailTestRequest, EmailTestResponse
+from .establishments import EstablishmentDetailOut, EstablishmentOut
+from .google import GoogleRetryConfigOut, GoogleRetryConfigUpdate, GoogleRetryRule, ManualGoogleCheckResponse
+from .naf import (
+    NafCategoryCreate,
+    NafCategoryOut,
+    NafCategoryStats,
+    NafCategoryUpdate,
+    NafSubCategoryCreate,
+    NafSubCategoryOut,
+    NafSubCategoryStats,
+    NafSubCategoryUpdate,
+)
+from .stats import (
+    DailyAlertMetricPoint,
+    DailyApiMetricPoint,
+    DailyGoogleStatusPoint,
+    DailyMetricPoint,
+    DailyRunOutcomePoint,
+    DashboardMetrics,
+    DashboardRunBreakdown,
+    GoogleListingAgeBreakdown,
+    GoogleStatusBreakdown,
+    StatsSummary,
+)
+from .sync import (
+    DeleteRunResult,
+    RunEmailSummary,
+    RunEstablishmentSummary,
+    RunSummaryStats,
+    RunUpdatedEstablishmentSummary,
+    SyncRequest,
+    SyncRunOut,
+    SyncRunReport,
+    SyncStateOut,
+)
+
+__all__ = [
+    "AdminEmailConfig",
+    "AdminEmailConfigUpdate",
+    "AlertOut",
+    "ClientCreate",
+    "ClientOut",
+    "ClientRecipientOut",
+    "ClientSubscriptionOut",
+    "ClientUpdate",
+    "DailyAlertMetricPoint",
+    "DailyApiMetricPoint",
+    "DailyGoogleStatusPoint",
+    "DailyMetricPoint",
+    "DailyRunOutcomePoint",
+    "DashboardMetrics",
+    "DashboardRunBreakdown",
+    "DeleteRunResult",
+    "EmailTestRequest",
+    "EmailTestResponse",
+    "EstablishmentDetailOut",
+    "EstablishmentOut",
+    "GoogleListingAgeBreakdown",
+    "GoogleRetryConfigOut",
+    "GoogleRetryConfigUpdate",
+    "GoogleRetryRule",
+    "GoogleStatusBreakdown",
+    "ListingStatus",
+    "ManualGoogleCheckResponse",
+    "NafCategoryCreate",
+    "NafCategoryOut",
+    "NafCategoryStats",
+    "NafCategoryUpdate",
+    "NafSubCategoryCreate",
+    "NafSubCategoryOut",
+    "NafSubCategoryStats",
+    "NafSubCategoryUpdate",
+    "RunEmailSummary",
+    "RunEstablishmentSummary",
+    "RunSummaryStats",
+    "RunUpdatedEstablishmentSummary",
+    "StatsSummary",
+    "SyncRequest",
+    "SyncRunOut",
+    "SyncRunReport",
+    "SyncStateOut",
+]

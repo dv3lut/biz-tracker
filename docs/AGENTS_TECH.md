@@ -1,6 +1,7 @@
 # Choix techniques
 
 - **Langage & runtime** : Python 3.11+, organisation modulaire (`app/clients`, `app/services`, `app/db`).
+- **Hygiène code** : gardez chaque fichier de service en dessous d’environ 300–400 lignes. Dès que la logique devient volumineuse (multiples blocs `if`, helpers internes, constantes), scindez-la dans des modules dédiés (`app/services/<feature>/...`) en réutilisant les mêmes conventions d’import que `google_business_service`.
 - **Config** : Pydantic Settings (v2) + `.env` avec séparateur `__` pour les sous-structures (ex. `SIRENE__API_TOKEN`). Paramètres API disponibles via `API__*` (host, port, header, admin token, activation des docs). Le flag historique `GOOGLE__ALERTS_ONLY_RECENT_CREATIONS` a été retiré : le filtrage se fait désormais côté clients et exports via les statuts sélectionnés.
 - **HTTP** : `requests` + `RateLimiter` logiciel + retry sur statuts 429/5xx (back-off exponentiel).
 - **Persistence** : PostgreSQL (Docker Compose) + SQLAlchemy 2.0 (ORM classique).
@@ -32,6 +33,7 @@
   - Paramètres ajustables via `.env` (`GOOGLE__*`). Sans clé, aucune requête n’est émise et les colonnes Google restent à `pending`.
   - Chaque run enregistre les compteurs Google (file totale, éligibles, correspondances, backlog) dans `sync_runs` pour exploitation API/UI.
   - Export XLSX disponible via `build_google_places_workbook` et l’endpoint `GET /admin/google/places-export` (paramètres obligatoires `start_date` et `end_date` au format ISO `YYYY-MM-DD`, filtrage + tri sur `establishments.date_creation`). Le paramètre `mode` permet de choisir `admin` (tous les champs techniques, défaut) ou `client` (mêmes informations que l’e-mail client : nom, adresse, Catégorie, lien Google). `listing_statuses` est une nouvelle query optionnelle acceptant 1 à 3 valeurs ; l’API normalise la sélection et refuse toute requête vide afin de rester alignée avec la configuration des clients.
+  - La logique Google est fragmentée dans `app/services/google_business/` : `constants.py` (tokens/fields partagés), `types.py` (dataclasses), `keywords.py` (mots-clés NAF) et `lookup_engine.py` (orchestrateur de requêtes). `GoogleBusinessService` orchestre uniquement la sélection et la planification, ce qui garde le fichier principal sous la barre des 400 lignes.
   - Statuts persistés dans `establishments.google_check_status` : `pending`, `found`, `not_found`, `insufficient`, `type_mismatch` (fiches rejetées car la catégorie Google ne correspond pas au NAF attendu), plus `other` comme garde-fou lors des agrégations.
   - Les contrôles de cohérence ne s’appuient plus sur une liste statique de types Google. `_resolve_expected_keywords` extrait des mots-clés depuis `naf_subcategories`/`naf_categories` (noms + descriptions) ainsi que depuis le libellé NAF stocké sur l’établissement, puis `_matches_expected_google_category` compare ces mots-clés aux `types` remontés par Google (tokenisation + `SequenceMatcher`).
   - Même en cas de `type_mismatch`, la fiche la plus pertinente est désormais persistée (`google_place_id`, `google_place_url`, `google_listing_origin_*`, `google_listing_age_status`, confiances) pour faciliter l’audit.

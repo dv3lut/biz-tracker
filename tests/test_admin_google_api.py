@@ -10,7 +10,7 @@ from app.api.routers.admin.google import manual_google_check, export_google_plac
 
 
 class ManualGoogleCheckRouteTests(TestCase):
-    @patch("app.api.routers.admin.google.get_settings")
+    @patch("app.api.routers.admin.google_handlers.get_settings")
     def test_manual_check_disabled_google(
         self,
         mock_get_settings,
@@ -28,7 +28,7 @@ class ManualGoogleCheckRouteTests(TestCase):
         self.assertEqual(ctx.exception.status_code, 400)
         self.assertIn("désactivé", ctx.exception.detail)
 
-    @patch("app.api.routers.admin.google.get_settings")
+    @patch("app.api.routers.admin.google_handlers.get_settings")
     def test_manual_check_establishment_not_found(
         self,
         mock_get_settings,
@@ -47,10 +47,10 @@ class ManualGoogleCheckRouteTests(TestCase):
         self.assertEqual(ctx.exception.status_code, 404)
         self.assertIn("introuvable", ctx.exception.detail)
 
-    @patch("app.api.routers.admin.google.log_event")
-    @patch("app.api.routers.admin.google.GoogleBusinessService")
-    @patch("app.api.routers.admin.google.EmailService")
-    @patch("app.api.routers.admin.google.get_settings")
+    @patch("app.api.routers.admin.google_handlers.log_event")
+    @patch("app.api.routers.admin.google_handlers.GoogleBusinessService")
+    @patch("app.api.routers.admin.google_handlers.EmailService")
+    @patch("app.api.routers.admin.google_handlers.get_settings")
     def test_manual_check_admin_email_sent_when_found(
         self,
         mock_get_settings,
@@ -109,13 +109,13 @@ class ManualGoogleCheckRouteTests(TestCase):
         mock_google_service_cls.return_value = mock_google_service
 
         # Mock collect_client_emails to return no client emails (only admin)
-        with patch("app.api.routers.admin.google.get_admin_emails") as mock_get_admin_emails, \
-            patch("app.api.routers.admin.google.get_active_clients") as mock_get_active_clients, \
-            patch("app.api.routers.admin.google.filter_clients_for_naf_code") as mock_filter_clients, \
-            patch("app.api.routers.admin.google.filter_clients_by_listing_status") as mock_filter_by_status, \
-            patch("app.api.routers.admin.google.collect_client_emails") as mock_collect_client_emails, \
-            patch("app.api.routers.admin.google.dispatch_email_to_clients") as mock_dispatch_email, \
-            patch("app.api.routers.admin.google.EstablishmentOut") as mock_establishment_out:
+        with patch("app.api.routers.admin.google_handlers.get_admin_emails") as mock_get_admin_emails, \
+            patch("app.api.routers.admin.google_handlers.get_active_clients") as mock_get_active_clients, \
+            patch("app.api.routers.admin.google_handlers.filter_clients_for_naf_code") as mock_filter_clients, \
+            patch("app.api.routers.admin.google_handlers.filter_clients_by_listing_status") as mock_filter_by_status, \
+            patch("app.api.routers.admin.google_handlers.collect_client_emails") as mock_collect_client_emails, \
+            patch("app.api.routers.admin.google_handlers.dispatch_email_to_clients") as mock_dispatch_email, \
+            patch("app.api.routers.admin.google_handlers.EstablishmentOut") as mock_establishment_out:
             
             mock_get_admin_emails.return_value = ["admin1@example.com", "admin2@example.com"]
             mock_get_active_clients.return_value = []
@@ -150,8 +150,8 @@ class ManualGoogleCheckRouteTests(TestCase):
 
 
 class GoogleExportRouteTests(TestCase):
-    @patch("app.api.routers.admin.google.build_google_places_workbook")
-    @patch("app.api.routers.admin.google.log_event")
+    @patch("app.api.routers.admin.google_handlers.build_google_places_workbook")
+    @patch("app.api.routers.admin.google_handlers.log_event")
     def test_export_skips_type_mismatch(self, mock_log_event, mock_build_workbook) -> None:
 
         type_mismatch = SimpleNamespace(
@@ -180,8 +180,8 @@ class GoogleExportRouteTests(TestCase):
         mock_build_workbook.assert_called_once()
         mock_log_event.assert_called_once()
 
-    @patch("app.api.routers.admin.google.build_google_places_workbook")
-    @patch("app.api.routers.admin.google.log_event")
+    @patch("app.api.routers.admin.google_handlers.build_google_places_workbook")
+    @patch("app.api.routers.admin.google_handlers.log_event")
     def test_export_filters_by_listing_status(self, mock_log_event, mock_build_workbook) -> None:
         recent = SimpleNamespace(
             google_check_status="found",
