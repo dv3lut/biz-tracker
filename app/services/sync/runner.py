@@ -13,7 +13,7 @@ from app.db import models
 from app.db.session import session_scope
 from app.observability import log_event, serialize_sync_run
 from app.services.sync.context import SyncContext, SyncResult
-from app.services.sync.mode import DEFAULT_SYNC_MODE
+from app.services.sync.mode import DEFAULT_SYNC_MODE, SyncMode
 
 from .preparation import SyncRunPreparationMixin
 from .utils import log_and_print
@@ -46,6 +46,7 @@ class SyncRunnerMixin(SyncRunPreparationMixin):
                 state,
                 last_treated_max=result.last_treated,
                 last_creation_date=result.max_creation_date,
+                mode=result.mode,
             )
             summary_payload = self._build_run_summary_payload(run, result)
             email_summary = self._send_run_summary_email(session, run, summary_payload)
@@ -117,6 +118,7 @@ class SyncRunnerMixin(SyncRunPreparationMixin):
                         state,
                         last_treated_max=result.last_treated,
                         last_creation_date=result.max_creation_date,
+                        mode=result.mode,
                     )
                     summary_payload = self._build_run_summary_payload(run, result)
                     email_summary = self._send_run_summary_email(session, run, summary_payload)
@@ -170,14 +172,21 @@ class SyncRunnerMixin(SyncRunPreparationMixin):
         *,
         last_treated_max: datetime | None,
         last_creation_date: date | None,
+        mode: SyncMode | None = None,
     ) -> None:
         run.status = "success"
         run.finished_at = datetime.utcnow()
-        state.last_successful_run_id = run.id
-        if last_treated_max:
-            state.last_treated_max = last_treated_max
-        if last_creation_date:
-            state.last_creation_date = last_creation_date
+        try:
+            resolved_mode = mode or SyncMode(run.mode)
+        except ValueError:
+            resolved_mode = DEFAULT_SYNC_MODE
+
+        if resolved_mode.requires_sirene_fetch:
+            state.last_successful_run_id = run.id
+            if last_treated_max:
+                state.last_treated_max = last_treated_max
+            if last_creation_date:
+                state.last_creation_date = last_creation_date
 
     def _serialize_result(self, result: SyncResult, email_summary: dict[str, Any]) -> dict[str, Any]:
         return {

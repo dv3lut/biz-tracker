@@ -117,7 +117,11 @@ class SyncRequest(BaseModel):
     )
     mode: SyncMode = Field(
         default=SyncMode.FULL,
-        description="Mode d'exécution: 'full' exécute l'enrichissement Google, 'sirene_only' le désactive.",
+        description=(
+            "Mode d'exécution: 'full' exécute l'enrichissement Google, 'sirene_only' le désactive, "
+            "'google_pending' relance uniquement les établissements jamais enrichis et déclenche les alertes, "
+            "'google_refresh' purge les fiches Google et relance une détection complète sans alertes."
+        ),
     )
 
 

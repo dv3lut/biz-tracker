@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.clients.google_places_client import GooglePlacesClient, GooglePlacesError
 from app.db import models
 from app.services.google_business import (
+    adjust_listing_status_for_contacts,
     build_place_query,
     compute_confidence,
     compute_listing_age_status,
@@ -19,7 +20,6 @@ from app.services.google_business import (
 from app.services.google_business.constants import (
     PLACE_DETAILS_FIELDS,
     PLACEHOLDER_TOKENS,
-    RECENT_NO_CONTACT_STATUS,
     TYPE_MISMATCH_STATUS,
 )
 from app.services.google_business.keywords import resolve_expected_keywords
@@ -122,7 +122,7 @@ class GoogleLookupEngine:
                 assumed_recent=assumed_recent,
                 now=now,
             )
-            listing_status = self._adjust_listing_status_for_contacts(
+            listing_status = adjust_listing_status_for_contacts(
                 listing_status,
                 contact_phone=contact_phone,
                 contact_email=contact_email,
@@ -274,16 +274,3 @@ class GoogleLookupEngine:
         else:
             website = None
         return phone, email, website
-
-    @staticmethod
-    def _adjust_listing_status_for_contacts(
-        listing_status: str,
-        *,
-        contact_phone: str | None,
-        contact_email: str | None,
-        contact_website: str | None,
-    ) -> str:
-        normalized = listing_status or "unknown"
-        if normalized == "recent_creation" and not any([contact_phone, contact_email, contact_website]):
-            return RECENT_NO_CONTACT_STATUS
-        return normalized

@@ -11,17 +11,8 @@ from sqlalchemy.orm import Session
 from app.clients.google_places_client import GooglePlacesClient, GooglePlacesError
 from app.config import get_settings
 from app.db import models
-from app.services.google_business import (
-    compute_confidence,
-    compute_listing_age_status,
-    matches_expected_google_category,
-    should_assume_recent_listing,
-)
-from app.services.google_business.constants import (
-    PROGRESS_BATCH_SIZE,
-    RECENT_NO_CONTACT_STATUS,
-    TYPE_MISMATCH_STATUS,
-)
+from app.services.google_business import compute_confidence, matches_expected_google_category
+from app.services.google_business.constants import PROGRESS_BATCH_SIZE, TYPE_MISMATCH_STATUS
 from app.services.google_business.keywords import build_naf_keyword_map
 from app.services.google_business.lookup_engine import GoogleLookupEngine
 from app.services.google_business.types import GoogleEnrichmentResult, GoogleMatch
@@ -110,6 +101,8 @@ class GoogleBusinessService:
         new_establishments: Sequence[models.Establishment],
         *,
         progress_callback: ProgressCallback | None = None,
+        include_backlog: bool = True,
+        force_refresh: bool = False,
     ) -> GoogleEnrichmentResult:
         if not self._client or not self._rate_limiter or not self._lookup_engine:
             return GoogleEnrichmentResult(
@@ -125,13 +118,15 @@ class GoogleBusinessService:
         self._api_call_count = 0
         unique_new = {establishment.siret: establishment for establishment in new_establishments if establishment.siret}
         new_sirets = set(unique_new)
-        candidates = list(self._filter_candidates(unique_new.values(), now=now))
-        backlog = self._fetch_backlog(now, exclude=new_sirets)
+        candidates = list(self._filter_candidates(unique_new.values(), now=now, force_refresh=force_refresh))
+        backlog = self._fetch_backlog(now, exclude=new_sirets) if include_backlog else []
         queue = candidates + backlog
 
         newly_found: list[models.Establishment] = []
         lookup_targets = [
-            est for est in queue if self._should_lookup(est, now, is_new=(est.siret in new_sirets))
+            est
+            for est in queue
+            if self._should_lookup(est, now, is_new=(est.siret in new_sirets), force_refresh=force_refresh)
         ]
         queue_count = len(lookup_targets)
         pending_count = queue_count
@@ -195,14 +190,17 @@ class GoogleBusinessService:
         establishments: Iterable[models.Establishment],
         *,
         now: datetime,
+        force_refresh: bool = False,
     ) -> list[models.Establishment]:
         filtered: list[models.Establishment] = []
         updated = False
         for establishment in establishments:
-            if establishment.google_place_url:
+            if not force_refresh and establishment.google_place_url:
                 continue
-            if establishment.google_check_status == TYPE_MISMATCH_STATUS:
+            if not force_refresh and establishment.google_check_status == TYPE_MISMATCH_STATUS:
                 continue
+            if force_refresh and self._reset_google_state(establishment):
+                updated = True
             if not self._has_searchable_identity(establishment):
                 establishment.google_check_status = "insufficient"
                 establishment.google_last_checked_at = establishment.google_last_checked_at or now
@@ -253,39 +251,52 @@ class GoogleBusinessService:
             self._session.flush()
         return backlog
 
+    def _reset_google_state(self, establishment: models.Establishment) -> bool:
+        updated = False
+
+        def _set(attr: str, value: object) -> None:
+            nonlocal updated
+            if getattr(establishment, attr) != value:
+                setattr(establishment, attr, value)
+                updated = True
+
+        _set("google_place_id", None)
+        _set("google_place_url", None)
+        _set("google_last_checked_at", None)
+        _set("google_last_found_at", None)
+        _set("google_match_confidence", None)
+        _set("google_category_match_confidence", None)
+        _set("google_listing_origin_at", None)
+        _set("google_listing_origin_source", "unknown")
+        _set("google_listing_age_status", "unknown")
+        _set("google_contact_phone", None)
+        _set("google_contact_email", None)
+        _set("google_contact_website", None)
+        _set("google_check_status", "pending")
+        return updated
+
     def _has_searchable_identity(self, establishment: models.Establishment) -> bool:
         return bool(establishment.name and (establishment.libelle_commune or establishment.code_postal))
 
-    def _should_lookup(self, establishment: models.Establishment, now: datetime, *, is_new: bool = False) -> bool:
-        if establishment.google_place_url:
+    def _should_lookup(
+        self,
+        establishment: models.Establishment,
+        now: datetime,
+        *,
+        is_new: bool = False,
+        force_refresh: bool = False,
+    ) -> bool:
+        if not force_refresh and establishment.google_place_url:
             return False
-        if establishment.google_check_status == TYPE_MISMATCH_STATUS:
+        if not force_refresh and establishment.google_check_status == TYPE_MISMATCH_STATUS:
             return False
         if not self._has_searchable_identity(establishment):
             return False
+        if force_refresh:
+            return True
         if is_new:
             return True
         return self._is_retry_due(establishment, now)
-
-    def _lookup(self, establishment: models.Establishment, *, now: datetime | None = None) -> GoogleMatch | None:
-        engine = self._get_lookup_engine()
-        return engine.lookup(establishment, now=now)
-
-    def _apply_lookup_result(
-        self,
-        establishment: models.Establishment,
-        result: GoogleMatch | None,
-        now: datetime,
-        *,
-        newly_found: list[models.Establishment] | None = None,
-    ) -> GoogleMatch | None:
-        engine = self._get_lookup_engine()
-        return engine.apply_lookup_result(
-            establishment,
-            result,
-            now,
-            newly_found=newly_found,
-        )
 
     def _record_api_call(self) -> None:
         current = getattr(self, "_api_call_count", 0)
@@ -392,36 +403,4 @@ class GoogleBusinessService:
             neutral_types=neutral_types,
             similarity_threshold=similarity_threshold,
         )
-
-    @staticmethod
-    def _compute_listing_age_status(
-        review_dates: Sequence[datetime],
-        *,
-        ratings_total: int | None,
-        assumed_recent: bool,
-        now: datetime,
-    ) -> str:
-        return compute_listing_age_status(
-            list(review_dates),
-            ratings_total=ratings_total,
-            assumed_recent=assumed_recent,
-            now=now,
-        )
-
-    @staticmethod
-    def _should_assume_recent_listing(details: dict[str, object]) -> bool:
-        return should_assume_recent_listing(details)
-
-    @staticmethod
-    def _adjust_listing_status_for_contacts(
-        listing_status: str,
-        *,
-        contact_phone: str | None,
-        contact_email: str | None,
-        contact_website: str | None,
-    ) -> str:
-        normalized = listing_status or "unknown"
-        if normalized == "recent_creation" and not any([contact_phone, contact_email, contact_website]):
-            return RECENT_NO_CONTACT_STATUS
-        return normalized
 

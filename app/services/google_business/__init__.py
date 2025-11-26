@@ -11,6 +11,7 @@ from .matching import (
     tokenize_text,
 )
 from .listing import (
+    adjust_listing_status_for_contacts,
     collect_review_dates,
     compute_listing_age_status,
     extract_listing_origin,
@@ -29,6 +30,7 @@ __all__ = [
     "sanitize_placeholder",
     "tokenize_name",
     "tokenize_text",
+    "adjust_listing_status_for_contacts",
     "collect_review_dates",
     "compute_listing_age_status",
     "extract_listing_origin",

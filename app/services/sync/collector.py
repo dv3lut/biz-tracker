@@ -1,12 +1,16 @@
 """Collection helpers for synchronization runs."""
 from __future__ import annotations
 
+import time
 from datetime import date, datetime, timedelta
+
+from sqlalchemy import select
 
 from app.db import models
 from app.observability import log_event, serialize_alert, serialize_establishment
 from app.services.alert_service import AlertService
 from app.services.google_business_service import GoogleBusinessService
+from app.services.sync.mode import SyncMode
 from app.utils.dates import subtract_months
 from app.utils.hashing import sha256_digest
 
@@ -19,6 +23,9 @@ class SyncCollectorMixin(SyncPersistenceMixin):
     """Provide data collection and persistence helpers for sync runs."""
 
     def _collect_sync(self, context: SyncContext) -> SyncResult:
+        if not context.mode.requires_sirene_fetch:
+            return self._collect_google_only(context)
+
         state = context.state
         months_back = max(self._settings.sync.months_back, 1)
         since_creation = self._compute_since_creation(state, months_back=months_back)
@@ -261,4 +268,188 @@ class SyncCollectorMixin(SyncPersistenceMixin):
 
     def _current_date(self) -> date:
         return datetime.utcnow().date()
+
+    def _collect_google_only(self, context: SyncContext) -> SyncResult:
+        started_at = time.perf_counter()
+        session = context.session
+        run = context.run
+        mode = context.mode
+        targets = self._load_google_resync_targets(session, mode)
+        target_count = len(targets)
+        note_prefix = "google_refresh_targets" if mode == SyncMode.GOOGLE_REFRESH else "google_pending_targets"
+        if target_count:
+            run.notes = f"{run.notes + ' | ' if run.notes else ''}{note_prefix}: {target_count}"
+
+        google_service = GoogleBusinessService(session)
+        alert_service = AlertService(session, run) if mode.dispatch_alerts else None
+        last_google_progress: tuple[int, int, int, int, int] | None = None
+
+        def update_google_progress(
+            queue_count: int,
+            eligible_count: int,
+            processed_count: int,
+            matched_count: int,
+            pending_count: int,
+        ) -> None:
+            nonlocal last_google_progress
+            snapshot = (queue_count, eligible_count, processed_count, matched_count, pending_count)
+            if snapshot == last_google_progress:
+                return
+            last_google_progress = snapshot
+            run.google_queue_count = queue_count
+            run.google_eligible_count = eligible_count
+            run.google_matched_count = matched_count
+            run.google_pending_count = pending_count
+            session.flush()
+            session.commit()
+
+        google_queue_count = 0
+        google_eligible_count = 0
+        google_matched_count = 0
+        google_pending_count = 0
+        google_api_call_count = 0
+        google_immediate_matches: list[models.Establishment] = []
+        google_late_matches: list[models.Establishment] = []
+        google_matches_payload: list[dict[str, object]] = []
+        alerts_created: list[models.Alert] = []
+        alerts_payload: list[dict[str, object]] = []
+
+        try:
+            if not targets:
+                log_event(
+                    "sync.google_only.skipped",
+                    run_id=str(run.id),
+                    scope_key=run.scope_key,
+                    mode=mode.value,
+                    reason="no_targets",
+                )
+                run.google_queue_count = 0
+                run.google_eligible_count = 0
+                run.google_matched_count = 0
+                run.google_pending_count = 0
+                run.google_immediate_matched_count = 0
+                run.google_late_matched_count = 0
+                run.google_api_call_count = 0
+                session.commit()
+            else:
+                enrichment = google_service.enrich(
+                    targets,
+                    progress_callback=update_google_progress,
+                    include_backlog=False,
+                    force_refresh=mode == SyncMode.GOOGLE_REFRESH,
+                )
+
+                google_queue_count = enrichment.queue_count
+                google_eligible_count = enrichment.eligible_count
+                google_matched_count = enrichment.matched_count
+                google_pending_count = enrichment.remaining_count
+                google_api_call_count = enrichment.api_call_count
+
+                run.google_queue_count = google_queue_count
+                run.google_eligible_count = google_eligible_count
+                run.google_matched_count = google_matched_count
+                run.google_pending_count = google_pending_count
+                run.google_api_call_count = google_api_call_count
+
+                log_event(
+                    "sync.google_only.summary",
+                    run_id=str(run.id),
+                    scope_key=run.scope_key,
+                    mode=mode.value,
+                    queue_count=google_queue_count,
+                    eligible_count=google_eligible_count,
+                    matched_count=google_matched_count,
+                    remaining_count=google_pending_count,
+                    api_call_count=google_api_call_count,
+                    target_count=target_count,
+                )
+
+                if enrichment.matches:
+                    for match in enrichment.matches:
+                        if match.created_run_id == run.id:
+                            google_immediate_matches.append(match)
+                        else:
+                            google_late_matches.append(match)
+                    run.google_immediate_matched_count = len(google_immediate_matches)
+                    run.google_late_matched_count = len(google_late_matches)
+
+                    google_matches_payload = [serialize_establishment(item) for item in enrichment.matches]
+                    log_event(
+                        "sync.google.enrichment",
+                        run_id=str(run.id),
+                        scope_key=run.scope_key,
+                        matched_count=len(google_matches_payload),
+                        immediate_matched_count=run.google_immediate_matched_count,
+                        late_matched_count=run.google_late_matched_count,
+                        establishments=google_matches_payload,
+                    )
+                    for match_payload in google_matches_payload:
+                        log_event(
+                            "sync.google.match",
+                            run_id=str(run.id),
+                            scope_key=run.scope_key,
+                            establishment=match_payload,
+                        )
+
+                    if alert_service and mode.dispatch_alerts:
+                        alerts = alert_service.create_google_alerts(enrichment.matches)
+                        if alerts:
+                            alerts_created.extend(alerts)
+                            alerts_payload = [serialize_alert(alert) for alert in alerts]
+                            log_event(
+                                "sync.alerts.created",
+                                run_id=str(run.id),
+                                scope_key=run.scope_key,
+                                count=len(alerts_payload),
+                                alerts=alerts_payload,
+                            )
+                            for alert_payload in alerts_payload:
+                                log_event(
+                                    "sync.alert.created",
+                                    run_id=str(run.id),
+                                    scope_key=run.scope_key,
+                                    alert=alert_payload,
+                                )
+                else:
+                    run.google_immediate_matched_count = 0
+                    run.google_late_matched_count = 0
+
+                session.commit()
+        finally:
+            google_service.close()
+
+        alerts_sent_count = sum(1 for alert in alerts_created if alert.sent_at)
+        duration = time.perf_counter() - started_at
+
+        return SyncResult(
+            mode=mode,
+            last_treated=None,
+            new_establishments=[],
+            new_establishment_payloads=[],
+            updated_establishments=[],
+            updated_payloads=[],
+            google_immediate_matches=google_immediate_matches,
+            google_late_matches=google_late_matches,
+            google_match_payloads=google_matches_payload,
+            alerts=alerts_created,
+            alert_payloads=alerts_payload,
+            page_count=0,
+            duration_seconds=duration,
+            max_creation_date=None,
+            google_queue_count=google_queue_count,
+            google_eligible_count=google_eligible_count,
+            google_matched_count=google_matched_count,
+            google_pending_count=google_pending_count,
+            google_api_call_count=google_api_call_count,
+            alerts_sent_count=alerts_sent_count,
+        )
+
+    def _load_google_resync_targets(self, session, mode: SyncMode) -> list[models.Establishment]:
+        stmt = select(models.Establishment).order_by(models.Establishment.first_seen_at.asc())
+        if mode == SyncMode.GOOGLE_PENDING:
+            stmt = stmt.where(
+                (models.Establishment.google_last_checked_at.is_(None))
+                | (models.Establishment.google_check_status == "pending"),
+            )
+        return session.execute(stmt).scalars().all()
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Iterable
 
+from app.services.google_business.constants import RECENT_NO_CONTACT_STATUS
 from app.utils.google_listing import normalize_listing_age_status
 
 _RECENT_REVIEW_THRESHOLD_DAYS = 14
@@ -88,6 +89,19 @@ def compute_listing_age_status(
     return normalize_listing_age_status("not_recent_creation")
 
 
+def adjust_listing_status_for_contacts(
+    listing_status: str,
+    *,
+    contact_phone: str | None,
+    contact_email: str | None,
+    contact_website: str | None,
+) -> str:
+    normalized = normalize_listing_age_status(listing_status or "unknown")
+    if normalized == "recent_creation" and not any([contact_phone, contact_email, contact_website]):
+        return RECENT_NO_CONTACT_STATUS
+    return normalized
+
+
 def extract_listing_origin(details: dict[str, object]) -> tuple[datetime | None, str, bool, list[datetime]]:
     origin_candidates: list[tuple[datetime, str]] = []
     for key in ("current_opening_hours", "opening_hours"):
@@ -119,6 +133,7 @@ def extract_listing_origin(details: dict[str, object]) -> tuple[datetime | None,
 __all__ = [
     "collect_review_dates",
     "compute_listing_age_status",
+    "adjust_listing_status_for_contacts",
     "extract_listing_origin",
     "extract_ratings_total",
     "iter_period_dates",

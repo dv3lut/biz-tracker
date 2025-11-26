@@ -65,7 +65,11 @@ def sync(
         SyncMode.FULL,
         "--mode",
         case_sensitive=False,
-        help="Mode d'exécution: 'full' déclenche Google, 'sirene_only' le désactive.",
+        help=(
+            "Mode d'exécution: 'full' déclenche Sirene + Google, 'sirene_only' saute Google, "
+            "'google_pending' traite uniquement les établissements jamais enrichis par Google, "
+            "'google_refresh' force une remise à zéro de toutes les fiches."
+        ),
     ),
 ) -> None:
     """Lancer la synchronisation unifiée des restaurants."""

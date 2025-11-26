@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from typing import Sequence
 
 from app.api.schemas import AlertOut, SyncRunOut
+from app.services.sync.mode import DEFAULT_SYNC_MODE, SyncMode
 from app.db import models
 
 
@@ -48,6 +49,15 @@ def serialize_run(run: models.SyncRun | None, *, state: models.SyncState | None 
     enriched.progress = progress
     enriched.estimated_remaining_seconds = remaining_seconds
     enriched.estimated_completion_at = eta
+    try:
+        mode = SyncMode(enriched.mode)
+    except ValueError:
+        mode = DEFAULT_SYNC_MODE
+    if not mode.requires_sirene_fetch:
+        enriched.total_expected_records = None
+        enriched.progress = None
+        enriched.estimated_remaining_seconds = None
+        enriched.estimated_completion_at = None
     return enriched
 
 

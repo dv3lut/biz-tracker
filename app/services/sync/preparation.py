@@ -29,9 +29,11 @@ class SyncRunPreparationMixin:
         check_informations: bool = False,
         mode: SyncMode = DEFAULT_SYNC_MODE,
     ) -> Optional[models.SyncRun]:
-        state = self._get_or_create_state(session, self._settings.sync.scope_key)
+        scope_key = self._settings.sync.scope_key
+        state = self._get_or_create_state(session, scope_key)
         latest_treated: datetime | None = None
-        if check_informations:
+
+        if mode.requires_sirene_fetch and check_informations:
             latest_treated = self._fetch_latest_treated()
             if latest_treated and state.last_treated_max and latest_treated <= state.last_treated_max:
                 _LOGGER.info(
@@ -40,18 +42,27 @@ class SyncRunPreparationMixin:
                 )
                 log_event(
                     "sync.run.skipped_no_changes",
-                    scope_key=self._settings.sync.scope_key,
+                    scope_key=scope_key,
                     last_known_treated=state.last_treated_max,
                     latest_treated=latest_treated,
                 )
                 return None
 
-        run, _state = self._initialize_sync_run(
-            session,
-            status="pending",
-            state=state,
-            mode=mode,
-        )
+        if mode.requires_sirene_fetch:
+            run, _state = self._initialize_sync_run(
+                session,
+                status="pending",
+                state=state,
+                mode=mode,
+            )
+        else:
+            run = self._start_run(
+                session,
+                scope_key=scope_key,
+                run_type="google_sync",
+                initial_status="pending",
+                mode=mode,
+            )
         if latest_treated:
             run.notes = f"dateDernierTraitementMaximum: {latest_treated.isoformat()}"
         log_event(
