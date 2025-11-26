@@ -3,6 +3,7 @@ import { type ReactNode } from "react";
 import { StatsSummary, SyncRun } from "../types";
 import { formatDateTime, formatNumber, formatPercent, formatDuration } from "../utils/format";
 import { computeGoogleProgress, computeSireneProgress } from "../utils/progress";
+import { describeSyncMode, syncModeIsGoogleOnly, syncModeSupportsSirene } from "../utils/sync";
 import { ProgressBar } from "./ProgressBar";
 
 type Props = {
@@ -19,10 +20,6 @@ type Props = {
   isRefreshing: boolean;
 };
 
-const describeMode = (mode: SyncRun["mode"]): string => {
-  return mode === "sirene_only" ? "Sirene uniquement" : "Complet";
-};
-
 const renderRunDetails = (run: SyncRun | null): ReactNode => {
   if (!run) {
     return <p className="muted">Aucune exécution enregistrée.</p>;
@@ -31,6 +28,8 @@ const renderRunDetails = (run: SyncRun | null): ReactNode => {
   const sireneProgress = computeSireneProgress(run);
   const googleProgress = computeGoogleProgress(run);
   const googleDisabled = !run.googleEnabled;
+  const sireneEnabled = syncModeSupportsSirene(run.mode);
+  const isGoogleOnly = syncModeIsGoogleOnly(run.mode);
   const sireneDetails = sireneProgress.total
     ? `${formatNumber(sireneProgress.processed)} / ${formatNumber(sireneProgress.total)} établissements traités`
     : `${formatNumber(sireneProgress.processed)} établissements traités (total inconnu)`;
@@ -53,11 +52,15 @@ const renderRunDetails = (run: SyncRun | null): ReactNode => {
   return (
     <>
       <div className="progress-bars">
-        <ProgressBar
-          label="Avancement Sirene"
-          value={sireneProgress.value}
-          details={<span>{sireneDetails}</span>}
-        />
+        {sireneEnabled ? (
+          <ProgressBar
+            label="Avancement Sirene"
+            value={sireneProgress.value}
+            details={<span>{sireneDetails}</span>}
+          />
+        ) : (
+          <p className="muted small">Run Google uniquement : aucune collecte Sirene n'a été effectuée.</p>
+        )}
         {hasGoogleWork ? (
           <ProgressBar
             label="Appels Google"
@@ -72,7 +75,7 @@ const renderRunDetails = (run: SyncRun | null): ReactNode => {
       <dl className="data-grid">
         <div>
           <dt>Mode</dt>
-          <dd>{describeMode(run.mode)}</dd>
+          <dd>{describeSyncMode(run.mode)}</dd>
         </div>
         <div>
           <dt>Google Places</dt>
@@ -150,6 +153,12 @@ const renderRunDetails = (run: SyncRun | null): ReactNode => {
         <dt>Notes</dt>
         <dd>{run.notes ?? "—"}</dd>
       </div>
+        {isGoogleOnly ? (
+          <div>
+            <dt>Observation</dt>
+            <dd>Ce run n'a pas interrogé l'API Sirene.</dd>
+          </div>
+        ) : null}
       </dl>
     </>
   );

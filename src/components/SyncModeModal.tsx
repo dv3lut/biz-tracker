@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { SyncMode } from "../types";
+import { describeSyncMode, syncModeIsGoogleOnly, syncModeSendsAlerts } from "../utils/sync";
 
 const MODE_OPTIONS: Array<{
   value: SyncMode;
@@ -20,17 +21,19 @@ const MODE_OPTIONS: Array<{
     description: "Capture uniquement les évolutions Sirene. Les appels Google sont ignorés.",
     impact: "Recommandé pour analyser rapidement une base ou en cas d'incident Google.",
   },
+  {
+    value: "google_pending",
+    title: "Google — nouveaux uniquement",
+    description: "Ne touche pas à Sirene et rattrape uniquement les établissements jamais enrichis par Google.",
+    impact: "Permet d'envoyer les alertes manquantes sans relancer un run complet.",
+  },
+  {
+    value: "google_refresh",
+    title: "Google — rafraîchir toutes les fiches",
+    description: "Réinitialise les correspondances Google pour tous les établissements et relance la détection.",
+    impact: "À utiliser après une mise à jour majeure de la logique de matching.",
+  },
 ];
-
-const getModeLabel = (mode: SyncMode): string => {
-  switch (mode) {
-    case "sirene_only":
-      return "Sirene uniquement";
-    case "full":
-    default:
-      return "Complet";
-  }
-};
 
 type Props = {
   isOpen: boolean;
@@ -95,10 +98,26 @@ export const SyncModeModal = ({ isOpen, initialMode, onConfirm, onCancel, isSubm
               );
             })}
           </div>
-          <p className="muted small">Mode actuel : {getModeLabel(mode)}</p>
+          <p className="muted small">Mode actuel : {describeSyncMode(mode)}</p>
           {mode === "sirene_only" ? (
             <p className="muted small">
               <strong>⚠️ Google désactivé :</strong> aucune fiche ne sera vérifiée ni enrichie pendant ce run.
+            </p>
+          ) : null}
+          {syncModeIsGoogleOnly(mode) ? (
+            <p className="muted small">
+              <strong>ℹ️ Synchro Google uniquement :</strong> la collecte Sirene n'est pas exécutée.
+            </p>
+          ) : null}
+          {mode === "google_refresh" ? (
+            <p className="muted small warning">
+              <strong>⚠️ Remise à zéro :</strong> toutes les correspondances Google existantes seront supprimées avant la relance et
+              aucune alerte ne sera renvoyée.
+            </p>
+          ) : null}
+          {mode === "google_pending" && syncModeSendsAlerts(mode) ? (
+            <p className="muted small">
+              <strong>Alertes actives :</strong> les clients seront notifiés pour les nouvelles fiches détectées.
             </p>
           ) : null}
         </div>

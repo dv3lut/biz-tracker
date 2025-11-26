@@ -1,4 +1,4 @@
-export type SyncMode = "full" | "sirene_only";
+export type SyncMode = "full" | "sirene_only" | "google_pending" | "google_refresh";
 
 export type ListingStatus = "recent_creation" | "recent_creation_missing_contact" | "not_recent_creation";
 

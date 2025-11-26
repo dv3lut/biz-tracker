@@ -1,9 +1,6 @@
 import { SyncRun } from "../types";
 import { formatDateTime, formatDuration, formatNumber } from "../utils/format";
-
-const describeMode = (mode: SyncRun["mode"]): string => {
-  return mode === "sirene_only" ? "Sirene uniquement" : "Complet";
-};
+import { describeSyncMode, syncModeIsGoogleOnly, syncModeSupportsSirene } from "../utils/sync";
 
 const formatDisplayDate = (isoDate: string | null | undefined): string => {
   if (!isoDate) {
@@ -65,6 +62,8 @@ export const SyncRunDetailModal = ({
   const alertsStats = stats?.alerts;
   const samples = summary?.samples;
   const googleEnabled = googleStats?.enabled ?? activeRun?.googleEnabled ?? false;
+  const sireneEnabled = activeRun ? syncModeSupportsSirene(activeRun.mode) : true;
+  const isGoogleOnly = activeRun ? syncModeIsGoogleOnly(activeRun.mode) : false;
 
   return (
     <div className="modal-overlay">
@@ -124,8 +123,13 @@ export const SyncRunDetailModal = ({
                           <strong>Scope</strong> {activeRun.scopeKey}
                         </li>
                         <li>
-                          <strong>Mode</strong> {describeMode(activeRun.mode)}
+                          <strong>Mode</strong> {describeSyncMode(activeRun.mode)}
                         </li>
+                        {!sireneEnabled ? (
+                          <li>
+                            <strong>Note</strong> Synchro Google uniquement (aucune collecte Sirene).
+                          </li>
+                        ) : null}
                         <li>
                           <strong>Google Places</strong> {googleEnabled ? "Activé" : "Désactivé"}
                         </li>
@@ -140,20 +144,24 @@ export const SyncRunDetailModal = ({
 
                     <article className="insight-card">
                       <h3>Volumes</h3>
-                      <ul className="metric-list">
-                        <li>
-                          <strong>Nouveaux établissements</strong> {formatNumber(stats?.createdRecords ?? activeRun.createdRecords)}
-                        </li>
-                        <li>
-                          <strong>Mises à jour</strong> {formatNumber(stats?.updatedRecords ?? activeRun.updatedRecords)}
-                        </li>
-                        <li>
-                          <strong>Enregistrements traités</strong> {formatNumber(stats?.fetchedRecords ?? activeRun.fetchedRecords)}
-                        </li>
-                        <li>
-                          <strong>Appels API</strong> {formatNumber(stats?.apiCallCount ?? activeRun.apiCallCount)}
-                        </li>
-                      </ul>
+                      {sireneEnabled ? (
+                        <ul className="metric-list">
+                          <li>
+                            <strong>Nouveaux établissements</strong> {formatNumber(stats?.createdRecords ?? activeRun.createdRecords)}
+                          </li>
+                          <li>
+                            <strong>Mises à jour</strong> {formatNumber(stats?.updatedRecords ?? activeRun.updatedRecords)}
+                          </li>
+                          <li>
+                            <strong>Enregistrements traités</strong> {formatNumber(stats?.fetchedRecords ?? activeRun.fetchedRecords)}
+                          </li>
+                          <li>
+                            <strong>Appels API</strong> {formatNumber(stats?.apiCallCount ?? activeRun.apiCallCount)}
+                          </li>
+                        </ul>
+                      ) : (
+                        <p className="muted small">Ce run n'a pas sollicité l'API Sirene.</p>
+                      )}
                     </article>
 
                     <article className="insight-card">
@@ -197,6 +205,13 @@ export const SyncRunDetailModal = ({
                           <strong>Envoyées</strong> {formatNumber(alertsStats?.sent)}
                         </li>
                       </ul>
+                      {isGoogleOnly ? (
+                        <p className="muted small">
+                          {activeRun.mode === "google_refresh"
+                            ? "Les alertes sont désactivées pour une remise à zéro complète."
+                            : "Les alertes sont émises uniquement pour les nouvelles fiches Google détectées."}
+                        </p>
+                      ) : null}
                     </article>
                   </div>
                 ) : null}

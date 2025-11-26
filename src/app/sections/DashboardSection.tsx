@@ -9,6 +9,7 @@ import type {
   GoogleRetryConfig,
   StatsSummary,
   SyncRun,
+  SyncMode,
 } from "../../types";
 import { DashboardView } from "../../components/views/DashboardView";
 import { SyncRunDetailModal } from "../../components/SyncRunDetailModal";
@@ -54,7 +55,7 @@ export const DashboardSection = ({ onUnauthorized }: Props) => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [runDetailModal, setRunDetailModal] = useState<RunDetailModalState | null>(null);
   const [isSyncModeModalOpen, setSyncModeModalOpen] = useState(false);
-  const [pendingSyncMode, setPendingSyncMode] = useState<"full" | "sirene_only">("full");
+  const [pendingSyncMode, setPendingSyncMode] = useState<SyncMode>("full");
   const [isGoogleExportModalOpen, setGoogleExportModalOpen] = useState(false);
   const initialExportRange = useMemo(getDefaultGoogleExportRange, []);
   const [googleExportStartDate, setGoogleExportStartDate] = useState(initialExportRange.start);
@@ -109,7 +110,7 @@ export const DashboardSection = ({ onUnauthorized }: Props) => {
   );
 
   const syncMutation = useMutation({
-    mutationFn: (mode: "full" | "sirene_only") => syncApi.trigger({ mode }),
+    mutationFn: (mode: SyncMode) => syncApi.trigger({ mode }),
     onSuccess: (result) => {
       const detail = result.detail ? `: ${result.detail}` : "";
       setFeedbackMessage(`Synchro acceptée${detail}`);
@@ -173,7 +174,7 @@ export const DashboardSection = ({ onUnauthorized }: Props) => {
   }, []);
 
   const handleConfirmSyncMode = useCallback(
-    (mode: "full" | "sirene_only") => {
+    (mode: SyncMode) => {
       setPendingSyncMode(mode);
       syncMutation.mutate(mode);
       setSyncModeModalOpen(false);

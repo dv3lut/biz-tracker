@@ -4,6 +4,7 @@ import { SyncRun } from "../types";
 import { formatDateTime, formatNumber, formatDuration } from "../utils/format";
 import { computeGoogleProgress, computeSireneProgress } from "../utils/progress";
 import { ProgressBar } from "./ProgressBar";
+import { describeSyncMode, syncModeSupportsSirene } from "../utils/sync";
 
 type Props = {
   runs?: SyncRun[];
@@ -101,6 +102,7 @@ export const SyncRunsTable = ({
                 const google = computeGoogleProgress(run);
                 const showGoogle =
                   run.googleEnabled && (google.total !== null || run.googleQueueCount > 0 || run.googleEligibleCount > 0);
+                const sireneEnabled = syncModeSupportsSirene(run.mode);
 
                 return (
                   <tr key={run.id}>
@@ -111,7 +113,7 @@ export const SyncRunsTable = ({
                       <br />
                       <span className="small muted">Type: {run.runType}</span>
                       <br />
-                      <span className="small muted">Mode: {run.mode === "sirene_only" ? "Sirene" : "Complet"}</span>
+                      <span className="small muted">Mode: {describeSyncMode(run.mode)}</span>
                       <br />
                       <span className="small muted">
                         Google: {run.googleEnabled ? "Activé" : "Désactivé"}
@@ -126,7 +128,11 @@ export const SyncRunsTable = ({
                     <td>
                       <span className={`badge status-${run.status}`}>{run.status}</span>
                       <div className="table-progress">
-                        <ProgressBar label="Sirene" value={sirene.value} />
+                        {sireneEnabled ? (
+                          <ProgressBar label="Sirene" value={sirene.value} />
+                        ) : (
+                          <span className="small muted">Google uniquement</span>
+                        )}
                         {showGoogle ? (
                           <ProgressBar label="Google" tone="success" value={google.value} />
                         ) : !run.googleEnabled ? (
