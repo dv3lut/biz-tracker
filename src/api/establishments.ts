@@ -26,6 +26,9 @@ export interface EstablishmentResponse {
   google_listing_origin_source: string | null;
   google_listing_age_status: string | null;
   google_check_status: string;
+  google_contact_phone: string | null;
+  google_contact_email: string | null;
+  google_contact_website: string | null;
   is_sole_proprietorship: boolean;
 }
 
@@ -91,6 +94,9 @@ export const mapEstablishment = (payload: EstablishmentResponse): Establishment 
   googleListingOriginSource: payload.google_listing_origin_source,
   googleListingAgeStatus: payload.google_listing_age_status,
   googleCheckStatus: payload.google_check_status,
+  googleContactPhone: payload.google_contact_phone,
+  googleContactEmail: payload.google_contact_email,
+  googleContactWebsite: payload.google_contact_website,
   isSoleProprietorship: payload.is_sole_proprietorship,
 });
 
