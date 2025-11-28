@@ -11,6 +11,7 @@ class SyncMode(str, Enum):
     SIRENE_ONLY = "sirene_only"
     GOOGLE_PENDING = "google_pending"
     GOOGLE_REFRESH = "google_refresh"
+    DAY_REPLAY = "day_replay"
 
     @property
     def google_enabled(self) -> bool:
@@ -34,7 +35,25 @@ class SyncMode(str, Enum):
     def dispatch_alerts(self) -> bool:
         """Return True when Google alerts should be sent."""
 
+        return self in {SyncMode.FULL, SyncMode.GOOGLE_PENDING, SyncMode.DAY_REPLAY}
+
+    @property
+    def client_notifications_enabled(self) -> bool:
+        """Return True when alerts may be sent to clients as well as admins."""
+
         return self in {SyncMode.FULL, SyncMode.GOOGLE_PENDING}
+
+    @property
+    def updates_state(self) -> bool:
+        """Return True when the SyncState checkpoints should be updated at the end."""
+
+        return self in {SyncMode.FULL, SyncMode.SIRENE_ONLY}
+
+    @property
+    def requires_replay_date(self) -> bool:
+        """Return True when a target creation date is mandatory for the run."""
+
+        return self is SyncMode.DAY_REPLAY
 
 
 DEFAULT_SYNC_MODE = SyncMode.FULL

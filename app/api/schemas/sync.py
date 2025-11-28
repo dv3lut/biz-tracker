@@ -5,7 +5,7 @@ from datetime import datetime, date as Date
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator, model_validator
 
 from app.services.sync.mode import SyncMode
 
@@ -18,6 +18,7 @@ class SyncRunOut(BaseModel):
     run_type: str
     status: str
     mode: SyncMode
+    replay_for_date: Date | None = Field(default=None)
     started_at: datetime
     finished_at: datetime | None
     api_call_count: int
@@ -36,6 +37,10 @@ class SyncRunOut(BaseModel):
     query_checksum: str | None
     resumed_from_run_id: UUID | None
     notes: str | None
+    target_naf_codes: list[str] | None = Field(
+        default=None,
+        description="Liste optionnelle des codes NAF ciblés par ce run.",
+    )
     total_expected_records: int | None = None
     progress: float | None = None
     estimated_remaining_seconds: float | None = None
@@ -120,9 +125,51 @@ class SyncRequest(BaseModel):
         description=(
             "Mode d'exécution: 'full' exécute l'enrichissement Google, 'sirene_only' le désactive, "
             "'google_pending' relance uniquement les établissements jamais enrichis et déclenche les alertes, "
-            "'google_refresh' purge les fiches Google et relance une détection complète sans alertes."
+            "'google_refresh' purge les fiches Google et relance une détection complète sans alertes, "
+            "'day_replay' rejoue une journée complète en limitant les alertes aux administrateurs."
         ),
     )
+    replay_for_date: Date | None = Field(
+        default=None,
+        description="Limite la collecte aux établissements créés à la date indiquée (mode 'day_replay' uniquement).",
+    )
+    naf_codes: list[str] | None = Field(
+        default=None,
+        description="Filtre optionnel de codes NAF (ex: 5610A) à rejouer quel que soit le mode.",
+    )
+
+    @field_validator("naf_codes")
+    @classmethod
+    def validate_naf_codes(cls, value: list[str] | None) -> list[str] | None:
+        if not value:
+            return None
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for raw in value:
+            candidate = (raw or "").strip().upper().replace(".", "").replace(" ", "")
+            if not candidate:
+                continue
+            if len(candidate) not in (4, 5) or not candidate[:4].isdigit():
+                raise ValueError("Chaque code NAF doit contenir 4 chiffres suivis éventuellement d'une lettre.")
+            if len(candidate) == 5 and not candidate[4].isalpha():
+                raise ValueError("Chaque code NAF doit se terminer par une lettre.")
+            if candidate in seen:
+                continue
+            seen.add(candidate)
+            normalized.append(candidate)
+            if len(normalized) > 25:
+                raise ValueError("Maximum 25 codes NAF ciblés par synchronisation.")
+        return normalized or None
+
+    @model_validator(mode="after")
+    def validate_replay_settings(self) -> "SyncRequest":
+        if self.mode.requires_replay_date and not self.replay_for_date:
+            raise ValueError("Une date est requise pour rejouer une journée.")
+        if self.replay_for_date and not self.mode.requires_replay_date:
+            raise ValueError("La date de rejeu n'est disponible qu'en mode 'day_replay'.")
+        if self.replay_for_date and self.replay_for_date > datetime.utcnow().date():
+            raise ValueError("Impossible de rejouer une journée future.")
+        return self
 
 
 class DeleteRunResult(BaseModel):

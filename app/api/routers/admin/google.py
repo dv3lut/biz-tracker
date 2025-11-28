@@ -17,6 +17,7 @@ from app.api.schemas import (
 )
 from app.observability import log_event
 from app.services.google_retry_config import (
+    ensure_google_retry_config,
     load_runtime_google_retry_config,
     serialize_google_retry_config,
     update_google_retry_config,
@@ -72,6 +73,17 @@ def export_google_places(
         listing_statuses=listing_statuses,
         session=session,
     )
+
+
+@router.get(
+    "/google/retry-config",
+    response_model=GoogleRetryConfigOut,
+    summary="Récupérer la configuration des relances Google",
+)
+def get_google_retry_config(session: Session = Depends(get_db_session)) -> GoogleRetryConfigOut:
+    record = ensure_google_retry_config(session)
+    payload_dict = serialize_google_retry_config(record)
+    return GoogleRetryConfigOut(**payload_dict)
 
 
 @router.put(

@@ -1,11 +1,13 @@
 """Command line entry points."""
 from __future__ import annotations
 
-from typing import Optional
+from datetime import datetime, date
+from typing import List, Optional
 
 import typer
 import uvicorn
 
+from app.api.schemas import SyncRequest
 from app.api import create_app
 from app.config import get_settings
 from app.db import Base, get_engine, session_scope
@@ -31,7 +33,23 @@ def init_db() -> None:
     typer.echo("Tables créées (si nécessaire).")
 
 
-def _execute_sync(check_for_updates: bool, mode: SyncMode) -> None:
+def _parse_replay_date(value: str | None) -> date | None:
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except ValueError as exc:  # noqa: BLE001
+        raise typer.BadParameter("Format attendu: YYYY-MM-DD") from exc
+
+
+def _execute_sync(
+    check_for_updates: bool,
+    mode: SyncMode,
+    replay_for_date: date | None = None,
+    target_naf_codes: list[str] | None = None,
+) -> None:
+    if replay_for_date and not mode.requires_replay_date:
+        raise typer.BadParameter("--replay-for-date est uniquement compatible avec le mode 'day_replay'.")
     configure_logging()
     service = SyncService()
     with session_scope() as session:
@@ -39,6 +57,8 @@ def _execute_sync(check_for_updates: bool, mode: SyncMode) -> None:
             session,
             check_informations=check_for_updates,
             mode=mode,
+            replay_for_date=replay_for_date,
+            target_naf_codes=target_naf_codes,
         )
         if run is None:
             typer.echo("Aucune mise à jour à synchroniser.")
@@ -68,13 +88,36 @@ def sync(
         help=(
             "Mode d'exécution: 'full' déclenche Sirene + Google, 'sirene_only' saute Google, "
             "'google_pending' traite uniquement les établissements jamais enrichis par Google, "
-            "'google_refresh' force une remise à zéro de toutes les fiches."
+            "'google_refresh' force une remise à zéro de toutes les fiches, "
+            "'day_replay' rejoue une journée complète sans notifier les clients."
         ),
+    ),
+    replay_for_date: Optional[str] = typer.Option(
+        None,
+        "--replay-for-date",
+        help="Date (YYYY-MM-DD) à rejouer lorsque le mode 'day_replay' est sélectionné.",
+    ),
+    naf_codes: Optional[List[str]] = typer.Option(
+        None,
+        "--naf-code",
+        help="Code NAF ciblé (ex: 5610A). Peut être répété pour filtrer plusieurs codes.",
     ),
 ) -> None:
     """Lancer la synchronisation unifiée des restaurants."""
 
-    _execute_sync(check_for_updates=check_for_updates, mode=mode)
+    replay_date = _parse_replay_date(replay_for_date)
+    request = SyncRequest(
+        check_for_updates=check_for_updates,
+        mode=mode,
+        replay_for_date=replay_date,
+        naf_codes=naf_codes,
+    )
+    _execute_sync(
+        check_for_updates=request.check_for_updates,
+        mode=request.mode,
+        replay_for_date=request.replay_for_date,
+        target_naf_codes=request.naf_codes,
+    )
 
 
 @cli.command("sync-full", hidden=True)

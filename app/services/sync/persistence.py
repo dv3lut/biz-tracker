@@ -19,7 +19,13 @@ class SyncPersistenceMixin:
 
     _naf_code_cache: list[str] | None = None
 
-    def _build_restaurant_query(self, naf_codes: Sequence[str], *, since_creation: date | None = None) -> str:
+    def _build_restaurant_query(
+        self,
+        naf_codes: Sequence[str],
+        *,
+        since_creation: date | None = None,
+        creation_range: tuple[date, date] | None = None,
+    ) -> str:
         normalized_codes = [code.strip() for code in naf_codes if code and code.strip()]
         if not normalized_codes:
             raise RuntimeError("Aucun code NAF actif n'est disponible pour construire la requête Sirene.")
@@ -31,7 +37,11 @@ class SyncPersistenceMixin:
             naf_query = f"({naf_query})"
         period_clause = f"periode({naf_query} AND etatAdministratifEtablissement:A)"
         clauses = [period_clause]
-        if since_creation:
+        if creation_range:
+            start, end = creation_range
+            creation_clause = f"dateCreationEtablissement:[{start.isoformat()} TO {end.isoformat()}]"
+            clauses.append(creation_clause)
+        elif since_creation:
             creation_clause = f"dateCreationEtablissement:[{since_creation.isoformat()} TO *]"
             clauses.append(creation_clause)
 

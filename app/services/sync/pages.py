@@ -35,18 +35,28 @@ def collect_pages(
     cursor_value: str,
     tri: str,
     months_back: int,
-    since_creation: date,
+    since_creation: date | None,
+    creation_range: tuple[date, date] | None,
+    persist_state: bool,
 ) -> PageCollectionResult:
     state = context.state
     page_count = 0
     collection_started = time.perf_counter()
+
+    creation_range_payload = None
+    if creation_range:
+        creation_range_payload = {
+            "start": creation_range[0].isoformat(),
+            "end": creation_range[1].isoformat(),
+        }
 
     log_event(
         "sync.collection.started",
         run_id=str(context.run.id),
         scope_key=context.run.scope_key,
         months_back=months_back,
-        since_creation=since_creation,
+        since_creation=since_creation.isoformat() if since_creation else None,
+        creation_range=creation_range_payload,
         page_size=collector._settings.sirene.page_size,
         initial_cursor=cursor_value,
     )
@@ -55,7 +65,7 @@ def collect_pages(
     new_entities_payload: list[dict[str, object]] = []
     updated_entities: list[UpdatedEstablishmentInfo] = []
     updated_payloads: list[dict[str, object]] = []
-    max_creation_date: date | None = state.last_creation_date
+    max_creation_date: date | None = state.last_creation_date if persist_state else None
 
     while True:
         page_size = collector._settings.sirene.page_size
@@ -127,16 +137,17 @@ def collect_pages(
             )
 
         next_cursor = header.get("curseurSuivant")
-        state.last_cursor = next_cursor
-        context.run.last_cursor = next_cursor
         total_value = header.get("total")
-        try:
-            state.last_total = int(total_value) if total_value is not None else state.last_total
-        except (TypeError, ValueError):
-            collector._logger.debug("Valeur 'total' non exploitable: %s", total_value)
-        state.last_synced_at = datetime.utcnow()
-        context.session.flush()
-        context.session.commit()
+        if persist_state:
+            state.last_cursor = next_cursor
+            context.run.last_cursor = next_cursor
+            try:
+                state.last_total = int(total_value) if total_value is not None else state.last_total
+            except (TypeError, ValueError):
+                collector._logger.debug("Valeur 'total' non exploitable: %s", total_value)
+            state.last_synced_at = datetime.utcnow()
+            context.session.flush()
+            context.session.commit()
 
         current_cursor = cursor_value or "*"
         page_duration = time.perf_counter() - page_started
@@ -155,7 +166,8 @@ def collect_pages(
         )
 
         if not etablissements or not next_cursor or next_cursor == header.get("curseur"):
-            state.cursor_completed = True
+            if persist_state:
+                state.cursor_completed = True
             break
 
         cursor_value = next_cursor

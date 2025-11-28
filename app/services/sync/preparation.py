@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, date
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -14,7 +14,7 @@ from app.services.sync.context import SyncContext
 from app.services.sync.mode import DEFAULT_SYNC_MODE, SyncMode
 from app.utils.dates import parse_datetime
 
-from .utils import normalize_text
+from .utils import append_run_note, format_target_naf_note, normalize_text
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -28,10 +28,44 @@ class SyncRunPreparationMixin:
         *,
         check_informations: bool = False,
         mode: SyncMode = DEFAULT_SYNC_MODE,
+        replay_for_date: date | None = None,
+        target_naf_codes: list[str] | None = None,
     ) -> Optional[models.SyncRun]:
         scope_key = self._settings.sync.scope_key
         state = self._get_or_create_state(session, scope_key)
         latest_treated: datetime | None = None
+        naf_filter = target_naf_codes or None
+
+        if mode.requires_replay_date:
+            if replay_for_date is None:
+                raise ValueError("Une date doit être fournie pour le mode 'day_replay'.")
+            if replay_for_date > datetime.utcnow().date():
+                raise ValueError("Impossible de rejouer une journée future.")
+            run = self._start_run(
+                session,
+                scope_key=scope_key,
+                run_type="sync_replay",
+                initial_status="pending",
+                mode=mode,
+            )
+            run.replay_for_date = replay_for_date
+            formatted_date = replay_for_date.isoformat()
+            append_run_note(run, f"Rejeu du {formatted_date}")
+            run.target_naf_codes = naf_filter
+            if naf_filter:
+                append_run_note(run, format_target_naf_note(naf_filter))
+            log_event(
+                "sync.run.prepared",
+                run_id=str(run.id),
+                scope_key=run.scope_key,
+                status=run.status,
+                check_informations=False,
+                mode=mode.value,
+                replay_for_date=formatted_date,
+                target_naf_codes=naf_filter,
+                run=serialize_sync_run(run),
+            )
+            return run
 
         if mode.requires_sirene_fetch and check_informations:
             latest_treated = self._fetch_latest_treated()
@@ -64,7 +98,10 @@ class SyncRunPreparationMixin:
                 mode=mode,
             )
         if latest_treated:
-            run.notes = f"dateDernierTraitementMaximum: {latest_treated.isoformat()}"
+            append_run_note(run, f"dateDernierTraitementMaximum: {latest_treated.isoformat()}")
+        run.target_naf_codes = naf_filter
+        if naf_filter:
+            append_run_note(run, format_target_naf_note(naf_filter))
         log_event(
             "sync.run.prepared",
             run_id=str(run.id),
@@ -72,6 +109,7 @@ class SyncRunPreparationMixin:
             status=run.status,
             check_informations=check_informations,
             mode=mode.value,
+            target_naf_codes=naf_filter,
             run=serialize_sync_run(run),
         )
         return run
@@ -216,6 +254,9 @@ class SyncRunPreparationMixin:
             mode = SyncMode(run.mode)
         except ValueError:
             mode = DEFAULT_SYNC_MODE
+        replay_for_date = run.replay_for_date
+        target_naf_codes = list(run.target_naf_codes or [])
+        persist_state = mode.updates_state and not target_naf_codes
         return SyncContext(
             session=session,
             run=run,
@@ -223,4 +264,8 @@ class SyncRunPreparationMixin:
             client=client,
             settings=self._settings,
             mode=mode,
+            replay_for_date=replay_for_date,
+            persist_state=persist_state,
+            client_notifications_enabled=mode.client_notifications_enabled,
+            target_naf_codes=target_naf_codes or None,
         )

@@ -61,6 +61,8 @@ def trigger_sync_run(
         session,
         check_informations=payload.check_for_updates,
         mode=payload.mode,
+        replay_for_date=payload.replay_for_date,
+        target_naf_codes=payload.naf_codes,
     )
     if run is None:
         log_event(
@@ -81,6 +83,7 @@ def trigger_sync_run(
         scope_key=scope_key,
         check_informations=payload.check_for_updates,
         mode=payload.mode.value,
+        replay_for_date=payload.replay_for_date.isoformat() if payload.replay_for_date else None,
     )
 
     background_tasks.add_task(

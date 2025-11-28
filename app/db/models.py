@@ -120,6 +120,7 @@ class SyncRun(Base):
     run_type: Mapped[str] = mapped_column(String(50), index=True)
     status: Mapped[str] = mapped_column(String(50), index=True)
     mode: Mapped[str] = mapped_column(String(32), default="full", nullable=False)
+    replay_for_date: Mapped[date | None] = mapped_column(Date)
     started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime)
     last_cursor: Mapped[str | None] = mapped_column(Text)
@@ -141,6 +142,7 @@ class SyncRun(Base):
     max_records: Mapped[int | None] = mapped_column(Integer)
     reset_state: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     truncate_before_run: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    target_naf_codes: Mapped[list[str] | None] = mapped_column(JSONB, default=None)
 
     previous_run: Mapped[SyncRun | None] = relationship(remote_side=[id], backref="resumed_runs")
     alerts: Mapped[list["Alert"]] = relationship("Alert", back_populates="run")

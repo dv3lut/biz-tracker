@@ -157,4 +157,5 @@ def serialize_sync_run(run: "Any") -> dict[str, Any]:
         "last_cursor": run.last_cursor,
         "notes": run.notes,
         "resumed_from_run_id": str(run.resumed_from_run_id) if run.resumed_from_run_id else None,
+        "target_naf_codes": list(run.target_naf_codes or []),
     }

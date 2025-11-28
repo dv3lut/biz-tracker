@@ -3,6 +3,9 @@ from __future__ import annotations
 
 import logging
 import unicodedata
+from typing import Sequence
+
+from app.db import models
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -24,4 +27,26 @@ def normalize_text(value: str) -> str:
     return stripped.lower()
 
 
-__all__ = ["log_and_print", "normalize_text"]
+def append_run_note(run: models.SyncRun, note: str) -> None:
+    """Append a human-readable note to the provided run."""
+
+    if not note:
+        return
+    existing = run.notes or ""
+    run.notes = f"{existing + ' | ' if existing else ''}{note}"
+
+
+def format_target_naf_note(naf_codes: Sequence[str]) -> str:
+    """Return a concise note describing the targeted NAF filters."""
+
+    codes = [code for code in naf_codes if code]
+    if not codes:
+        return ""
+    preview = ", ".join(codes[:5])
+    remaining = len(codes) - len(codes[:5])
+    if remaining > 0:
+        return f"NAF ciblées: {preview} (+{remaining})"
+    return f"NAF ciblées: {preview}"
+
+
+__all__ = ["append_run_note", "format_target_naf_note", "log_and_print", "normalize_text"]

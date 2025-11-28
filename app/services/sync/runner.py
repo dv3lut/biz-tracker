@@ -181,12 +181,17 @@ class SyncRunnerMixin(SyncRunPreparationMixin):
         except ValueError:
             resolved_mode = DEFAULT_SYNC_MODE
 
-        if resolved_mode.requires_sirene_fetch:
-            state.last_successful_run_id = run.id
-            if last_treated_max:
-                state.last_treated_max = last_treated_max
-            if last_creation_date:
-                state.last_creation_date = last_creation_date
+        if not resolved_mode.updates_state:
+            return
+
+        if run.target_naf_codes:
+            return
+
+        state.last_successful_run_id = run.id
+        if last_treated_max:
+            state.last_treated_max = last_treated_max
+        if last_creation_date:
+            state.last_creation_date = last_creation_date
 
     def _serialize_result(self, result: SyncResult, email_summary: dict[str, Any]) -> dict[str, Any]:
         return {

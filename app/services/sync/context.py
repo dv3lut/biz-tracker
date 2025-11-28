@@ -23,6 +23,10 @@ class SyncContext:
     client: SireneClient
     settings: Settings
     mode: SyncMode
+    replay_for_date: date | None = None
+    persist_state: bool = True
+    client_notifications_enabled: bool = True
+    target_naf_codes: list[str] | None = None
 
 
 @dataclass

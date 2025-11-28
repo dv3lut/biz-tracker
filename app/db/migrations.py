@@ -183,6 +183,10 @@ def run_schema_upgrades(engine: Engine) -> None:
         ALTER TABLE sync_runs
         ADD COLUMN IF NOT EXISTS google_api_call_count INTEGER DEFAULT 0
         """,
+    """
+    ALTER TABLE sync_runs
+    ADD COLUMN IF NOT EXISTS replay_for_date DATE
+    """,
         """
         ALTER TABLE sync_runs
         ADD COLUMN IF NOT EXISTS google_immediate_matched_count INTEGER DEFAULT 0
@@ -199,6 +203,10 @@ def run_schema_upgrades(engine: Engine) -> None:
         ALTER TABLE sync_runs
         ADD COLUMN IF NOT EXISTS summary JSONB
         """,
+    """
+    ALTER TABLE sync_runs
+    ADD COLUMN IF NOT EXISTS target_naf_codes JSONB
+    """,
         """
         ALTER TABLE IF EXISTS naf_categories
         DROP COLUMN IF EXISTS order_index

@@ -29,11 +29,18 @@ _ALERT_LOGGER = logging.getLogger("alerts")
 class AlertService:
     """Create alert records and dispatch notifications."""
 
-    def __init__(self, session: Session, run: models.SyncRun) -> None:
+    def __init__(
+        self,
+        session: Session,
+        run: models.SyncRun,
+        *,
+        client_notifications_enabled: bool = True,
+    ) -> None:
         self._session = session
         self._run = run
         self._email_service = EmailService()
         self._formatter = EstablishmentFormatter(session)
+        self._client_notifications_enabled = client_notifications_enabled
 
     def create_google_alerts(self, establishments: Sequence[models.Establishment]) -> list[models.Alert]:
         if not establishments:
@@ -76,13 +83,17 @@ class AlertService:
         has_previous_success = self._has_previous_successful_run()
         admin_recipients = get_admin_emails(self._session)
 
-        plan, client_skip_reason = self._prepare_client_dispatch(
-            filtered_establishments,
-            admin_recipients,
-            email_enabled=email_enabled,
-            email_configured=email_configured,
-            has_previous_success=has_previous_success,
-        )
+        if self._client_notifications_enabled:
+            plan, client_skip_reason = self._prepare_client_dispatch(
+                filtered_establishments,
+                admin_recipients,
+                email_enabled=email_enabled,
+                email_configured=email_configured,
+                has_previous_success=has_previous_success,
+            )
+        else:
+            plan = None
+            client_skip_reason = "client_notifications_disabled"
         targeted_recipient_addresses = plan.targeted_recipient_addresses if plan else []
         combined_recipient_addresses = plan.combined_recipient_addresses if plan else sorted(admin_recipients)
         for alert in alerts:

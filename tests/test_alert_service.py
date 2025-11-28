@@ -29,15 +29,18 @@ class AlertServiceFilteringTests(unittest.TestCase):
             patch("app.services.alert_service.assign_establishments_to_clients", return_value=({}, False))
         )
         stack.enter_context(patch("app.services.alert_service.collect_client_emails", return_value=[]))
+        dispatch_mock = MagicMock(
+            return_value=SimpleNamespace(delivered=[], failed=[], sent_at=None)
+        )
         stack.enter_context(
             patch(
                 "app.services.alert_service.dispatch_email_to_clients",
-                return_value=SimpleNamespace(delivered=[], failed=[]),
+                dispatch_mock,
             )
         )
-        stack.enter_context(patch("app.services.alert_service.log_event"))
+        log_mock = stack.enter_context(patch("app.services.alert_service.log_event"))
         try:
-            yield
+            yield SimpleNamespace(dispatch_mock=dispatch_mock, log_mock=log_mock)
         finally:
             stack.close()
 
@@ -110,6 +113,22 @@ class AlertServiceFilteringTests(unittest.TestCase):
 
         self.assertEqual(len(alerts), 1)
         self.assertEqual(self.session.add.call_count, 1)
+
+    def test_client_notifications_can_be_disabled(self) -> None:
+        establishments = [self._make_establishment("recent_creation", suffix="1")]
+
+        with self._patched_dependencies() as deps:
+            service = AlertService(
+                self.session,
+                self.run,
+                client_notifications_enabled=False,
+            )
+            alerts = service.create_google_alerts(establishments)
+
+        self.assertEqual(len(alerts), 1)
+        deps.dispatch_mock.assert_not_called()
+        reasons = [kwargs.get("reason") for _, kwargs in deps.log_mock.call_args_list]
+        self.assertIn("client_notifications_disabled", [reason for reason in reasons if reason])
 
 
 if __name__ == "__main__":
