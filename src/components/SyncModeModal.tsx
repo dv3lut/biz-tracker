@@ -2,6 +2,8 @@ import { KeyboardEvent, useEffect, useMemo, useState } from "react";
 
 import { NafCategoryStat, SyncMode } from "../types";
 import {
+  canonicalizeNafCode,
+  denormalizeNafCode,
   describeSyncMode,
   formatNafCodesPreview,
   MAX_TARGET_NAF_CODES,
@@ -54,6 +56,7 @@ const MODE_OPTIONS: Array<{
 
 type NormalizedSubcategory = NafCategoryStat["subcategories"][number] & {
   normalizedNafCode: string;
+  displayNafCode: string;
 };
 
 type NormalizedCategory = {
@@ -96,6 +99,7 @@ const buildNormalizedCategories = (categories: NafCategoryStat[]): NormalizedCat
           return {
             ...sub,
             normalizedNafCode: normalized,
+            displayNafCode: denormalizeNafCode(normalized),
           };
         })
         .filter((sub): sub is NormalizedSubcategory => Boolean(sub));
@@ -302,7 +306,8 @@ export const SyncModeModal = ({
     onConfirm({
       mode,
       replayForDate: requiresReplayDate ? replayDate : undefined,
-      nafCodes: selectedNafCodes.length > 0 ? selectedNafCodes : undefined,
+      nafCodes:
+        selectedNafCodes.length > 0 ? selectedNafCodes.map((code) => denormalizeNafCode(code)) : undefined,
     });
   };
 
@@ -342,6 +347,10 @@ export const SyncModeModal = ({
                 return (
                   <label key={option.value} className={`mode-option${isSelected ? " selected" : ""}`}>
                     <div className="mode-option-body">
+                      <div className="mode-option-text">
+                        <strong>{option.title}</strong>
+                        <p className="muted small">{option.description}</p>
+                      </div>
                       <input
                         type="radio"
                         name="sync-mode"
@@ -349,11 +358,8 @@ export const SyncModeModal = ({
                         checked={isSelected}
                         onChange={() => setMode(option.value)}
                         disabled={isSubmitting}
+                        className="mode-option-control"
                       />
-                      <div className="mode-option-text">
-                        <strong>{option.title}</strong>
-                        <p className="muted small">{option.description}</p>
-                      </div>
                     </div>
                     <p className="muted small mode-option-impact">{option.impact}</p>
                     {option.value === "day_replay" && isSelected ? (
@@ -411,13 +417,13 @@ export const SyncModeModal = ({
             <div className="naf-filter-section">
               <div className="naf-filter-header">
                 <label className="naf-select-all">
+                  <span>Tout sélectionner (max {MAX_TARGET_NAF_CODES} codes)</span>
                   <input
                     type="checkbox"
                     checked={isAllSelected}
                     onChange={(event) => handleToggleSelectAll(event.target.checked)}
                     disabled={isSubmitting || limitedSelectableCodes.length === 0}
                   />
-                  <span>Tout sélectionner (max {MAX_TARGET_NAF_CODES} codes)</span>
                 </label>
                 <span className="muted small">
                   {selectedCount} code(s) · {remainingSlots} place(s) restantes
@@ -432,6 +438,10 @@ export const SyncModeModal = ({
                     return (
                       <div key={category.categoryId} className="naf-category">
                         <label className="naf-category-header">
+                          <div>
+                            <strong>{category.name}</strong>
+                            <p className="muted small">{category.nafCodes.length} code(s)</p>
+                          </div>
                           <input
                             type="checkbox"
                             checked={isFull}
@@ -439,24 +449,20 @@ export const SyncModeModal = ({
                             onChange={(event) => handleCategoryChange(category.nafCodes, event.target.checked)}
                             disabled={isSubmitting || category.nafCodes.length === 0}
                           />
-                          <div>
-                            <strong>{category.name}</strong>
-                            <p className="muted small">{category.nafCodes.length} code(s)</p>
-                          </div>
                         </label>
                         <div className="naf-subcategory-list">
                           {category.subcategories.map((sub) => (
                             <label key={sub.subcategoryId} className="naf-subcategory">
+                              <div>
+                                <strong>{sub.name}</strong>
+                                <span className="muted small">{sub.displayNafCode}</span>
+                              </div>
                               <input
                                 type="checkbox"
                                 checked={selectedSet.has(sub.normalizedNafCode)}
                                 onChange={(event) => handleSubcategoryChange(sub.normalizedNafCode, event.target.checked)}
                                 disabled={isSubmitting}
                               />
-                              <div>
-                                <strong>{sub.name}</strong>
-                                <span className="muted small">{sub.normalizedNafCode}</span>
-                              </div>
                             </label>
                           ))}
                         </div>
@@ -493,7 +499,7 @@ export const SyncModeModal = ({
                     <div className="naf-chip-list">
                       {selectedNafCodes.map((code) => (
                         <span key={code} className="naf-chip">
-                          {code}
+                          {canonicalizeNafCode(code) ?? code}
                           <button
                             type="button"
                             aria-label={`Retirer ${code}`}

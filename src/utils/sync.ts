@@ -48,6 +48,28 @@ export const normalizeNafCode = (raw: string | null | undefined): string | null 
   return null;
 };
 
+const formatNormalized = (code: string): string => {
+  if (code.length < 4) {
+    return code;
+  }
+  const digits = code.slice(0, 4);
+  const suffix = code.slice(4);
+  const withDot = `${digits.slice(0, 2)}.${digits.slice(2)}`;
+  return suffix ? `${withDot}${suffix}` : withDot;
+};
+
+export const denormalizeNafCode = (code: string): string => {
+  return formatNormalized(code);
+};
+
+export const canonicalizeNafCode = (value: string | null | undefined): string | null => {
+  const normalized = normalizeNafCode(value);
+  if (!normalized) {
+    return null;
+  }
+  return formatNormalized(normalized);
+};
+
 export const sanitizeNafCodes = (values: Array<string | null | undefined>): string[] => {
   const normalized: string[] = [];
   const seen = new Set<string>();
@@ -79,9 +101,15 @@ export const formatNafCodesPreview = (codes?: string[] | null, limit = 5): strin
   if (!codes || codes.length === 0) {
     return "—";
   }
-  if (codes.length <= limit) {
-    return codes.join(", ");
+  const canonical = codes
+    .map((code) => canonicalizeNafCode(code) ?? code)
+    .filter((value): value is string => Boolean(value));
+  if (canonical.length === 0) {
+    return "—";
   }
-  const remaining = codes.length - limit;
-  return `${codes.slice(0, limit).join(", ")} +${remaining}`;
+  if (canonical.length <= limit) {
+    return canonical.join(", ");
+  }
+  const remaining = canonical.length - limit;
+  return `${canonical.slice(0, limit).join(", ")} +${remaining}`;
 };

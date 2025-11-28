@@ -1551,12 +1551,13 @@ table td {
 
 .modal.sync-mode-modal .modal-content {
   display: grid;
-  gap: 1.25rem;
+  gap: 1.5rem;
 }
 
 .modal.sync-mode-modal .mode-options {
   display: grid;
   gap: 0.9rem;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
 }
 
 .sync-mode-content {
@@ -1676,6 +1677,7 @@ table td {
   gap: 0.65rem;
   transition: border 0.2s ease, background 0.2s ease;
   cursor: pointer;
+  min-height: 100%;
 }
 
 .mode-option:hover {
@@ -1689,12 +1691,16 @@ table td {
 
 .mode-option-body {
   display: flex;
-  gap: 0.75rem;
-  align-items: flex-start;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
 }
 
-.mode-option-body input[type="radio"] {
-  margin-top: 0.3rem;
+.mode-option-control {
+  width: 1.15rem;
+  height: 1.15rem;
+  flex-shrink: 0;
+  margin-left: 0.5rem;
 }
 
 .mode-option-text strong {
@@ -1718,13 +1724,20 @@ table td {
 .naf-select-all {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.75rem;
   font-weight: 600;
+}
+
+.naf-select-all input[type="checkbox"] {
+  width: 1.15rem;
+  height: 1.15rem;
+  flex-shrink: 0;
 }
 
 .naf-category-grid {
   display: grid;
   gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 }
 
 .naf-category {
@@ -1734,16 +1747,20 @@ table td {
   background: var(--color-card);
   display: grid;
   gap: 0.75rem;
+  box-shadow: 0 4px 12px rgba(15, 18, 23, 0.05);
 }
 
 .naf-category-header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 0.75rem;
 }
 
 .naf-category-header input[type="checkbox"] {
-  margin-top: 0.2rem;
+  width: 1.15rem;
+  height: 1.15rem;
+  flex-shrink: 0;
 }
 
 .naf-category-header div strong {
@@ -1753,16 +1770,27 @@ table td {
 .naf-subcategory-list {
   display: grid;
   gap: 0.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
 }
 
 .naf-subcategory {
   display: flex;
-  align-items: flex-start;
-  gap: 0.65rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.9rem;
+  padding: 0.4rem 0.35rem;
+  border-radius: 10px;
+  transition: background 0.2s ease;
+}
+
+.naf-subcategory:hover {
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .naf-subcategory input[type="checkbox"] {
-  margin-top: 0.25rem;
+  width: 1.15rem;
+  height: 1.15rem;
+  flex-shrink: 0;
 }
 
 .naf-manual-add {
