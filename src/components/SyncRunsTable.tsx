@@ -4,7 +4,8 @@ import { SyncRun } from "../types";
 import { formatDateTime, formatNumber, formatDuration } from "../utils/format";
 import { computeGoogleProgress, computeSireneProgress } from "../utils/progress";
 import { ProgressBar } from "./ProgressBar";
-import { describeSyncMode, syncModeSupportsSirene } from "../utils/sync";
+import { RunModeBadges } from "./RunModeBadges";
+import { describeSyncMode, formatNafCodesPreview, syncModeSupportsSirene } from "../utils/sync";
 
 type Props = {
   runs?: SyncRun[];
@@ -114,6 +115,7 @@ export const SyncRunsTable = ({
                       <span className="small muted">Type: {run.runType}</span>
                       <br />
                       <span className="small muted">Mode: {describeSyncMode(run.mode)}</span>
+                      <RunModeBadges run={{ mode: run.mode, targetNafCodes: run.targetNafCodes }} />
                       <br />
                       <span className="small muted">
                         Google: {run.googleEnabled ? "Activé" : "Désactivé"}
@@ -166,6 +168,8 @@ export const SyncRunsTable = ({
                       <span className="small muted">Restant: {formatNumber(run.googlePendingCount)}</span>
                       <br />
                       <span className="small muted">Notes: {run.notes ? truncate(run.notes, 64) : "—"}</span>
+                      <br />
+                      <span className="small muted">NAF ciblées: {formatNafCodesPreview(run.targetNafCodes, 5)}</span>
                     </td>
                     <td>
                       <button

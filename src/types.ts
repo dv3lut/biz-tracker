@@ -1,4 +1,4 @@
-export type SyncMode = "full" | "sirene_only" | "google_pending" | "google_refresh";
+export type SyncMode = "full" | "sirene_only" | "google_pending" | "google_refresh" | "day_replay";
 
 export type ListingStatus = "recent_creation" | "recent_creation_missing_contact" | "not_recent_creation";
 
@@ -8,6 +8,7 @@ export interface SyncRun {
   runType: string;
   status: string;
   mode: SyncMode;
+  replayForDate: string | null;
   startedAt: string;
   finishedAt: string | null;
   apiCallCount: number;
@@ -30,6 +31,7 @@ export interface SyncRun {
   estimatedRemainingSeconds: number | null;
   estimatedCompletionAt: string | null;
   googleEnabled: boolean;
+  targetNafCodes: string[] | null;
   summary: RunSummary | null;
 }
 
@@ -249,6 +251,8 @@ export interface DashboardMetrics {
 export interface SyncRequestPayload {
   checkForUpdates?: boolean;
   mode?: SyncMode;
+  replayForDate?: string;
+  nafCodes?: string[];
 }
 
 export type EstablishmentIndividualFilter = "all" | "individual" | "non_individual";

@@ -15,6 +15,7 @@ export interface SyncRunResponse {
   run_type: string;
   status: string;
   mode: SyncMode;
+  replay_for_date: string | null;
   started_at: string;
   finished_at: string | null;
   api_call_count: number;
@@ -38,6 +39,7 @@ export interface SyncRunResponse {
   estimated_completion_at: string | null;
   summary: RunSummaryResponse | null;
   google_enabled: boolean;
+  target_naf_codes: string[] | null;
 }
 
 export interface RunSummaryResponse {
@@ -219,6 +221,7 @@ export const mapSyncRun = (payload: SyncRunResponse): SyncRun => ({
   runType: payload.run_type,
   status: payload.status,
   mode: payload.mode,
+  replayForDate: payload.replay_for_date,
   startedAt: payload.started_at,
   finishedAt: payload.finished_at,
   apiCallCount: payload.api_call_count,
@@ -241,6 +244,7 @@ export const mapSyncRun = (payload: SyncRunResponse): SyncRun => ({
   estimatedRemainingSeconds: payload.estimated_remaining_seconds,
   estimatedCompletionAt: payload.estimated_completion_at,
   googleEnabled: payload.google_enabled,
+  targetNafCodes: payload.target_naf_codes ?? null,
   summary: payload.summary ? mapRunSummary(payload.summary) : null,
 });
 
@@ -284,6 +288,12 @@ export const syncApi = {
     }
     if (payload.mode) {
       body.mode = payload.mode;
+    }
+    if (payload.replayForDate) {
+      body.replay_for_date = payload.replayForDate;
+    }
+    if (payload.nafCodes && payload.nafCodes.length > 0) {
+      body.naf_codes = payload.nafCodes;
     }
     const { data, status } = await request<SyncRunResponse | { detail?: string }>("/admin/sync", {
       method: "POST",

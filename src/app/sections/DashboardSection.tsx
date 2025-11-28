@@ -10,6 +10,7 @@ import type {
   StatsSummary,
   SyncRun,
   SyncMode,
+  SyncRequestPayload,
 } from "../../types";
 import { DashboardView } from "../../components/views/DashboardView";
 import { SyncRunDetailModal } from "../../components/SyncRunDetailModal";
@@ -54,8 +55,9 @@ export const DashboardSection = ({ onUnauthorized }: Props) => {
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [runDetailModal, setRunDetailModal] = useState<RunDetailModalState | null>(null);
+  type SyncTriggerSelection = SyncRequestPayload & { mode: SyncMode };
   const [isSyncModeModalOpen, setSyncModeModalOpen] = useState(false);
-  const [pendingSyncMode, setPendingSyncMode] = useState<SyncMode>("full");
+  const [pendingSyncRequest, setPendingSyncRequest] = useState<SyncTriggerSelection>({ mode: "full" });
   const [isGoogleExportModalOpen, setGoogleExportModalOpen] = useState(false);
   const initialExportRange = useMemo(getDefaultGoogleExportRange, []);
   const [googleExportStartDate, setGoogleExportStartDate] = useState(initialExportRange.start);
@@ -110,7 +112,7 @@ export const DashboardSection = ({ onUnauthorized }: Props) => {
   );
 
   const syncMutation = useMutation({
-    mutationFn: (mode: SyncMode) => syncApi.trigger({ mode }),
+    mutationFn: (payload: SyncRequestPayload) => syncApi.trigger(payload),
     onSuccess: (result) => {
       const detail = result.detail ? `: ${result.detail}` : "";
       setFeedbackMessage(`Synchro acceptée${detail}`);
@@ -174,9 +176,9 @@ export const DashboardSection = ({ onUnauthorized }: Props) => {
   }, []);
 
   const handleConfirmSyncMode = useCallback(
-    (mode: SyncMode) => {
-      setPendingSyncMode(mode);
-      syncMutation.mutate(mode);
+    (payload: SyncTriggerSelection) => {
+      setPendingSyncRequest(payload);
+      syncMutation.mutate(payload);
       setSyncModeModalOpen(false);
     },
     [syncMutation],
@@ -383,7 +385,10 @@ export const DashboardSection = ({ onUnauthorized }: Props) => {
 
       <SyncModeModal
         isOpen={isSyncModeModalOpen}
-        initialMode={pendingSyncMode}
+        initialMode={pendingSyncRequest.mode}
+        initialReplayDate={pendingSyncRequest.replayForDate ?? null}
+        initialNafCodes={pendingSyncRequest.nafCodes ?? []}
+        nafCategories={dashboardQuery.data?.nafCategoryBreakdown ?? []}
         onConfirm={handleConfirmSyncMode}
         onCancel={handleCloseSyncModeModal}
         isSubmitting={syncMutation.isPending}

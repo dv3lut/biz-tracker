@@ -3,8 +3,9 @@ import { type ReactNode } from "react";
 import { StatsSummary, SyncRun } from "../types";
 import { formatDateTime, formatNumber, formatPercent, formatDuration } from "../utils/format";
 import { computeGoogleProgress, computeSireneProgress } from "../utils/progress";
-import { describeSyncMode, syncModeIsGoogleOnly, syncModeSupportsSirene } from "../utils/sync";
+import { describeSyncMode, formatNafCodesPreview, syncModeIsGoogleOnly, syncModeSupportsSirene } from "../utils/sync";
 import { ProgressBar } from "./ProgressBar";
+import { RunModeBadges } from "./RunModeBadges";
 
 type Props = {
   summary?: StatsSummary;
@@ -51,6 +52,7 @@ const renderRunDetails = (run: SyncRun | null): ReactNode => {
 
   return (
     <>
+      <RunModeBadges run={{ mode: run.mode, targetNafCodes: run.targetNafCodes }} className="mb-1" />
       <div className="progress-bars">
         {sireneEnabled ? (
           <ProgressBar
@@ -76,6 +78,10 @@ const renderRunDetails = (run: SyncRun | null): ReactNode => {
         <div>
           <dt>Mode</dt>
           <dd>{describeSyncMode(run.mode)}</dd>
+        </div>
+        <div>
+          <dt>Ciblage NAF</dt>
+          <dd>{formatNafCodesPreview(run.targetNafCodes, 6)}</dd>
         </div>
         <div>
           <dt>Google Places</dt>

@@ -1,6 +1,7 @@
 import { SyncRun } from "../types";
 import { formatDateTime, formatDuration, formatNumber } from "../utils/format";
-import { describeSyncMode, syncModeIsGoogleOnly, syncModeSupportsSirene } from "../utils/sync";
+import { describeSyncMode, formatNafCodesPreview, syncModeIsGoogleOnly, syncModeSupportsSirene } from "../utils/sync";
+import { RunModeBadges } from "./RunModeBadges";
 
 const formatDisplayDate = (isoDate: string | null | undefined): string => {
   if (!isoDate) {
@@ -109,6 +110,7 @@ export const SyncRunDetailModal = ({
                   <div className="run-detail-grid">
                     <article className="insight-card">
                       <h3>Informations générales</h3>
+                      <RunModeBadges run={{ mode: activeRun.mode, targetNafCodes: activeRun.targetNafCodes }} />
                       <ul className="metric-list">
                         <li>
                           <strong>Début</strong> {formatDateTime(activeRun.startedAt)}
@@ -124,6 +126,9 @@ export const SyncRunDetailModal = ({
                         </li>
                         <li>
                           <strong>Mode</strong> {describeSyncMode(activeRun.mode)}
+                        </li>
+                        <li>
+                          <strong>Ciblage NAF</strong> {formatNafCodesPreview(activeRun.targetNafCodes, 8)}
                         </li>
                         {!sireneEnabled ? (
                           <li>
