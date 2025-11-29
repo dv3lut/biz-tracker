@@ -40,6 +40,9 @@ export interface SyncRunResponse {
   summary: RunSummaryResponse | null;
   google_enabled: boolean;
   target_naf_codes: string[] | null;
+  target_client_ids: string[] | null;
+  notify_admins: boolean;
+  day_replay_force_google: boolean;
 }
 
 export interface RunSummaryResponse {
@@ -245,6 +248,9 @@ export const mapSyncRun = (payload: SyncRunResponse): SyncRun => ({
   estimatedCompletionAt: payload.estimated_completion_at,
   googleEnabled: payload.google_enabled,
   targetNafCodes: payload.target_naf_codes ?? null,
+  targetClientIds: payload.target_client_ids ?? null,
+  notifyAdmins: payload.notify_admins,
+  dayReplayForceGoogle: payload.day_replay_force_google,
   summary: payload.summary ? mapRunSummary(payload.summary) : null,
 });
 
@@ -294,6 +300,15 @@ export const syncApi = {
     }
     if (payload.nafCodes && payload.nafCodes.length > 0) {
       body.naf_codes = payload.nafCodes;
+    }
+    if (payload.targetClientIds && payload.targetClientIds.length > 0) {
+      body.target_client_ids = payload.targetClientIds;
+    }
+    if (payload.notifyAdmins !== undefined) {
+      body.notify_admins = payload.notifyAdmins;
+    }
+    if (payload.forceGoogleReplay !== undefined) {
+      body.force_google_replay = payload.forceGoogleReplay;
     }
     const { data, status } = await request<SyncRunResponse | { detail?: string }>("/admin/sync", {
       method: "POST",

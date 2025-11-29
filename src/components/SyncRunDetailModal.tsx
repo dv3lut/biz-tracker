@@ -110,7 +110,15 @@ export const SyncRunDetailModal = ({
                   <div className="run-detail-grid">
                     <article className="insight-card">
                       <h3>Informations générales</h3>
-                      <RunModeBadges run={{ mode: activeRun.mode, targetNafCodes: activeRun.targetNafCodes }} />
+                      <RunModeBadges
+                        run={{
+                          mode: activeRun.mode,
+                          targetNafCodes: activeRun.targetNafCodes,
+                          targetClientIds: activeRun.targetClientIds,
+                          notifyAdmins: activeRun.notifyAdmins,
+                          dayReplayForceGoogle: activeRun.dayReplayForceGoogle,
+                        }}
+                      />
                       <ul className="metric-list">
                         <li>
                           <strong>Début</strong> {formatDateTime(activeRun.startedAt)}

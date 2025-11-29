@@ -52,7 +52,16 @@ const renderRunDetails = (run: SyncRun | null): ReactNode => {
 
   return (
     <>
-      <RunModeBadges run={{ mode: run.mode, targetNafCodes: run.targetNafCodes }} className="mb-1" />
+      <RunModeBadges
+        run={{
+          mode: run.mode,
+          targetNafCodes: run.targetNafCodes,
+          targetClientIds: run.targetClientIds,
+          notifyAdmins: run.notifyAdmins,
+          dayReplayForceGoogle: run.dayReplayForceGoogle,
+        }}
+        className="mb-1"
+      />
       <div className="progress-bars">
         {sireneEnabled ? (
           <ProgressBar

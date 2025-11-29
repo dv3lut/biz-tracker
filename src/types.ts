@@ -32,6 +32,9 @@ export interface SyncRun {
   estimatedCompletionAt: string | null;
   googleEnabled: boolean;
   targetNafCodes: string[] | null;
+  targetClientIds: string[] | null;
+  notifyAdmins: boolean;
+  dayReplayForceGoogle: boolean;
   summary: RunSummary | null;
 }
 
@@ -253,6 +256,9 @@ export interface SyncRequestPayload {
   mode?: SyncMode;
   replayForDate?: string;
   nafCodes?: string[];
+  targetClientIds?: string[];
+  notifyAdmins?: boolean;
+  forceGoogleReplay?: boolean;
 }
 
 export type EstablishmentIndividualFilter = "all" | "individual" | "non_individual";

@@ -1,6 +1,7 @@
 import { KeyboardEvent, useEffect, useMemo, useState } from "react";
 
-import { NafCategoryStat, SyncMode } from "../types";
+import { LISTING_STATUS_LABELS } from "../constants/listingStatuses";
+import { Client, ListingStatus, NafCategoryStat, SyncMode } from "../types";
 import {
   canonicalizeNafCode,
   denormalizeNafCode,
@@ -54,6 +55,60 @@ const MODE_OPTIONS: Array<{
   },
 ];
 
+const MAX_TARGET_CLIENTS = 50;
+
+type ClientOption = {
+  id: string;
+  name: string;
+  listingSummary: string;
+  nafSummary: string;
+  recipientCount: number;
+  searchTokens: string;
+};
+
+const describeListingStatuses = (statuses?: ListingStatus[]): string => {
+  if (!statuses || statuses.length === 0) {
+    return "Tous les statuts Google";
+  }
+  const labels = statuses.map((status) => LISTING_STATUS_LABELS[status] ?? status);
+  return labels.join(", ");
+};
+
+const extractClientNafCodes = (client: Client): string[] => {
+  const subscriptions = client.subscriptions ?? [];
+  return subscriptions
+    .map((subscription) => subscription.subcategory?.nafCode)
+    .filter((code): code is string => Boolean(code))
+    .map((code) => canonicalizeNafCode(normalizeNafCode(code) ?? code) ?? code);
+};
+
+const describeNafSummary = (codes: string[]): string => {
+  if (codes.length === 0) {
+    return "Toutes catégories suivies";
+  }
+  const preview = codes.slice(0, 6).join(", ");
+  return codes.length > 6 ? `${preview}…` : preview;
+};
+
+const buildClientOptions = (clients: Client[]): ClientOption[] => {
+  return [...clients]
+    .sort((a, b) => a.name.localeCompare(b.name, "fr", { sensitivity: "base" }))
+    .map((client) => {
+      const codes = extractClientNafCodes(client);
+      const listingSummary = describeListingStatuses(client.listingStatuses);
+      const nafSummary = describeNafSummary(codes);
+      const tokens = `${client.name} ${listingSummary} ${codes.join(" ")}`.toLowerCase();
+      return {
+        id: client.id,
+        name: client.name,
+        listingSummary,
+        nafSummary,
+        recipientCount: client.recipients?.length ?? 0,
+        searchTokens: tokens,
+      };
+    });
+};
+
 type NormalizedSubcategory = NafCategoryStat["subcategories"][number] & {
   normalizedNafCode: string;
   displayNafCode: string;
@@ -72,7 +127,20 @@ type Props = {
   initialReplayDate?: string | null;
   initialNafCodes?: string[] | null;
   nafCategories: NafCategoryStat[];
-  onConfirm: (payload: { mode: SyncMode; replayForDate?: string; nafCodes?: string[] }) => void;
+  initialTargetClientIds?: string[] | null;
+  initialNotifyAdmins?: boolean | null;
+  initialForceGoogleReplay?: boolean | null;
+  clients: Client[];
+  isClientsLoading?: boolean;
+  clientsError?: string | null;
+  onConfirm: (payload: {
+    mode: SyncMode;
+    replayForDate?: string;
+    nafCodes?: string[];
+    targetClientIds?: string[];
+    notifyAdmins?: boolean;
+    forceGoogleReplay?: boolean;
+  }) => void;
   onCancel: () => void;
   isSubmitting: boolean;
 };
@@ -85,6 +153,10 @@ const normalizeList = (values?: string[] | null): string[] => {
     ),
   );
   return normalized.slice(0, MAX_TARGET_NAF_CODES);
+};
+
+const normalizeClientSelection = (values?: string[] | null): string[] => {
+  return Array.from(new Set(values ?? [])).slice(0, MAX_TARGET_CLIENTS);
 };
 
 const buildNormalizedCategories = (categories: NafCategoryStat[]): NormalizedCategory[] => {
@@ -121,6 +193,12 @@ export const SyncModeModal = ({
   initialReplayDate,
   initialNafCodes,
   nafCategories,
+  initialTargetClientIds,
+  initialNotifyAdmins,
+  initialForceGoogleReplay,
+  clients,
+  isClientsLoading = false,
+  clientsError,
   onConfirm,
   onCancel,
   isSubmitting,
@@ -135,6 +213,11 @@ export const SyncModeModal = ({
   const [formError, setFormError] = useState<string | null>(null);
   const [nafInput, setNafInput] = useState<string>("");
   const [selectedNafCodes, setSelectedNafCodes] = useState<string[]>(() => normalizeList(initialNafCodes));
+  const [selectedClientIds, setSelectedClientIds] = useState<string[]>(() => normalizeClientSelection(initialTargetClientIds));
+  const [notifyAdmins, setNotifyAdmins] = useState<boolean>(initialNotifyAdmins ?? true);
+  const [forceGoogleReplay, setForceGoogleReplay] = useState<boolean>(initialForceGoogleReplay ?? false);
+  const [clientSearch, setClientSearch] = useState<string>("");
+  const [recipientError, setRecipientError] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -143,14 +226,57 @@ export const SyncModeModal = ({
       setSelectedNafCodes(normalizeList(initialNafCodes));
       setNafInput("");
       setFormError(null);
+      setSelectedClientIds(normalizeClientSelection(initialTargetClientIds));
+      setNotifyAdmins(initialNotifyAdmins ?? true);
+      setForceGoogleReplay(initialForceGoogleReplay ?? false);
+      setClientSearch("");
+      setRecipientError(null);
     }
-  }, [initialMode, initialReplayDate, initialNafCodes, isOpen]);
+  }, [
+    initialMode,
+    initialReplayDate,
+    initialNafCodes,
+    initialTargetClientIds,
+    initialNotifyAdmins,
+    initialForceGoogleReplay,
+    isOpen,
+  ]);
 
   useEffect(() => {
     if (!syncModeRequiresReplayDate(mode)) {
       setFormError(null);
     }
+    if (mode !== "day_replay") {
+      setRecipientError(null);
+    }
   }, [mode]);
+
+  useEffect(() => {
+    if (mode === "day_replay" && (notifyAdmins || selectedClientIds.length > 0)) {
+      setRecipientError(null);
+    }
+  }, [mode, notifyAdmins, selectedClientIds]);
+
+  const clientOptions = useMemo(() => buildClientOptions(clients), [clients]);
+  const clientLookup = useMemo(() => new Map(clients.map((client) => [client.id, client])), [clients]);
+  const filteredClients = useMemo(() => {
+    const query = clientSearch.trim().toLowerCase();
+    if (!query) {
+      return clientOptions;
+    }
+    return clientOptions.filter((client) => client.searchTokens.includes(query));
+  }, [clientOptions, clientSearch]);
+  const selectedClientCount = selectedClientIds.length;
+  const clientSlotsLeft = Math.max(0, MAX_TARGET_CLIENTS - selectedClientCount);
+  const clientLimitReached = clientSlotsLeft === 0;
+  const selectedClientChips = useMemo(
+    () =>
+      selectedClientIds.map((clientId) => ({
+        id: clientId,
+        name: clientLookup.get(clientId)?.name ?? "Client inconnu",
+      })),
+    [clientLookup, selectedClientIds],
+  );
 
   const normalizedCategories = useMemo(() => buildNormalizedCategories(nafCategories), [nafCategories]);
   const allSelectableCodes = useMemo(() => {
@@ -192,8 +318,8 @@ export const SyncModeModal = ({
     if (mode === "day_replay") {
       notes.push({
         tone: "info",
-        title: "Alertes admin uniquement",
-        detail: "Rejouer une journée ne notifie pas les clients et n'avance pas les curseurs.",
+        title: "Destinataires ciblés",
+        detail: "Choisissez les clients à notifier et/ou les administrateurs sans avancer les curseurs.",
       });
     }
     if (mode === "google_pending" && syncModeSendsAlerts(mode)) {
@@ -296,6 +422,29 @@ export const SyncModeModal = ({
     }
   };
 
+  const handleClientToggle = (clientId: string, checked: boolean) => {
+    setSelectedClientIds((current) => {
+      if (checked) {
+        if (current.includes(clientId)) {
+          return current;
+        }
+        if (current.length >= MAX_TARGET_CLIENTS) {
+          setRecipientError(`Maximum ${MAX_TARGET_CLIENTS} clients ciblés.`);
+          return current;
+        }
+        setRecipientError(null);
+        return [...current, clientId];
+      }
+      setRecipientError(null);
+      return current.filter((value) => value !== clientId);
+    });
+  };
+
+  const handleClearSelectedClients = () => {
+    setSelectedClientIds([]);
+    setRecipientError(null);
+  };
+
   const handleSubmit = () => {
     const requiresReplayDate = syncModeRequiresReplayDate(mode);
     if (requiresReplayDate && !replayDate) {
@@ -303,12 +452,28 @@ export const SyncModeModal = ({
       return;
     }
     setFormError(null);
-    onConfirm({
+    if (mode === "day_replay" && !notifyAdmins && selectedClientIds.length === 0) {
+      setRecipientError("Sélectionnez au moins un client ou activez l'envoi administrateur.");
+      return;
+    }
+
+    const nafCodesPayload =
+      selectedNafCodes.length > 0 ? selectedNafCodes.map((code) => denormalizeNafCode(code)) : undefined;
+    const payload: Parameters<typeof onConfirm>[0] = {
       mode,
       replayForDate: requiresReplayDate ? replayDate : undefined,
-      nafCodes:
-        selectedNafCodes.length > 0 ? selectedNafCodes.map((code) => denormalizeNafCode(code)) : undefined,
-    });
+      nafCodes: nafCodesPayload,
+    };
+
+    if (mode === "day_replay") {
+      if (selectedClientIds.length > 0) {
+        payload.targetClientIds = selectedClientIds;
+      }
+      payload.notifyAdmins = notifyAdmins;
+      payload.forceGoogleReplay = forceGoogleReplay;
+    }
+
+    onConfirm(payload);
   };
 
   const isCategoryFullySelected = (codes: string[]) => codes.length > 0 && codes.every((code) => selectedSet.has(code));
@@ -375,6 +540,18 @@ export const SyncModeModal = ({
                           onChange={(event) => setReplayDate(event.target.value)}
                           disabled={isSubmitting}
                         />
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={forceGoogleReplay}
+                            onChange={(event) => setForceGoogleReplay(event.target.checked)}
+                            disabled={isSubmitting}
+                          />
+                          <span>Forcer les appels Google</span>
+                        </label>
+                        <p className="muted small">
+                          Activez cette option pour relancer Google même si les fiches existent déjà pour cette date.
+                        </p>
                       </div>
                     ) : null}
                   </label>
@@ -520,6 +697,122 @@ export const SyncModeModal = ({
             </div>
             {formError ? <p className="muted small error">{formError}</p> : null}
           </section>
+
+          {mode === "day_replay" ? (
+            <section className="recipient-target-panel">
+              <header className="panel-header">
+                <div>
+                  <h3>Destinataires du rejeu</h3>
+                  <p className="muted small">
+                    Choisissez jusqu'à {MAX_TARGET_CLIENTS} clients et/ou les administrateurs pour recevoir les alertes.
+                  </p>
+                </div>
+                <div className="selection-counter">
+                  <strong>{selectedClientCount}</strong>
+                  <span>/ {MAX_TARGET_CLIENTS}</span>
+                  <p className="muted small">{clientSlotsLeft} restant(s)</p>
+                </div>
+              </header>
+
+              <div className="recipient-card">
+                <label className="recipient-option admin">
+                  <div>
+                    <strong>Administrateurs</strong>
+                    <p className="muted small">
+                      Envoie un récapitulatif global de tous les établissements correspondant aux filtres ci-dessus.
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={notifyAdmins}
+                    onChange={(event) => setNotifyAdmins(event.target.checked)}
+                    disabled={isSubmitting}
+                  />
+                </label>
+
+                <div className="recipient-list-header">
+                  <div>
+                    <strong>Clients actifs</strong>
+                    <p className="muted small">
+                      {clientOptions.length} disponible(s) — sélection actuelle {selectedClientCount}
+                    </p>
+                  </div>
+                  <input
+                    type="search"
+                    placeholder="Rechercher un client"
+                    value={clientSearch}
+                    onChange={(event) => setClientSearch(event.target.value)}
+                    disabled={isSubmitting || clientOptions.length === 0}
+                  />
+                </div>
+
+                {isClientsLoading ? (
+                  <p className="muted small">Chargement des clients…</p>
+                ) : clientsError ? (
+                  <p className="muted small error">{clientsError}</p>
+                ) : clientOptions.length === 0 ? (
+                  <p className="muted small">Aucun client actif pour le moment.</p>
+                ) : filteredClients.length === 0 ? (
+                  <p className="muted small">Aucun client ne correspond à votre recherche.</p>
+                ) : (
+                  <div className="recipient-list">
+                    {filteredClients.map((client) => {
+                      const isSelected = selectedClientIds.includes(client.id);
+                      return (
+                        <label
+                          key={client.id}
+                          className={`recipient-option${isSelected ? " selected" : ""}`}
+                        >
+                          <div>
+                            <strong>{client.name}</strong>
+                            <p className="muted small">{client.listingSummary}</p>
+                            <p className="muted small">{client.nafSummary}</p>
+                            <p className="muted small">{client.recipientCount} destinataire(s)</p>
+                          </div>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(event) => handleClientToggle(client.id, event.target.checked)}
+                            disabled={isSubmitting || (!isSelected && clientLimitReached)}
+                          />
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {selectedClientChips.length > 0 ? (
+                  <div className="recipient-selection-preview">
+                    <div className="recipient-chip-list">
+                      {selectedClientChips.map((chip) => (
+                        <span key={chip.id} className="recipient-chip">
+                          {chip.name}
+                          <button
+                            type="button"
+                            aria-label={`Retirer ${chip.name}`}
+                            onClick={() => handleClientToggle(chip.id, false)}
+                            disabled={isSubmitting}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={handleClearSelectedClients}
+                      disabled={isSubmitting}
+                    >
+                      Effacer la sélection
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+
+              {recipientError ? <p className="muted small error">{recipientError}</p> : null}
+            </section>
+          ) : null}
         </div>
 
         <footer className="modal-footer">

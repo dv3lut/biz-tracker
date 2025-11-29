@@ -115,7 +115,15 @@ export const SyncRunsTable = ({
                       <span className="small muted">Type: {run.runType}</span>
                       <br />
                       <span className="small muted">Mode: {describeSyncMode(run.mode)}</span>
-                      <RunModeBadges run={{ mode: run.mode, targetNafCodes: run.targetNafCodes }} />
+                      <RunModeBadges
+                        run={{
+                          mode: run.mode,
+                          targetNafCodes: run.targetNafCodes,
+                          targetClientIds: run.targetClientIds,
+                          notifyAdmins: run.notifyAdmins,
+                          dayReplayForceGoogle: run.dayReplayForceGoogle,
+                        }}
+                      />
                       <br />
                       <span className="small muted">
                         Google: {run.googleEnabled ? "Activé" : "Désactivé"}

@@ -1,20 +1,28 @@
 import { SyncRun } from "../types";
 
 type Props = {
-  run: Pick<SyncRun, "mode" | "targetNafCodes">;
+  run: Pick<SyncRun, "mode" | "targetNafCodes" | "targetClientIds" | "notifyAdmins" | "dayReplayForceGoogle">;
   className?: string;
 };
 
 export const RunModeBadges = ({ run, className }: Props) => {
-  const badges: Array<{ key: string; label: string; tone: "replay" | "naf"; title: string }> = [];
+  const badges: Array<{ key: string; label: string; tone: "replay" | "naf" | "clients" | "admins"; title: string }> = [];
 
   if (run.mode === "day_replay") {
     badges.push({
       key: "replay",
-      label: "Replay admin",
+      label: "Rejeu ciblé",
       tone: "replay",
-      title: "Run de rejeu: alertes limitées aux administrateurs",
+      title: "Rejoue une journée précise avec options de ciblage",
     });
+    if (run.dayReplayForceGoogle) {
+      badges.push({
+        key: "force-google",
+        label: "Google forcé",
+        tone: "replay",
+        title: "Les appels Google ont été forcés pendant ce rejeu",
+      });
+    }
   }
 
   if (run.targetNafCodes && run.targetNafCodes.length > 0) {
@@ -28,6 +36,26 @@ export const RunModeBadges = ({ run, className }: Props) => {
         count === 1
           ? `Synchronisation ciblée sur ${run.targetNafCodes[0]}`
           : `Synchronisation ciblée sur ${preview}${count > 5 ? "…" : ""}`,
+    });
+  }
+
+  if (run.targetClientIds && run.targetClientIds.length > 0) {
+    const count = run.targetClientIds.length;
+    const preview = run.targetClientIds.slice(0, 5).join(", ");
+    badges.push({
+      key: "clients",
+      label: count === 1 ? "1 client ciblé" : `${count} clients ciblés`,
+      tone: "clients",
+      title: count > 5 ? `${preview}…` : preview || "Ciblage clients",
+    });
+  }
+
+  if (run.notifyAdmins === false) {
+    badges.push({
+      key: "admins",
+      label: "Admins désactivés",
+      tone: "admins",
+      title: "Les alertes administrateurs sont volontairement désactivées pour ce run.",
     });
   }
 

@@ -45,6 +45,9 @@ interface SyncRunResponse {
   mode: SyncMode;
   replay_for_date: string | null;
   target_naf_codes: string[] | null;
+  target_client_ids: string[] | null;
+  notify_admins: boolean;
+  day_replay_force_google: boolean;
   started_at: string;
   finished_at: string | null;
   api_call_count: number;
@@ -503,6 +506,9 @@ const toSyncRun = (payload: SyncRunResponse): SyncRun => ({
   estimatedCompletionAt: payload.estimated_completion_at,
   googleEnabled: payload.google_enabled,
   targetNafCodes: payload.target_naf_codes ?? null,
+  targetClientIds: payload.target_client_ids ?? null,
+  notifyAdmins: payload.notify_admins,
+  dayReplayForceGoogle: payload.day_replay_force_google,
   summary: payload.summary ? toRunSummary(payload.summary) : null,
 });
 

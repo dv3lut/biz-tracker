@@ -1,9 +1,10 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { ApiError, googleApi, statsApi, syncApi } from "../../api";
+import { ApiError, clientsApi, googleApi, statsApi, syncApi } from "../../api";
 import { DEFAULT_LISTING_STATUSES } from "../../constants/listingStatuses";
 import type {
+  Client,
   DashboardMetrics,
   GoogleCheckResult,
   GoogleRetryConfig,
@@ -57,7 +58,7 @@ export const DashboardSection = ({ onUnauthorized }: Props) => {
   const [runDetailModal, setRunDetailModal] = useState<RunDetailModalState | null>(null);
   type SyncTriggerSelection = SyncRequestPayload & { mode: SyncMode };
   const [isSyncModeModalOpen, setSyncModeModalOpen] = useState(false);
-  const [pendingSyncRequest, setPendingSyncRequest] = useState<SyncTriggerSelection>({ mode: "full" });
+  const [pendingSyncRequest, setPendingSyncRequest] = useState<SyncTriggerSelection>({ mode: "full", notifyAdmins: true });
   const [isGoogleExportModalOpen, setGoogleExportModalOpen] = useState(false);
   const initialExportRange = useMemo(getDefaultGoogleExportRange, []);
   const [googleExportStartDate, setGoogleExportStartDate] = useState(initialExportRange.start);
@@ -89,6 +90,12 @@ export const DashboardSection = ({ onUnauthorized }: Props) => {
   const syncRunsQuery = useQuery<SyncRun[]>({
     queryKey: ["sync-runs", 10],
     queryFn: () => syncApi.fetchRuns(10),
+  });
+
+  const clientsQuery = useQuery<Client[]>({
+    queryKey: ["clients"],
+    queryFn: () => clientsApi.list(),
+    staleTime: 5 * 60 * 1000,
   });
 
   const hasActiveRun = syncRunsQuery.data?.some((run) => run.status === "running" || run.status === "pending") ?? false;
@@ -177,11 +184,15 @@ export const DashboardSection = ({ onUnauthorized }: Props) => {
 
   const handleConfirmSyncMode = useCallback(
     (payload: SyncTriggerSelection) => {
-      setPendingSyncRequest(payload);
+      const persistedRequest: SyncTriggerSelection = {
+        ...payload,
+        notifyAdmins: payload.notifyAdmins ?? pendingSyncRequest.notifyAdmins ?? true,
+      };
+      setPendingSyncRequest(persistedRequest);
       syncMutation.mutate(payload);
       setSyncModeModalOpen(false);
     },
-    [syncMutation],
+    [pendingSyncRequest.notifyAdmins, syncMutation],
   );
 
   const handleCloseSyncModeModal = useCallback(() => {
@@ -315,6 +326,13 @@ export const DashboardSection = ({ onUnauthorized }: Props) => {
   const statsError = statsQuery.error instanceof Error ? statsQuery.error : null;
   const metricsError = dashboardQuery.error instanceof Error ? dashboardQuery.error : null;
   const googleRetryConfigError = googleRetryConfigQuery.error instanceof Error ? googleRetryConfigQuery.error : null;
+  const clientsError = clientsQuery.error instanceof Error ? clientsQuery.error : null;
+
+  useEffect(() => {
+    if (clientsQuery.error instanceof ApiError && clientsQuery.error.status === 403) {
+      onUnauthorized();
+    }
+  }, [clientsQuery.error, onUnauthorized]);
 
   const manualGoogleCheckState = useMemo(
     () => ({
@@ -389,6 +407,11 @@ export const DashboardSection = ({ onUnauthorized }: Props) => {
         initialReplayDate={pendingSyncRequest.replayForDate ?? null}
         initialNafCodes={pendingSyncRequest.nafCodes ?? []}
         nafCategories={dashboardQuery.data?.nafCategoryBreakdown ?? []}
+        initialTargetClientIds={pendingSyncRequest.targetClientIds ?? null}
+        initialNotifyAdmins={pendingSyncRequest.notifyAdmins}
+        clients={clientsQuery.data ?? []}
+        isClientsLoading={clientsQuery.isLoading}
+        clientsError={clientsError?.message ?? null}
         onConfirm={handleConfirmSyncMode}
         onCancel={handleCloseSyncModeModal}
         isSubmitting={syncMutation.isPending}
