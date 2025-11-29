@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.db import models
 from app.services.establishment_mapper import extract_fields
+from app.utils.naf import normalize_naf_code
 
 from .context import UpdatedEstablishmentInfo
 
@@ -26,7 +27,11 @@ class SyncPersistenceMixin:
         since_creation: date | None = None,
         creation_range: tuple[date, date] | None = None,
     ) -> str:
-        normalized_codes = [code.strip() for code in naf_codes if code and code.strip()]
+        normalized_codes: list[str] = []
+        for code in naf_codes:
+            normalized = normalize_naf_code(code)
+            if normalized:
+                normalized_codes.append(normalized)
         if not normalized_codes:
             raise RuntimeError("Aucun code NAF actif n'est disponible pour construire la requête Sirene.")
 

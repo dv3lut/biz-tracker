@@ -208,6 +208,18 @@ def run_schema_upgrades(engine: Engine) -> None:
     ADD COLUMN IF NOT EXISTS target_naf_codes JSONB
     """,
         """
+        ALTER TABLE sync_runs
+        ADD COLUMN IF NOT EXISTS target_client_ids JSONB
+        """,
+        """
+        ALTER TABLE sync_runs
+        ADD COLUMN IF NOT EXISTS notify_admins BOOLEAN NOT NULL DEFAULT TRUE
+        """,
+    """
+    ALTER TABLE sync_runs
+    ADD COLUMN IF NOT EXISTS day_replay_force_google BOOLEAN NOT NULL DEFAULT FALSE
+    """,
+        """
         ALTER TABLE IF EXISTS naf_categories
         DROP COLUMN IF EXISTS order_index
         """,

@@ -86,11 +86,8 @@ class EstablishmentFormatter:
         if include_google and establishment.google_place_url:
             lines.append(f"  Google: {establishment.google_place_url}")
         if establishment.google_place_url:
-            status_label, origin = self.describe_listing_age(establishment)
-            if origin:
-                lines.append(f"  Statut fiche Google : {status_label} (origine {origin})")
-            else:
-                lines.append(f"  Statut fiche Google : {status_label}")
+            status_label, _ = self.describe_listing_age(establishment)
+            lines.append(f"  Statut fiche Google : {status_label}")
         return lines
 
     def format_address_lines(self, establishment: models.Establishment) -> tuple[str | None, str | None]:

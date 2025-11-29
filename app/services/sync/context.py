@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Sequence
+from uuid import UUID
 
 from sqlalchemy.orm import Session
 
@@ -27,6 +28,9 @@ class SyncContext:
     persist_state: bool = True
     client_notifications_enabled: bool = True
     target_naf_codes: list[str] | None = None
+    admin_notifications_enabled: bool = True
+    target_client_ids: list[UUID] | None = None
+    force_google_replay: bool = False
 
 
 @dataclass

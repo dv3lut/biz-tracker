@@ -42,16 +42,24 @@ class EmailService:
         settings = self._settings
         recipient_list = [addr for addr in recipients if addr]
         if not settings.enabled:
-            _LOGGER.info("Email service disabled; skipping send: %s", subject)
+            _LOGGER.info("Email service disabled; skipping send (subject=%r)", subject)
             return
         if not settings.smtp_host or not settings.from_address:
-            _LOGGER.warning("Email service misconfigured; host or from address missing.")
+            _LOGGER.warning(
+                "Email service misconfigured; host or from address missing (subject=%r)",
+                subject,
+            )
             return
         if not recipient_list:
-            _LOGGER.info("No recipients supplied; nothing to send.")
+            _LOGGER.info("No recipients supplied; nothing to send (subject=%r)", subject)
             return
 
-        _LOGGER.info("Sending email to %s", recipient_list)
+        _LOGGER.info(
+            "Sending email via %s to %s (subject=%r)",
+            settings.provider,
+            recipient_list,
+            subject,
+        )
         with smtplib.SMTP(settings.smtp_host, settings.smtp_port) as server:
             if settings.use_tls:
                 server.starttls()
@@ -65,4 +73,9 @@ class EmailService:
             if html_body:
                 message.add_alternative(html_body, subtype="html")
             server.send_message(message, to_addrs=recipient_list)
-            _LOGGER.debug("Email sent to %s", recipient_list)
+            _LOGGER.debug(
+                "Email sent via %s to %s (subject=%r)",
+                settings.provider,
+                recipient_list,
+                subject,
+            )

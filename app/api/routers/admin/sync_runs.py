@@ -63,6 +63,9 @@ def trigger_sync_run(
         mode=payload.mode,
         replay_for_date=payload.replay_for_date,
         target_naf_codes=payload.naf_codes,
+        target_client_ids=payload.target_client_ids,
+        notify_admins=payload.notify_admins,
+        force_google_replay=payload.force_google_replay,
     )
     if run is None:
         log_event(
@@ -84,6 +87,9 @@ def trigger_sync_run(
         check_informations=payload.check_for_updates,
         mode=payload.mode.value,
         replay_for_date=payload.replay_for_date.isoformat() if payload.replay_for_date else None,
+        target_client_ids=payload.target_client_ids,
+        notify_admins=payload.notify_admins,
+        force_google_replay=payload.force_google_replay,
     )
 
     background_tasks.add_task(

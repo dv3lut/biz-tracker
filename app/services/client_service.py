@@ -94,12 +94,38 @@ class ClientDispatchResult:
 
 
 @dataclass
+class ClientFilterSummary:
+    listing_statuses: list[str]
+    naf_codes: list[str]
+
+
+@dataclass
 class ClientEmailPayload:
     client: models.Client
     subject: str
     text_body: str
     html_body: str | None = None
     establishments: Sequence[models.Establishment] | None = None
+    filters: ClientFilterSummary | None = None
+
+
+def summarize_client_filters(client: models.Client) -> ClientFilterSummary:
+    """Return a snapshot of listing statuses and NAF codes configured for a client."""
+
+    listing_statuses = resolve_client_listing_statuses(client)
+    naf_codes: list[str] = []
+    seen_codes: set[str] = set()
+    for subscription in getattr(client, "subscriptions", []) or []:
+        subcategory = getattr(subscription, "subcategory", None)
+        if not subcategory or not getattr(subcategory, "is_active", True):
+            continue
+        normalized_code = normalize_naf_code(getattr(subcategory, "naf_code", None))
+        if not normalized_code or normalized_code in seen_codes:
+            continue
+        seen_codes.add(normalized_code)
+        naf_codes.append(normalized_code)
+
+    return ClientFilterSummary(listing_statuses=listing_statuses, naf_codes=naf_codes)
 
 
 def resolve_client_listing_statuses(client: models.Client) -> list[str]:

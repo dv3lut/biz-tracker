@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 from typing import Sequence
+from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -20,6 +21,7 @@ from app.services.client_service import (
     dispatch_email_to_clients,
     get_active_clients,
     get_admin_emails,
+    summarize_client_filters,
 )
 from app.services.email_service import EmailService
 
@@ -35,53 +37,50 @@ class AlertService:
         run: models.SyncRun,
         *,
         client_notifications_enabled: bool = True,
+        admin_notifications_enabled: bool = True,
+        target_client_ids: Sequence[UUID] | None = None,
     ) -> None:
         self._session = session
         self._run = run
         self._email_service = EmailService()
         self._formatter = EstablishmentFormatter(session)
         self._client_notifications_enabled = client_notifications_enabled
+        self._admin_notifications_enabled = admin_notifications_enabled
+        self._target_client_ids = tuple(str(value) for value in (target_client_ids or []))
 
     def create_google_alerts(self, establishments: Sequence[models.Establishment]) -> list[models.Alert]:
-        if not establishments:
-            return []
-
         filtered_establishments = [
             item for item in establishments if (item.google_check_status or "").lower() == "found"
         ]
-        if not filtered_establishments:
-            return []
-
         alerts: list[models.Alert] = []
-        for establishment in filtered_establishments:
-            payload = self._formatter.build_payload(establishment)
-            payload["google_place_url"] = establishment.google_place_url
-            payload["google_place_id"] = establishment.google_place_id
-            alert = models.Alert(
-                run_id=self._run.id,
-                siret=establishment.siret,
-                recipients=[],
-                payload=payload,
-            )
-            alerts.append(alert)
-            self._session.add(alert)
+        if filtered_establishments:
+            for establishment in filtered_establishments:
+                payload = self._formatter.build_payload(establishment)
+                payload["google_place_url"] = establishment.google_place_url
+                payload["google_place_id"] = establishment.google_place_id
+                alert = models.Alert(
+                    run_id=self._run.id,
+                    siret=establishment.siret,
+                    recipients=[],
+                    payload=payload,
+                )
+                alerts.append(alert)
+                self._session.add(alert)
 
-        self._session.flush()
+            self._session.flush()
 
-        message_lines = ["Pages Google My Business associées détectées:", ""]
-        for establishment in filtered_establishments:
-            message_lines.extend(self._formatter.format_lines(establishment, include_google=True))
-            message_lines.append("")
-        _ALERT_LOGGER.info("\n".join(message_lines).strip())
-
-        base_client_subject = f"[{self._run.scope_key}] {len(filtered_establishments)} fiche(s) Google détectée(s)"
-        admin_subject = f"{base_client_subject} - administration"
-        admin_text_body, admin_html_body = render_admin_email(self._formatter, filtered_establishments)
+            message_lines = ["Pages Google My Business associées détectées:", ""]
+            for establishment in filtered_establishments:
+                message_lines.extend(self._formatter.format_lines(establishment, include_google=True))
+                message_lines.append("")
+            _ALERT_LOGGER.info("\n".join(message_lines).strip())
+        else:
+            _ALERT_LOGGER.info("Aucune fiche Google détectée pour le run %s", self._run.id)
 
         email_enabled = self._email_service.is_enabled()
         email_configured = self._email_service.is_configured()
         has_previous_success = self._has_previous_successful_run()
-        admin_recipients = get_admin_emails(self._session)
+        admin_recipients = get_admin_emails(self._session) if self._admin_notifications_enabled else []
 
         if self._client_notifications_enabled:
             plan, client_skip_reason = self._prepare_client_dispatch(
@@ -90,6 +89,7 @@ class AlertService:
                 email_enabled=email_enabled,
                 email_configured=email_configured,
                 has_previous_success=has_previous_success,
+                target_client_ids=self._target_client_ids,
             )
         else:
             plan = None
@@ -158,56 +158,70 @@ class AlertService:
                 recipient_count=len(targeted_recipient_addresses),
             )
 
-        admin_skip_reason: str | None = None
-        admin_sent_at: datetime | None = None
-        if not admin_recipients:
-            admin_skip_reason = "no_admin_recipients"
-        elif not email_enabled:
-            admin_skip_reason = "email_disabled"
-        elif not email_configured:
-            admin_skip_reason = "email_not_configured"
-        else:
-            try:
-                self._email_service.send(
-                    admin_subject,
-                    admin_text_body,
-                    admin_recipients,
-                    html_body=admin_html_body,
-                )
-            except Exception as exc:  # noqa: BLE001
-                admin_skip_reason = "send_error"
-                _ALERT_LOGGER.warning("Échec de l'envoi des alertes admin: %s", exc)
-                log_event(
-                    "alerts.email.admin_error",
-                    run_id=str(self._run.id),
-                    scope_key=self._run.scope_key,
-                    recipients=admin_recipients,
-                    error={"type": type(exc).__name__, "message": str(exc)},
-                )
+        if filtered_establishments and self._admin_notifications_enabled:
+            base_client_subject = f"[{self._run.scope_key}] {len(filtered_establishments)} fiche(s) Google détectée(s)"
+            admin_subject = f"{base_client_subject} - administration"
+            admin_text_body, admin_html_body = render_admin_email(self._formatter, filtered_establishments)
+
+            admin_skip_reason: str | None = None
+            admin_sent_at: datetime | None = None
+            if not admin_recipients:
+                admin_skip_reason = "no_admin_recipients"
+            elif not email_enabled:
+                admin_skip_reason = "email_disabled"
+            elif not email_configured:
+                admin_skip_reason = "email_not_configured"
             else:
-                admin_sent_at = datetime.utcnow()
+                try:
+                    self._email_service.send(
+                        admin_subject,
+                        admin_text_body,
+                        admin_recipients,
+                        html_body=admin_html_body,
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    admin_skip_reason = "send_error"
+                    _ALERT_LOGGER.warning("Échec de l'envoi des alertes admin: %s", exc)
+                    log_event(
+                        "alerts.email.admin_error",
+                        run_id=str(self._run.id),
+                        scope_key=self._run.scope_key,
+                        recipients=admin_recipients,
+                        error={"type": type(exc).__name__, "message": str(exc)},
+                    )
+                else:
+                    admin_sent_at = datetime.utcnow()
+                    log_event(
+                        "alerts.email.admin_sent",
+                        run_id=str(self._run.id),
+                        scope_key=self._run.scope_key,
+                        recipient_count=len(admin_recipients),
+                        recipients=admin_recipients,
+                    )
+
+            if admin_skip_reason and admin_skip_reason != "send_error":
                 log_event(
-                    "alerts.email.admin_sent",
+                    "alerts.email.admin_skipped",
                     run_id=str(self._run.id),
                     scope_key=self._run.scope_key,
+                    reason=admin_skip_reason,
                     recipient_count=len(admin_recipients),
                     recipients=admin_recipients,
                 )
 
-        if admin_skip_reason and admin_skip_reason != "send_error":
+            if admin_sent_at:
+                for alert in alerts:
+                    if alert.sent_at is None or alert.sent_at > admin_sent_at:
+                        alert.sent_at = admin_sent_at
+        elif filtered_establishments and not self._admin_notifications_enabled:
             log_event(
                 "alerts.email.admin_skipped",
                 run_id=str(self._run.id),
                 scope_key=self._run.scope_key,
-                reason=admin_skip_reason,
-                recipient_count=len(admin_recipients),
-                recipients=admin_recipients,
+                reason="admin_notifications_disabled",
+                recipient_count=0,
+                recipients=[],
             )
-
-        if admin_sent_at:
-            for alert in alerts:
-                if alert.sent_at is None or alert.sent_at > admin_sent_at:
-                    alert.sent_at = admin_sent_at
 
         return alerts
 
@@ -219,6 +233,7 @@ class AlertService:
         email_enabled: bool,
         email_configured: bool,
         has_previous_success: bool,
+        target_client_ids: Sequence[str] | None = None,
     ) -> tuple[ClientDispatchPlan | None, str | None]:
         if not email_enabled:
             return None, "email_disabled"
@@ -231,20 +246,39 @@ class AlertService:
         if not active_clients:
             return None, "no_clients"
 
-        eligible_clients = [client for client in active_clients if any(recipient.email for recipient in client.recipients)]
+        if target_client_ids:
+            target_lookup: set[str] = set()
+            for client_id in target_client_ids:
+                try:
+                    target_lookup.add(str(UUID(str(client_id))))
+                except (TypeError, ValueError):
+                    continue
+            if not target_lookup:
+                return None, "no_targeted_clients"
+            filtered_clients = [client for client in active_clients if str(getattr(client, "id", "")) in target_lookup]
+            if not filtered_clients:
+                return None, "no_targeted_clients"
+        else:
+            filtered_clients = active_clients
+
+        eligible_clients = [client for client in filtered_clients if any(recipient.email for recipient in client.recipients)]
         if not eligible_clients:
             return None, "no_active_recipients"
 
         assignment_map, filters_configured = assign_establishments_to_clients(eligible_clients, establishments)
+        send_zero_digest = len(establishments) == 0 or bool(target_client_ids)
         client_payloads: list[ClientEmailPayload] = []
         for client in eligible_clients:
             matches = assignment_map.get(client.id, [])
-            if not matches and not filters_configured:
-                matches = list(establishments)
-            if not matches:
+            if not matches and not send_zero_digest:
                 continue
+            filter_summary = summarize_client_filters(client)
             subject = f"[{self._run.scope_key}] {len(matches)} fiche(s) Google détectée(s)"
-            text_body, html_body = render_client_email(self._formatter, matches)
+            text_body, html_body = render_client_email(
+                self._formatter,
+                matches,
+                filters=filter_summary,
+            )
             client_payloads.append(
                 ClientEmailPayload(
                     client=client,
@@ -252,6 +286,7 @@ class AlertService:
                     text_body=text_body,
                     html_body=html_body,
                     establishments=matches,
+                    filters=filter_summary,
                 )
             )
 

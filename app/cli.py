@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, date
 from typing import List, Optional
+from uuid import UUID
 
 import typer
 import uvicorn
@@ -47,6 +48,9 @@ def _execute_sync(
     mode: SyncMode,
     replay_for_date: date | None = None,
     target_naf_codes: list[str] | None = None,
+    target_client_ids: list[str] | None = None,
+    notify_admins: bool = True,
+    force_google_replay: bool = False,
 ) -> None:
     if replay_for_date and not mode.requires_replay_date:
         raise typer.BadParameter("--replay-for-date est uniquement compatible avec le mode 'day_replay'.")
@@ -59,6 +63,9 @@ def _execute_sync(
             mode=mode,
             replay_for_date=replay_for_date,
             target_naf_codes=target_naf_codes,
+            target_client_ids=[UUID(value) for value in target_client_ids] if target_client_ids else None,
+            notify_admins=notify_admins,
+            force_google_replay=force_google_replay,
         )
         if run is None:
             typer.echo("Aucune mise à jour à synchroniser.")
@@ -102,6 +109,21 @@ def sync(
         "--naf-code",
         help="Code NAF ciblé (ex: 5610A). Peut être répété pour filtrer plusieurs codes.",
     ),
+    target_client_ids: Optional[List[str]] = typer.Option(
+        None,
+        "--target-client",
+        help="Client (UUID) à notifier lors d'un rejeu. Peut être répété.",
+    ),
+    notify_admins: bool = typer.Option(
+        True,
+        "--notify-admins/--skip-admins",
+        help="Contrôle l'envoi de l'alerte administrateur (mode 'day_replay').",
+    ),
+    force_google_replay: bool = typer.Option(
+        False,
+        "--force-google-replay/--no-force-google-replay",
+        help="Force un nouvel enrichissement Google lors d'un rejeu même si des fiches existent déjà.",
+    ),
 ) -> None:
     """Lancer la synchronisation unifiée des restaurants."""
 
@@ -111,12 +133,18 @@ def sync(
         mode=mode,
         replay_for_date=replay_date,
         naf_codes=naf_codes,
+        target_client_ids=target_client_ids,
+        notify_admins=notify_admins,
+        force_google_replay=force_google_replay,
     )
     _execute_sync(
         check_for_updates=request.check_for_updates,
         mode=request.mode,
         replay_for_date=request.replay_for_date,
         target_naf_codes=request.naf_codes,
+        target_client_ids=[str(client_id) for client_id in request.target_client_ids] if request.target_client_ids else None,
+        notify_admins=request.notify_admins,
+        force_google_replay=request.force_google_replay,
     )
 
 

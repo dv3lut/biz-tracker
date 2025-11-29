@@ -158,4 +158,6 @@ def serialize_sync_run(run: "Any") -> dict[str, Any]:
         "notes": run.notes,
         "resumed_from_run_id": str(run.resumed_from_run_id) if run.resumed_from_run_id else None,
         "target_naf_codes": list(run.target_naf_codes or []),
+        "target_client_ids": list(run.target_client_ids or []),
+        "notify_admins": bool(getattr(run, "notify_admins", True)),
     }

@@ -8,6 +8,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator, model_validator
 
 from app.services.sync.mode import SyncMode
+from app.utils.naf import normalize_naf_code
 
 
 class SyncRunOut(BaseModel):
@@ -40,6 +41,18 @@ class SyncRunOut(BaseModel):
     target_naf_codes: list[str] | None = Field(
         default=None,
         description="Liste optionnelle des codes NAF ciblés par ce run.",
+    )
+    target_client_ids: list[UUID] | None = Field(
+        default=None,
+        description="Clients explicitement ciblés lors de ce run (mode 'day_replay' uniquement).",
+    )
+    notify_admins: bool = Field(
+        default=True,
+        description="Indique si les alertes de ce run sont envoyées aux administrateurs.",
+    )
+    day_replay_force_google: bool = Field(
+        default=False,
+        description="Indique si les appels Google ont été forcés lors d'un rejeu.",
     )
     total_expected_records: int | None = None
     progress: float | None = None
@@ -137,6 +150,18 @@ class SyncRequest(BaseModel):
         default=None,
         description="Filtre optionnel de codes NAF (ex: 5610A) à rejouer quel que soit le mode.",
     )
+    target_client_ids: list[UUID] | None = Field(
+        default=None,
+        description="Limiter l'envoi des alertes à une liste précise de clients (mode 'day_replay').",
+    )
+    notify_admins: bool = Field(
+        default=True,
+        description="Autorise l'envoi des alertes administrateurs lors d'un rejeu (mode 'day_replay').",
+    )
+    force_google_replay: bool = Field(
+        default=False,
+        description="Force les appels Google lors d'un rejeu même si des fiches existent déjà.",
+    )
 
     @field_validator("naf_codes")
     @classmethod
@@ -146,19 +171,37 @@ class SyncRequest(BaseModel):
         normalized: list[str] = []
         seen: set[str] = set()
         for raw in value:
-            candidate = (raw or "").strip().upper().replace(".", "").replace(" ", "")
-            if not candidate:
+            candidate = (raw or "").strip().upper().replace(" ", "")
+            normalized_code = normalize_naf_code(candidate)
+            if not normalized_code:
+                raise ValueError("Chaque code NAF doit contenir 4 chiffres suivis d'une lettre (ex: 56.10A).")
+            if normalized_code in seen:
                 continue
-            if len(candidate) not in (4, 5) or not candidate[:4].isdigit():
-                raise ValueError("Chaque code NAF doit contenir 4 chiffres suivis éventuellement d'une lettre.")
-            if len(candidate) == 5 and not candidate[4].isalpha():
-                raise ValueError("Chaque code NAF doit se terminer par une lettre.")
-            if candidate in seen:
-                continue
-            seen.add(candidate)
-            normalized.append(candidate)
+            seen.add(normalized_code)
+            normalized.append(normalized_code)
             if len(normalized) > 25:
                 raise ValueError("Maximum 25 codes NAF ciblés par synchronisation.")
+        return normalized or None
+
+    @field_validator("target_client_ids")
+    @classmethod
+    def validate_target_clients(cls, value: list[UUID] | None) -> list[UUID] | None:
+        if not value:
+            return None
+        normalized: list[UUID] = []
+        seen: set[str] = set()
+        for raw in value:
+            try:
+                candidate = UUID(str(raw))
+            except (TypeError, ValueError) as exc:  # noqa: PERF203 - explicit error for clarity
+                raise ValueError("Chaque client ciblé doit être un UUID valide.") from exc
+            candidate_key = str(candidate)
+            if candidate_key in seen:
+                continue
+            seen.add(candidate_key)
+            normalized.append(candidate)
+            if len(normalized) > 50:
+                raise ValueError("Maximum 50 clients ciblés par synchronisation.")
         return normalized or None
 
     @model_validator(mode="after")
@@ -169,6 +212,12 @@ class SyncRequest(BaseModel):
             raise ValueError("La date de rejeu n'est disponible qu'en mode 'day_replay'.")
         if self.replay_for_date and self.replay_for_date > datetime.utcnow().date():
             raise ValueError("Impossible de rejouer une journée future.")
+        if self.target_client_ids and self.mode is not SyncMode.DAY_REPLAY:
+            raise ValueError("Le ciblage de clients est disponible uniquement en mode 'day_replay'.")
+        if self.notify_admins is False and self.mode is not SyncMode.DAY_REPLAY:
+            raise ValueError("La désactivation des notifications admin est réservée au mode 'day_replay'.")
+        if self.force_google_replay and self.mode is not SyncMode.DAY_REPLAY:
+            raise ValueError("Le forçage des appels Google est disponible uniquement en mode 'day_replay'.")
         return self
 
 

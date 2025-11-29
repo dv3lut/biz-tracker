@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 from contextlib import ExitStack, contextmanager
+from datetime import date
 from types import SimpleNamespace
 import unittest
 from unittest.mock import MagicMock, patch
+from uuid import uuid4
 
 from app.services.alert_service import AlertService
 
@@ -17,18 +19,44 @@ class AlertServiceFilteringTests(unittest.TestCase):
         self.run = SimpleNamespace(id="run-1", scope_key="restaurants")
 
     @contextmanager
-    def _patched_dependencies(self):
+    def _patched_dependencies(
+        self,
+        *,
+        active_clients: list[SimpleNamespace] | None = None,
+        admin_recipients: list[str] | None = None,
+        client_emails: list[str] | None = None,
+        assignment_map: dict | None = None,
+        filters_configured: bool = False,
+    ):
         stack = ExitStack()
         email_service = MagicMock()
-        email_service.is_enabled.return_value = False
-        email_service.is_configured.return_value = False
+        email_service.is_enabled.return_value = True
+        email_service.is_configured.return_value = True
         stack.enter_context(patch("app.services.alert_service.EmailService", return_value=email_service))
-        stack.enter_context(patch("app.services.alert_service.get_active_clients", return_value=[]))
-        stack.enter_context(patch("app.services.alert_service.get_admin_emails", return_value=[]))
         stack.enter_context(
-            patch("app.services.alert_service.assign_establishments_to_clients", return_value=({}, False))
+            patch(
+                "app.services.alert_service.get_active_clients",
+                return_value=active_clients or [],
+            )
         )
-        stack.enter_context(patch("app.services.alert_service.collect_client_emails", return_value=[]))
+        stack.enter_context(
+            patch(
+                "app.services.alert_service.get_admin_emails",
+                return_value=admin_recipients or [],
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.services.alert_service.assign_establishments_to_clients",
+                return_value=(assignment_map or {}, filters_configured),
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.services.alert_service.collect_client_emails",
+                return_value=client_emails or [],
+            )
+        )
         dispatch_mock = MagicMock(
             return_value=SimpleNamespace(delivered=[], failed=[], sent_at=None)
         )
@@ -40,7 +68,7 @@ class AlertServiceFilteringTests(unittest.TestCase):
         )
         log_mock = stack.enter_context(patch("app.services.alert_service.log_event"))
         try:
-            yield SimpleNamespace(dispatch_mock=dispatch_mock, log_mock=log_mock)
+            yield SimpleNamespace(dispatch_mock=dispatch_mock, log_mock=log_mock, email_service=email_service)
         finally:
             stack.close()
 
@@ -129,6 +157,112 @@ class AlertServiceFilteringTests(unittest.TestCase):
         deps.dispatch_mock.assert_not_called()
         reasons = [kwargs.get("reason") for _, kwargs in deps.log_mock.call_args_list]
         self.assertIn("client_notifications_disabled", [reason for reason in reasons if reason])
+
+    def test_sends_digest_when_no_establishments(self) -> None:
+        client = SimpleNamespace(
+            id="client-1",
+            name="Client A",
+            recipients=[SimpleNamespace(email="client@example.com")],
+            subscriptions=[],
+            listing_statuses=None,
+            start_date=date.today(),
+            end_date=None,
+        )
+
+        with self._patched_dependencies(active_clients=[client]) as deps:
+            service = AlertService(self.session, self.run)
+            alerts = service.create_google_alerts([])
+
+        self.assertEqual(alerts, [])
+        deps.dispatch_mock.assert_called_once()
+        payloads = deps.dispatch_mock.call_args[0][1]
+        self.assertEqual(len(payloads), 1)
+        self.assertEqual(payloads[0].subject, "[restaurants] 0 fiche(s) Google détectée(s)")
+
+    def test_targeted_clients_receive_zero_digest(self) -> None:
+        client_a = SimpleNamespace(
+            id=uuid4(),
+            name="Client A",
+            recipients=[SimpleNamespace(email="a@example.com")],
+            subscriptions=[],
+            listing_statuses=None,
+            start_date=date.today(),
+            end_date=None,
+        )
+        client_b = SimpleNamespace(
+            id=uuid4(),
+            name="Client B",
+            recipients=[SimpleNamespace(email="b@example.com")],
+            subscriptions=[],
+            listing_statuses=None,
+            start_date=date.today(),
+            end_date=None,
+        )
+
+        with self._patched_dependencies(active_clients=[client_a, client_b]) as deps:
+            service = AlertService(
+                self.session,
+                self.run,
+                target_client_ids=[client_a.id],
+            )
+            service.create_google_alerts([])
+
+        deps.dispatch_mock.assert_called_once()
+        payloads = deps.dispatch_mock.call_args[0][1]
+        self.assertEqual(len(payloads), 1)
+        self.assertEqual(payloads[0].client.id, client_a.id)
+
+    def test_targeted_clients_receive_zero_digest_even_when_other_matches_exist(self) -> None:
+        client_a = SimpleNamespace(
+            id=uuid4(),
+            name="Client A",
+            recipients=[SimpleNamespace(email="a@example.com")],
+            subscriptions=[],
+            listing_statuses=None,
+            start_date=date.today(),
+            end_date=None,
+        )
+        client_b = SimpleNamespace(
+            id=uuid4(),
+            name="Client B",
+            recipients=[SimpleNamespace(email="b@example.com")],
+            subscriptions=[],
+            listing_statuses=None,
+            start_date=date.today(),
+            end_date=None,
+        )
+        establishment = self._make_establishment("recent_creation", suffix="5")
+
+        with self._patched_dependencies(
+            active_clients=[client_a, client_b],
+            assignment_map={},
+            filters_configured=True,
+        ) as deps:
+            service = AlertService(
+                self.session,
+                self.run,
+                target_client_ids=[client_a.id],
+            )
+            service.create_google_alerts([establishment])
+
+        deps.dispatch_mock.assert_called_once()
+        payloads = deps.dispatch_mock.call_args[0][1]
+        self.assertEqual(len(payloads), 1)
+        self.assertEqual(payloads[0].client.id, client_a.id)
+        self.assertEqual(payloads[0].subject, "[restaurants] 0 fiche(s) Google détectée(s)")
+
+    def test_admin_notifications_can_be_disabled(self) -> None:
+        establishment = self._make_establishment("recent_creation", suffix="9")
+
+        with self._patched_dependencies(admin_recipients=["admin@example.com"]) as deps:
+            service = AlertService(
+                self.session,
+                self.run,
+                admin_notifications_enabled=False,
+            )
+            service.create_google_alerts([establishment])
+
+        deps.email_service.send.assert_not_called()
 
 
 if __name__ == "__main__":
