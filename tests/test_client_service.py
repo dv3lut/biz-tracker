@@ -5,6 +5,7 @@ import unittest
 from types import SimpleNamespace
 from uuid import UUID, uuid4
 
+from app.services import client_service
 from app.services.client_service import assign_establishments_to_clients, filter_clients_by_listing_status
 
 
@@ -35,6 +36,49 @@ def _make_establishment(naf_code: str, status: str, *, siret: str) -> SimpleName
 
 
 class ClientServiceListingStatusTests(unittest.TestCase):
+    def test_get_active_clients_and_all_clients_query_session(self) -> None:
+        client = _make_client()
+
+        class DummyResult:
+            def __init__(self, values):
+                self._values = values
+
+            def scalars(self):
+                return iter(self._values)
+
+        class DummySession:
+            def __init__(self):
+                self.calls = 0
+
+            def execute(self, stmt):  # noqa: ARG002 - we only count invocations
+                self.calls += 1
+                return DummyResult([client])
+
+        session = DummySession()
+
+        active_clients = client_service.get_active_clients(session)
+        all_clients = client_service.get_all_clients(session)
+
+        self.assertEqual(active_clients, [client])
+        self.assertEqual(all_clients, [client])
+        self.assertEqual(session.calls, 2)
+
+    def test_get_admin_emails_filters_empty_values(self) -> None:
+        class DummyResult:
+            def __init__(self, values):
+                self._values = values
+
+            def scalars(self):
+                return iter(self._values)
+
+        class DummySession:
+            def execute(self, stmt):  # noqa: ARG002
+                return DummyResult(["alerts@example.com", "", None])
+
+        emails = client_service.get_admin_emails(DummySession())
+
+        self.assertEqual(emails, ["alerts@example.com"])
+
     def test_assignments_filter_by_status_without_subscriptions(self) -> None:
         clients = [
             _make_client(listing_statuses=["recent_creation"], identifier=uuid4()),

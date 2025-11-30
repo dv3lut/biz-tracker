@@ -14,6 +14,7 @@ from app.db.session import session_scope
 from app.observability import log_event, serialize_sync_run
 from app.services.sync.context import SyncContext, SyncResult
 from app.services.sync.mode import DEFAULT_SYNC_MODE, SyncMode
+from app.utils.dates import utcnow
 
 from .preparation import SyncRunPreparationMixin
 from .utils import log_and_print
@@ -67,7 +68,7 @@ class SyncRunnerMixin(SyncRunPreparationMixin):
         except Exception as exc:
             session.rollback()
             run.status = "failed"
-            run.finished_at = datetime.utcnow()
+            run.finished_at = utcnow()
             session.commit()
             log_event(
                 "sync.run.failed",
@@ -96,7 +97,7 @@ class SyncRunnerMixin(SyncRunPreparationMixin):
                     return
                 state = self._get_or_create_state(session, run.scope_key)
                 run.status = "running"
-                run.started_at = datetime.utcnow()
+                run.started_at = utcnow()
                 session.commit()
 
                 log_event(
@@ -141,7 +142,7 @@ class SyncRunnerMixin(SyncRunPreparationMixin):
                 except Exception as exc:
                     session.rollback()
                     run.status = "failed"
-                    run.finished_at = datetime.utcnow()
+                    run.finished_at = utcnow()
                     session.commit()
                     log_event(
                         "sync.run.failed",
@@ -162,7 +163,7 @@ class SyncRunnerMixin(SyncRunPreparationMixin):
                 run = session.get(models.SyncRun, run_id)
                 if run:
                     run.status = "failed"
-                    run.finished_at = datetime.utcnow()
+                    run.finished_at = utcnow()
                     session.commit()
 
     def _finish_run(
@@ -175,7 +176,7 @@ class SyncRunnerMixin(SyncRunPreparationMixin):
         mode: SyncMode | None = None,
     ) -> None:
         run.status = "success"
-        run.finished_at = datetime.utcnow()
+        run.finished_at = utcnow()
         try:
             resolved_mode = mode or SyncMode(run.mode)
         except ValueError:

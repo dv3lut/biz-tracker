@@ -81,6 +81,14 @@ Toutes les commandes passent par `python -m app …` (Typer).
 
 Des cibles `Makefile` équivalentes existent (`make init-db`, `make sync`, `make serve`, `make sync-force`, etc.).
 
+## Tests & couverture
+
+- Installer les dépendances de développement : `make install-dev` (équivalent à `pip install -r requirements-dev.txt`).
+- Lancer la suite unitaire + couverture : `make test`. La configuration `pytest.ini` active automatiquement `pytest-cov` avec le seuil `95 %` défini dans `.coveragerc`.
+- Le rapport terminal affiche aussi les fichiers manquants (`term-missing`) et génère `coverage.xml` (utile pour les outils CI / IDE).
+
+Un workflow GitHub Actions (`.github/workflows/backend-tests.yml`) exécute ces étapes à chaque `push` / `pull request` impactant le dossier backend et bloque les déploiements sous le seuil requis.
+
 ## Pipeline de synchronisation
 
 1. **Préparation du run** (`SyncService.prepare_sync_run`) : création d'un `sync_run` en statut `pending`, calcul du checksum de requête, option de vérification du service `informations` pour éviter un déclenchement inutile.

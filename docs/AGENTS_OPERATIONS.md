@@ -8,6 +8,12 @@
 - Optionnel : activer l’enrichissement Google Places en définissant `GOOGLE__API_KEY` (clé API avec Places + Geocoding activées et facturation). Sans clé, le service reste inactif.
 - Pour chaque client, définir les statuts de fiches Google souhaités (`recent_creation`, `recent_creation_missing_contact`, `not_recent_creation`) directement dans l’UI. Cette sélection conditionne les alertes envoyées et les exports générés pour ce client.
 
+## Vérifications QA (fin de tâche & pré-déploiement)
+- **Tests obligatoires** : `cd biz-tracker-back && .venv/bin/python -m pytest -W error`. Le profil pytest applique automatiquement `--cov=app --cov-config=.coveragerc` ; le seuil `fail_under=95` dans `.coveragerc` rend la couverture bloquante.
+- **Objectif** : zéro warning et 100 % de tests verts avant de considérer une tâche terminée ou de lancer `scripts/deploy.sh` / `python -m app serve` sur un environnement partagé.
+- **Traçabilité** : reporter explicitement dans les comptes rendus de tâche que la commande ci-dessus a été exécutée et qu’elle est passée, sinon bloquer le merge/déploiement.
+- **Optionnel mais recommandé** : lorsqu’une tâche touche aussi le frontend, lancer `source ~/.nvm/nvm.sh && npm run build` pour vérifier TypeScript avant de clore la MR.
+
 ## Exécutions
 - **Initiale** : `python -m app sync --no-check-for-updates` pour forcer une collecte complète (chaque run repart désormais de zéro).
 - **Récurrente** : `python -m app sync --check-for-updates` afin de consulter le `service informations` et d’éviter un run si rien n’a changé. En production, l’API démarre un scheduler interne (`SyncScheduler`) qui applique la même vérification toutes les `sync.auto_poll_minutes` minutes, sous réserve du délai minimum `sync.minimum_delay_minutes` entre deux runs.

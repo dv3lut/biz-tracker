@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.db import models
 from app.services.establishment_mapper import extract_fields
+from app.utils.dates import utcnow
 from app.utils.naf import normalize_naf_code
 
 from .context import UpdatedEstablishmentInfo
@@ -101,7 +102,7 @@ class SyncPersistenceMixin:
     ) -> tuple[list[models.Establishment], list[UpdatedEstablishmentInfo]]:
         new_entities: list[models.Establishment] = []
         updated_entities: list[UpdatedEstablishmentInfo] = []
-        now = datetime.utcnow()
+        now = utcnow()
         for payload in etablissements:
             fields = extract_fields(payload)
             siret = fields.get("siret")

@@ -8,6 +8,7 @@ from unittest.mock import MagicMock
 
 from app.services.alerts.email_renderer import render_admin_email, render_client_email
 from app.services.alerts.formatter import EstablishmentFormatter
+from app.services.client_service import ClientFilterSummary
 
 
 class EmailRendererTests(unittest.TestCase):
@@ -92,6 +93,24 @@ class EmailRendererTests(unittest.TestCase):
         self.assertIn("Statut&nbsp;: Création récente (contact manquant)", html_body)
         self.assertNotIn("origine", text_body)
         self.assertNotIn("origine", html_body)
+
+    def test_client_email_summary_with_filters_and_missing_links(self) -> None:
+        establishment = self._make_establishment(name="Sans URL", status="recent_creation_missing_contact", google_url=None)
+        filters = ClientFilterSummary(listing_statuses=["recent_creation"], naf_codes=["5610A"])
+
+        text_body, html_body = render_client_email(self.formatter, [establishment], filters=filters)
+
+        self.assertIn("Statuts Google surveillés", text_body)
+        self.assertIn("Codes NAF ciblés", text_body)
+        self.assertIn("Lien Google indisponible", html_body)
+        self.assertIn("Statuts Google surveillés", html_body)
+
+    def test_client_email_zero_matches_prompts_future_notification(self) -> None:
+        text_body, html_body = render_client_email(self.formatter, [])
+
+        self.assertIn("0 nouvel établissement détecté", text_body)
+        self.assertIn("Nous vous notifierons", text_body)
+        self.assertIn("0 nouvel établissement détecté", html_body)
 
 
 if __name__ == "__main__":

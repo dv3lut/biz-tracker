@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.db import models
 from app.services.email_service import EmailService
+from app.utils.dates import utcnow
 from app.utils.google_listing import (
     FILTERABLE_LISTING_STATUSES,
     default_listing_statuses,
@@ -281,7 +282,7 @@ def dispatch_email_to_clients(
         if not recipients:
             continue
         if timestamp is None:
-            timestamp = datetime.utcnow()
+            timestamp = utcnow()
         try:
             email_service.send(payload.subject, payload.text_body, recipients, html_body=payload.html_body)
         except Exception as exc:  # noqa: BLE001 - let caller handle logging

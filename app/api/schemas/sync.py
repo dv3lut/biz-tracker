@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validat
 
 from app.services.sync.mode import SyncMode
 from app.services.sync.replay_reference import DayReplayReference, DEFAULT_DAY_REPLAY_REFERENCE
+from app.utils.dates import utcnow
 from app.utils.naf import normalize_naf_code
 
 
@@ -222,7 +223,7 @@ class SyncRequest(BaseModel):
             raise ValueError("Une date est requise pour rejouer une journée.")
         if self.replay_for_date and not self.mode.requires_replay_date:
             raise ValueError("La date de rejeu n'est disponible qu'en mode 'day_replay'.")
-        if self.replay_for_date and self.replay_for_date > datetime.utcnow().date():
+        if self.replay_for_date and self.replay_for_date > utcnow().date():
             raise ValueError("Impossible de rejouer une journée future.")
         if self.target_client_ids and self.mode is not SyncMode.DAY_REPLAY:
             raise ValueError("Le ciblage de clients est disponible uniquement en mode 'day_replay'.")

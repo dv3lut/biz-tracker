@@ -30,6 +30,7 @@ from app.services.client_service import (
 from app.services.email_service import EmailService
 from app.services.export_service import build_google_places_workbook
 from app.services.google_business_service import GoogleBusinessService
+from app.utils.dates import utcnow
 from app.utils.google_listing import normalize_listing_age_status, normalize_listing_status_filters
 
 from .common import format_establishment_summary
@@ -267,10 +268,10 @@ def build_google_places_export_response(
     try:
         selected_statuses = normalize_listing_status_filters(raw_listing_statuses)
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
     if not selected_statuses:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Sélectionnez au moins un statut de fiche Google.",
         )
     allowed_statuses = set(selected_statuses)
@@ -310,7 +311,7 @@ def build_google_places_export_response(
         mode=mode,
         subcategory_lookup=subcategory_lookup,
     )
-    timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+    timestamp = utcnow().strftime("%Y%m%d-%H%M%S")
     filename = f"biz-tracker-google-places-{mode}-{timestamp}.xlsx"
 
     log_event(

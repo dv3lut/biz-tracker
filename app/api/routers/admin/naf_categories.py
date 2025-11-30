@@ -26,7 +26,10 @@ router = APIRouter(tags=["admin"])
 def _normalize_name(value: str, *, field: str) -> str:
     normalized = value.strip()
     if not normalized:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Le champ {field} est obligatoire.")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"Le champ {field} est obligatoire.",
+        )
     return normalized
 
 
@@ -144,7 +147,7 @@ def create_naf_subcategory(payload: NafSubCategoryCreate, session: Session = Dep
     try:
         naf_code = ensure_valid_naf_code(payload.naf_code)
     except ValueError as exc:  # noqa: BLE001
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
 
     price_cents = euros_to_cents(payload.price_eur)
     description = (payload.description.strip() or None) if payload.description is not None else None
@@ -188,7 +191,7 @@ def update_naf_subcategory(
         try:
             subcategory.naf_code = ensure_valid_naf_code(payload.naf_code)
         except ValueError as exc:  # noqa: BLE001
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
     if payload.price_eur is not None:
         subcategory.price_cents = euros_to_cents(payload.price_eur)
     if payload.is_active is not None:

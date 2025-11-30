@@ -14,7 +14,7 @@ from app.observability import log_event, serialize_sync_run
 from app.services.sync.context import SyncContext
 from app.services.sync.mode import DEFAULT_SYNC_MODE, SyncMode
 from app.services.sync.replay_reference import DEFAULT_DAY_REPLAY_REFERENCE, DayReplayReference
-from app.utils.dates import parse_datetime
+from app.utils.dates import parse_datetime, utcnow
 
 from .utils import append_run_note, format_target_naf_note, normalize_text
 
@@ -47,7 +47,7 @@ class SyncRunPreparationMixin:
         if mode.requires_replay_date:
             if replay_for_date is None:
                 raise ValueError("Une date doit être fournie pour le mode 'day_replay'.")
-            if replay_for_date > datetime.utcnow().date():
+            if replay_for_date > utcnow().date():
                 raise ValueError("Impossible de rejouer une journée future.")
             run = self._start_run(
                 session,

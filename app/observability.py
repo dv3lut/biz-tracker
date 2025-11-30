@@ -8,6 +8,7 @@ from typing import Any, Mapping, MutableMapping
 from uuid import UUID
 
 from app.config import get_settings
+from app.utils.dates import utcnow
 
 _OBSERVABILITY_LOGGER = logging.getLogger("observability")
 
@@ -33,7 +34,7 @@ def _normalize(value: Any) -> Any:
 def log_event(event_name: str, *, level: int = logging.INFO, message: str | None = None, **fields: Any) -> None:
     settings = get_settings()
     payload: MutableMapping[str, Any] = {
-        "@timestamp": datetime.utcnow().isoformat(timespec="milliseconds") + "Z",
+        "@timestamp": utcnow().isoformat(timespec="milliseconds") + "Z",
         "event": {"name": event_name},
         "service": {"name": settings.logging.service_name},
     }

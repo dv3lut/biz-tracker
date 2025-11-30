@@ -48,7 +48,7 @@
   - Nouveaux endpoints : `GET /admin/google/places-export` (XLSX), `GET /admin/stats/dashboard` (agrégations journalières) et journalisation `sync.google.summary`.
 - **CORS** : middleware FastAPI activé. La liste des origines autorisées est configurable via `API__ALLOWED_ORIGINS` (liste JSON ou chaîne séparée par des virgules, valeur par défaut `http://localhost:5173`).
 - **CLI** : Typer (`python -m app …`). Commandes `init-db`, `sync`, `serve` (lance Uvicorn). Aliases historiques `sync-full` et `sync-incremental` redirigent vers `sync`.
-- **Tests & QA** : placeholder `make lint` (compileall). Prévoir pytest/ruff ultérieurement.
+- **Tests & QA** : exécuter systématiquement `python -m pytest -W error` depuis `biz-tracker-back/` (le `pytest.ini` ajoute `--cov=app --cov-report=term-missing --cov-report=xml --cov-config=.coveragerc`). La CI locale doit rester à ≥95 % de couverture et sans aucun warning ; si des scripts automatisés sont ajoutés (`make test`, `tox`, etc.), ils doivent appeler cette commande en interne.
 
 ## UI d’administration
 

@@ -24,6 +24,7 @@ from app.services.client_service import (
     summarize_client_filters,
 )
 from app.services.email_service import EmailService
+from app.utils.dates import utcnow
 
 _ALERT_LOGGER = logging.getLogger("alerts")
 
@@ -190,7 +191,7 @@ class AlertService:
                         error={"type": type(exc).__name__, "message": str(exc)},
                     )
                 else:
-                    admin_sent_at = datetime.utcnow()
+                    admin_sent_at = utcnow()
                     log_event(
                         "alerts.email.admin_sent",
                         run_id=str(self._run.id),

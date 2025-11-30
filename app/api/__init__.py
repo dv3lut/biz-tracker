@@ -1,6 +1,8 @@
 """FastAPI application factory."""
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -11,6 +13,15 @@ from app.services.sync_scheduler import SyncScheduler
 from .routers import admin, health
 
 _SYNC_SCHEDULER = SyncScheduler()
+
+
+@asynccontextmanager
+async def _lifespan(_: FastAPI):
+    _SYNC_SCHEDULER.start()
+    try:
+        yield
+    finally:
+        _SYNC_SCHEDULER.stop()
 
 
 def create_app() -> FastAPI:
@@ -26,6 +37,7 @@ def create_app() -> FastAPI:
         docs_url=docs_url,
         redoc_url=redoc_url,
         openapi_url="/openapi.json" if settings.api.docs_enabled else None,
+        lifespan=_lifespan,
     )
 
     if settings.api.allowed_origins:
@@ -38,14 +50,6 @@ def create_app() -> FastAPI:
 
     app.include_router(health.router)
     app.include_router(admin.router)
-
-    @app.on_event("startup")
-    async def _start_scheduler() -> None:
-        _SYNC_SCHEDULER.start()
-
-    @app.on_event("shutdown")
-    async def _stop_scheduler() -> None:
-        _SYNC_SCHEDULER.stop()
 
     return app
 

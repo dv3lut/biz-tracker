@@ -18,7 +18,7 @@ from app.services.sync.google_enrichment import create_google_progress_callback,
 from app.services.sync.google_only import collect_google_only, load_google_resync_targets
 from app.services.sync.mode import SyncMode
 from app.services.sync.replay_reference import DEFAULT_DAY_REPLAY_REFERENCE, DayReplayReference
-from app.utils.dates import subtract_months
+from app.utils.dates import subtract_months, utcnow
 from app.utils.hashing import sha256_digest
 
 from .context import SyncContext, SyncResult, UpdatedEstablishmentInfo
@@ -387,7 +387,7 @@ class SyncCollectorMixin(SyncPersistenceMixin):
         return candidate
 
     def _current_date(self) -> date:
-        return datetime.utcnow().date()
+        return utcnow().date()
 
     def _collect_google_only(self, context: SyncContext) -> SyncResult:
         run = context.run

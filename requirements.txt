@@ -10,3 +10,6 @@ uvicorn[standard]>=0.30,<0.31
 debugpy>=1.8,<2.0
 elasticsearch>=8.13,<9.0
 openpyxl>=3.1,<4.0
+pytest>=9.0,<10.0
+pytest-cov>=5.0,<6.0
+pytest-mock>=3.14,<4.0

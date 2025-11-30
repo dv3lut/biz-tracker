@@ -11,6 +11,7 @@ from app.services.google_business import (
     compute_listing_age_status,
     should_assume_recent_listing,
 )
+from app.services.google_business import listing as listing_utils
 from app.services.google_business.lookup_engine import GoogleLookupEngine
 from app.services.google_business_service import GoogleBusinessService
 
@@ -272,6 +273,63 @@ class GoogleConfidencePersistenceTests(unittest.TestCase):
         self.assertEqual(establishment.google_place_url, "https://maps.google.com/?cid=123")
         self.assertEqual(establishment.google_listing_age_status, "recent_creation")
 
+
+class GoogleListingHelpersTests(unittest.TestCase):
+    def test_iter_period_dates_and_parsing(self) -> None:
+        periods = [
+            {"open": {"date": "20240115"}},
+            {"open": {"date": "bad"}},
+            {},
+        ]
+
+        dates = [value for value in listing_utils.iter_period_dates(periods) if value]
+
+        self.assertEqual(len(dates), 1)
+        self.assertEqual(dates[0].strftime("%Y-%m-%d"), "2024-01-15")
+
+    def test_collect_review_dates_and_ratings(self) -> None:
+        details = {
+            "reviews": [
+                {"time": 1700001000},
+                {"time": "invalid"},
+                {"time": 1700000000},
+            ],
+            "user_ratings_total": 5.0,
+        }
+
+        review_dates = listing_utils.collect_review_dates(details)
+
+        self.assertEqual(len(review_dates), 2)
+        self.assertLess(review_dates[0], review_dates[1])
+        self.assertEqual(listing_utils.extract_ratings_total(details), 5)
+
+    def test_extract_listing_origin_prefers_opening_hours(self) -> None:
+        details = {
+            "current_opening_hours": {
+                "periods": [
+                    {"open": {"date": "20240102"}},
+                    {"open": {"date": "20240105"}},
+                ]
+            },
+            "reviews": [{"time": 1704153600}],
+        }
+
+        origin_at, source, assumed_recent, reviews = listing_utils.extract_listing_origin(details)
+
+        self.assertEqual(origin_at.strftime("%Y-%m-%d"), "2024-01-02")
+        self.assertEqual(source, "opening_period")
+        self.assertFalse(assumed_recent)
+        self.assertEqual(len(reviews), 1)
+
+    def test_extract_listing_origin_handles_recent_assumption(self) -> None:
+        details = {"user_ratings_total": 0}
+
+        origin_at, source, assumed_recent, reviews = listing_utils.extract_listing_origin(details)
+
+        self.assertIsNone(origin_at)
+        self.assertEqual(source, "assumed_recent")
+        self.assertTrue(assumed_recent)
+        self.assertEqual(reviews, [])
 
 if __name__ == "__main__":
     unittest.main()

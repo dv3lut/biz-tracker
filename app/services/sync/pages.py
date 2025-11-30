@@ -3,11 +3,12 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date
 from typing import TYPE_CHECKING
 
 from app.db import models
 from app.observability import log_event, serialize_establishment
+from app.utils.dates import utcnow
 
 from .context import SyncContext, UpdatedEstablishmentInfo
 
@@ -145,7 +146,7 @@ def collect_pages(
                 state.last_total = int(total_value) if total_value is not None else state.last_total
             except (TypeError, ValueError):
                 collector._logger.debug("Valeur 'total' non exploitable: %s", total_value)
-            state.last_synced_at = datetime.utcnow()
+            state.last_synced_at = utcnow()
             context.session.flush()
             context.session.commit()
 

@@ -11,6 +11,7 @@ from app.db.session import session_scope
 from app.services.sync.mode import DEFAULT_SYNC_MODE
 from app.services.sync_service import SyncService
 from app.observability import log_event
+from app.utils.dates import utcnow
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -98,7 +99,7 @@ class SyncScheduler:
             state = session.get(models.SyncState, scope_key)
             if state and state.last_synced_at:
                 next_allowed = state.last_synced_at + minimum_delay
-                if datetime.utcnow() < next_allowed:
+                if utcnow() < next_allowed:
                     _LOGGER.debug("Minimum delay not reached for auto sync (next at %s).", next_allowed)
                     log_event(
                         "scheduler.skip",

@@ -15,6 +15,7 @@ from app.api.schemas import (
     StatsSummary,
 )
 from app.db import models
+from app.utils.dates import utcnow
 
 from .common import serialize_alert, serialize_run
 
@@ -48,7 +49,7 @@ def build_stats_summary(session: Session, scope_key: str) -> StatsSummary:
 def build_dashboard_metrics(session: Session, *, days: int, scope_key: str) -> DashboardMetrics:
     """Compute the full dashboard payload over the requested window."""
 
-    now = datetime.utcnow()
+    now = utcnow()
     start_date = now.date() - timedelta(days=days - 1) if days > 1 else now.date()
     since_dt = datetime.combine(start_date, datetime.min.time())
 

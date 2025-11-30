@@ -6,6 +6,8 @@ from functools import lru_cache
 from typing import Any, Dict, List, Literal, Optional
 from pydantic import AliasChoices, BaseModel, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings.sources import PydanticBaseSettingsSource
+from pydantic_settings.sources.types import ForceDecode, NoDecode
 from sqlalchemy.engine import URL, make_url
 
 
@@ -156,7 +158,7 @@ class GoogleSettings(BaseModel):
 
 class SyncSettings(BaseModel):
     scope_key: str = Field(
-        default="restaurants",
+        default="default",
         validation_alias=AliasChoices("scope_key", "full_scope_key"),
         description="Scope identifier used to persist sync state and runs.",
     )
@@ -262,13 +264,37 @@ def _permissive_json_loads(value: str) -> Any:
         return value
 
 
+def _decode_complex_value_with_permissive_json(
+    self: PydanticBaseSettingsSource,
+    field_name: str,
+    field: Any,
+    value: Any,
+) -> Any:
+    metadata = getattr(field, "metadata", ()) if field is not None else ()
+    if field and (
+        NoDecode in metadata
+        or (self.config.get("enable_decoding") is False and ForceDecode not in metadata)
+    ):
+        return value
+
+    if isinstance(value, (bytes, bytearray)):
+        value = value.decode()
+
+    if isinstance(value, str):
+        return _permissive_json_loads(value)
+
+    return json.loads(value)
+
+
+PydanticBaseSettingsSource.decode_complex_value = _decode_complex_value_with_permissive_json
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
         env_nested_delimiter="__",
-        json_loads=_permissive_json_loads,
         extra="allow",
     )
 

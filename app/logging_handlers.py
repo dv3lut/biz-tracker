@@ -6,6 +6,8 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Sequence
 
+from app.utils.dates import utcnow
+
 try:  # pragma: no cover - optional dependency guard
     from elasticsearch import Elasticsearch
 except ModuleNotFoundError:  # pragma: no cover - handled gracefully in runtime
@@ -57,7 +59,7 @@ class ElasticsearchLogHandler(logging.Handler):
     def emit(self, record: logging.LogRecord) -> None:
         try:
             document = self._build_document(record)
-            index_name = f"{self._index_prefix}-{datetime.utcnow():%Y.%m.%d}"
+            index_name = f"{self._index_prefix}-{utcnow():%Y.%m.%d}"
             self._client.index(index=index_name, document=document, request_timeout=self._timeout)
         except Exception:  # pragma: no cover - defensive path
             self.handleError(record)

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from calendar import monthrange
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Optional
 
 
@@ -46,3 +46,9 @@ def subtract_months(reference: date, months: int) -> date:
 
     day = min(reference.day, monthrange(year, month)[1])
     return date(year, month, day)
+
+
+def utcnow() -> datetime:
+    """Return a naive UTC timestamp without relying on the deprecated ``utcnow``."""
+
+    return datetime.now(timezone.utc).replace(tzinfo=None)

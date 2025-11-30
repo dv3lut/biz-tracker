@@ -18,7 +18,7 @@ from .common import normalize_emails
 def _validate_activation_window(start_date: date, end_date: date | None) -> None:
     if end_date and end_date < start_date:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="La date de fin doit être postérieure ou égale à la date de début.",
         )
 
@@ -27,7 +27,7 @@ def _normalize_name(name: str) -> str:
     normalized = name.strip()
     if not normalized:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Le nom du client est obligatoire.",
         )
     return normalized

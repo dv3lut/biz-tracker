@@ -25,6 +25,7 @@ from app.services.google_business.constants import (
 from app.services.google_business.keywords import resolve_expected_keywords
 from app.services.google_business.types import GoogleMatch
 from app.services.rate_limiter import RateLimiter
+from app.utils.dates import utcnow
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -63,12 +64,12 @@ class GoogleLookupEngine:
 
     def lookup(self, establishment: models.Establishment, *, now: datetime | None = None) -> GoogleMatch | None:
         if now is None:
-            now = datetime.utcnow()
+            now = utcnow()
         query = build_place_query(establishment, PLACEHOLDER_TOKENS)
         establishment.google_match_confidence = None
         if not query:
             establishment.google_check_status = "insufficient"
-            establishment.google_last_checked_at = establishment.google_last_checked_at or datetime.utcnow()
+            establishment.google_last_checked_at = establishment.google_last_checked_at or utcnow()
             self._session.flush()
             return None
 

@@ -11,6 +11,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base
 from app.utils.business_types import is_individual_company
 from app.utils.google_listing import default_listing_statuses
+from app.utils.dates import utcnow
 
 
 def _default_client_listing_statuses() -> list[str]:
@@ -83,9 +84,9 @@ class Establishment(Base):
     code_pays: Mapped[str | None] = mapped_column(String(10))
     libelle_pays: Mapped[str | None] = mapped_column(String(255))
 
-    last_seen_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
-    first_seen_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
 
     google_place_id: Mapped[str | None] = mapped_column(String(128), index=True, nullable=True)
     google_place_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
@@ -121,7 +122,7 @@ class SyncRun(Base):
     status: Mapped[str] = mapped_column(String(50), index=True)
     mode: Mapped[str] = mapped_column(String(32), default="full", nullable=False)
     replay_for_date: Mapped[date | None] = mapped_column(Date)
-    started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime)
     last_cursor: Mapped[str | None] = mapped_column(Text)
     query_checksum: Mapped[str | None] = mapped_column(String(64))
@@ -166,7 +167,7 @@ class SyncState(Base):
     last_treated_max: Mapped[datetime | None] = mapped_column(DateTime)
     last_creation_date: Mapped[date | None] = mapped_column(Date)
     query_checksum: Mapped[str | None] = mapped_column(String(64))
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
 
     run: Mapped[SyncRun | None] = relationship("SyncRun")
 
@@ -181,7 +182,7 @@ class Alert(Base):
     siret: Mapped[str] = mapped_column(String(14), ForeignKey("establishments.siret"), nullable=False)
     recipients: Mapped[list[str]] = mapped_column(JSONB, default=list)
     payload: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
     sent_at: Mapped[datetime | None] = mapped_column(DateTime)
 
     run: Mapped[SyncRun] = relationship("SyncRun", back_populates="alerts")
@@ -204,8 +205,8 @@ class Client(Base):
     )
     emails_sent_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     last_email_sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
 
     recipients: Mapped[list["ClientRecipient"]] = relationship(
         "ClientRecipient",
@@ -229,7 +230,7 @@ class ClientRecipient(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     client_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("clients.id", ondelete="CASCADE"), index=True)
     email: Mapped[str] = mapped_column(String(255), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
 
     client: Mapped[Client] = relationship("Client", back_populates="recipients")
 
@@ -243,8 +244,8 @@ class NafCategory(Base):
     name: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     keywords: Mapped[list[str]] = mapped_column(JSONB, default=list, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
 
     subcategories: Mapped[list["NafSubCategory"]] = relationship(
         "NafSubCategory",
@@ -270,8 +271,8 @@ class NafSubCategory(Base):
     naf_code: Mapped[str] = mapped_column(String(10), unique=True, nullable=False, index=True)
     price_cents: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
 
     category: Mapped[NafCategory] = relationship("NafCategory", back_populates="subcategories")
     subscriptions: Mapped[list["ClientSubscription"]] = relationship(
@@ -295,7 +296,7 @@ class ClientSubscription(Base):
         ForeignKey("naf_subcategories.id", ondelete="CASCADE"),
         primary_key=True,
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
 
     client: Mapped[Client] = relationship("Client", back_populates="subscriptions")
     subcategory: Mapped[NafSubCategory] = relationship("NafSubCategory", back_populates="subscriptions")
@@ -308,8 +309,8 @@ class AdminRecipient(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
 
 
 class GoogleRetryConfig(Base):
@@ -323,4 +324,4 @@ class GoogleRetryConfig(Base):
     micro_rules: Mapped[list[dict[str, object]]] = mapped_column(JSONB, default=list, nullable=False)
     micro_company_categories: Mapped[list[str]] = mapped_column(JSONB, default=list, nullable=False)
     micro_legal_categories: Mapped[list[str]] = mapped_column(JSONB, default=list, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)

@@ -3,6 +3,9 @@ PYTHON ?= python
 install:
 	$(PYTHON) -m pip install -r requirements.txt
 
+install-dev:
+	$(PYTHON) -m pip install -r requirements-dev.txt
+
 lint:
 	$(PYTHON) -m compileall app
 
@@ -22,4 +25,7 @@ init-db:
 serve:
 	$(PYTHON) -m app serve
 
-.PHONY: install lint sync sync-force sync-full sync-incremental init-db serve
+test:
+	$(PYTHON) -m pytest
+
+.PHONY: install install-dev lint sync sync-force sync-full sync-incremental init-db serve test

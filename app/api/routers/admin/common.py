@@ -7,6 +7,7 @@ from typing import Sequence
 from app.api.schemas import AlertOut, SyncRunOut
 from app.services.sync.mode import DEFAULT_SYNC_MODE, SyncMode
 from app.db import models
+from app.utils.dates import utcnow
 
 
 def compute_run_metrics(
@@ -28,7 +29,7 @@ def compute_run_metrics(
     estimated_remaining_seconds: float | None = None
     estimated_completion_at: datetime | None = None
     if run.status == "running" and total_expected and run.fetched_records > 0:
-        now = datetime.utcnow()
+        now = utcnow()
         elapsed_seconds = max((now - run.started_at).total_seconds(), 0.0)
         if elapsed_seconds > 0:
             rate = run.fetched_records / elapsed_seconds

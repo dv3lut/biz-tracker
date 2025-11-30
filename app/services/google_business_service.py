@@ -19,6 +19,7 @@ from app.services.google_business.types import GoogleEnrichmentResult, GoogleMat
 from app.services.rate_limiter import RateLimiter
 from app.services.google_retry_config import GoogleRetryRuntimeConfig, load_runtime_google_retry_config
 from app.utils.business_types import is_micro_company
+from app.utils.dates import utcnow
 
 ProgressCallback = Callable[[int, int, int, int, int], None]
 
@@ -114,7 +115,7 @@ class GoogleBusinessService:
                 api_call_count=0,
             )
 
-        now = datetime.utcnow()
+        now = utcnow()
         self._api_call_count = 0
         unique_new = {establishment.siret: establishment for establishment in new_establishments if establishment.siret}
         new_sirets = set(unique_new)
@@ -172,7 +173,7 @@ class GoogleBusinessService:
         if not self._client or not self._rate_limiter or not self._lookup_engine:
             raise GooglePlacesError("Google Places API key is not configured.")
 
-        now = datetime.utcnow()
+        now = utcnow()
         if not self._has_searchable_identity(establishment):
             establishment.google_check_status = "insufficient"
             establishment.google_last_checked_at = establishment.google_last_checked_at or now
