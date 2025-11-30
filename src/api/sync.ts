@@ -1,4 +1,5 @@
 import {
+  DayReplayReference,
   RunSummary,
   RunSummaryEstablishment,
   RunSummaryUpdatedEstablishment,
@@ -16,6 +17,7 @@ export interface SyncRunResponse {
   status: string;
   mode: SyncMode;
   replay_for_date: string | null;
+  day_replay_reference: DayReplayReference;
   started_at: string;
   finished_at: string | null;
   api_call_count: number;
@@ -251,6 +253,7 @@ export const mapSyncRun = (payload: SyncRunResponse): SyncRun => ({
   targetClientIds: payload.target_client_ids ?? null,
   notifyAdmins: payload.notify_admins,
   dayReplayForceGoogle: payload.day_replay_force_google,
+  dayReplayReference: payload.day_replay_reference,
   summary: payload.summary ? mapRunSummary(payload.summary) : null,
 });
 
@@ -297,6 +300,9 @@ export const syncApi = {
     }
     if (payload.replayForDate) {
       body.replay_for_date = payload.replayForDate;
+    }
+    if (payload.replayReference) {
+      body.replay_reference = payload.replayReference;
     }
     if (payload.nafCodes && payload.nafCodes.length > 0) {
       body.naf_codes = payload.nafCodes;

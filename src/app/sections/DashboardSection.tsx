@@ -6,11 +6,12 @@ import { DEFAULT_LISTING_STATUSES } from "../../constants/listingStatuses";
 import type {
   Client,
   DashboardMetrics,
+  DayReplayReference,
   GoogleCheckResult,
   GoogleRetryConfig,
   StatsSummary,
-  SyncRun,
   SyncMode,
+  SyncRun,
   SyncRequestPayload,
 } from "../../types";
 import { DashboardView } from "../../components/views/DashboardView";
@@ -22,6 +23,7 @@ import { useRefreshIndicator } from "../../hooks/useRefreshIndicator";
 const DASHBOARD_DAYS = 30;
 const GOOGLE_EXPORT_DEFAULT_WINDOW_DAYS = 30;
 const RUN_HISTORY_LIMIT = 100;
+const DEFAULT_REPLAY_REFERENCE: DayReplayReference = "creation_date";
 
 const runMatchesDay = (run: SyncRun, isoDate: string): boolean => {
   if (!run.startedAt) {
@@ -58,7 +60,12 @@ export const DashboardSection = ({ onUnauthorized }: Props) => {
   const [runDetailModal, setRunDetailModal] = useState<RunDetailModalState | null>(null);
   type SyncTriggerSelection = SyncRequestPayload & { mode: SyncMode };
   const [isSyncModeModalOpen, setSyncModeModalOpen] = useState(false);
-  const [pendingSyncRequest, setPendingSyncRequest] = useState<SyncTriggerSelection>({ mode: "full", notifyAdmins: true });
+  const [pendingSyncRequest, setPendingSyncRequest] = useState<SyncTriggerSelection>({
+    mode: "full",
+    notifyAdmins: true,
+    replayReference: DEFAULT_REPLAY_REFERENCE,
+    forceGoogleReplay: false,
+  });
   const [isGoogleExportModalOpen, setGoogleExportModalOpen] = useState(false);
   const initialExportRange = useMemo(getDefaultGoogleExportRange, []);
   const [googleExportStartDate, setGoogleExportStartDate] = useState(initialExportRange.start);
@@ -187,12 +194,14 @@ export const DashboardSection = ({ onUnauthorized }: Props) => {
       const persistedRequest: SyncTriggerSelection = {
         ...payload,
         notifyAdmins: payload.notifyAdmins ?? pendingSyncRequest.notifyAdmins ?? true,
+        forceGoogleReplay: payload.forceGoogleReplay ?? pendingSyncRequest.forceGoogleReplay ?? false,
+        replayReference: payload.replayReference ?? pendingSyncRequest.replayReference ?? DEFAULT_REPLAY_REFERENCE,
       };
       setPendingSyncRequest(persistedRequest);
       syncMutation.mutate(payload);
       setSyncModeModalOpen(false);
     },
-    [pendingSyncRequest.notifyAdmins, syncMutation],
+    [pendingSyncRequest.forceGoogleReplay, pendingSyncRequest.notifyAdmins, pendingSyncRequest.replayReference, syncMutation],
   );
 
   const handleCloseSyncModeModal = useCallback(() => {
@@ -409,6 +418,8 @@ export const DashboardSection = ({ onUnauthorized }: Props) => {
         nafCategories={dashboardQuery.data?.nafCategoryBreakdown ?? []}
         initialTargetClientIds={pendingSyncRequest.targetClientIds ?? null}
         initialNotifyAdmins={pendingSyncRequest.notifyAdmins}
+        initialForceGoogleReplay={pendingSyncRequest.forceGoogleReplay ?? false}
+        initialReplayReference={pendingSyncRequest.replayReference ?? DEFAULT_REPLAY_REFERENCE}
         clients={clientsQuery.data ?? []}
         isClientsLoading={clientsQuery.isLoading}
         clientsError={clientsError?.message ?? null}

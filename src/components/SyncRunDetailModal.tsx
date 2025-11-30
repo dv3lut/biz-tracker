@@ -1,6 +1,12 @@
 import { SyncRun } from "../types";
 import { formatDateTime, formatDuration, formatNumber } from "../utils/format";
-import { describeSyncMode, formatNafCodesPreview, syncModeIsGoogleOnly, syncModeSupportsSirene } from "../utils/sync";
+import {
+  describeDayReplayReference,
+  describeSyncMode,
+  formatNafCodesPreview,
+  syncModeIsGoogleOnly,
+  syncModeSupportsSirene,
+} from "../utils/sync";
 import { RunModeBadges } from "./RunModeBadges";
 
 const formatDisplayDate = (isoDate: string | null | undefined): string => {
@@ -117,6 +123,7 @@ export const SyncRunDetailModal = ({
                           targetClientIds: activeRun.targetClientIds,
                           notifyAdmins: activeRun.notifyAdmins,
                           dayReplayForceGoogle: activeRun.dayReplayForceGoogle,
+                          dayReplayReference: activeRun.dayReplayReference,
                         }}
                       />
                       <ul className="metric-list">
@@ -135,6 +142,11 @@ export const SyncRunDetailModal = ({
                         <li>
                           <strong>Mode</strong> {describeSyncMode(activeRun.mode)}
                         </li>
+                        {activeRun.mode === "day_replay" ? (
+                          <li>
+                            <strong>Référence rejeu</strong> {describeDayReplayReference(activeRun.dayReplayReference)}
+                          </li>
+                        ) : null}
                         <li>
                           <strong>Ciblage NAF</strong> {formatNafCodesPreview(activeRun.targetNafCodes, 8)}
                         </li>

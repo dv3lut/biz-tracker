@@ -1,4 +1,5 @@
 import {
+  DayReplayReference,
   SyncRequestPayload,
   SyncRun,
   SyncState,
@@ -44,6 +45,7 @@ interface SyncRunResponse {
   status: string;
   mode: SyncMode;
   replay_for_date: string | null;
+  day_replay_reference: DayReplayReference;
   target_naf_codes: string[] | null;
   target_client_ids: string[] | null;
   notify_admins: boolean;
@@ -509,6 +511,7 @@ const toSyncRun = (payload: SyncRunResponse): SyncRun => ({
   targetClientIds: payload.target_client_ids ?? null,
   notifyAdmins: payload.notify_admins,
   dayReplayForceGoogle: payload.day_replay_force_google,
+  dayReplayReference: payload.day_replay_reference,
   summary: payload.summary ? toRunSummary(payload.summary) : null,
 });
 
@@ -813,6 +816,9 @@ export const adminApi = {
     }
     if (payload.replayForDate) {
       requestBody.replay_for_date = payload.replayForDate;
+    }
+    if (payload.replayReference) {
+      requestBody.replay_reference = payload.replayReference;
     }
     if (payload.nafCodes && payload.nafCodes.length > 0) {
       requestBody.naf_codes = payload.nafCodes;

@@ -3,7 +3,13 @@ import { type ReactNode } from "react";
 import { StatsSummary, SyncRun } from "../types";
 import { formatDateTime, formatNumber, formatPercent, formatDuration } from "../utils/format";
 import { computeGoogleProgress, computeSireneProgress } from "../utils/progress";
-import { describeSyncMode, formatNafCodesPreview, syncModeIsGoogleOnly, syncModeSupportsSirene } from "../utils/sync";
+import {
+  describeDayReplayReference,
+  describeSyncMode,
+  formatNafCodesPreview,
+  syncModeIsGoogleOnly,
+  syncModeSupportsSirene,
+} from "../utils/sync";
 import { ProgressBar } from "./ProgressBar";
 import { RunModeBadges } from "./RunModeBadges";
 
@@ -59,6 +65,7 @@ const renderRunDetails = (run: SyncRun | null): ReactNode => {
           targetClientIds: run.targetClientIds,
           notifyAdmins: run.notifyAdmins,
           dayReplayForceGoogle: run.dayReplayForceGoogle,
+          dayReplayReference: run.dayReplayReference,
         }}
         className="mb-1"
       />
@@ -100,6 +107,12 @@ const renderRunDetails = (run: SyncRun | null): ReactNode => {
           <dt>Type</dt>
           <dd>{run.runType}</dd>
         </div>
+        {run.mode === "day_replay" ? (
+          <div>
+            <dt>Référence rejeu</dt>
+            <dd>{describeDayReplayReference(run.dayReplayReference)}</dd>
+          </div>
+        ) : null}
         <div>
           <dt>Status</dt>
           <dd>{run.status}</dd>

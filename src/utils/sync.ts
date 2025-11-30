@@ -1,4 +1,4 @@
-import { SyncMode } from "../types";
+import { DayReplayReference, SyncMode } from "../types";
 
 export const describeSyncMode = (mode: SyncMode): string => {
   switch (mode) {
@@ -112,4 +112,14 @@ export const formatNafCodesPreview = (codes?: string[] | null, limit = 5): strin
   }
   const remaining = canonical.length - limit;
   return `${canonical.slice(0, limit).join(", ")} +${remaining}`;
+};
+
+export const describeDayReplayReference = (reference: DayReplayReference): string => {
+  switch (reference) {
+    case "insertion_date":
+      return "Insertion dans Biz Tracker";
+    case "creation_date":
+    default:
+      return "Date de création Sirene";
+  }
 };

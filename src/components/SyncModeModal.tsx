@@ -1,7 +1,7 @@
 import { KeyboardEvent, useEffect, useMemo, useState } from "react";
 
 import { LISTING_STATUS_LABELS } from "../constants/listingStatuses";
-import { Client, ListingStatus, NafCategoryStat, SyncMode } from "../types";
+import { Client, DayReplayReference, ListingStatus, NafCategoryStat, SyncMode } from "../types";
 import {
   canonicalizeNafCode,
   denormalizeNafCode,
@@ -54,6 +54,25 @@ const MODE_OPTIONS: Array<{
     impact: "Les alertes sont limitées aux administrateurs et n'impactent pas les curseurs.",
   },
 ];
+
+const DAY_REPLAY_REFERENCE_OPTIONS: Array<{
+  value: DayReplayReference;
+  title: string;
+  description: string;
+}> = [
+  {
+    value: "creation_date",
+    title: "Basée sur la création Sirene",
+    description: "Filtre tous les établissements dont la date de création Sirene correspond au jour ciblé.",
+  },
+  {
+    value: "insertion_date",
+    title: "Basée sur l'insertion Biz Tracker",
+    description: "Utilise la date d'insertion dans Biz Tracker pour rejouer uniquement les alertes importées ce jour-là.",
+  },
+];
+
+const DEFAULT_REPLAY_REFERENCE: DayReplayReference = "creation_date";
 
 const MAX_TARGET_CLIENTS = 50;
 
@@ -130,6 +149,7 @@ type Props = {
   initialTargetClientIds?: string[] | null;
   initialNotifyAdmins?: boolean | null;
   initialForceGoogleReplay?: boolean | null;
+  initialReplayReference?: DayReplayReference | null;
   clients: Client[];
   isClientsLoading?: boolean;
   clientsError?: string | null;
@@ -140,6 +160,7 @@ type Props = {
     targetClientIds?: string[];
     notifyAdmins?: boolean;
     forceGoogleReplay?: boolean;
+    replayReference?: DayReplayReference;
   }) => void;
   onCancel: () => void;
   isSubmitting: boolean;
@@ -196,6 +217,7 @@ export const SyncModeModal = ({
   initialTargetClientIds,
   initialNotifyAdmins,
   initialForceGoogleReplay,
+  initialReplayReference,
   clients,
   isClientsLoading = false,
   clientsError,
@@ -216,6 +238,7 @@ export const SyncModeModal = ({
   const [selectedClientIds, setSelectedClientIds] = useState<string[]>(() => normalizeClientSelection(initialTargetClientIds));
   const [notifyAdmins, setNotifyAdmins] = useState<boolean>(initialNotifyAdmins ?? true);
   const [forceGoogleReplay, setForceGoogleReplay] = useState<boolean>(initialForceGoogleReplay ?? false);
+  const [replayReference, setReplayReference] = useState<DayReplayReference>(initialReplayReference ?? DEFAULT_REPLAY_REFERENCE);
   const [clientSearch, setClientSearch] = useState<string>("");
   const [recipientError, setRecipientError] = useState<string | null>(null);
 
@@ -229,6 +252,7 @@ export const SyncModeModal = ({
       setSelectedClientIds(normalizeClientSelection(initialTargetClientIds));
       setNotifyAdmins(initialNotifyAdmins ?? true);
       setForceGoogleReplay(initialForceGoogleReplay ?? false);
+      setReplayReference(initialReplayReference ?? DEFAULT_REPLAY_REFERENCE);
       setClientSearch("");
       setRecipientError(null);
     }
@@ -239,6 +263,7 @@ export const SyncModeModal = ({
     initialTargetClientIds,
     initialNotifyAdmins,
     initialForceGoogleReplay,
+    initialReplayReference,
     isOpen,
   ]);
 
@@ -471,6 +496,7 @@ export const SyncModeModal = ({
       }
       payload.notifyAdmins = notifyAdmins;
       payload.forceGoogleReplay = forceGoogleReplay;
+      payload.replayReference = replayReference;
     }
 
     onConfirm(payload);
@@ -552,6 +578,27 @@ export const SyncModeModal = ({
                         <p className="muted small">
                           Activez cette option pour relancer Google même si les fiches existent déjà pour cette date.
                         </p>
+                        <div className="replay-reference-group">
+                          <p className="muted small">Point de référence temporel :</p>
+                          <div className="replay-reference-options">
+                            {DAY_REPLAY_REFERENCE_OPTIONS.map((refOption) => (
+                              <label key={refOption.value} className="replay-reference-option">
+                                <input
+                                  type="radio"
+                                  name="replay-reference"
+                                  value={refOption.value}
+                                  checked={replayReference === refOption.value}
+                                  onChange={() => setReplayReference(refOption.value)}
+                                  disabled={isSubmitting}
+                                />
+                                <div>
+                                  <strong>{refOption.title}</strong>
+                                  <p className="muted small">{refOption.description}</p>
+                                </div>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
                       </div>
                     ) : null}
                   </label>

@@ -5,7 +5,12 @@ import { formatDateTime, formatNumber, formatDuration } from "../utils/format";
 import { computeGoogleProgress, computeSireneProgress } from "../utils/progress";
 import { ProgressBar } from "./ProgressBar";
 import { RunModeBadges } from "./RunModeBadges";
-import { describeSyncMode, formatNafCodesPreview, syncModeSupportsSirene } from "../utils/sync";
+import {
+  describeDayReplayReference,
+  describeSyncMode,
+  formatNafCodesPreview,
+  syncModeSupportsSirene,
+} from "../utils/sync";
 
 type Props = {
   runs?: SyncRun[];
@@ -122,12 +127,21 @@ export const SyncRunsTable = ({
                           targetClientIds: run.targetClientIds,
                           notifyAdmins: run.notifyAdmins,
                           dayReplayForceGoogle: run.dayReplayForceGoogle,
+                          dayReplayReference: run.dayReplayReference,
                         }}
                       />
                       <br />
                       <span className="small muted">
                         Google: {run.googleEnabled ? "Activé" : "Désactivé"}
                       </span>
+                      {run.mode === "day_replay" ? (
+                        <>
+                          <br />
+                          <span className="small muted">
+                            Réf. rejeu: {describeDayReplayReference(run.dayReplayReference)}
+                          </span>
+                        </>
+                      ) : null}
                       {run.resumedFromRunId ? (
                         <>
                           <br />

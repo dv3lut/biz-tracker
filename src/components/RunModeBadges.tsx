@@ -1,7 +1,8 @@
 import { SyncRun } from "../types";
+import { describeDayReplayReference } from "../utils/sync";
 
 type Props = {
-  run: Pick<SyncRun, "mode" | "targetNafCodes" | "targetClientIds" | "notifyAdmins" | "dayReplayForceGoogle">;
+  run: Pick<SyncRun, "mode" | "targetNafCodes" | "targetClientIds" | "notifyAdmins" | "dayReplayForceGoogle" | "dayReplayReference">;
   className?: string;
 };
 
@@ -23,6 +24,12 @@ export const RunModeBadges = ({ run, className }: Props) => {
         title: "Les appels Google ont été forcés pendant ce rejeu",
       });
     }
+    badges.push({
+      key: `reference-${run.dayReplayReference}`,
+      label: run.dayReplayReference === "insertion_date" ? "Base insertions" : "Base créations",
+      tone: "replay",
+      title: describeDayReplayReference(run.dayReplayReference),
+    });
   }
 
   if (run.targetNafCodes && run.targetNafCodes.length > 0) {

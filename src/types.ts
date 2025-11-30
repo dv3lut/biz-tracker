@@ -1,4 +1,5 @@
 export type SyncMode = "full" | "sirene_only" | "google_pending" | "google_refresh" | "day_replay";
+export type DayReplayReference = "creation_date" | "insertion_date";
 
 export type ListingStatus = "recent_creation" | "recent_creation_missing_contact" | "not_recent_creation";
 
@@ -35,6 +36,7 @@ export interface SyncRun {
   targetClientIds: string[] | null;
   notifyAdmins: boolean;
   dayReplayForceGoogle: boolean;
+  dayReplayReference: DayReplayReference;
   summary: RunSummary | null;
 }
 
@@ -255,6 +257,7 @@ export interface SyncRequestPayload {
   checkForUpdates?: boolean;
   mode?: SyncMode;
   replayForDate?: string;
+  replayReference?: DayReplayReference;
   nafCodes?: string[];
   targetClientIds?: string[];
   notifyAdmins?: boolean;
