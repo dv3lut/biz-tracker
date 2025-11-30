@@ -13,6 +13,7 @@ from app.db import models
 from app.observability import log_event, serialize_sync_run
 from app.services.sync.context import SyncContext
 from app.services.sync.mode import DEFAULT_SYNC_MODE, SyncMode
+from app.services.sync.replay_reference import DEFAULT_DAY_REPLAY_REFERENCE, DayReplayReference
 from app.utils.dates import parse_datetime
 
 from .utils import append_run_note, format_target_naf_note, normalize_text
@@ -30,6 +31,7 @@ class SyncRunPreparationMixin:
         check_informations: bool = False,
         mode: SyncMode = DEFAULT_SYNC_MODE,
         replay_for_date: date | None = None,
+        replay_reference: DayReplayReference = DEFAULT_DAY_REPLAY_REFERENCE,
         target_naf_codes: list[str] | None = None,
         target_client_ids: list[UUID] | None = None,
         notify_admins: bool = True,
@@ -56,6 +58,7 @@ class SyncRunPreparationMixin:
             )
             run.replay_for_date = replay_for_date
             run.day_replay_force_google = bool(force_google_replay)
+            run.day_replay_reference = replay_reference.value
             formatted_date = replay_for_date.isoformat()
             append_run_note(run, f"Rejeu du {formatted_date}")
             run.target_naf_codes = naf_filter
@@ -71,6 +74,7 @@ class SyncRunPreparationMixin:
                 check_informations=False,
                 mode=mode.value,
                 replay_for_date=formatted_date,
+                replay_reference=replay_reference.value,
                 target_naf_codes=naf_filter,
                 target_client_ids=client_targets,
                 notify_admins=run.notify_admins,
@@ -270,6 +274,10 @@ class SyncRunPreparationMixin:
         except ValueError:
             mode = DEFAULT_SYNC_MODE
         replay_for_date = run.replay_for_date
+        try:
+            replay_reference = DayReplayReference(getattr(run, "day_replay_reference", DEFAULT_DAY_REPLAY_REFERENCE.value))
+        except ValueError:
+            replay_reference = DEFAULT_DAY_REPLAY_REFERENCE
         target_naf_codes = list(run.target_naf_codes or [])
         persist_state = mode.updates_state and not target_naf_codes
         raw_client_targets = list(run.target_client_ids or [])
@@ -294,4 +302,5 @@ class SyncRunPreparationMixin:
             target_naf_codes=target_naf_codes or None,
             target_client_ids=target_client_ids or None,
             force_google_replay=bool(getattr(run, "day_replay_force_google", False)),
+            replay_reference=replay_reference,
         )

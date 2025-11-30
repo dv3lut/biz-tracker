@@ -8,6 +8,7 @@ from pydantic import ValidationError
 
 from app.api.schemas import SyncRequest
 from app.services.sync.mode import SyncMode
+from app.services.sync.replay_reference import DayReplayReference
 
 
 class SyncRequestSchemaTests(unittest.TestCase):
@@ -85,6 +86,18 @@ class SyncRequestSchemaTests(unittest.TestCase):
             force_google_replay=True,
         )
         self.assertTrue(payload.force_google_replay)
+
+    def test_replay_reference_restricted_to_day_replay(self) -> None:
+        with self.assertRaises(ValidationError):
+            SyncRequest(mode=SyncMode.FULL, replay_reference=DayReplayReference.INSERTION_DATE)
+
+    def test_replay_reference_allowed_for_day_replay(self) -> None:
+        payload = SyncRequest(
+            mode=SyncMode.DAY_REPLAY,
+            replay_for_date=date.today(),
+            replay_reference=DayReplayReference.INSERTION_DATE,
+        )
+        self.assertEqual(payload.replay_reference, DayReplayReference.INSERTION_DATE)
 
 
 if __name__ == "__main__":

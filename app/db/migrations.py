@@ -220,6 +220,10 @@ def run_schema_upgrades(engine: Engine) -> None:
     ADD COLUMN IF NOT EXISTS day_replay_force_google BOOLEAN NOT NULL DEFAULT FALSE
     """,
         """
+        ALTER TABLE sync_runs
+        ADD COLUMN IF NOT EXISTS day_replay_reference VARCHAR(32) NOT NULL DEFAULT 'creation_date'
+        """,
+        """
         ALTER TABLE IF EXISTS naf_categories
         DROP COLUMN IF EXISTS order_index
         """,

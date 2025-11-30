@@ -146,6 +146,7 @@ class SyncRun(Base):
     target_client_ids: Mapped[list[str] | None] = mapped_column(JSONB, default=None)
     notify_admins: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     day_replay_force_google: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    day_replay_reference: Mapped[str] = mapped_column(String(32), default="creation_date", nullable=False)
 
     previous_run: Mapped[SyncRun | None] = relationship(remote_side=[id], backref="resumed_runs")
     alerts: Mapped[list["Alert"]] = relationship("Alert", back_populates="run")

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import time
-from datetime import date
+from datetime import date, datetime, time as dt_time
 from typing import Callable, Sequence
 
 from sqlalchemy import select
@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.db import models
 from app.observability import log_event, serialize_establishment
 from app.services.alert_service import AlertService
+from app.services.sync.replay_reference import DayReplayReference, DEFAULT_DAY_REPLAY_REFERENCE
 
 from .context import SyncContext, SyncResult
 from .google_enrichment import create_google_progress_callback, run_google_enrichment
@@ -23,8 +24,18 @@ def load_replay_establishments(
     *,
     target_date: date,
     naf_codes: Sequence[str] | None = None,
+    reference: DayReplayReference = DEFAULT_DAY_REPLAY_REFERENCE,
 ) -> list[models.Establishment]:
-    stmt = select(models.Establishment).where(models.Establishment.date_creation == target_date)
+    stmt = select(models.Establishment)
+    if reference is DayReplayReference.INSERTION_DATE:
+        start_at = datetime.combine(target_date, dt_time.min)
+        end_at = datetime.combine(target_date, dt_time.max)
+        stmt = stmt.where(
+            models.Establishment.first_seen_at >= start_at,
+            models.Establishment.first_seen_at <= end_at,
+        )
+    else:
+        stmt = stmt.where(models.Establishment.date_creation == target_date)
     if naf_codes:
         stmt = stmt.where(models.Establishment.naf_code.in_(naf_codes))
     stmt = stmt.order_by(models.Establishment.siret.asc())

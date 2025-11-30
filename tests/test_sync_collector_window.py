@@ -10,6 +10,7 @@ from app.db import models
 from app.services.sync.collector import SyncCollectorMixin
 from app.services.sync.context import SyncContext
 from app.services.sync.mode import SyncMode
+from app.services.sync.replay_reference import DayReplayReference
 
 
 class _DummyCollector(SyncCollectorMixin):
@@ -49,11 +50,13 @@ class _ReplayAwareCollector(SyncCollectorMixin):
         *,
         target_date: date,
         naf_codes: list[str] | None = None,
+        reference: DayReplayReference | None = None,
     ) -> list[object]:
         self.last_request = {
             "session": session,
             "target_date": target_date,
             "naf_codes": list(naf_codes or []),
+            "reference": reference or DayReplayReference.CREATION_DATE,
         }
         return list(self._replay_results)
 
@@ -103,6 +106,7 @@ class ResolveGoogleCandidatesTests(unittest.TestCase):
         mode: SyncMode,
         replay_for_date: date | None = None,
         target_naf_codes: list[str] | None = None,
+        replay_reference: DayReplayReference = DayReplayReference.CREATION_DATE,
     ) -> SyncContext:
         return SyncContext(
             session=SimpleNamespace(name="session"),
@@ -113,6 +117,7 @@ class ResolveGoogleCandidatesTests(unittest.TestCase):
             mode=mode,
             replay_for_date=replay_for_date,
             target_naf_codes=target_naf_codes,
+            replay_reference=replay_reference,
         )
 
     def test_non_replay_mode_keeps_base_candidates(self) -> None:
@@ -144,6 +149,22 @@ class ResolveGoogleCandidatesTests(unittest.TestCase):
         if last_request is not None:
             self.assertEqual(last_request["naf_codes"], ["5610A"])
             self.assertEqual(last_request["target_date"], date(2025, 11, 10))
+            self.assertEqual(last_request["reference"], DayReplayReference.CREATION_DATE)
+
+    def test_day_replay_can_switch_reference_mode(self) -> None:
+        collector = _ReplayAwareCollector([], current_date=date(2025, 11, 15))
+        context = self._make_context(
+            mode=SyncMode.DAY_REPLAY,
+            replay_for_date=date(2025, 11, 10),
+            target_naf_codes=None,
+            replay_reference=DayReplayReference.INSERTION_DATE,
+        )
+
+        collector._resolve_google_candidates(context, [], [])
+
+        self.assertIsNotNone(collector.last_request)
+        if collector.last_request is not None:
+            self.assertEqual(collector.last_request["reference"], DayReplayReference.INSERTION_DATE)
 
 
 class DayReplayPolicyTests(unittest.TestCase):

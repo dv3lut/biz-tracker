@@ -8,6 +8,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator, model_validator
 
 from app.services.sync.mode import SyncMode
+from app.services.sync.replay_reference import DayReplayReference, DEFAULT_DAY_REPLAY_REFERENCE
 from app.utils.naf import normalize_naf_code
 
 
@@ -53,6 +54,10 @@ class SyncRunOut(BaseModel):
     day_replay_force_google: bool = Field(
         default=False,
         description="Indique si les appels Google ont été forcés lors d'un rejeu.",
+    )
+    day_replay_reference: DayReplayReference = Field(
+        default=DEFAULT_DAY_REPLAY_REFERENCE,
+        description="Source de vérité utilisée pour rejouer une journée (date de création ou d'insertion).",
     )
     total_expected_records: int | None = None
     progress: float | None = None
@@ -162,6 +167,13 @@ class SyncRequest(BaseModel):
         default=False,
         description="Force les appels Google lors d'un rejeu même si des fiches existent déjà.",
     )
+    replay_reference: DayReplayReference = Field(
+        default=DEFAULT_DAY_REPLAY_REFERENCE,
+        description=(
+            "Contrôle le critère de rejeu: 'creation_date' récupère les établissements par date de création, "
+            "'insertion_date' par date d'insertion en base (mode 'day_replay')."
+        ),
+    )
 
     @field_validator("naf_codes")
     @classmethod
@@ -218,6 +230,8 @@ class SyncRequest(BaseModel):
             raise ValueError("La désactivation des notifications admin est réservée au mode 'day_replay'.")
         if self.force_google_replay and self.mode is not SyncMode.DAY_REPLAY:
             raise ValueError("Le forçage des appels Google est disponible uniquement en mode 'day_replay'.")
+        if self.replay_reference is not DEFAULT_DAY_REPLAY_REFERENCE and self.mode is not SyncMode.DAY_REPLAY:
+            raise ValueError("Le choix de la référence de rejeu est réservé au mode 'day_replay'.")
         return self
 
 

@@ -17,6 +17,7 @@ from app.services.sync.day_replay import (
 from app.services.sync.google_enrichment import create_google_progress_callback, run_google_enrichment
 from app.services.sync.google_only import collect_google_only, load_google_resync_targets
 from app.services.sync.mode import SyncMode
+from app.services.sync.replay_reference import DEFAULT_DAY_REPLAY_REFERENCE, DayReplayReference
 from app.utils.dates import subtract_months
 from app.utils.hashing import sha256_digest
 
@@ -35,6 +36,7 @@ class SyncCollectorMixin(SyncPersistenceMixin):
                 context.session,
                 target_date=context.replay_for_date,
                 naf_codes=context.target_naf_codes,
+                reference=context.replay_reference,
             )
             if cached:
                 log_event(
@@ -44,6 +46,7 @@ class SyncCollectorMixin(SyncPersistenceMixin):
                     target_date=context.replay_for_date.isoformat(),
                     cached_establishment_count=len(cached),
                     force_google=context.force_google_replay,
+                    reference=context.replay_reference.value,
                 )
                 return collect_day_replay_from_cache(
                     context,
@@ -55,6 +58,7 @@ class SyncCollectorMixin(SyncPersistenceMixin):
                 run_id=str(context.run.id),
                 scope_key=context.run.scope_key,
                 target_date=context.replay_for_date.isoformat(),
+                reference=context.replay_reference.value,
             )
 
         if not context.mode.requires_sirene_fetch:
@@ -311,6 +315,7 @@ class SyncCollectorMixin(SyncPersistenceMixin):
                 context.session,
                 target_date=context.replay_for_date,
                 naf_codes=context.target_naf_codes or naf_codes,
+                reference=context.replay_reference,
             )
             existing_sirets = {est.siret for est in candidates if getattr(est, "siret", None)}
             additional = [
@@ -327,6 +332,7 @@ class SyncCollectorMixin(SyncPersistenceMixin):
                     run_id=str(context.run.id),
                     scope_key=context.run.scope_key,
                     target_date=context.replay_for_date.isoformat(),
+                    reference=context.replay_reference.value,
                     rehydrated_count=len(additional),
                     total_candidates=len(candidates),
                 )
@@ -336,6 +342,7 @@ class SyncCollectorMixin(SyncPersistenceMixin):
                     run_id=str(context.run.id),
                     scope_key=context.run.scope_key,
                     target_date=context.replay_for_date.isoformat(),
+                    reference=context.replay_reference.value,
                     total_candidates=len(candidates),
                 )
         return candidates, force_refresh
@@ -412,11 +419,14 @@ class SyncCollectorMixin(SyncPersistenceMixin):
         *,
         target_date: date,
         naf_codes: Sequence[str] | None = None,
+        reference: DayReplayReference | None = None,
     ) -> list[models.Establishment]:
+        resolved_reference = reference or DEFAULT_DAY_REPLAY_REFERENCE
         return load_replay_establishments(
             session,
             target_date=target_date,
             naf_codes=naf_codes,
+            reference=resolved_reference,
         )
 
     def _filter_ready_google_matches(

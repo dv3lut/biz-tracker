@@ -15,6 +15,7 @@ from app.db import Base, get_engine, session_scope
 from app.db.migrations import run_schema_upgrades
 from app.logging_config import configure_logging
 from app.services.sync.mode import SyncMode
+from app.services.sync.replay_reference import DayReplayReference
 from app.services.sync_service import SyncService
 from app.db import models
 
@@ -47,6 +48,7 @@ def _execute_sync(
     check_for_updates: bool,
     mode: SyncMode,
     replay_for_date: date | None = None,
+    replay_reference: DayReplayReference = DayReplayReference.CREATION_DATE,
     target_naf_codes: list[str] | None = None,
     target_client_ids: list[str] | None = None,
     notify_admins: bool = True,
@@ -62,6 +64,7 @@ def _execute_sync(
             check_informations=check_for_updates,
             mode=mode,
             replay_for_date=replay_for_date,
+            replay_reference=replay_reference,
             target_naf_codes=target_naf_codes,
             target_client_ids=[UUID(value) for value in target_client_ids] if target_client_ids else None,
             notify_admins=notify_admins,
@@ -104,6 +107,15 @@ def sync(
         "--replay-for-date",
         help="Date (YYYY-MM-DD) à rejouer lorsque le mode 'day_replay' est sélectionné.",
     ),
+    replay_reference: DayReplayReference = typer.Option(
+        DayReplayReference.CREATION_DATE,
+        "--replay-reference",
+        case_sensitive=False,
+        help=(
+            "Référence utilisée pour le rejeu: 'creation_date' filtre par date Sirene, "
+            "'insertion_date' par date d'insertion en base (mode 'day_replay')."
+        ),
+    ),
     naf_codes: Optional[List[str]] = typer.Option(
         None,
         "--naf-code",
@@ -132,6 +144,7 @@ def sync(
         check_for_updates=check_for_updates,
         mode=mode,
         replay_for_date=replay_date,
+        replay_reference=replay_reference,
         naf_codes=naf_codes,
         target_client_ids=target_client_ids,
         notify_admins=notify_admins,
@@ -141,6 +154,7 @@ def sync(
         check_for_updates=request.check_for_updates,
         mode=request.mode,
         replay_for_date=request.replay_for_date,
+        replay_reference=request.replay_reference,
         target_naf_codes=request.naf_codes,
         target_client_ids=[str(client_id) for client_id in request.target_client_ids] if request.target_client_ids else None,
         notify_admins=request.notify_admins,

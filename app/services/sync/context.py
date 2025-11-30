@@ -12,6 +12,7 @@ from app.clients.sirene_client import SireneClient
 from app.config import Settings
 from app.db import models
 from app.services.sync.mode import SyncMode
+from app.services.sync.replay_reference import DayReplayReference, DEFAULT_DAY_REPLAY_REFERENCE
 
 
 @dataclass
@@ -31,6 +32,7 @@ class SyncContext:
     admin_notifications_enabled: bool = True
     target_client_ids: list[UUID] | None = None
     force_google_replay: bool = False
+    replay_reference: DayReplayReference = DEFAULT_DAY_REPLAY_REFERENCE
 
 
 @dataclass
