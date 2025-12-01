@@ -26,7 +26,7 @@ export const SidebarNav = ({ sections, activeSection, onSelect, collapsed, onTog
     <aside className={`sidebar${collapsed ? " sidebar--collapsed" : ""}`}>
       <div className="sidebar-header">
         <div className="sidebar-brand">
-          <span className="sidebar-title">Biz Tracker</span>
+          <span className="sidebar-title">Business tracker</span>
           <span className="sidebar-subtitle">Console Admin</span>
         </div>
         <button type="button" className="sidebar-toggle" onClick={onToggleCollapse} aria-label={toggleLabel}>

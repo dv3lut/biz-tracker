@@ -1,7 +1,7 @@
 {
   "info": {
-    "name": "Biz Tracker Admin API",
-    "description": "Collection Postman pour piloter et monitorer l'API d'administration Biz Tracker.",
+    "name": "Business tracker Admin API",
+    "description": "Collection Postman pour piloter et monitorer l'API d'administration Business tracker.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
     "version": {
       "major": 1,

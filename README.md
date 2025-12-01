@@ -1,6 +1,6 @@
-# Biz Tracker Admin UI
+# Business tracker Admin UI
 
-Interface d'administration React pour piloter l'API Biz Tracker. Le projet peut vivre hors du dépôt backend (ex. dossier frère `../biz-tracker-admin-ui`).
+Interface d'administration React pour piloter l'API Business tracker. Le projet peut vivre hors du dépôt backend (ex. dossier frère `../biz-tracker-admin-ui`).
 
 ## Prérequis
 

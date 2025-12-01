@@ -12,7 +12,7 @@ interface EmailTestPanelProps {
 
 const presetTemplates: Record<string, { subject: string; recipients: string; body: string }> = {
   mailhog: {
-    subject: "[Mailhog] Test Biz Tracker",
+    subject: "[Mailhog] Test Business tracker",
     recipients: "test@example.com",
     body: [
       "Bonjour équipe,",
@@ -21,11 +21,11 @@ const presetTemplates: Record<string, { subject: string; recipients: string; bod
       "Vérifiez la délivrance sur http://localhost:8025.",
       "",
       "--",
-      "Biz Tracker",
+      "Business tracker",
     ].join("\n"),
   },
   mailjet: {
-    subject: "[Mailjet] Test Biz Tracker",
+    subject: "[Mailjet] Test Business tracker",
     recipients: "alertes@votredomaine.fr",
     body: [
       "Bonjour équipe,",
@@ -34,7 +34,7 @@ const presetTemplates: Record<string, { subject: string; recipients: string; bod
       "Vous pouvez adapter le contenu avant envoi.",
       "",
       "--",
-      "Biz Tracker",
+      "Business tracker",
     ].join("\n"),
   },
 };
@@ -42,7 +42,7 @@ const presetTemplates: Record<string, { subject: string; recipients: string; bod
 export const EmailTestPanel = ({ onSend, isSending, feedbackMessage, errorMessage, onResetMessages }: EmailTestPanelProps) => {
   const [subject, setSubject] = useState("");
   const [recipientsInput, setRecipientsInput] = useState("");
-  const [body, setBody] = useState("Bonjour,\n\nCeci est un test Biz Tracker.\n\n--\nBiz Tracker\n");
+  const [body, setBody] = useState("Bonjour,\n\nCeci est un test Business tracker.\n\n--\nBusiness tracker\n");
 
   const parseRecipients = (value: string): string[] => {
     return value
@@ -79,7 +79,7 @@ export const EmailTestPanel = ({ onSend, isSending, feedbackMessage, errorMessag
   const handleReset = () => {
     setSubject("");
     setRecipientsInput("");
-    setBody("Bonjour,\n\nCeci est un test Biz Tracker.\n\n--\nBiz Tracker\n");
+    setBody("Bonjour,\n\nCeci est un test Business tracker.\n\n--\nBusiness tracker\n");
     onResetMessages();
   };
 
@@ -108,7 +108,7 @@ export const EmailTestPanel = ({ onSend, isSending, feedbackMessage, errorMessag
           type="text"
           value={subject}
           onChange={(event) => setSubject(event.target.value)}
-          placeholder="Ex. [Mailjet] Test Biz Tracker"
+          placeholder="Ex. [Mailjet] Test Business tracker"
           disabled={isSending}
         />
 

@@ -1,4 +1,4 @@
-# Agents — Biz Tracker Frontend
+# Agents — Business tracker Frontend
 
 Ce fichier documente les pré-requis, configurations et patterns à respecter lors du développement assisté par Copilot sur le frontend.
 

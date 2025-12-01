@@ -117,7 +117,7 @@ export const formatNafCodesPreview = (codes?: string[] | null, limit = 5): strin
 export const describeDayReplayReference = (reference: DayReplayReference): string => {
   switch (reference) {
     case "insertion_date":
-      return "Insertion dans Biz Tracker";
+      return "Insertion dans Business tracker";
     case "creation_date":
     default:
       return "Date de création Sirene";

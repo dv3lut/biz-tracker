@@ -67,8 +67,8 @@ const DAY_REPLAY_REFERENCE_OPTIONS: Array<{
   },
   {
     value: "insertion_date",
-    title: "Basée sur l'insertion Biz Tracker",
-    description: "Utilise la date d'insertion dans Biz Tracker pour rejouer uniquement les alertes importées ce jour-là.",
+    title: "Basée sur l'insertion Business tracker",
+    description: "Utilise la date d'insertion dans Business tracker pour rejouer uniquement les alertes importées ce jour-là.",
   },
 ];
 
