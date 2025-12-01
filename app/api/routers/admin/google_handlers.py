@@ -117,7 +117,7 @@ def manual_google_check_action(
     if notify_clients and found:
         assert email_service is not None  # placate type checker
         subject = (
-            f"[{settings.sync.scope_key}] Page Google détectée pour "
+            f"Business tracker · Page Google détectée pour "
             f"{establishment.name or establishment.siret}"
         )
         message_lines = [
@@ -125,7 +125,7 @@ def manual_google_check_action(
             "",
             *format_establishment_summary(establishment),
             "",
-            "Cette recherche a été déclenchée depuis la console d'administration Biz Tracker.",
+            "Cette recherche a été déclenchée depuis la console d'administration Business tracker.",
         ]
         if not establishment.google_place_url:
             message_lines.insert(
@@ -135,7 +135,7 @@ def manual_google_check_action(
         body = "\n".join(message_lines)
 
         if admin_emails:
-            admin_subject = f"[{settings.sync.scope_key}] Check Google relancé: {establishment.name or establishment.siret}"
+            admin_subject = f"Business tracker · Check Google relancé: {establishment.name or establishment.siret}"
             admin_message_lines = [
                 "Un check Google manuel a été relancé depuis l'administration.",
                 "",

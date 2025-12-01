@@ -1,6 +1,6 @@
 # Kibana Observability
 
-Ce dossier contient les ressources nécessaires pour superviser Biz Tracker via l’Elastic Stack.
+Ce dossier contient les ressources nécessaires pour superviser Business tracker via l'Elastic Stack.
 
 ## Pré-requis
 
@@ -18,7 +18,7 @@ Ce dossier contient les ressources nécessaires pour superviser Biz Tracker via 
 
 1. Ouvrir Kibana (`http://localhost:5601`) > Management > **Stack Management** > **Saved Objects** > **Import**.
 2. Sélectionner le fichier `docs/kibana/dashboards.ndjson` et cocher l’option « Replace index patterns with matching ones » si demandée.
-3. Après import, un data view `biz-tracker-observability-*` et le dashboard **“Biz Tracker - Synchronisation”** sont disponibles.
+3. Après import, un data view `biz-tracker-observability-*` et le dashboard **"Business tracker - Synchronisation"** sont disponibles.
 
 ## Contenu du dashboard
 

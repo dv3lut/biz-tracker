@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 class NafSubCategoryStats(BaseModel):
     subcategory_id: UUID = Field(description="Identifiant de la sous-catégorie NAF.")
-    naf_code: str = Field(description="Code NAF exact suivi par Biz Tracker.")
+    naf_code: str = Field(description="Code NAF exact suivi par Business tracker.")
     name: str = Field(description="Libellé lisible de la sous-catégorie.")
     establishment_count: int = Field(description="Nombre d'établissements correspondant à ce code NAF.")
     google_found: int = Field(description="Nombre d'établissements avec fiche Google identifiée.")

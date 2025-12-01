@@ -114,7 +114,7 @@ class SyncSummaryMixin:
             return {"sent": False, "recipients": recipients, "subject": None, "reason": "email_not_configured"}
 
         started_at_display = run.started_at.strftime("%Y-%m-%d %H:%M") if run.started_at else "inconnu"
-        subject = f"[{run.scope_key}] Synthese run {started_at_display}"
+        subject = f"Business tracker · Synthese run {started_at_display}"
         body = self._render_run_summary_email(run, summary)
 
         try:

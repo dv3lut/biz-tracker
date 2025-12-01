@@ -160,7 +160,11 @@ class AlertService:
             )
 
         if filtered_establishments and self._admin_notifications_enabled:
-            base_client_subject = f"[{self._run.scope_key}] {len(filtered_establishments)} fiche(s) Google détectée(s)"
+            count = len(filtered_establishments)
+            fiche_plural = "fiches" if count > 1 else "fiche"
+            base_client_subject = (
+                f"Business tracker · {count} {fiche_plural} Google détectée{'s' if count > 1 else ''}"
+            )
             admin_subject = f"{base_client_subject} - administration"
             admin_text_body, admin_html_body = render_admin_email(self._formatter, filtered_establishments)
 
@@ -274,7 +278,9 @@ class AlertService:
             if not matches and not send_zero_digest:
                 continue
             filter_summary = summarize_client_filters(client)
-            subject = f"[{self._run.scope_key}] {len(matches)} fiche(s) Google détectée(s)"
+            match_count = len(matches)
+            match_fiche_plural = "fiches" if match_count > 1 else "fiche"
+            subject = f"Business tracker · {match_count} {match_fiche_plural} Google détectée{'s' if match_count > 1 else ''}"
             text_body, html_body = render_client_email(
                 self._formatter,
                 matches,

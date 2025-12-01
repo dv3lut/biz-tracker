@@ -1,4 +1,4 @@
-# Biz Tracker Back
+# Business tracker Back
 
 Solution de veille sur les nouveaux établissements de restauration (NAF 56.10A) via l'API Sirene.
 

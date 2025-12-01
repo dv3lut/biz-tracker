@@ -49,9 +49,9 @@ def send_test_email(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Aucun destinataire configuré.")
 
     provider = settings.provider or "SMTP"
-    subject = payload.subject or f"[{provider}] Test Biz Tracker"
+    subject = payload.subject or f"[{provider}] Test Business tracker"
     body = payload.body or (
-        "Ce message confirme que la configuration SMTP de Biz Tracker fonctionne.\n"
+        "Ce message confirme que la configuration SMTP de Business tracker fonctionne.\n"
         "Vous recevez cet e-mail car l'endpoint /admin/email/test a été appelé."
     )
 

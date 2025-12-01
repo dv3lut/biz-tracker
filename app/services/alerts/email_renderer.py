@@ -168,10 +168,10 @@ def render_client_email(
             "<p style=\"margin-top:16px;\">Nous vous notifierons dès qu'un nouvel établissement correspondra à ces critères.</p>"
         )
 
-    lines.extend(["Cordialement,", "L'équipe Biz Tracker"])
+    lines.extend(["Cordialement,", "L'équipe Business tracker"])
 
     html_parts.extend([
-        "<p style=\"margin-top:24px;\">Cordialement,<br/>L'équipe Biz Tracker</p>",
+        "<p style=\"margin-top:24px;\">Cordialement,<br/>L'équipe Business tracker</p>",
         "</body>",
         "</html>",
     ])
@@ -271,13 +271,13 @@ def render_admin_email(
 
     lines.extend([
         "Bien à vous,",
-        "L'équipe Biz Tracker",
+        "L'équipe Business tracker",
     ])
 
     html_parts.extend([
         "</tbody>",
         "</table>",
-        "<p style=\"margin-top:24px;\">Bien à vous,<br/>L'équipe Biz Tracker</p>",
+        "<p style=\"margin-top:24px;\">Bien à vous,<br/>L'équipe Business tracker</p>",
         "</body>",
         "</html>",
     ])
