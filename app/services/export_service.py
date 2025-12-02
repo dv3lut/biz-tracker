@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 from io import BytesIO
-from typing import Iterable, Literal, Mapping
+from typing import Iterable, Literal, Mapping, Sequence
 
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
@@ -29,6 +29,19 @@ def _compose_address(establishment: models.Establishment) -> str:
     return " ".join(filter(None, parts)).strip()
 
 
+def _compose_full_address(establishment: models.Establishment) -> str | None:
+    street = _compose_address(establishment)
+    city_parts = [
+        establishment.code_postal,
+        establishment.libelle_commune or establishment.libelle_commune_etranger,
+    ]
+    city_line = " ".join(filter(None, city_parts)).strip()
+    segments = [segment for segment in [street, city_line] if segment]
+    if not segments:
+        return None
+    return ", ".join(segments)
+
+
 def _format_date(value: object | None) -> str | None:
     if not value:
         return None
@@ -38,19 +51,18 @@ def _format_date(value: object | None) -> str | None:
     return str(value)
 
 
-def _format_subcategory_label(
+def _resolve_category_columns(
     naf_code: str | None,
+    naf_label: str | None,
     lookup: Mapping[str, tuple[str | None, str | None]] | None,
-) -> str | None:
+) -> tuple[str | None, str | None]:
     if not naf_code or not lookup:
-        return None
+        return naf_label, None
     token = naf_code.strip().upper()
     if not token:
-        return None
+        return naf_label, None
     category_name, subcategory_name = lookup.get(token, (None, None))
-    if subcategory_name and category_name and category_name != subcategory_name:
-        return f"{subcategory_name} ({category_name})"
-    return subcategory_name or category_name
+    return category_name or naf_label, subcategory_name
 
 
 def _apply_hyperlink(sheet, row_index: int, column_index: int, url: str | None) -> None:
@@ -66,6 +78,7 @@ def build_google_places_workbook(
     *,
     mode: Literal["admin", "client"] = "admin",
     subcategory_lookup: Mapping[str, tuple[str | None, str | None]] | None = None,
+    listing_statuses: Sequence[str] | None = None,
 ) -> BytesIO:
     """Generate an Excel workbook listing establishments enriched with Google Places."""
 
@@ -73,16 +86,17 @@ def build_google_places_workbook(
     sheet = workbook.active
     sheet.title = "Google Places (clients)" if mode == "client" else "Google Places (admin)"
     if mode == "client":
+        selected_statuses = list(listing_statuses or [])
+        include_listing_status = len(selected_statuses) != 1
         headers = [
-            "Date création",
             "Nom",
             "Adresse",
-            "Commune",
-            "Code postal",
             "Catégorie",
+            "Sous-catégorie",
             "Lien Google",
-            "Statut fiche Google",
         ]
+        if include_listing_status:
+            headers.append("Statut fiche Google")
     else:
         headers = [
             "Date création",
@@ -107,26 +121,34 @@ def build_google_places_workbook(
         ]
     sheet.append(headers)
 
+    if mode == "client":
+        link_column_index = headers.index("Lien Google") + 1
+    else:
+        link_column_index = None
+
     for establishment in establishments:
         creation_date = _format_date(establishment.date_creation)
         address = _compose_address(establishment)
         commune = establishment.libelle_commune or establishment.libelle_commune_etranger
         google_url = establishment.google_place_url
         if mode == "client":
-            sheet.append(
-                [
-                    creation_date,
-                    establishment.name,
-                    address,
-                    commune,
-                    establishment.code_postal,
-                    _format_subcategory_label(establishment.naf_code, subcategory_lookup)
-                    or establishment.naf_libelle,
-                    google_url,
-                    describe_listing_age_status(establishment.google_listing_age_status),
-                ]
+            full_address = _compose_full_address(establishment)
+            category_name, subcategory_name = _resolve_category_columns(
+                establishment.naf_code,
+                establishment.naf_libelle,
+                subcategory_lookup,
             )
-            _apply_hyperlink(sheet, sheet.max_row, 7, google_url)
+            row = [
+                establishment.name,
+                full_address,
+                category_name,
+                subcategory_name,
+                google_url,
+            ]
+            if include_listing_status:
+                row.append(describe_listing_age_status(establishment.google_listing_age_status))
+            sheet.append(row)
+            _apply_hyperlink(sheet, sheet.max_row, link_column_index, google_url)
             continue
 
         sheet.append(
@@ -152,9 +174,9 @@ def build_google_places_workbook(
                 _format_datetime(establishment.last_seen_at),
             ]
         )
-        row_idx = sheet.max_row
-        _apply_hyperlink(sheet, row_idx, 2, build_annuaire_etablissement_url(establishment.siret))
-        _apply_hyperlink(sheet, row_idx, 10, google_url)
+    row_idx = sheet.max_row
+    _apply_hyperlink(sheet, row_idx, 2, build_annuaire_etablissement_url(establishment.siret))
+    _apply_hyperlink(sheet, row_idx, 10, google_url)
 
     sheet.freeze_panes = "A2"
 

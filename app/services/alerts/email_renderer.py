@@ -38,6 +38,11 @@ def render_client_email(
     filters: ClientFilterSummary | None = None,
 ) -> tuple[str, str]:
     match_count = len(establishments)
+    selected_statuses = list(filters.listing_statuses) if filters and filters.listing_statuses else list(STATUS_SECTION_ORDER)
+    section_statuses = [status for status in STATUS_SECTION_ORDER if status in selected_statuses]
+    if not section_statuses:
+        section_statuses = list(STATUS_SECTION_ORDER)
+    multi_status_selection = len(section_statuses) > 1
 
     lines: list[str] = ["Bonjour,", ""]
     html_parts: list[str] = [
@@ -62,13 +67,82 @@ def render_client_email(
                 f"<p style=\"margin:4px 0 0;\"><strong>Codes NAF ciblés :</strong> {escape(naf_codes)}</p>"
             )
 
-    grouped_by_status: dict[str, list[models.Establishment]] = {
-        status: [] for status in STATUS_SECTION_ORDER
-    }
+    grouped_by_status: dict[str, list[models.Establishment]] = {status: [] for status in section_statuses}
+    fallback_bucket: list[models.Establishment] = []
     for establishment in establishments:
         normalized_status = normalize_listing_age_status(establishment.google_listing_age_status)
-        bucket = normalized_status if normalized_status in grouped_by_status else "unknown"
-        grouped_by_status[bucket].append(establishment)
+        if normalized_status in grouped_by_status:
+            grouped_by_status[normalized_status].append(establishment)
+        else:
+            fallback_bucket.append(establishment)
+    if fallback_bucket and section_statuses:
+        grouped_by_status.setdefault(section_statuses[0], []).extend(fallback_bucket)
+
+    def _build_item_blocks(establishment: models.Establishment) -> tuple[list[str], str]:
+        name = establishment.name or "(nom indisponible)"
+        full_address = formatter.format_full_address(establishment)
+        category_name, subcategory_name = formatter.resolve_category_and_subcategory(establishment.naf_code)
+        if not category_name:
+            category_name = establishment.naf_libelle
+        google_url = establishment.google_place_url
+
+        item_lines = [f"- {name}"]
+        if full_address:
+            item_lines.append(f"  {full_address}")
+        if category_name:
+            item_lines.append(f"  Catégorie : {category_name}")
+        if subcategory_name:
+            item_lines.append(f"  Sous-catégorie : {subcategory_name}")
+        if google_url:
+            item_lines.append(f"  Fiche Google : {google_url}")
+        else:
+            item_lines.append("  Fiche Google : en cours de disponibilité")
+        if multi_status_selection:
+            status_label, _ = formatter.describe_listing_age(establishment)
+            item_lines.append(f"  Statut fiche Google : {status_label}")
+
+        item_html_parts = [f"<strong>{escape(name)}</strong>"]
+        if full_address:
+            item_html_parts.append(f"<div>{escape(full_address)}</div>")
+        if category_name:
+            item_html_parts.append(f"<div>Catégorie : {escape(category_name)}</div>")
+        if subcategory_name:
+            item_html_parts.append(f"<div>Sous-catégorie : {escape(subcategory_name)}</div>")
+        if google_url:
+            link = escape(google_url)
+            item_html_parts.append(
+                f"<div><a href=\"{link}\" style=\"color:#2563eb;text-decoration:none;\">Voir la fiche Google</a></div>"
+            )
+        else:
+            item_html_parts.append(
+                "<div style=\"color:#6b7280;\">Lien Google indisponible pour le moment</div>"
+            )
+        if multi_status_selection:
+            status_label, _ = formatter.describe_listing_age(establishment)
+            item_html_parts.append(f"<div>Statut fiche Google : {escape(status_label)}</div>")
+        item_html = "<li style=\"margin-bottom:16px;\">" + "".join(item_html_parts) + "</li>"
+        return item_lines, item_html
+
+    def _append_establishments(
+        items: Sequence[models.Establishment],
+        *,
+        show_empty_placeholder: bool,
+    ) -> None:
+        if items:
+            html_parts.append("<ul style=\"padding-left:18px;margin:0;\">")
+            for establishment in items:
+                item_lines, item_html = _build_item_blocks(establishment)
+                lines.extend(item_lines)
+                lines.append("")
+                html_parts.append(item_html)
+            html_parts.append("</ul>")
+        elif show_empty_placeholder:
+            lines.append("  0 nouvel établissement détecté.")
+            html_parts.append(
+                "<p style=\"color:#6b7280;margin:4px 0 16px;\">0 nouvel établissement détecté.</p>"
+            )
+        if items or show_empty_placeholder:
+            lines.append("")
 
     if match_count:
         lines.append("Nous avons identifié de nouvelles fiches Google My Business pour vos établissements :")
@@ -96,66 +170,20 @@ def render_client_email(
         lines.append("Nous vous notifierons dès qu'un nouvel établissement correspondra à ces critères.")
         lines.append("")
 
-    for status in STATUS_SECTION_ORDER:
-        section_title = _section_title_for_status(status)
-        section_establishments = grouped_by_status.get(status, [])
-        lines.append(section_title)
-        html_parts.append(
-            f"<h3 style=\"font-size:18px;margin:24px 0 8px;\">{escape(section_title)}</h3>"
-        )
-        if section_establishments:
-            html_parts.append("<ul style=\"padding-left:18px;margin:0;\">")
-            for establishment in section_establishments:
-                name = establishment.name or "(nom indisponible)"
-                street_line, commune_line = formatter.format_address_lines(establishment)
-                google_url = establishment.google_place_url
-                subcategory_label = formatter.format_subcategory_label(establishment.naf_code)
-
-                lines.append(f"- {name}")
-                if street_line:
-                    lines.append(f"  {street_line}")
-                if commune_line:
-                    lines.append(f"  {commune_line}")
-                if subcategory_label:
-                    lines.append(f"  Catégorie : {subcategory_label}")
-                if google_url:
-                    lines.append(f"  Fiche Google : {google_url}")
-                else:
-                    lines.append("  Fiche Google : en cours de disponibilité")
-                status_label, _ = formatter.describe_listing_age(establishment)
-                if google_url:
-                    lines.append(f"  Statut fiche Google : {status_label}")
-                lines.append("")
-
-                item_html = [f"<strong>{escape(name)}</strong>"]
-                if street_line:
-                    item_html.append(f"<div>{escape(street_line)}</div>")
-                if commune_line:
-                    item_html.append(f"<div>{escape(commune_line)}</div>")
-                if subcategory_label:
-                    item_html.append(
-                        f"<div style=\"color:#93c5fd;\">Sous-catégorie : {escape(subcategory_label)}</div>"
-                    )
-                if google_url:
-                    link = escape(google_url)
-                    item_html.append(
-                        f"<div><a href=\"{link}\" style=\"color:#2563eb;text-decoration:none;\">Voir la fiche Google</a></div>"
-                    )
-                else:
-                    item_html.append(
-                        "<div style=\"color:#6b7280;\">Lien Google indisponible pour le moment</div>"
-                    )
-                status_label, _ = formatter.describe_listing_age(establishment)
-                item_html.append(f"<div>Statut fiche Google : {escape(status_label)}</div>")
-                html_parts.append("<li style=\"margin-bottom:16px;\">" + "".join(item_html) + "</li>")
-
-            html_parts.append("</ul>")
-        else:
-            lines.append("  0 nouvel établissement détecté.")
+    if multi_status_selection:
+        for status in section_statuses:
+            section_title = _section_title_for_status(status)
+            section_establishments = grouped_by_status.get(status, [])
+            lines.append(section_title)
             html_parts.append(
-                "<p style=\"color:#6b7280;margin:4px 0 16px;\">0 nouvel établissement détecté.</p>"
+                f"<h3 style=\"font-size:18px;margin:24px 0 8px;\">{escape(section_title)}</h3>"
             )
-        lines.append("")
+            _append_establishments(section_establishments, show_empty_placeholder=True)
+    else:
+        combined_establishments: list[models.Establishment] = []
+        for status in section_statuses:
+            combined_establishments.extend(grouped_by_status.get(status, []))
+        _append_establishments(combined_establishments, show_empty_placeholder=False)
 
     if summary_html:
         html_parts.append(

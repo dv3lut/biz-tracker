@@ -310,9 +310,10 @@ def build_google_places_export_response(
         establishments,
         mode=mode,
         subcategory_lookup=subcategory_lookup,
+        listing_statuses=selected_statuses,
     )
     timestamp = utcnow().strftime("%Y%m%d-%H%M%S")
-    filename = f"biz-tracker-google-places-{mode}-{timestamp}.xlsx"
+    filename = f"business-tracker-google-places-{mode}-{timestamp}.xlsx"
 
     log_event(
         "export.google.places",

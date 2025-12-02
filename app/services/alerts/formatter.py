@@ -112,6 +112,13 @@ class EstablishmentFormatter:
         commune_line = " ".join(commune_parts) or None
         return street_line, commune_line
 
+    def format_full_address(self, establishment: models.Establishment) -> str | None:
+        street_line, commune_line = self.format_address_lines(establishment)
+        parts = [part for part in [street_line, commune_line] if part]
+        if not parts:
+            return None
+        return ", ".join(parts)
+
     def get_siret_display_and_url(self, siret: str | None) -> tuple[str, str | None]:
         siret_display = siret or "N/A"
         return siret_display, build_annuaire_etablissement_url(siret)
@@ -130,6 +137,9 @@ class EstablishmentFormatter:
         if subcategory_name and category_name and category_name != subcategory_name:
             return f"{subcategory_name} ({category_name})"
         return subcategory_name or category_name
+
+    def resolve_category_and_subcategory(self, naf_code: str | None) -> tuple[str | None, str | None]:
+        return self._resolve_subcategory_info(naf_code)
 
     def _resolve_subcategory_info(self, naf_code: str | None) -> tuple[str | None, str | None]:
         if not naf_code:

@@ -103,6 +103,10 @@ class EmailRendererTests(unittest.TestCase):
         self.assertIn("Statuts Google surveillés", text_body)
         self.assertIn("Codes NAF ciblés", text_body)
         self.assertIn("Lien Google indisponible", html_body)
+        self.assertNotIn("Statut fiche Google", text_body)
+        self.assertNotIn("Statut fiche Google", html_body)
+        self.assertNotIn("<h3", html_body)
+        self.assertIn("5610A", text_body)
         self.assertIn("Statuts Google surveillés", html_body)
 
     def test_client_email_zero_matches_prompts_future_notification(self) -> None:

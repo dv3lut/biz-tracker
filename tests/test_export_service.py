@@ -71,11 +71,53 @@ def test_build_google_places_workbook_client_mode_uses_lookup():
     establishment = _make_establishment(google_listing_age_status="not_recent_creation")
     lookup = {"5610A": ("Restauration", "Bistrot")}  # category, subcategory
 
-    buffer = export_service.build_google_places_workbook([establishment], mode="client", subcategory_lookup=lookup)
+    buffer = export_service.build_google_places_workbook(
+        [establishment],
+        mode="client",
+        subcategory_lookup=lookup,
+        listing_statuses=["recent_creation", "not_recent_creation"],
+    )
     sheet, rows = _load_rows(buffer)
 
     assert sheet.title == "Google Places (clients)"
-    assert rows[1][5] == "Bistrot (Restauration)"
+    assert rows[0][:6] == (
+        "Nom",
+        "Adresse",
+        "Catégorie",
+        "Sous-catégorie",
+        "Lien Google",
+        "Statut fiche Google",
+    )
+    assert rows[1][0] == "Chez Test"
+    assert rows[1][1] == "10 Rue des Tests, 75000 Paris"
+    assert rows[1][2] == "Restauration"
+    assert rows[1][3] == "Bistrot"
+    assert rows[1][5] == "Création ancienne"
+    link_cell = sheet.cell(row=2, column=5)
+    assert link_cell.hyperlink and "maps.google.com" in link_cell.hyperlink.target
+
+
+def test_client_export_hides_status_when_single_filter():
+    establishment = _make_establishment()
+
+    buffer = export_service.build_google_places_workbook(
+        [establishment],
+        mode="client",
+        subcategory_lookup=None,
+        listing_statuses=["recent_creation"],
+    )
+    _, rows = _load_rows(buffer)
+
+    expected_headers = ("Nom", "Adresse", "Catégorie", "Sous-catégorie", "Lien Google")
+    assert rows[0][:5] == expected_headers
+    assert rows[1][:5] == (
+        establishment.name,
+        "10 Rue des Tests, 75000 Paris",
+        establishment.naf_libelle,
+        None,
+        establishment.google_place_url,
+    )
+    assert rows[1][5] is None
 
 
 def test_build_alerts_workbook_includes_payload_and_links():
@@ -104,9 +146,23 @@ def test_export_helpers_normalize_values():
 
     assert export_service._format_datetime(None) is None
     assert export_service._format_date(None) is None
-    assert export_service._format_subcategory_label("", {}) is None
     assert export_service._compose_address(establishment) == "10 BIS Rue des Tests"
+    assert export_service._compose_full_address(establishment) == "10 BIS Rue des Tests, 75000 Paris"
     assert export_service._format_date(datetime(2024, 1, 1)) == "2024-01-01T00:00:00"
     assert export_service._format_datetime(datetime(2024, 1, 1, 12, 0, 0)) == "2024-01-01T12:00:00"
     lookup = {"5610A": ("Restauration", "Bistrot")}
-    assert export_service._format_subcategory_label("5610A", lookup) == "Bistrot (Restauration)"
+    assert export_service._resolve_category_columns("5610A", "Fallback", lookup) == ("Restauration", "Bistrot")
+    assert export_service._resolve_category_columns(None, "Fallback", None) == ("Fallback", None)
+
+
+def test_compose_full_address_handles_missing_segments():
+    establishment = _make_establishment(
+        numero_voie=None,
+        type_voie=None,
+        libelle_voie=None,
+        code_postal=None,
+        libelle_commune=None,
+        libelle_commune_etranger=None,
+    )
+
+    assert export_service._compose_full_address(establishment) is None
