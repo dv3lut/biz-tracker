@@ -294,7 +294,7 @@ export const DashboardSection = ({ onUnauthorized }: Props) => {
       const anchor = document.createElement("a");
       anchor.href = url;
       const today = new Date().toISOString().slice(0, 10);
-      anchor.download = `biz-tracker-google-places-${googleExportMode}-${today}.xlsx`;
+      anchor.download = `business-tracker-google-places-${googleExportMode}-${today}.xlsx`;
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
