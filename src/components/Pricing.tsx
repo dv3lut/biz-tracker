@@ -6,7 +6,8 @@ const Pricing = () => {
   const plans = [
     {
       name: "Starter",
-      price: "99",
+      price: "79",
+      originalPrice: "99",
       period: "mois",
       description: "Pour tester le service",
       features: [
@@ -21,7 +22,8 @@ const Pricing = () => {
     },
     {
       name: "Business",
-      price: "249",
+      price: "199",
+      originalPrice: "249",
       period: "mois",
       description: "Le plus populaire",
       features: [
@@ -91,7 +93,12 @@ const Pricing = () => {
                 <p className="text-sm text-muted-foreground mb-4">
                   {plan.description}
                 </p>
-                <div className="flex items-end justify-center gap-1">
+                <div className="flex items-end justify-center gap-2">
+                  {plan.price !== "Sur devis" && plan.originalPrice && (
+                    <span className="text-xl text-muted-foreground line-through">
+                      {plan.originalPrice}€
+                    </span>
+                  )}
                   {plan.price !== "Sur devis" && (
                     <span className="text-4xl font-bold">{plan.price}€</span>
                   )}
