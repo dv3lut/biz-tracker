@@ -6,7 +6,7 @@ const TargetAudience = () => {
     {
       icon: Utensils,
       title: "Solutions pour la restauration",
-      examples: "Zenchef, TheFork, Guestonline, L'Addition...",
+      examples: "Logiciels de caisse, réservation en ligne, gestion de salle...",
     },
     {
       icon: Store,
