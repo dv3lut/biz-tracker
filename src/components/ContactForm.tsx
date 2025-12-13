@@ -172,12 +172,12 @@ const ContactForm = () => {
                     <Phone className="w-5 h-5 text-secondary" />
                   </div>
                   <div>
-                    <h3 className="font-semibold mb-1">Téléphone</h3>
+                    <h3 className="font-semibold mb-1">WhatsApp</h3>
                     <a
-                      href="tel:+33123456789"
+                      href="https://wa.me/33699042706"
                       className="text-sm text-muted-foreground hover:text-secondary transition-colors"
                     >
-                      +33 1 23 45 67 89
+                      +33 6 99 04 27 06
                     </a>
                   </div>
                 </div>
