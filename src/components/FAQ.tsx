@@ -9,7 +9,7 @@ const FAQ = () => {
   const faqs = [
     {
       question: "D'où viennent les données ?",
-      answer: "Nos données proviennent des registres officiels français (INPI, INSEE). Nous analysons quotidiennement ces sources pour détecter toutes les nouvelles créations d'entreprises et d'établissements en France.",
+      answer: "Nos données proviennent des registres officiels français. Nous analysons quotidiennement ces sources pour détecter toutes les nouvelles créations d'entreprises et d'établissements en France.",
     },
     {
       question: "À quelle fréquence les données sont-elles mises à jour ?",

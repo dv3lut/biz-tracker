@@ -26,7 +26,7 @@ const Benefits = () => {
     {
       icon: Shield,
       title: "Données officielles et fiables",
-      description: "Sources vérifiées (INPI, INSEE) pour une qualité de données irréprochable.",
+      description: "Sources officielles vérifiées pour une qualité de données irréprochable.",
     },
     {
       icon: Sparkles,

@@ -6,7 +6,7 @@ const HowItWorks = () => {
     {
       icon: Database,
       title: "Détection automatique",
-      description: "Notre système analyse quotidiennement les registres officiels (INPI, INSEE) pour identifier toutes les nouvelles créations d'entreprises et d'établissements en France.",
+      description: "Notre système analyse quotidiennement les registres officiels pour identifier toutes les nouvelles créations d'entreprises et d'établissements en France.",
     },
     {
       icon: FileSpreadsheet,
