@@ -66,7 +66,7 @@ const Hero = () => {
           <div className="mt-16 flex flex-wrap justify-center gap-8 text-primary-foreground/70 text-sm">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 bg-secondary rounded-full" />
-              <span>Données officielles INPI</span>
+              <span>Données officielles vérifiées</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 bg-secondary rounded-full" />
