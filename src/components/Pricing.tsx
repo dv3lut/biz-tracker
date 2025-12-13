@@ -6,8 +6,8 @@ const Pricing = () => {
   const plans = [
     {
       name: "Starter",
-      price: "79",
-      originalPrice: "99",
+      price: "56",
+      originalPrice: "69",
       period: "mois",
       description: "Pour tester le service",
       features: [
@@ -22,8 +22,8 @@ const Pricing = () => {
     },
     {
       name: "Business",
-      price: "199",
-      originalPrice: "249",
+      price: "128",
+      originalPrice: "159",
       period: "mois",
       description: "Le plus populaire",
       features: [
