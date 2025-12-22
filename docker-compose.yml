@@ -1,0 +1,22 @@
+version: '3'
+
+services:
+  biz-tracker-landing-page:
+    image: dv3lut/biz-tracker-landing-page:latest
+    container_name: biz-tracker-landing-page
+    environment:
+      - VIRTUAL_HOST=business-tracker.fr
+      - LETSENCRYPT_HOST=business-tracker.fr
+      - LETSENCRYPT_EMAIL=you@business-tracker.fr
+      - HTTPS_METHOD=redirect
+    expose:
+      - "80"
+    ports:
+      - "5174:80"
+    networks:
+      - nginx-proxy
+    restart: always
+
+networks:
+  nginx-proxy:
+    external: true
