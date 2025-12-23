@@ -18,12 +18,47 @@ const ContactForm = () => {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const apiBaseUrl = (import.meta.env.VITE_APP_API_BASE_URL ?? "").replace(/\/$/, "");
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
 
-    // Simulate form submission
-    setTimeout(() => {
+    try {
+      const response = await fetch(`${apiBaseUrl}/public/contact`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: formData.name,
+          email: formData.email,
+          company: formData.company,
+          phone: formData.phone || null,
+          message: formData.message || null,
+          website: null,
+        }),
+      });
+
+      if (!response.ok) {
+        let detail = "Impossible d'envoyer le message.";
+        try {
+          const errorPayload = await response.json();
+          if (typeof errorPayload?.detail === "string") {
+            detail = errorPayload.detail;
+          }
+        } catch {
+          // ignore JSON parse errors
+        }
+
+        toast({
+          title: "Erreur d'envoi",
+          description: detail,
+          variant: "destructive",
+        });
+        return;
+      }
+
       toast({
         title: "Message envoyé !",
         description: "Nous vous recontacterons dans les plus brefs délais.",
@@ -35,8 +70,9 @@ const ContactForm = () => {
         phone: "",
         message: "",
       });
+    } finally {
       setIsSubmitting(false);
-    }, 1000);
+    }
   };
 
   const handleChange = (
@@ -157,10 +193,10 @@ const ContactForm = () => {
                   <div>
                     <h3 className="font-semibold mb-1">Email</h3>
                     <a
-                      href="mailto:contact@businesstracking.fr"
+                      href="mailto:contact@business-tracker.fr"
                       className="text-sm text-muted-foreground hover:text-secondary transition-colors"
                     >
-                      contact@businesstracking.fr
+                      contact@business-tracker.fr
                     </a>
                   </div>
                 </div>
