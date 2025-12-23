@@ -227,7 +227,7 @@ class ApiSettings(BaseModel):
     admin_token: str = Field(default="change-me", min_length=8)
     admin_header_name: str = Field(default="X-Admin-Token")
     docs_enabled: bool = Field(default=False)
-    allowed_origins: List[str] = Field(default_factory=lambda: ["http://localhost:5173", "http://localhost:5174"])
+    allowed_origins: List[str] = Field(default_factory=lambda: ["http://localhost:5173", "http://localhost:5174", "http://localhost:8082"])
 
     @field_validator("allowed_origins", mode="before")
     @classmethod
@@ -240,6 +240,17 @@ class ApiSettings(BaseModel):
                 return []
             return [item.strip() for item in stripped.split(",") if item.strip()]
         return value
+    
+
+class PublicContactSettings(BaseModel):
+    enabled: bool = Field(
+        default=True,
+        description="Active l'endpoint public de réception du formulaire landing.",
+    )
+    inbox_address: str = Field(
+        default="contact@business-tracker.fr",
+        description="Adresse de réception (contact) qui reçoit les données du formulaire.",
+    )
 
 
 def _permissive_json_loads(value: str) -> Any:
@@ -310,6 +321,7 @@ class Settings(BaseSettings):
     logging: LoggingSettings = Field(default_factory=LoggingSettings)
     api: ApiSettings = Field(default_factory=ApiSettings)
     google: GoogleSettings = Field(default_factory=GoogleSettings)
+    public_contact: PublicContactSettings = Field(default_factory=PublicContactSettings)
 
     @property
     def is_local(self) -> bool:

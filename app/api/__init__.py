@@ -10,7 +10,7 @@ from app.config import get_settings
 from app.logging_config import configure_logging
 from app.services.sync_scheduler import SyncScheduler
 
-from .routers import admin, health
+from .routers import admin, health, public
 
 _SYNC_SCHEDULER = SyncScheduler()
 
@@ -50,6 +50,7 @@ def create_app() -> FastAPI:
 
     app.include_router(health.router)
     app.include_router(admin.router)
+    app.include_router(public.router)
 
     return app
 

@@ -38,6 +38,7 @@ class EmailService:
         recipients: Iterable[str],
         *,
         html_body: str | None = None,
+        reply_to: str | None = None,
     ) -> None:
         settings = self._settings
         recipient_list = [addr for addr in recipients if addr]
@@ -69,6 +70,8 @@ class EmailService:
             message["Subject"] = subject
             message["From"] = settings.from_address
             message["To"] = ", ".join(recipient_list)
+            if reply_to:
+                message["Reply-To"] = reply_to
             message.set_content(body)
             if html_body:
                 message.add_alternative(html_body, subtype="html")

@@ -1,6 +1,6 @@
 """Router package exports."""
 from __future__ import annotations
 
-from . import admin, health
+from . import admin, health, public
 
-__all__ = ["admin", "health"]
+__all__ = ["admin", "health", "public"]

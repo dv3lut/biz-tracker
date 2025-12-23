@@ -82,6 +82,27 @@ def test_settings_instance_reports_local_environment():
     assert settings.is_local is True
 
 
+def test_settings_includes_public_contact_defaults_and_overrides():
+    settings = config.Settings(
+        environment="Local",
+        database={"url": "postgresql+psycopg://user:pass@localhost/db"},
+        sirene={"api_token": "token"},
+    )
+
+    assert settings.public_contact.enabled is True
+    assert settings.public_contact.inbox_address
+
+    overridden = config.Settings(
+        environment="Local",
+        database={"url": "postgresql+psycopg://user:pass@localhost/db"},
+        sirene={"api_token": "token"},
+        public_contact={"enabled": False, "inbox_address": "sales@business-tracker.fr"},
+    )
+
+    assert overridden.public_contact.enabled is False
+    assert overridden.public_contact.inbox_address == "sales@business-tracker.fr"
+
+
 def test_logging_settings_bool_normalization():
     settings = config.LoggingSettings(
         elasticsearch={

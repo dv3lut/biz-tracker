@@ -48,6 +48,7 @@ def test_email_service_send_skips_when_before_ready(monkeypatch):
 
 def test_email_service_send_uses_smtp(monkeypatch):
     sent_messages: list[tuple[str, list[str]]] = []
+    sent_reply_to: list[str | None] = []
 
     class DummySMTP:
         def __init__(self, host, port) -> None:
@@ -69,11 +70,19 @@ def test_email_service_send_uses_smtp(monkeypatch):
 
         def send_message(self, message, to_addrs):
             sent_messages.append((message["Subject"], to_addrs))
+            sent_reply_to.append(message.get("Reply-To"))
 
     monkeypatch.setattr(email_service, "get_settings", lambda: SimpleNamespace(email=_settings(use_tls=True, smtp_username="user", smtp_password="pass")))
     monkeypatch.setattr(email_service.smtplib, "SMTP", DummySMTP)
 
     service = email_service.EmailService()
-    service.send("Hello", "Body", ["ops@example.com", None], html_body="<p>Body</p>")
+    service.send(
+        "Hello",
+        "Body",
+        ["ops@example.com", None],
+        html_body="<p>Body</p>",
+        reply_to="contact@business-tracker.fr",
+    )
 
     assert sent_messages == [("Hello", ["ops@example.com"])]
+    assert sent_reply_to == ["contact@business-tracker.fr"]

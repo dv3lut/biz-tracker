@@ -13,6 +13,7 @@ from .clients import (
 from .email import AdminEmailConfig, AdminEmailConfigUpdate, EmailTestRequest, EmailTestResponse
 from .establishments import EstablishmentDetailOut, EstablishmentOut
 from .google import GoogleRetryConfigOut, GoogleRetryConfigUpdate, GoogleRetryRule, ManualGoogleCheckResponse
+from .public_contact import PublicContactRequest, PublicContactResponse
 from .naf import (
     NafCategoryCreate,
     NafCategoryOut,
@@ -92,4 +93,6 @@ __all__ = [
     "SyncRunOut",
     "SyncRunReport",
     "SyncStateOut",
+    "PublicContactRequest",
+    "PublicContactResponse",
 ]
