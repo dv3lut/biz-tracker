@@ -22,23 +22,23 @@ const Hero = () => {
           <div className="inline-flex items-center gap-2 bg-background/10 backdrop-blur-sm border border-background/20 rounded-full px-4 py-2 mb-8">
             <Sparkles className="w-4 h-4 text-secondary" />
             <span className="text-sm font-medium text-primary-foreground">
-              Détection automatique • Données ultra-fraîches
+              Alertes quotidiennes • Des centaines de secteurs
             </span>
           </div>
 
           {/* Main Heading */}
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-primary-foreground mb-6 leading-tight">
-            Recevez chaque semaine les nouveaux business créés en France
+            Recevez chaque jour les nouveaux business détectés en France
           </h1>
 
           {/* Subheading */}
           <p className="text-xl md:text-2xl text-primary-foreground/90 mb-4">
-            Prêts à être contactés
+            Triés par secteur d’activité
           </p>
 
           <p className="text-lg text-primary-foreground/80 mb-10 max-w-2xl mx-auto">
-            Business Tracking détecte automatiquement toutes les nouvelles entreprises et établissements en France. 
-            Recevez un fichier de prospects qualifiés directement par email.
+            Business Tracker envoie des alertes quotidiennes par email sur des créations récentes et des mises à jour
+            administratives récentes d’entreprises en France, selon les secteurs que vous avez sélectionnés.
           </p>
 
           {/* CTA Buttons */}
@@ -49,7 +49,7 @@ const Hero = () => {
               onClick={scrollToContact}
               className="text-lg px-8 py-6 h-auto"
             >
-              Tester pendant 2 semaines
+              Essai gratuit 14 jours
               <ArrowRight className="ml-2 w-5 h-5" />
             </Button>
             <Button 
@@ -70,11 +70,11 @@ const Hero = () => {
             </div>
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 bg-secondary rounded-full" />
-              <span>Mise à jour hebdomadaire</span>
+              <span>Envoi par email chaque jour</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 bg-secondary rounded-full" />
-              <span>Fichier Excel prêt à l'emploi</span>
+              <span>Secteurs au choix (1, 3 ou illimité)</span>
             </div>
           </div>
         </div>

@@ -6,12 +6,12 @@ const Benefits = () => {
     {
       icon: Zap,
       title: "Gain de temps considérable",
-      description: "Fini les recherches manuelles fastidieuses. Recevez automatiquement tous les nouveaux prospects chaque semaine.",
+      description: "Fini les recherches manuelles fastidieuses. Recevez automatiquement des alertes chaque jour.",
     },
     {
       icon: Target,
       title: "Ciblage ultra-précis",
-      description: "Filtrez par secteur d'activité, localisation géographique et critères spécifiques à votre business.",
+      description: "Choisissez les secteurs d’activité à surveiller, et ne recevez que ce qui vous intéresse.",
     },
     {
       icon: Clock,
@@ -31,7 +31,7 @@ const Benefits = () => {
     {
       icon: Sparkles,
       title: "Simplicité d'utilisation",
-      description: "Aucune installation, aucune configuration. Recevez vos fichiers directement par email.",
+      description: "Aucune installation. Vous recevez vos alertes directement par email.",
     },
   ];
 
@@ -40,7 +40,7 @@ const Benefits = () => {
       <div className="container mx-auto px-4">
         <div className="text-center mb-16">
           <h2 className="text-3xl md:text-4xl font-bold mb-4">
-            Les avantages de Business Tracking
+            Les avantages de Business Tracker
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
             Optimisez votre prospection et développez votre business plus rapidement

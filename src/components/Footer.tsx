@@ -4,9 +4,9 @@ const Footer = () => {
       <div className="container mx-auto px-4">
         <div className="grid md:grid-cols-4 gap-8 mb-8">
           <div>
-            <h3 className="text-xl font-bold mb-4">Business Tracking</h3>
+            <h3 className="text-xl font-bold mb-4">Business Tracker</h3>
             <p className="text-sm text-primary-foreground/80">
-              La plateforme qui vous connecte aux nouveaux business en France.
+              Des alertes quotidiennes sur les nouveaux business en France.
             </p>
           </div>
 
@@ -24,8 +24,8 @@ const Footer = () => {
                 </a>
               </li>
               <li>
-                <a href="#" className="text-primary-foreground/80 hover:text-primary-foreground transition-colors">
-                  API
+                <a href="#contact" className="text-primary-foreground/80 hover:text-primary-foreground transition-colors">
+                  Contact
                 </a>
               </li>
             </ul>
@@ -76,7 +76,7 @@ const Footer = () => {
 
         <div className="border-t border-primary-foreground/20 pt-8 text-center">
           <p className="text-sm text-primary-foreground/60">
-            © {new Date().getFullYear()} Business Tracking. Tous droits réservés.
+            © {new Date().getFullYear()} Business Tracker. Tous droits réservés.
           </p>
         </div>
       </div>

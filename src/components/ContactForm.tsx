@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -17,11 +17,86 @@ const ContactForm = () => {
     message: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [cooldownUntilMs, setCooldownUntilMs] = useState<number | null>(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+
+  const cooldownRemainingSeconds = useMemo(() => {
+    if (!cooldownUntilMs) return 0;
+    const remainingMs = cooldownUntilMs - nowMs;
+    return remainingMs > 0 ? Math.ceil(remainingMs / 1000) : 0;
+  }, [cooldownUntilMs, nowMs]);
+
+  const isInCooldown = cooldownRemainingSeconds > 0;
+
+  const isProfessionalEmail = (email: string) => {
+    const normalized = email.trim().toLowerCase();
+    const atIndex = normalized.lastIndexOf("@");
+    if (atIndex <= 0 || atIndex === normalized.length - 1) return false;
+    const domain = normalized.slice(atIndex + 1);
+
+    const personalDomains = new Set([
+      "gmail.com",
+      "googlemail.com",
+      "yahoo.com",
+      "yahoo.fr",
+      "ymail.com",
+      "outlook.com",
+      "hotmail.com",
+      "live.com",
+      "msn.com",
+      "aol.com",
+      "icloud.com",
+      "me.com",
+      "mac.com",
+      "proton.me",
+      "protonmail.com",
+      "gmx.com",
+      "gmx.fr",
+      "mail.com",
+      "yandex.com",
+      "yandex.ru",
+      "orange.fr",
+      "wanadoo.fr",
+      "sfr.fr",
+      "neuf.fr",
+      "free.fr",
+      "laposte.net",
+      "bbox.fr",
+      "aliceadsl.fr",
+    ]);
+
+    return !personalDomains.has(domain);
+  };
 
   const apiBaseUrl = (import.meta.env.VITE_APP_API_BASE_URL ?? "").replace(/\/$/, "");
 
+  useEffect(() => {
+    if (!cooldownUntilMs) return;
+    if (Date.now() >= cooldownUntilMs) return;
+
+    const interval = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 250);
+
+    return () => window.clearInterval(interval);
+  }, [cooldownUntilMs]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting || isInCooldown) return;
+
+    if (!isProfessionalEmail(formData.email)) {
+      toast({
+        title: "Email professionnel requis",
+        description: "Merci d'utiliser une adresse email d'entreprise (pas Gmail/Yahoo/Outlook…).",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Anti-spam: évite plusieurs soumissions successives (ex: double-clic).
+    setCooldownUntilMs(Date.now() + 8000);
+    setNowMs(Date.now());
     setIsSubmitting(true);
 
     try {
@@ -90,7 +165,7 @@ const ContactForm = () => {
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-12">
             <h2 className="text-3xl md:text-4xl font-bold mb-4">
-              Tester pendant 2 semaines
+              Essai gratuit 14 jours
             </h2>
             <p className="text-lg text-muted-foreground">
               Découvrez la qualité de nos données gratuitement
@@ -162,7 +237,7 @@ const ContactForm = () => {
                       value={formData.message}
                       onChange={handleChange}
                       rows={4}
-                      placeholder="Secteurs ciblés, zone géographique, volume attendu..."
+                      placeholder="Secteurs d'activité à surveiller, questions..."
                     />
                   </div>
 
@@ -170,11 +245,13 @@ const ContactForm = () => {
                     type="submit"
                     size="lg"
                     className="w-full"
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || isInCooldown}
                   >
                     {isSubmitting
                       ? "Envoi en cours..."
-                      : "Recevoir un exemple gratuit"}
+                      : isInCooldown
+                        ? `Veuillez patienter ${cooldownRemainingSeconds}s...`
+                        : "Envoyer ma demande d'essai gratuit"}
                   </Button>
 
                   <p className="text-xs text-muted-foreground text-center">

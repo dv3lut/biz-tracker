@@ -9,29 +9,35 @@ const FAQ = () => {
   const faqs = [
     {
       question: "D'où viennent les données ?",
-      answer: "Nos données proviennent des registres officiels français. Nous analysons quotidiennement ces sources pour détecter toutes les nouvelles créations d'entreprises et d'établissements en France.",
+      answer: "Nous analysons quotidiennement des bases officielles disponibles en France pour détecter des créations récentes et certaines mises à jour administratives récentes.",
     },
     {
       question: "À quelle fréquence les données sont-elles mises à jour ?",
-      answer: "Les données sont collectées quotidiennement. Selon votre formule, vous recevez votre fichier chaque semaine, chaque mois, ou même quotidiennement pour l'offre Enterprise. Vous avez ainsi accès aux créations les plus récentes.",
+      answer: "Les alertes sont envoyées chaque jour par email, quelle que soit la formule.",
     },
     {
-      question: "Puis-je filtrer par secteur d'activité ou zone géographique ?",
-      answer: "Oui, absolument. Vous pouvez choisir les départements qui vous intéressent et filtrer par codes NAF (secteurs d'activité). Pour des filtres encore plus avancés, notre équipe peut configurer des critères sur mesure avec l'offre Enterprise.",
+      question: "Puis-je choisir les secteurs à surveiller ?",
+      answer: "Oui. Vous sélectionnez un ou plusieurs secteurs d’activité (parmi des centaines de catégories) et vous recevez les alertes correspondant à vos choix. L’offre Enterprise permet un nombre de secteurs illimité.",
     },
     {
       question: "Les données incluent-elles les coordonnées de contact ?",
-      answer: "Oui, nous fournissons toutes les informations publiques disponibles : numéro SIREN/SIRET, adresse, raison sociale, dirigeant, et lorsque disponible, téléphone, email et site web. Ces informations permettent de contacter directement les prospects.",
+      answer: "Oui. Chaque alerte est associée à une fiche Google : nous affichons le lien vers la fiche et les contacts présents (ex: téléphone, site web).",
     },
     {
       question: "Puis-je annuler mon abonnement à tout moment ?",
-      answer: "Oui, aucun engagement. Vous pouvez suspendre ou annuler votre abonnement à tout moment. De plus, nous offrons 7 jours d'essai gratuit pour toutes nos formules afin que vous puissiez tester le service sans risque.",
+      answer: "Oui, sans engagement. Vous pouvez suspendre ou annuler votre abonnement à tout moment. Toutes nos formules incluent 14 jours d’essai gratuit.",
     },
     {
-      question: "Comment puis-je utiliser les fichiers dans mon CRM ?",
-      answer: "Nos fichiers Excel et CSV sont prêts à l'importation dans tous les CRM du marché (Salesforce, HubSpot, Pipedrive, etc.). Pour l'offre Enterprise, nous proposons également une intégration API directe pour automatiser complètement le processus.",
+      question: "Que contient une alerte ?",
+      answer: "Chaque alerte contient au minimum le nom de l’entreprise, son adresse, son secteur, et un indicateur indiquant si l’alerte concerne une création récente ou une mise à jour administrative récente. Il y a également le lien vers la fiche Google associée, contenant les coordonnées de contact si disponibles.",
     },
-  ];
+    {
+      question: "Y a-t-il un portail / dashboard ?",
+      answer: "Pour l’instant, la livraison se fait par email. Nous travaillons sur un portail avec dashboard pour gérer les secteurs, l’historique et le suivi de vos alertes depuis une interface dédiée.",
+    },    {
+      question: "Couvrez-vous d'autres pays que la France ?",
+      answer: "Pour l'instant, le service est disponible uniquement pour la France. Nous travaillons activement sur l'expansion à d'autres pays européens. Contactez-nous si vous êtes intéressé par une future couverture.",
+    },  ];
 
   return (
     <section className="py-20 bg-background">
@@ -42,7 +48,7 @@ const FAQ = () => {
               Questions fréquentes
             </h2>
             <p className="text-lg text-muted-foreground">
-              Tout ce que vous devez savoir sur Business Tracking
+              Tout ce que vous devez savoir sur Business Tracker
             </p>
           </div>
 

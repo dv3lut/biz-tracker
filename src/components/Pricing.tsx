@@ -9,13 +9,11 @@ const Pricing = () => {
       price: "56",
       originalPrice: "69",
       period: "mois",
-      description: "Pour tester le service",
+      description: "Pour démarrer simplement",
       features: [
-        "Livraison mensuelle",
-        "1 département au choix",
-        "Tous les secteurs d'activité",
-        "Format Excel ou CSV",
-        "Support par email",
+        "Alertes quotidiennes par email",
+        "1 secteur sélectionné (sur le catalogue complet)",
+        "Nouvelles entreprises détectées en France",
       ],
       cta: "Commencer",
       highlighted: false,
@@ -27,12 +25,9 @@ const Pricing = () => {
       period: "mois",
       description: "Le plus populaire",
       features: [
-        "Livraison hebdomadaire",
-        "3 départements au choix",
-        "Filtres par secteur d'activité",
-        "Format Excel ou CSV",
-        "Support prioritaire",
-        "Historique 3 mois inclus",
+        "Alertes quotidiennes par email",
+        "3 secteurs sélectionnés (sur le catalogue complet)",
+        "Historique 2 mois (sur vos secteurs)",
       ],
       cta: "Démarrer maintenant",
       highlighted: true,
@@ -41,15 +36,11 @@ const Pricing = () => {
       name: "Enterprise",
       price: "Sur devis",
       period: "",
-      description: "Pour les grandes équipes",
+      description: "Pour couvrir tous les secteurs",
       features: [
-        "Livraison quotidienne possible",
-        "France entière ou ciblage précis",
-        "Filtres avancés multiples",
-        "Tous formats + API",
-        "Support dédié & onboarding",
-        "Historique complet",
-        "Intégration CRM",
+        "Alertes quotidiennes par email",
+        "Secteurs illimités",
+        "Historique 4 mois (sur vos secteurs)",
       ],
       cta: "Nous contacter",
       highlighted: false,
@@ -68,7 +59,7 @@ const Pricing = () => {
             Tarifs transparents
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Choisissez la formule adaptée à vos besoins de prospection
+            Choisissez la formule adaptée au nombre de secteurs à surveiller
           </p>
         </div>
 
@@ -136,7 +127,7 @@ const Pricing = () => {
 
         <div className="mt-12 text-center">
           <p className="text-muted-foreground">
-            Toutes les offres incluent un essai gratuit de 7 jours
+            Toutes les offres incluent un essai gratuit de 14 jours
           </p>
         </div>
       </div>

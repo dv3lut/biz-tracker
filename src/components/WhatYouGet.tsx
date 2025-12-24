@@ -3,16 +3,12 @@ import { Card } from "@/components/ui/card";
 
 const WhatYouGet = () => {
   const dataFields = [
-    "Raison sociale complète",
-    "Forme juridique (SARL, SAS, EURL...)",
-    "Adresse complète de l'établissement",
-    "Code NAF et secteur d'activité détaillé",
-    "Date de création exacte",
-    "Capital social",
-    "Numéro SIREN/SIRET",
-    "Nom du dirigeant (si disponible)",
-    "Coordonnées de contact (téléphone, email si disponibles)",
-    "Site web (si disponible)",
+    "Nom d’entreprise",
+    "Adresse",
+    "Secteur(s) d’activité",
+    "Type d’alerte (création récente ou mise à jour administrative récente)",
+    "Lien vers la fiche Google",
+    "Contacts présents sur la fiche Google (téléphone, site web…)",
   ];
 
   return (
@@ -24,7 +20,7 @@ const WhatYouGet = () => {
               Ce que vous recevez
             </h2>
             <p className="text-lg text-muted-foreground">
-              Un fichier Excel ou CSV complet et structuré avec toutes les données essentielles
+              Un email quotidien avec des alertes sur vos secteurs (créations et mises à jour administratives)
             </p>
           </div>
 
@@ -41,22 +37,12 @@ const WhatYouGet = () => {
             <div className="mt-10 p-6 bg-secondary/10 rounded-lg border border-secondary/20">
               <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
                 <span className="text-secondary">✓</span>
-                Formats disponibles
+                À savoir
               </h3>
-              <p className="text-muted-foreground mb-3">
-                Recevez vos données dans le format de votre choix :
+              <p className="text-muted-foreground">
+                Les alertes couvrent les créations récentes et certains changements administratifs récents.
+                La fiche Google peut concerner un établissement plus ancien.
               </p>
-              <div className="flex flex-wrap gap-3">
-                <span className="px-4 py-2 bg-background rounded-md text-sm font-medium border">
-                  📊 Excel (.xlsx)
-                </span>
-                <span className="px-4 py-2 bg-background rounded-md text-sm font-medium border">
-                  📄 CSV
-                </span>
-                <span className="px-4 py-2 bg-background rounded-md text-sm font-medium border">
-                  🔗 API (sur demande)
-                </span>
-              </div>
             </div>
           </Card>
         </div>

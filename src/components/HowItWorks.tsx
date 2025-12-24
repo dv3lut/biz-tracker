@@ -6,17 +6,17 @@ const HowItWorks = () => {
     {
       icon: Database,
       title: "Détection automatique",
-      description: "Notre système analyse quotidiennement les registres officiels pour identifier toutes les nouvelles créations d'entreprises et d'établissements en France.",
+      description: "Notre système analyse quotidiennement les sources disponibles pour repérer les nouvelles créations d'entreprises en France.",
     },
     {
       icon: FileSpreadsheet,
       title: "Enrichissement des données",
-      description: "Nous collectons et structurons toutes les informations essentielles : raison sociale, adresse, contact, secteur d'activité, et bien plus encore.",
+      description: "Nous organisons les informations utiles (nom, adresse, secteurs) et associons la fiche Google et ses moyens de contact (les alertes ne concernent que les business ayant une fiche Google).",
     },
     {
       icon: Send,
       title: "Livraison par email",
-      description: "Recevez automatiquement votre fichier Excel ou CSV chaque semaine ou chaque mois, prêt à être importé dans votre CRM ou vos outils de prospection.",
+      description: "Vous recevez chaque jour vos alertes par email, selon les secteurs que vous avez sélectionnés.",
     },
   ];
 
@@ -28,7 +28,7 @@ const HowItWorks = () => {
             Comment ça marche ?
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Un processus simple et entièrement automatisé pour vous fournir les meilleurs prospects
+            Un processus simple et automatisé pour ne rien rater
           </p>
         </div>
 
