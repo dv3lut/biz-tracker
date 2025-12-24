@@ -3,7 +3,6 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest import TestCase
 from unittest.mock import patch
-
 from app.api.routers import public
 from app.api.schemas import PublicContactRequest
 

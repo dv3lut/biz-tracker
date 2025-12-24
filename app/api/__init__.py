@@ -10,6 +10,8 @@ from app.config import get_settings
 from app.logging_config import configure_logging
 from app.services.sync_scheduler import SyncScheduler
 
+from .middlewares.rate_limit_middleware import RateLimitMiddleware, RateLimitPolicy
+
 from .routers import admin, health, public
 
 _SYNC_SCHEDULER = SyncScheduler()
@@ -47,6 +49,15 @@ def create_app() -> FastAPI:
             allow_methods=["*"],
             allow_headers=["*"],
         )
+
+    # Global inbound throttling.
+    # Keep public endpoints stricter (anti-spam), and keep the rest permissive
+    # to avoid impacting admin usage.
+    app.add_middleware(
+        RateLimitMiddleware,
+        default_policy=RateLimitPolicy(max_per_second=50, max_per_minute=1200),
+        public_policy=RateLimitPolicy(max_per_second=5, max_per_minute=30),
+    )
 
     app.include_router(health.router)
     app.include_router(admin.router)

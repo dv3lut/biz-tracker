@@ -9,6 +9,7 @@ from pydantic import ValidationError
 from app.api.schemas import SyncRequest
 from app.services.sync.mode import SyncMode
 from app.services.sync.replay_reference import DayReplayReference
+from app.utils.dates import utcnow
 
 
 class SyncRequestSchemaTests(unittest.TestCase):
@@ -17,16 +18,17 @@ class SyncRequestSchemaTests(unittest.TestCase):
             SyncRequest(mode=SyncMode.DAY_REPLAY)
 
     def test_replay_date_forbidden_in_other_modes(self) -> None:
+        today = utcnow().date()
         with self.assertRaises(ValidationError):
-            SyncRequest(mode=SyncMode.FULL, replay_for_date=date.today())
+            SyncRequest(mode=SyncMode.FULL, replay_for_date=today)
 
     def test_day_replay_rejects_future_date(self) -> None:
-        future_day = date.today() + timedelta(days=1)
+        future_day = utcnow().date() + timedelta(days=1)
         with self.assertRaises(ValidationError):
             SyncRequest(mode=SyncMode.DAY_REPLAY, replay_for_date=future_day)
 
     def test_day_replay_accepts_valid_payload(self) -> None:
-        payload = SyncRequest(mode=SyncMode.DAY_REPLAY, replay_for_date=date.today())
+        payload = SyncRequest(mode=SyncMode.DAY_REPLAY, replay_for_date=utcnow().date())
         self.assertIsNotNone(payload.replay_for_date)
         self.assertEqual(payload.mode, SyncMode.DAY_REPLAY)
 
@@ -50,7 +52,7 @@ class SyncRequestSchemaTests(unittest.TestCase):
         client_id = uuid4()
         payload = SyncRequest(
             mode=SyncMode.DAY_REPLAY,
-            replay_for_date=date.today(),
+            replay_for_date=utcnow().date(),
             target_client_ids=[client_id, client_id],
         )
         self.assertEqual(payload.target_client_ids, [client_id])
@@ -59,7 +61,7 @@ class SyncRequestSchemaTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             SyncRequest(
                 mode=SyncMode.DAY_REPLAY,
-                replay_for_date=date.today(),
+                replay_for_date=utcnow().date(),
                 target_client_ids=[uuid4() for _ in range(60)],
             )
 
@@ -70,7 +72,7 @@ class SyncRequestSchemaTests(unittest.TestCase):
     def test_day_replay_accepts_admin_toggle(self) -> None:
         payload = SyncRequest(
             mode=SyncMode.DAY_REPLAY,
-            replay_for_date=date.today(),
+            replay_for_date=utcnow().date(),
             notify_admins=False,
         )
         self.assertFalse(payload.notify_admins)
@@ -82,7 +84,7 @@ class SyncRequestSchemaTests(unittest.TestCase):
     def test_force_google_replay_allowed_for_day_replay(self) -> None:
         payload = SyncRequest(
             mode=SyncMode.DAY_REPLAY,
-            replay_for_date=date.today(),
+            replay_for_date=utcnow().date(),
             force_google_replay=True,
         )
         self.assertTrue(payload.force_google_replay)
@@ -94,7 +96,7 @@ class SyncRequestSchemaTests(unittest.TestCase):
     def test_replay_reference_allowed_for_day_replay(self) -> None:
         payload = SyncRequest(
             mode=SyncMode.DAY_REPLAY,
-            replay_for_date=date.today(),
+            replay_for_date=utcnow().date(),
             replay_reference=DayReplayReference.INSERTION_DATE,
         )
         self.assertEqual(payload.replay_reference, DayReplayReference.INSERTION_DATE)

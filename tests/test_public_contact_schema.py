@@ -42,3 +42,16 @@ class PublicContactSchemaTests(TestCase):
                         message=None,
                         website=None,
                     )
+
+    def test_email_rejects_personal_domains(self) -> None:
+        for value in ["jean@gmail.com", "jean@laposte.net", "jean@outlook.com"]:
+            with self.subTest(value=value):
+                with self.assertRaises(ValidationError):
+                    PublicContactRequest(
+                        name="Jean",
+                        email=value,
+                        company="ACME",
+                        phone=None,
+                        message=None,
+                        website=None,
+                    )
