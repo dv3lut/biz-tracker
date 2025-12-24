@@ -9,6 +9,7 @@ from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 
 from app.db import models
+from app.services.alerts.email_renderer import get_client_listing_status_label
 from app.utils.google_listing import describe_listing_age_status
 from app.utils.urls import build_annuaire_etablissement_url
 
@@ -92,7 +93,6 @@ def build_google_places_workbook(
             "Nom",
             "Adresse",
             "Catégorie",
-            "Sous-catégorie",
             "Lien Google",
         ]
         if include_listing_status:
@@ -133,7 +133,7 @@ def build_google_places_workbook(
         google_url = establishment.google_place_url
         if mode == "client":
             full_address = _compose_full_address(establishment)
-            category_name, subcategory_name = _resolve_category_columns(
+            category_name, _subcategory_name = _resolve_category_columns(
                 establishment.naf_code,
                 establishment.naf_libelle,
                 subcategory_lookup,
@@ -142,11 +142,11 @@ def build_google_places_workbook(
                 establishment.name,
                 full_address,
                 category_name,
-                subcategory_name,
                 google_url,
             ]
             if include_listing_status:
-                row.append(describe_listing_age_status(establishment.google_listing_age_status))
+                # Utiliser le label client pour les exports clients
+                row.append(get_client_listing_status_label(establishment.google_listing_age_status))
             sheet.append(row)
             _apply_hyperlink(sheet, sheet.max_row, link_column_index, google_url)
             continue

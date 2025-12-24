@@ -66,15 +66,13 @@ class EmailRendererTests(unittest.TestCase):
 
         self.assertIn("Création récente", text_body)
         self.assertIn("- Boulangerie Nova", text_body)
-        self.assertIn("Création récente sans contact", text_body)
-        self.assertIn("Création ancienne", text_body)
+        self.assertNotIn("Création récente sans contact", text_body)
+        self.assertIn("Modification administrative récente", text_body)
+        self.assertNotIn("Création ancienne", text_body)
         self.assertNotIn("Non déterminé", text_body)
-        self.assertGreaterEqual(text_body.count("0 nouvel établissement détecté."), 1)
-        self.assertIn(
-            "<h3 style=\"font-size:18px;margin:24px 0 8px;\">Création récente sans contact</h3>",
-            html_body,
-        )
-        self.assertIn("0 nouvel établissement détecté.", html_body)
+        self.assertEqual(text_body.count("0 nouvel établissement détecté."), 0)
+        self.assertIn("Statut :", html_body)
+        self.assertNotIn("0 nouvel établissement détecté.", html_body)
         self.assertNotIn("origine", text_body)
         self.assertNotIn("origine", html_body)
 
@@ -100,14 +98,14 @@ class EmailRendererTests(unittest.TestCase):
 
         text_body, html_body = render_client_email(self.formatter, [establishment], filters=filters)
 
-        self.assertIn("Statuts Google surveillés", text_body)
-        self.assertIn("Codes NAF ciblés", text_body)
+        self.assertNotIn("Statuts Google surveillés", text_body)
+        self.assertNotIn("Codes NAF ciblés", text_body)
         self.assertIn("Lien Google indisponible", html_body)
         self.assertNotIn("Statut fiche Google", text_body)
         self.assertNotIn("Statut fiche Google", html_body)
         self.assertNotIn("<h3", html_body)
-        self.assertIn("5610A", text_body)
-        self.assertIn("Statuts Google surveillés", html_body)
+        self.assertNotIn("5610A", text_body)
+        self.assertNotIn("Statuts Google surveillés", html_body)
 
     def test_client_email_zero_matches_prompts_future_notification(self) -> None:
         text_body, html_body = render_client_email(self.formatter, [])

@@ -80,20 +80,18 @@ def test_build_google_places_workbook_client_mode_uses_lookup():
     sheet, rows = _load_rows(buffer)
 
     assert sheet.title == "Google Places (clients)"
-    assert rows[0][:6] == (
+    assert rows[0][:5] == (
         "Nom",
         "Adresse",
         "Catégorie",
-        "Sous-catégorie",
         "Lien Google",
         "Statut fiche Google",
     )
     assert rows[1][0] == "Chez Test"
     assert rows[1][1] == "10 Rue des Tests, 75000 Paris"
     assert rows[1][2] == "Restauration"
-    assert rows[1][3] == "Bistrot"
-    assert rows[1][5] == "Création ancienne"
-    link_cell = sheet.cell(row=2, column=5)
+    assert rows[1][4] == "Modification administrative récente"  # Label client, pas admin
+    link_cell = sheet.cell(row=2, column=4)
     assert link_cell.hyperlink and "maps.google.com" in link_cell.hyperlink.target
 
 
@@ -108,16 +106,15 @@ def test_client_export_hides_status_when_single_filter():
     )
     _, rows = _load_rows(buffer)
 
-    expected_headers = ("Nom", "Adresse", "Catégorie", "Sous-catégorie", "Lien Google")
-    assert rows[0][:5] == expected_headers
-    assert rows[1][:5] == (
+    expected_headers = ("Nom", "Adresse", "Catégorie", "Lien Google")
+    assert rows[0][:4] == expected_headers
+    assert rows[1][:4] == (
         establishment.name,
         "10 Rue des Tests, 75000 Paris",
         establishment.naf_libelle,
-        None,
         establishment.google_place_url,
     )
-    assert rows[1][5] is None
+    assert rows[1][4] is None
 
 
 def test_build_alerts_workbook_includes_payload_and_links():

@@ -41,8 +41,17 @@ def _subscription(naf_code: str, *, active: bool = True) -> SimpleNamespace:
     )
 
 
-def _establishment(naf_code: str, *, status: str = "recent_creation") -> SimpleNamespace:
-    return SimpleNamespace(siret=str(uuid4().int)[:14], naf_code=naf_code, google_listing_age_status=status)
+def _establishment(naf_code: str, *, status: str = "recent_creation", **kwargs) -> SimpleNamespace:
+    defaults = {
+        "siret": str(uuid4().int)[:14],
+        "naf_code": naf_code,
+        "google_listing_age_status": status,
+        "google_contact_phone": None,
+        "google_contact_email": None,
+        "google_contact_website": None,
+    }
+    defaults.update(kwargs)
+    return SimpleNamespace(**defaults)
 
 
 def test_is_client_active_checks_window(monkeypatch):
@@ -171,6 +180,36 @@ def test_assign_establishments_to_clients_deduplicates_sirets():
     assignments, _ = client_service.assign_establishments_to_clients([client], establishments)
 
     assert len(assignments[client.id]) == 1
+
+
+def test_assign_establishments_includes_not_recent_with_contacts():
+    """Les créations anciennes avec contacts doivent être incluses si recent_creation est autorisé."""
+    client = _client(
+        subscriptions=[_subscription("5610A")],
+        listing_statuses=["recent_creation"],  # Seulement recent_creation autorisé
+    )
+    establishments = [
+        # Création ancienne sans contact : exclue
+        _establishment("5610A", status="not_recent_creation"),
+        # Création ancienne avec téléphone : incluse
+        _establishment("5610A", status="not_recent_creation", google_contact_phone="+33123456789"),
+        # Création ancienne avec email : incluse
+        _establishment("5610A", status="not_recent_creation", google_contact_email="contact@example.com"),
+        # Création ancienne avec website : incluse
+        _establishment("5610A", status="not_recent_creation", google_contact_website="https://example.com"),
+        # Création récente : toujours incluse
+        _establishment("5610A", status="recent_creation"),
+    ]
+
+    assignments, filters_enabled = client_service.assign_establishments_to_clients([client], establishments)
+
+    assert filters_enabled
+    assert client.id in assignments
+    # On doit avoir 4 établissements : 3 créations anciennes avec contacts + 1 création récente
+    assert len(assignments[client.id]) == 4
+    # Vérifier que le premier (sans contact) n'est PAS inclus
+    assigned_sirets = {est.siret for est in assignments[client.id]}
+    assert establishments[0].siret not in assigned_sirets
 
 
 def test_assign_establishments_to_clients_handles_empty_payload():

@@ -16,19 +16,93 @@ STATUS_SECTION_ORDER: Final[tuple[str, ...]] = (
     "not_recent_creation",
 )
 
+# Thème (mail client) : centraliser les couleurs pour pouvoir les ajuster facilement.
+CLIENT_EMAIL_THEME: Final[dict[str, str]] = {
+    "page_bg": "#f9fafb",
+    "card_bg": "#ffffff",
+    "card_shadow": "0 1px 3px rgba(0,0,0,0.1)",
+    "border": "#e5e7eb",
+    "text": "#111827",
+    "text_muted": "#6b7280",
+    "text_subtle": "#374151",
+    "brand": "#2563eb",
+    "link_muted": "#9ca3af",
+    "item_bg": "#f9fafb",
+}
+
+# Labels pour les emails clients (différents de ceux pour les admins)
+CLIENT_STATUS_LABELS: Final[dict[str, str]] = {
+    "recent_creation": "Création récente",
+    "recent_creation_missing_contact": "Création récente sans contact",
+    "not_recent_creation": "Modification administrative récente",
+    "unknown": "Non déterminé",
+}
+
 STATUS_TITLE_OVERRIDES: Final[dict[str, str]] = {
     "recent_creation_missing_contact": "Création récente sans contact",
+    "not_recent_creation": "Modification administrative récente",
+}
+
+# Couleurs pour les badges de statut
+STATUS_COLORS: Final[dict[str, dict[str, str]]] = {
+    # Vert légèrement plus foncé (bordure + contraste)
+    "recent_creation": {"bg": "#bbf7d0", "text": "#166534", "border": "#22c55e"},
+    "recent_creation_missing_contact": {"bg": "#fef3c7", "text": "#92400e", "border": "#fcd34d"},
+    "not_recent_creation": {"bg": "#dbeafe", "text": "#1e40af", "border": "#93c5fd"},
+    "unknown": {"bg": "#f3f4f6", "text": "#6b7280", "border": "#d1d5db"},
 }
 
 
 def _section_title_for_status(status: str) -> str:
+    """Retourne le titre de section pour les emails clients."""
     if status in STATUS_TITLE_OVERRIDES:
         return STATUS_TITLE_OVERRIDES[status]
-    return LISTING_AGE_STATUS_LABELS.get(status, status)
+    return CLIENT_STATUS_LABELS.get(status, status)
 
 
 def _format_listing_status_labels(statuses: list[str]) -> list[str]:
-    return [LISTING_AGE_STATUS_LABELS.get(status, status) for status in statuses]
+    """Formate les labels de statut pour l'affichage dans les emails clients."""
+    return [CLIENT_STATUS_LABELS.get(status, status) for status in statuses]
+
+
+def _get_status_badge_html(status: str, label: str) -> str:
+    """Génère un badge HTML coloré pour un statut."""
+    colors = STATUS_COLORS.get(status, STATUS_COLORS["unknown"])
+    return (
+        f'<span style="display:inline-block;padding:3px 10px;border-radius:10px;'
+        f'background:{colors["bg"]};color:{colors["text"]};border:1px solid {colors["border"]};'
+        f'font-size:12px;font-weight:500;">{escape(label)}</span>'
+    )
+
+
+def _order_establishments_by_status(
+    establishments: Sequence[models.Establishment],
+    *,
+    ordered_statuses: Sequence[str],
+) -> list[models.Establishment]:
+    ordered: list[models.Establishment] = []
+    remaining: list[models.Establishment] = []
+    buckets: dict[str, list[models.Establishment]] = {status: [] for status in ordered_statuses}
+    for establishment in establishments:
+        normalized_status = normalize_listing_age_status(getattr(establishment, "google_listing_age_status", None))
+        if normalized_status in buckets:
+            buckets[normalized_status].append(establishment)
+        else:
+            remaining.append(establishment)
+    for status in ordered_statuses:
+        ordered.extend(buckets.get(status, []))
+    ordered.extend(remaining)
+    return ordered
+
+
+def get_client_listing_status_label(status: str | None) -> str:
+    """Retourne le label client pour un statut de fiche Google.
+    
+    Cette fonction est exportée pour être utilisée dans d'autres modules
+    (ex: export_service) qui ont besoin des labels clients.
+    """
+    normalized = normalize_listing_age_status(status)
+    return CLIENT_STATUS_LABELS.get(normalized, CLIENT_STATUS_LABELS["unknown"])
 
 
 def render_client_email(
@@ -45,38 +119,29 @@ def render_client_email(
     multi_status_selection = len(section_statuses) > 1
 
     lines: list[str] = ["Bonjour,", ""]
+    theme = CLIENT_EMAIL_THEME
     html_parts: list[str] = [
         "<html>",
-        "<body style=\"font-family:'Helvetica Neue',Arial,sans-serif;color:#111827;line-height:1.5;\">",
-        "<p>Bonjour,</p>",
+        "<head><meta charset=\"UTF-8\"></head>",
+        (
+            "<body "
+            f"style=\"font-family:'Helvetica Neue',Arial,sans-serif;color:{theme['text']};"
+            f"line-height:1.55;background:{theme['page_bg']};margin:0;padding:20px;\">"
+        ),
+        (
+            "<div "
+            f"style=\"max-width:700px;margin:0 auto;background:{theme['card_bg']};"
+            f"border-radius:12px;box-shadow:{theme['card_shadow']};padding:28px;\">"
+        ),
+        "<div style=\"display:flex;align-items:center;gap:10px;margin-bottom:18px;\">",
+        f"<h2 style=\"margin:0;color:{theme['text']};font-size:20px;font-weight:800;letter-spacing:-0.01em;\">Business tracker</h2>",
+        "</div>",
+        f"<p style=\"margin:0 0 14px;font-size:14px;color:{theme['text']};\">Bonjour,</p>",
     ]
 
-    summary_lines: list[str] = []
-    summary_html: list[str] = []
-    if filters:
-        if filters.listing_statuses:
-            labels = ", ".join(_format_listing_status_labels(filters.listing_statuses))
-            summary_lines.append(f"Statuts Google surveillés : {labels}")
-            summary_html.append(
-                f"<p style=\"margin:0;\"><strong>Statuts Google surveillés :</strong> {escape(labels)}</p>"
-            )
-        if filters.naf_codes:
-            naf_codes = ", ".join(filters.naf_codes)
-            summary_lines.append(f"Codes NAF ciblés : {naf_codes}")
-            summary_html.append(
-                f"<p style=\"margin:4px 0 0;\"><strong>Codes NAF ciblés :</strong> {escape(naf_codes)}</p>"
-            )
+    # Note: on n'affiche pas les filtres surveillés (NAF/statuts) dans le mail client.
 
-    grouped_by_status: dict[str, list[models.Establishment]] = {status: [] for status in section_statuses}
-    fallback_bucket: list[models.Establishment] = []
-    for establishment in establishments:
-        normalized_status = normalize_listing_age_status(establishment.google_listing_age_status)
-        if normalized_status in grouped_by_status:
-            grouped_by_status[normalized_status].append(establishment)
-        else:
-            fallback_bucket.append(establishment)
-    if fallback_bucket and section_statuses:
-        grouped_by_status.setdefault(section_statuses[0], []).extend(fallback_bucket)
+    ordered_establishments = _order_establishments_by_status(establishments, ordered_statuses=section_statuses)
 
     def _build_item_blocks(establishment: models.Establishment) -> tuple[list[str], str]:
         name = establishment.name or "(nom indisponible)"
@@ -84,6 +149,8 @@ def render_client_email(
         category_name, subcategory_name = formatter.resolve_category_and_subcategory(establishment.naf_code)
         if not category_name:
             category_name = establishment.naf_libelle
+        normalized_status = normalize_listing_age_status(establishment.google_listing_age_status)
+        border_color = STATUS_COLORS.get(normalized_status, STATUS_COLORS["unknown"])["border"]
         google_url = establishment.google_place_url
 
         item_lines = [f"- {name}"]
@@ -91,36 +158,50 @@ def render_client_email(
             item_lines.append(f"  {full_address}")
         if category_name:
             item_lines.append(f"  Catégorie : {category_name}")
-        if subcategory_name:
-            item_lines.append(f"  Sous-catégorie : {subcategory_name}")
         if google_url:
             item_lines.append(f"  Fiche Google : {google_url}")
         else:
             item_lines.append("  Fiche Google : en cours de disponibilité")
         if multi_status_selection:
             status_label, _ = formatter.describe_listing_age(establishment)
-            item_lines.append(f"  Statut fiche Google : {status_label}")
+            client_label = CLIENT_STATUS_LABELS.get(normalized_status, status_label)
+            item_lines.append(f"  Statut fiche Google : {client_label}")
 
-        item_html_parts = [f"<strong>{escape(name)}</strong>"]
+        item_html_parts = [f"<strong style=\"font-size:15px;color:{theme['text']};\">{escape(name)}</strong>"]
         if full_address:
-            item_html_parts.append(f"<div>{escape(full_address)}</div>")
+            item_html_parts.append(
+                f"<div style=\"margin-top:4px;color:{theme['text_muted']};font-size:13px;\">{escape(full_address)}</div>"
+            )
         if category_name:
-            item_html_parts.append(f"<div>Catégorie : {escape(category_name)}</div>")
-        if subcategory_name:
-            item_html_parts.append(f"<div>Sous-catégorie : {escape(subcategory_name)}</div>")
+            item_html_parts.append(
+                f"<div style=\"margin-top:8px;font-size:13px;\"><span style=\"color:{theme['text_muted']};\">Catégorie :</span> {escape(category_name)}</div>"
+            )
         if google_url:
             link = escape(google_url)
             item_html_parts.append(
-                f"<div><a href=\"{link}\" style=\"color:#2563eb;text-decoration:none;\">Voir la fiche Google</a></div>"
+                (
+                    f"<div style=\"margin-top:10px;\">"
+                    f"<a href=\"{link}\" style=\"display:inline-block;padding:6px 12px;"
+                    f"background:{theme['brand']};color:#ffffff;text-decoration:none;border-radius:6px;"
+                    f"font-weight:600;font-size:12px;\">Voir la fiche Google</a>"
+                    f"</div>"
+                )
             )
         else:
             item_html_parts.append(
-                "<div style=\"color:#6b7280;\">Lien Google indisponible pour le moment</div>"
+                f"<div style=\"margin-top:12px;color:{theme['link_muted']};font-style:italic;font-size:12px;\">Lien Google indisponible pour le moment</div>"
             )
         if multi_status_selection:
             status_label, _ = formatter.describe_listing_age(establishment)
-            item_html_parts.append(f"<div>Statut fiche Google : {escape(status_label)}</div>")
-        item_html = "<li style=\"margin-bottom:16px;\">" + "".join(item_html_parts) + "</li>"
+            client_label = CLIENT_STATUS_LABELS.get(normalized_status, status_label)
+            badge = _get_status_badge_html(normalized_status, client_label)
+            item_html_parts.append(f"<div style=\"margin-top:10px;\">Statut : {badge}</div>")
+        item_html = (
+            f"<li style=\"margin-bottom:20px;padding:14px;background:#f9fafb;border-radius:8px;"
+            f"border-left:4px solid {border_color};\">"
+            + "".join(item_html_parts)
+            + "</li>"
+        )
         return item_lines, item_html
 
     def _append_establishments(
@@ -129,26 +210,21 @@ def render_client_email(
         show_empty_placeholder: bool,
     ) -> None:
         if items:
-            html_parts.append("<ul style=\"padding-left:18px;margin:0;\">")
+            html_parts.append("<ul style=\"list-style:none;padding:0;margin:0;\">")
             for establishment in items:
                 item_lines, item_html = _build_item_blocks(establishment)
                 lines.extend(item_lines)
                 lines.append("")
                 html_parts.append(item_html)
             html_parts.append("</ul>")
-        elif show_empty_placeholder:
-            lines.append("  0 nouvel établissement détecté.")
-            html_parts.append(
-                "<p style=\"color:#6b7280;margin:4px 0 16px;\">0 nouvel établissement détecté.</p>"
-            )
-        if items or show_empty_placeholder:
+        if items:
             lines.append("")
 
     if match_count:
-        lines.append("Nous avons identifié de nouvelles fiches Google My Business pour vos établissements :")
+        lines.append("Nous avons identifié de nouvelles fiches Google My Business :")
         lines.append("")
         html_parts.append(
-            "<p>Nous avons identifié de nouvelles fiches Google My Business pour vos établissements :</p>"
+            f"<p style=\"margin:0 0 18px;color:{theme['text_subtle']};font-size:14px;\">Nous avons identifié de nouvelles fiches Google My Business :</p>"
         )
     else:
         lines.extend([
@@ -157,49 +233,31 @@ def render_client_email(
             "",
         ])
         html_parts.append(
-            "<p>Aucun nouvel établissement n'a été détecté aujourd'hui dans votre périmètre.</p>"
+            f"<p style=\"margin:0 0 16px;color:{theme['text_subtle']};\">Aucun nouvel établissement n'a été détecté aujourd'hui dans votre périmètre.</p>"
         )
         html_parts.append(
-            "<p style=\"color:#6b7280;\">Synthèse : 0 nouvel établissement détecté.</p>"
+            f"<p style=\"margin:0 0 16px;color:{theme['text_muted']};\">Synthèse : 0 nouvel établissement détecté.</p>"
         )
 
-    if summary_lines:
-        lines.extend(summary_lines)
-        lines.append("")
     if not match_count:
         lines.append("Nous vous notifierons dès qu'un nouvel établissement correspondra à ces critères.")
         lines.append("")
 
-    if multi_status_selection:
-        for status in section_statuses:
-            section_title = _section_title_for_status(status)
-            section_establishments = grouped_by_status.get(status, [])
-            lines.append(section_title)
-            html_parts.append(
-                f"<h3 style=\"font-size:18px;margin:24px 0 8px;\">{escape(section_title)}</h3>"
-            )
-            _append_establishments(section_establishments, show_empty_placeholder=True)
-    else:
-        combined_establishments: list[models.Establishment] = []
-        for status in section_statuses:
-            combined_establishments.extend(grouped_by_status.get(status, []))
-        _append_establishments(combined_establishments, show_empty_placeholder=False)
+    _append_establishments(ordered_establishments, show_empty_placeholder=False)
 
-    if summary_html:
-        html_parts.append(
-            "<div style=\"margin-top:16px;padding:12px;background:#f3f4f6;border-radius:8px;\">"
-            + "".join(summary_html)
-            + "</div>"
-        )
     if not match_count:
         html_parts.append(
-            "<p style=\"margin-top:16px;\">Nous vous notifierons dès qu'un nouvel établissement correspondra à ces critères.</p>"
+            f"<p style=\"margin-top:24px;color:{theme['text_subtle']};\">Nous vous notifierons dès qu'un nouvel établissement correspondra à ces critères.</p>"
         )
 
     lines.extend(["Cordialement,", "L'équipe Business tracker"])
 
     html_parts.extend([
-        "<p style=\"margin-top:24px;\">Cordialement,<br/>L'équipe Business tracker</p>",
+        f"<div style=\"margin-top:32px;padding-top:18px;border-top:1px solid {theme['border']};color:{theme['text_muted']};font-size:13px;\">",
+        "<p style=\"margin:0;\">Cordialement,</p>",
+        f"<p style=\"margin:4px 0 0;font-weight:700;color:{theme['brand']};\">L'équipe Business tracker</p>",
+        "</div>",
+        "</div>",
         "</body>",
         "</html>",
     ])

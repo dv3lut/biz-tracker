@@ -256,10 +256,30 @@ def _establishment_matches_listing_status(
     establishment: models.Establishment,
     allowed_statuses: set[str],
 ) -> bool:
+    """Check if establishment matches allowed listing statuses.
+    
+    Special rule: 'not_recent_creation' establishments with contacts
+    (phone, email, or website) are treated as valid matches,
+    similar to 'recent_creation' establishments.
+    """
     normalized = normalize_listing_age_status(getattr(establishment, "google_listing_age_status", None))
     if not allowed_statuses:
         return normalized in FILTERABLE_LISTING_STATUSES
-    return normalized in allowed_statuses
+    
+    # Si le statut normalisé est directement autorisé
+    if normalized in allowed_statuses:
+        return True
+    
+    # Règle spéciale : si c'est une création ancienne avec contacts,
+    # on l'inclut si "recent_creation" est autorisé
+    if normalized == "not_recent_creation" and "recent_creation" in allowed_statuses:
+        has_phone = bool(getattr(establishment, "google_contact_phone", None))
+        has_email = bool(getattr(establishment, "google_contact_email", None))
+        has_website = bool(getattr(establishment, "google_contact_website", None))
+        if has_phone or has_email or has_website:
+            return True
+    
+    return False
 
 
 def dispatch_email_to_clients(
