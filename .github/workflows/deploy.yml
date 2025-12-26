@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
   deploy:
@@ -63,6 +64,11 @@ jobs:
             fi
             cd ~/biz-tracker-back
             git pull --rebase
+            IMAGE_TAG="${{ github.event.inputs.image_tag }}"
+            if [ -n "$IMAGE_TAG" ] && [ "$IMAGE_TAG" != "latest" ]; then
+              docker pull dv3lut/biz-tracker-back-api:"$IMAGE_TAG"
+              docker tag dv3lut/biz-tracker-back-api:"$IMAGE_TAG" dv3lut/biz-tracker-back-api:latest
+            fi
             docker-compose pull
             docker-compose down
             docker-compose up -d

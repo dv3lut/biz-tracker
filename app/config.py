@@ -232,13 +232,21 @@ class ApiSettings(BaseModel):
     @field_validator("allowed_origins", mode="before")
     @classmethod
     def _split_allowed_origins(cls, value: object) -> List[str] | object:
+        def _normalize_origin(origin: str) -> str:
+            normalized = origin.strip()
+            if normalized.endswith("/"):
+                normalized = normalized.rstrip("/")
+            return normalized
+
         if value is None:
             return value
         if isinstance(value, str):
             stripped = value.strip()
             if not stripped:
                 return []
-            return [item.strip() for item in stripped.split(",") if item.strip()]
+            return [_normalize_origin(item) for item in stripped.split(",") if item.strip()]
+        if isinstance(value, list):
+            return [_normalize_origin(str(item)) for item in value if str(item).strip()]
         return value
     
 

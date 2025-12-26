@@ -127,6 +127,63 @@ Un fichier Postman de référence est disponible (`docs/postman_collection.json`
 - Toute autre origine (hébergement distant, tunnel) peut être ajoutée à `API__ALLOWED_ORIGINS` sous forme de liste JSON ou de chaîne séparée par des virgules.
 - La section « Monitoring quotidien » de l'UI consomme `GET /admin/stats/dashboard` pour restituer les courbes journalières (nouveaux établissements, appels API), la répartition Google (global et dernier run), les alertes envoyées et le bilan des statuts établissements.
 
+## Proxy Nginx (whitelist IP)
+
+Le backend est souvent exposé via `jwilder/nginx-proxy` + `letsencrypt-nginx-proxy-companion`. Pour restreindre certains hôtes ou chemins a une IP precise, placez un fichier par hostname dans `vhost.d`.
+
+1. Sur l'hote, creez un dossier persistant et montez-le dans les deux services nginx-proxy (exemple):
+   ```bash
+   mkdir -p /srv/nginx-proxy/vhost.d
+   ```
+   ```yaml
+   volumes:
+     - /srv/nginx-proxy/vhost.d:/etc/nginx/vhost.d
+   ```
+2. Creez un fichier par hostname, par exemple:
+   - `/srv/nginx-proxy/vhost.d/admin.business-tracker.fr`
+   - `/srv/nginx-proxy/vhost.d/kibana.business-tracker.fr`
+   - `/srv/nginx-proxy/vhost.d/api.business-tracker.fr`
+3. Pour un hostname entier (admin / kibana), un allow/deny suffit:
+   ```nginx
+   allow 12.34.56.78;
+   deny all;
+   ```
+4. Pour restreindre uniquement `/admin` sur `api.business-tracker.fr`, il faut conserver le proxy_pass genere par nginx-proxy. Recuperez l'upstream dans la config effective:
+   ```bash
+   docker exec nginx-proxy nginx -T | sed -n '/server_name api.business-tracker.fr/,/}/p'
+   ```
+   Copiez la valeur de `proxy_pass http://...;` et utilisez-la dans le fichier:
+   ```nginx
+   location = /admin {
+     allow 12.34.56.78;
+     deny all;
+
+     proxy_pass http://api.business-tracker.fr;
+     proxy_set_header Host $host;
+     proxy_set_header X-Real-IP $remote_addr;
+     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+     proxy_set_header X-Forwarded-Proto $scheme;
+   }
+
+   location ^~ /admin/ {
+     allow 12.34.56.78;
+     deny all;
+
+     proxy_pass http://api.business-tracker.fr;
+     proxy_set_header Host $host;
+     proxy_set_header X-Real-IP $remote_addr;
+     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+     proxy_set_header X-Forwarded-Proto $scheme;
+   }
+   ```
+5. Rechargez nginx:
+   ```bash
+   docker exec nginx-proxy nginx -t
+   docker exec nginx-proxy nginx -s reload
+   ```
+
+Si vous passez par un CDN (ex: Cloudflare), configurez `real_ip_header` et `set_real_ip_from` pour que Nginx voie l'IP cliente reelle, sinon la whitelist ne marchera pas.
+
 ## Planification recommandée
 - Exécuter `python -m app sync --no-check-for-updates` une seule fois pour amorcer la base (chaque exécution rejoue l'intégralité de la collecte).
 - Programmer `python -m app sync --check-for-updates` quotidiennement **après** la publication des mises à jour Sirene (cf. `Service informations`).

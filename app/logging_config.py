@@ -11,6 +11,12 @@ from .logging_handlers import ElasticsearchLogHandler
 _LOGGER = logging.getLogger(__name__)
 
 _LOG_FORMAT = "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
+_ELASTICSEARCH_LOGGER_PREFIXES = ("elasticsearch", "elastic_transport", "urllib3")
+
+
+class _ElasticsearchLogFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        return not record.name.startswith(_ELASTICSEARCH_LOGGER_PREFIXES)
 
 
 def _build_file_handler(path: Path, level: int) -> logging.Handler:
@@ -43,11 +49,10 @@ def configure_logging(extra_handlers: Optional[list[logging.Handler]] = None) ->
                 password=es_settings.password,
                 timeout_seconds=es_settings.timeout_seconds,
             )
+            es_handler.addFilter(_ElasticsearchLogFilter())
             configured_handlers.append(es_handler)
             
-            # Silence Elasticsearch client internal transport logs
-            logging.getLogger("elastic_transport").setLevel(logging.WARNING)
-        except Exception:  # pragma: no cover - fallback if Elasticsearch is unavailable
+        except Exception:
             _LOGGER.exception("Initialisation du handler Elasticsearch impossible, journalisation locale uniquement.")
 
     console_handler = logging.StreamHandler()

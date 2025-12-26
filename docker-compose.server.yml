@@ -1,0 +1,195 @@
+x-biztracker-env-file: &biztracker_env_file
+  - ${BIZTRACKER_ENV_FILE:-.env}
+
+services:
+  # IMPORTANT (docker compose)
+  # Les variables au format ${...} sont substituées par Docker Compose.
+  # Assure-toi de lancer `docker compose` depuis ce dossier (avec le `.env` à côté),
+  # ou utilise explicitement `docker compose --env-file .env -f docker-compose.server.yml ...`.
+  # Sinon des secrets (ex: ELASTIC_PASSWORD) peuvent être vides => Elasticsearch répond 401 => healthcheck KO.
+  biztracker-back:
+    image: dv3lut/biz-tracker-back-api:latest
+    container_name: biztracker-back
+    restart: unless-stopped
+    env_file: *biztracker_env_file
+    environment:
+      # Reverse proxy (jwilder/nginx-proxy + letsencrypt companion)
+      - VIRTUAL_HOST=${API_VIRTUAL_HOST}
+      - LETSENCRYPT_HOST=${API_VIRTUAL_HOST}
+      - LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL}
+      - VIRTUAL_PORT=8080
+
+      # Observabilité: envoi des logs structurés vers Elasticsearch
+      - LOGGING__ELASTICSEARCH__ENABLED=true
+      - LOGGING__ELASTICSEARCH__HOSTS=["http://biztracker-elasticsearch:9200"]
+      - LOGGING__ELASTICSEARCH__VERIFY_CERTS=false
+      - LOGGING__ELASTICSEARCH__USERNAME=${ELASTIC_LOGGER_USERNAME}
+      - LOGGING__ELASTICSEARCH__PASSWORD=${ELASTIC_LOGGER_PASSWORD}
+    depends_on:
+      biztracker-postgres:
+        condition: service_healthy
+      biztracker-elasticsearch:
+        condition: service_healthy
+      biztracker-elasticsearch-setup:
+        condition: service_completed_successfully
+    networks:
+      - nginx-proxy
+      - internal
+    volumes:
+      - ./logs:/app/logs
+
+  biztracker-postgres:
+    image: postgres:16-alpine
+    container_name: biztracker-postgres
+    restart: unless-stopped
+    env_file: *biztracker_env_file
+    environment:
+      - POSTGRES_DB=${DATABASE__NAME}
+      - POSTGRES_USER=${DATABASE__USER}
+      - POSTGRES_PASSWORD=${DATABASE__PASSWORD}
+    # Optionnel: expose uniquement si tu en as besoin depuis l'hôte
+    ports:
+      - "5434:5432"
+    networks:
+      - internal
+    volumes:
+      - biztracker_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE__USER} -d ${DATABASE__NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  biztracker-elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.14.1
+    container_name: biztracker-elasticsearch
+    restart: unless-stopped
+    depends_on:
+      biztracker-elasticsearch-certs:
+        condition: service_completed_successfully
+    environment:
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+
+      # Auth activée (sinon Kibana est forcément "open")
+      - xpack.security.enabled=true
+      - xpack.security.enrollment.enabled=false
+
+      # TLS HTTP désactivé (TLS géré par ton reverse proxy côté Kibana)
+      - xpack.security.http.ssl.enabled=false
+
+      # TLS transport requis quand la sécurité est activée
+      - xpack.security.transport.ssl.enabled=true
+      - xpack.security.transport.ssl.verification_mode=certificate
+      - xpack.security.transport.ssl.keystore.path=/usr/share/elasticsearch/config/certs/elastic-certificates.p12
+      - xpack.security.transport.ssl.truststore.path=/usr/share/elasticsearch/config/certs/elastic-stack-ca-truststore.p12
+      - xpack.security.transport.ssl.truststore.password=${ELASTIC_TRANSPORT_SSL_TRUSTSTORE_PASSWORD:-changeit}
+
+      # Mot de passe du superuser `elastic`
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    networks:
+      - internal
+    volumes:
+      - biztracker_elasticsearch_data:/usr/share/elasticsearch/data
+      - biztracker_elasticsearch_certs:/usr/share/elasticsearch/config/certs
+    # IMPORTANT: ne pas exposer 9200 publiquement
+    # (si tu veux un accès local ponctuel: "127.0.0.1:9200:9200")
+    # ports:
+    #   - "127.0.0.1:9200:9200"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "code=$$(curl -sS -o /dev/null -w '%{http_code}' http://localhost:9200); [ \"$$code\" = \"200\" ] || [ \"$$code\" = \"401\" ]",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  # Initialise le mot de passe de `kibana_system` (automatique, une seule fois au démarrage)
+  biztracker-elasticsearch-setup:
+    image: curlimages/curl:8.10.1
+    container_name: biztracker-elasticsearch-setup
+    depends_on:
+      biztracker-elasticsearch:
+        condition: service_healthy
+    environment:
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - KIBANA_SYSTEM_PASSWORD=${KIBANA_SYSTEM_PASSWORD}
+      - ELASTIC_LOGGER_USERNAME=${ELASTIC_LOGGER_USERNAME}
+      - ELASTIC_LOGGER_PASSWORD=${ELASTIC_LOGGER_PASSWORD}
+      - KIBANA_UI_USERNAME=${KIBANA_UI_USERNAME}
+      - KIBANA_UI_PASSWORD=${KIBANA_UI_PASSWORD}
+      - LOGGING__ELASTICSEARCH__INDEX_PREFIX=${LOGGING__ELASTICSEARCH__INDEX_PREFIX}
+    networks:
+      - internal
+    volumes:
+      - ./scripts/elastic:/scripts/elastic:ro
+    command:
+      - sh
+      - /scripts/elastic/setup-elastic.sh
+
+  # Génère un certificat transport (PKCS#12) dans un volume partagé.
+  # Nécessaire car Elasticsearch impose TLS transport quand xpack.security.enabled=true.
+  biztracker-elasticsearch-certs:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.14.1
+    container_name: biztracker-elasticsearch-certs
+    restart: "no"
+    user: "0"
+    networks:
+      - internal
+    environment:
+      - ELASTIC_TRANSPORT_SSL_TRUSTSTORE_PASSWORD=${ELASTIC_TRANSPORT_SSL_TRUSTSTORE_PASSWORD:-changeit}
+    volumes:
+      - biztracker_elasticsearch_certs:/usr/share/elasticsearch/config/certs
+      - ./scripts/elastic:/scripts/elastic:ro
+    command:
+      - bash
+      - /scripts/elastic/generate-transport-certs.sh
+
+  biztracker-kibana:
+    image: docker.elastic.co/kibana/kibana:8.14.1
+    container_name: biztracker-kibana
+    restart: unless-stopped
+    depends_on:
+      biztracker-elasticsearch-setup:
+        condition: service_completed_successfully
+    environment:
+      # Fix principal: utiliser le nom du service Docker
+      - ELASTICSEARCH_HOSTS=http://biztracker-elasticsearch:9200
+      - ELASTICSEARCH_USERNAME=kibana_system
+      - ELASTICSEARCH_PASSWORD=${KIBANA_SYSTEM_PASSWORD}
+
+      # Supprime le warning "public URL" et rend les liens corrects derrière le proxy
+      - SERVER_PUBLICBASEURL=${KIBANA_PUBLIC_BASE_URL}
+
+      # Clés requises pour certaines features (sessions, saved objects chiffrés, reporting)
+      - XPACK_SECURITY_ENCRYPTIONKEY=${KIBANA_SECURITY_ENCRYPTION_KEY}
+      - XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY=${KIBANA_ENCRYPTED_SAVED_OBJECTS_KEY}
+      - XPACK_REPORTING_ENCRYPTIONKEY=${KIBANA_REPORTING_ENCRYPTION_KEY}
+
+      # Reverse proxy
+      - VIRTUAL_HOST=${KIBANA_VIRTUAL_HOST}
+      - LETSENCRYPT_HOST=${KIBANA_VIRTUAL_HOST}
+      - LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL}
+      - VIRTUAL_PORT=5601
+    networks:
+      - nginx-proxy
+      - internal
+    # IMPORTANT: ne pas exposer 5601 via `ports:`
+
+volumes:
+  biztracker_postgres_data:
+  biztracker_elasticsearch_data:
+  biztracker_elasticsearch_certs:
+
+networks:
+  nginx-proxy:
+    external: true
+  internal:
+    driver: bridge

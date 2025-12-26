@@ -5,12 +5,14 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+import logging
 
 from app.config import get_settings
 from app.logging_config import configure_logging
 from app.services.sync_scheduler import SyncScheduler
 
 from .middlewares.rate_limit_middleware import RateLimitMiddleware, RateLimitPolicy
+from .middlewares.access_log_middleware import AccessLogMiddleware
 
 from .routers import admin, health, public
 
@@ -30,7 +32,10 @@ def create_app() -> FastAPI:
     """Instantiate the FastAPI application with all routers."""
 
     settings = get_settings()
+    logger = logging.getLogger(__name__)
     configure_logging()
+    # Log only the CORS origins to confirm env parsing without leaking secrets.
+    logger.info("CORS allowed_origins (parsed) = %s", settings.api.allowed_origins)
     docs_url = "/docs" if settings.api.docs_enabled else None
     redoc_url = "/redoc" if settings.api.docs_enabled else None
     app = FastAPI(
@@ -53,6 +58,7 @@ def create_app() -> FastAPI:
     # Global inbound throttling.
     # Keep public endpoints stricter (anti-spam), and keep the rest permissive
     # to avoid impacting admin usage.
+    app.add_middleware(AccessLogMiddleware)
     app.add_middleware(
         RateLimitMiddleware,
         default_policy=RateLimitPolicy(max_per_second=50, max_per_minute=1200),

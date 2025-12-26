@@ -121,5 +121,17 @@ def test_api_settings_split_allowed_origins_string():
     assert settings.allowed_origins == ["https://a.test", "https://b.test"]
 
 
+def test_api_settings_normalizes_allowed_origins_trailing_slash():
+    settings = config.ApiSettings(allowed_origins="https://admin.test/, https://foo.test")
+
+    assert settings.allowed_origins == ["https://admin.test", "https://foo.test"]
+
+
+def test_api_settings_normalizes_allowed_origins_list():
+    settings = config.ApiSettings(allowed_origins=["https://admin.test/", " https://foo.test "])
+
+    assert settings.allowed_origins == ["https://admin.test", "https://foo.test"]
+
+
 def test_email_settings_nullable_validator_preserves_non_strings():
     assert config.EmailSettings._normalize_nullable_field(123) == 123

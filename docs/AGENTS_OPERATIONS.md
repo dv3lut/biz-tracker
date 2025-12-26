@@ -68,3 +68,5 @@
 - Activer la journalisation vers Elasticsearch via `.env` (`LOGGING__ELASTICSEARCH__ENABLED=true`, hôte, credentials optionnels).
 - Un dashboard prêt à l’emploi est versionné dans `docs/kibana/dashboards.ndjson` (importer via Stack Management > Saved Objects > Import).
 - Les événements structurés disponibles : `sync.run.*`, `sync.new_establishment`, `sync.google.summary`, `sync.google.match`, `sync.alert.created`, `alerts.email.sent`, `alerts.email.skipped`, `scheduler.*`, `email.test_sent`.
+
+> Production : privilégier une pile Elastic/Kibana avec authentification (xpack security) et `server.publicBaseUrl` configuré. Voir `docs/kibana/README.md` et l'exemple `docs/kibana/docker-compose.secure.yml`.
