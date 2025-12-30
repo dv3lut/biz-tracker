@@ -3,14 +3,38 @@ from __future__ import annotations
 
 import json
 import logging
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import date, datetime
-from typing import Any, Mapping, MutableMapping
+from typing import Any, Iterator, Mapping, MutableMapping
 from uuid import UUID
 
 from app.config import get_settings
 from app.utils.dates import utcnow
 
 _OBSERVABILITY_LOGGER = logging.getLogger("observability")
+_RUN_CONTEXT: ContextVar[dict[str, Any] | None] = ContextVar("run_context", default=None)
+
+
+def get_run_context() -> Mapping[str, Any] | None:
+    context = _RUN_CONTEXT.get()
+    if context:
+        return dict(context)
+    return None
+
+
+@contextmanager
+def run_context(run_id: str | UUID | None, **fields: Any) -> Iterator[None]:
+    context = dict(get_run_context() or {})
+    if run_id is not None:
+        context["run_id"] = str(run_id)
+    for key, value in fields.items():
+        context[key] = value
+    token = _RUN_CONTEXT.set(context or None)
+    try:
+        yield
+    finally:
+        _RUN_CONTEXT.reset(token)
 
 
 def _json_default(value: Any) -> Any:
@@ -42,6 +66,10 @@ def log_event(event_name: str, *, level: int = logging.INFO, message: str | None
         payload["message"] = message
     if fields:
         payload.update({key: _normalize(value) for key, value in fields.items()})
+    context = get_run_context()
+    if context:
+        for key, value in context.items():
+            payload.setdefault(key, _normalize(value))
 
     serialized = json.dumps(payload, default=_json_default, ensure_ascii=False, separators=(",", ":"))
     _OBSERVABILITY_LOGGER.log(

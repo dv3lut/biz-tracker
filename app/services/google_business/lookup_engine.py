@@ -8,10 +8,12 @@ from sqlalchemy.orm import Session
 
 from app.clients.google_places_client import GooglePlacesClient, GooglePlacesError
 from app.db import models
+from app.observability import log_event
 from app.services.google_business import (
     adjust_listing_status_for_contacts,
     build_place_query,
     compute_confidence,
+    compute_confidence_details,
     compute_listing_age_status,
     extract_listing_origin,
     extract_ratings_total,
@@ -65,9 +67,16 @@ class GoogleLookupEngine:
     def lookup(self, establishment: models.Establishment, *, now: datetime | None = None) -> GoogleMatch | None:
         if now is None:
             now = utcnow()
+        establishment_payload = self._serialize_establishment(establishment)
+        expected_keywords = resolve_expected_keywords(self._naf_keyword_map, establishment)
         query = build_place_query(establishment, PLACEHOLDER_TOKENS)
         establishment.google_match_confidence = None
         if not query:
+            log_event(
+                "sync.google.lookup.skipped",
+                establishment=establishment_payload,
+                reason="insufficient_query",
+            )
             establishment.google_check_status = "insufficient"
             establishment.google_last_checked_at = establishment.google_last_checked_at or utcnow()
             self._session.flush()
@@ -79,13 +88,27 @@ class GoogleLookupEngine:
             candidates = self._client.find_place(query, fields="place_id,name,formatted_address")
         except GooglePlacesError as exc:
             _LOGGER.warning("Recherche Google Places échouée pour %s: %s", establishment.siret, exc)
+            log_event(
+                "sync.google.find_place.error",
+                establishment=establishment_payload,
+                query=query,
+                error={"type": type(exc).__name__, "message": str(exc)},
+            )
             return None
+
+        log_event(
+            "sync.google.find_place.query",
+            establishment=establishment_payload,
+            query=query,
+            candidate_count=len(candidates),
+            expected_keywords=sorted(expected_keywords) if expected_keywords else [],
+            min_match_confidence=self._settings.min_match_confidence,
+        )
 
         best_candidate: GoogleMatch | None = None
         best_mismatch_candidate: GoogleMatch | None = None
         best_confidence: float | None = None
         best_category_confidence: float | None = None
-        expected_keywords = resolve_expected_keywords(self._naf_keyword_map, establishment)
         type_mismatch_detected = False
 
         for candidate in candidates:
@@ -95,6 +118,33 @@ class GoogleLookupEngine:
             if not place_id or not name:
                 continue
             confidence = self._compute_confidence_func(establishment, name, formatted_address)
+            computed_confidence, confidence_details = compute_confidence_details(
+                establishment,
+                name,
+                formatted_address,
+            )
+            if abs(confidence - computed_confidence) > 1e-6:
+                confidence_details = {
+                    "final_score": round(confidence, 4),
+                    "source": "custom_confidence",
+                }
+            else:
+                confidence_details["final_score"] = round(confidence, 4)
+            candidate_payload = {
+                "place_id": place_id,
+                "name": name,
+                "formatted_address": formatted_address,
+            }
+            decision = "accepted" if confidence >= self._settings.min_match_confidence else "below_threshold"
+            log_event(
+                "sync.google.find_place.candidate_scored",
+                establishment=establishment_payload,
+                candidate=candidate_payload,
+                confidence=round(confidence, 4),
+                confidence_details=confidence_details,
+                min_match_confidence=self._settings.min_match_confidence,
+                decision=decision,
+            )
             if best_confidence is None or confidence > best_confidence:
                 best_confidence = confidence
             if confidence < self._settings.min_match_confidence:
@@ -107,6 +157,12 @@ class GoogleLookupEngine:
                     establishment.siret,
                     place_id,
                     exc,
+                )
+                log_event(
+                    "sync.google.place_details.error",
+                    establishment=establishment_payload,
+                    candidate=candidate_payload,
+                    error={"type": type(exc).__name__, "message": str(exc)},
                 )
                 continue
             if not details:
@@ -132,6 +188,18 @@ class GoogleLookupEngine:
             raw_types = details.get("types")
             google_types = raw_types if isinstance(raw_types, list) else []
             matches_category, category_similarity = self._category_matcher(google_types, expected_keywords)
+            log_event(
+                "sync.google.category.evaluated",
+                establishment=establishment_payload,
+                candidate=candidate_payload,
+                category={
+                    "matched": matches_category,
+                    "similarity": round(category_similarity, 4) if category_similarity is not None else None,
+                    "threshold": self._category_similarity_threshold,
+                    "expected_keywords": sorted(expected_keywords) if expected_keywords else [],
+                    "google_types": google_types,
+                },
+            )
             if category_similarity is not None and (
                 best_category_confidence is None or category_similarity > best_category_confidence
             ):
@@ -187,9 +255,47 @@ class GoogleLookupEngine:
             best_candidate = best_mismatch_candidate
         if best_candidate is None and type_mismatch_detected:
             establishment.google_check_status = TYPE_MISMATCH_STATUS
+            log_event(
+                "sync.google.lookup.result",
+                establishment=establishment_payload,
+                status=TYPE_MISMATCH_STATUS,
+                candidate_count=len(candidates),
+                best_confidence=round(best_confidence, 4) if best_confidence is not None else None,
+                best_category_confidence=(
+                    round(best_category_confidence, 4) if best_category_confidence is not None else None
+                ),
+                type_mismatch_detected=type_mismatch_detected,
+            )
             return None
         if best_candidate is not None and best_candidate.category_confidence is None and best_category_confidence is not None:
             best_candidate.category_confidence = best_category_confidence
+        log_event(
+            "sync.google.lookup.result",
+            establishment=establishment_payload,
+            status="found" if best_candidate else "not_found",
+            candidate_count=len(candidates),
+            best_confidence=round(best_confidence, 4) if best_confidence is not None else None,
+            best_category_confidence=(
+                round(best_category_confidence, 4) if best_category_confidence is not None else None
+            ),
+            type_mismatch_detected=type_mismatch_detected,
+            result=(
+                {
+                    "place_id": best_candidate.place_id,
+                    "place_url": best_candidate.place_url,
+                    "confidence": round(best_candidate.confidence, 4),
+                    "category_confidence": (
+                        round(best_candidate.category_confidence, 4)
+                        if best_candidate.category_confidence is not None
+                        else None
+                    ),
+                    "listing_age_status": best_candidate.listing_age_status,
+                    "listing_origin_source": best_candidate.listing_origin_source,
+                }
+                if best_candidate
+                else None
+            ),
+        )
         return best_candidate
 
     def apply_lookup_result(
@@ -275,3 +381,13 @@ class GoogleLookupEngine:
         else:
             website = None
         return phone, email, website
+
+    @staticmethod
+    def _serialize_establishment(establishment: models.Establishment) -> dict[str, object]:
+        return {
+            "siret": establishment.siret,
+            "name": establishment.name,
+            "code_postal": establishment.code_postal,
+            "libelle_commune": establishment.libelle_commune or establishment.libelle_commune_etranger,
+            "naf_code": establishment.naf_code,
+        }

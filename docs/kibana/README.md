@@ -82,7 +82,7 @@ Recommandations réseau :
 
 1. Ouvrir Kibana (`http://localhost:5601`) > Management > **Stack Management** > **Saved Objects** > **Import**.
 2. Sélectionner le fichier `docs/kibana/dashboards.ndjson` et cocher l’option « Replace index patterns with matching ones » si demandée.
-3. Après import, un data view `biz-tracker-observability-*` et le dashboard **"Business tracker - Synchronisation"** sont disponibles.
+3. Après import, un data view `biz-tracker-observability-*` et les dashboards **"Business tracker - Synchronisation"** et **"Business tracker - Chronologie run"** sont disponibles.
 
 ## Contenu du dashboard
 
@@ -92,6 +92,7 @@ Recommandations réseau :
 - **Alertes** : journal des alertes Google My Business envoyées.
 - **Runs en échec** : chronologie des incidents avec le type et le message d’erreur associé.
 - **Appels externes** : trois tables (tous services, Sirene, Google Places) pour suivre les statuts HTTP, durées et rejets côté APIs partenaires.
+- **Chronologie run** : table ordonnée par timestamp (ASC) pour rejouer toutes les étapes d'un run. Utiliser la barre de filtre avec `run_id: <uuid>` pour cibler un run précis.
 
 Les vues sont basées sur les événements structurés émis par le backend (`event.name`). Vous pouvez créer des filtres ou des visualisations Lens supplémentaires à partir du même data view pour explorer des KPI spécifiques (volume par jour, délais moyens, etc.).
 

@@ -81,6 +81,9 @@ class ElasticsearchLogHandler(logging.Handler):
         service_name = getattr(record, "service_name", None)
         if service_name:
             document.setdefault("service", {"name": service_name})
+        run_id = getattr(record, "run_id", None)
+        if run_id:
+            document.setdefault("run_id", str(run_id))
         return document
 
     @staticmethod
