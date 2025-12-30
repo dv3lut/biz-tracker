@@ -4,6 +4,14 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Mail, Phone, MapPin } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -12,13 +20,14 @@ const ContactForm = () => {
   const [formData, setFormData] = useState({
     name: "",
     email: "",
-    company: "",
+    linkedin: "",
     phone: "",
     message: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [cooldownUntilMs, setCooldownUntilMs] = useState<number | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [isSuccessDialogOpen, setIsSuccessDialogOpen] = useState(false);
 
   const cooldownRemainingSeconds = useMemo(() => {
     if (!cooldownUntilMs) return 0;
@@ -108,8 +117,8 @@ const ContactForm = () => {
         body: JSON.stringify({
           name: formData.name,
           email: formData.email,
-          company: formData.company,
-          phone: formData.phone || null,
+          company: formData.linkedin,
+          phone: formData.phone,
           message: formData.message || null,
           website: null,
         }),
@@ -134,17 +143,14 @@ const ContactForm = () => {
         return;
       }
 
-      toast({
-        title: "Message envoyé !",
-        description: "Nous vous recontacterons dans les plus brefs délais.",
-      });
       setFormData({
         name: "",
         email: "",
-        company: "",
+        linkedin: "",
         phone: "",
         message: "",
       });
+      setIsSuccessDialogOpen(true);
     } finally {
       setIsSubmitting(false);
     }
@@ -204,24 +210,25 @@ const ContactForm = () => {
 
                   <div className="grid md:grid-cols-2 gap-4">
                     <div>
-                      <Label htmlFor="company">Entreprise *</Label>
+                      <Label htmlFor="linkedin">LinkedIn *</Label>
                       <Input
-                        id="company"
-                        name="company"
-                        value={formData.company}
+                        id="linkedin"
+                        name="linkedin"
+                        value={formData.linkedin}
                         onChange={handleChange}
                         required
-                        placeholder="Nom de votre entreprise"
+                        placeholder="https://www.linkedin.com/company/votre-entreprise"
                       />
                     </div>
                     <div>
-                      <Label htmlFor="phone">Téléphone</Label>
+                      <Label htmlFor="phone">Téléphone *</Label>
                       <Input
                         id="phone"
                         name="phone"
                         type="tel"
                         value={formData.phone}
                         onChange={handleChange}
+                        required
                         placeholder="+33 6 12 34 56 78"
                       />
                     </div>
@@ -247,11 +254,17 @@ const ContactForm = () => {
                     className="w-full"
                     disabled={isSubmitting || isInCooldown}
                   >
-                    {isSubmitting
-                      ? "Envoi en cours..."
-                      : isInCooldown
-                        ? `Veuillez patienter ${cooldownRemainingSeconds}s...`
-                        : "Envoyer ma demande d'essai gratuit"}
+                    {isSubmitting ? (
+                      <>
+                        <span
+                          className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+                          aria-hidden="true"
+                        />
+                        <span className="sr-only">Envoi en cours...</span>
+                      </>
+                    ) : (
+                      "Envoyer ma demande d'essai gratuit"
+                    )}
                   </Button>
 
                   <p className="text-xs text-muted-foreground text-center">
@@ -313,6 +326,21 @@ const ContactForm = () => {
           </div>
         </div>
       </div>
+      <Dialog open={isSuccessDialogOpen} onOpenChange={setIsSuccessDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Message envoyé</DialogTitle>
+            <DialogDescription>
+              Merci ! Votre demande a bien été envoyée. Nous revenons vers vous très vite.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" onClick={() => setIsSuccessDialogOpen(false)}>
+              Fermer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 };
