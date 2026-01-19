@@ -28,6 +28,16 @@ const Footer = () => {
                   Contact
                 </a>
               </li>
+              <li>
+                <a
+                  href="https://calendly.com/julien-businesstracker/30min"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-primary-foreground/80 hover:text-primary-foreground transition-colors"
+                >
+                  Échanger 30 min
+                </a>
+              </li>
             </ul>
           </div>
 

@@ -12,7 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Mail, Phone, MapPin } from "lucide-react";
+import { CalendarDays, Mail, Phone, MapPin } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const ContactForm = () => {
@@ -270,11 +270,55 @@ const ContactForm = () => {
                   <p className="text-xs text-muted-foreground text-center">
                     Vos données sont protégées et ne seront jamais partagées
                   </p>
+
+                  <div className="pt-4 border-t border-border/60">
+                    <h3 className="text-sm font-semibold">Vous préférez un échange rapide ?</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Réservez 30 minutes avec un membre de la team Business Tracker pour répondre à vos questions,
+                      discuter d’un besoin personnalisé, ou obtenir des informations complémentaires.
+                    </p>
+                    <div className="mt-3 flex flex-col sm:flex-row gap-3">
+                      <Button asChild variant="secondary" size="lg" className="w-full sm:w-auto">
+                        <a
+                          href="https://calendly.com/julien-businesstracker/30min"
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Réserver un créneau (30 min)
+                        </a>
+                      </Button>
+                    </div>
+                  </div>
                 </form>
               </Card>
             </div>
 
             <div className="space-y-6">
+              <Card className="p-6">
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 bg-secondary/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <CalendarDays className="w-5 h-5 text-secondary" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold mb-1">Échange 30 minutes</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Un créneau avec la team Business Tracker pour vos questions, besoins sur-mesure ou infos complémentaires.
+                    </p>
+                    <div className="mt-3">
+                      <Button asChild variant="secondary" size="sm">
+                        <a
+                          href="https://calendly.com/julien-businesstracker/30min"
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Réserver un créneau (30 min)
+                        </a>
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+
               <Card className="p-6">
                 <div className="flex items-start gap-4">
                   <div className="w-10 h-10 bg-secondary/10 rounded-lg flex items-center justify-center flex-shrink-0">

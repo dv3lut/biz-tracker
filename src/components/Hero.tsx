@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Sparkles } from "lucide-react";
+import { ArrowRight, CalendarDays, Sparkles } from "lucide-react";
 import heroBg from "@/assets/hero-bg.jpg";
 
 const Hero = () => {
@@ -59,6 +59,21 @@ const Hero = () => {
               className="text-lg px-8 py-6 h-auto"
             >
               Voir les tarifs
+            </Button>
+            <Button
+              asChild
+              size="lg"
+              variant="secondary"
+              className="text-lg px-8 py-6 h-auto"
+            >
+              <a
+                href="https://calendly.com/julien-businesstracker/30min"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Échanger 30 min
+                <CalendarDays className="ml-2 w-5 h-5" />
+              </a>
             </Button>
           </div>
 
