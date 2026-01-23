@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import time
 from typing import Callable, Sequence
 
 from sqlalchemy.orm import Session
 
 from app.db import models
+from app.observability import log_event
 from app.services.alert_service import AlertService
 from app.services.google_business_service import GoogleBusinessService
 
@@ -63,6 +65,15 @@ def run_google_enrichment(
 ) -> tuple[GoogleEnrichmentResult, list[models.Alert]]:
     """Execute Google enrichment and optional alert creation in a unified way."""
 
+    log_event(
+        "sync.google.enrichment.started",
+        target_count=len(targets),
+        include_backlog=include_backlog,
+        force_refresh=force_refresh,
+        alerts_enabled=bool(alert_service),
+    )
+    started_at = time.perf_counter()
+
     google_service = GoogleBusinessService(session)
     try:
         enrichment = google_service.enrich(
@@ -74,9 +85,30 @@ def run_google_enrichment(
     finally:
         google_service.close()
 
+    duration = time.perf_counter() - started_at
+    log_event(
+        "sync.google.enrichment.completed",
+        duration_seconds=duration,
+        queue_count=enrichment.queue_count,
+        eligible_count=enrichment.eligible_count,
+        matched_count=enrichment.matched_count,
+        remaining_count=enrichment.remaining_count,
+        api_call_count=enrichment.api_call_count,
+    )
+
     alerts: list[models.Alert] = []
     if alert_service:
+        log_event(
+            "sync.alerts.dispatch.started",
+            candidate_count=len(enrichment.matches),
+        )
+        alert_started_at = time.perf_counter()
         alerts = alert_service.create_google_alerts(enrichment.matches)
+        log_event(
+            "sync.alerts.dispatch.completed",
+            duration_seconds=time.perf_counter() - alert_started_at,
+            alerts_created=len(alerts),
+        )
 
     result = GoogleEnrichmentResult(
         queue_count=enrichment.queue_count,

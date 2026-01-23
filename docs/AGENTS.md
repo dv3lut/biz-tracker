@@ -5,6 +5,8 @@ Ce dossier contient les informations utiles pour de futures itérations assisté
 - `AGENTS_CONTEXT.md` : vision produit & périmètre fonctionnel.
 - `AGENTS_TECH.md` : choix techniques, bibliothèques et patterns utilisés.
 - `AGENTS_OPERATIONS.md` : procédures d’exploitation, exécution et surveillance.
+- `AGENTS_CODEMAP.md` : carte du code (user stories → modules → fichiers) pour naviguer vite.
+- `AGENTS_SYNC_MONITORING.md` : deep dive synchro + requêtes Kibana prêtes à l’emploi.
 
 Merci de maintenir ces fichiers à jour avant toute évolution majeure.
 
@@ -35,3 +37,6 @@ Merci de maintenir ces fichiers à jour avant toute évolution majeure.
 	- `tests/test_alert_service.py`, `test_admin_google_api.py`, `test_sync_collector_window.py` : garde-fous principaux.
 
 > Astuce : combine ce mémo avec la table du `AGENTS.md` racine pour localiser rapidement un module avant d’ouvrir le fichier concerné.
+
+## Code style & bonnes pratiques
+Bien ajouter des logs, events, kpis sur les steps de logique, et s'assurer de créer des viz ou des dashboards de monitoring dans Kibana en modifiant le fichier docs/kibana/dashboards.ndjson.

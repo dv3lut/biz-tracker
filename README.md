@@ -2,6 +2,11 @@
 
 Solution de veille sur les nouveaux établissements de restauration (NAF 56.10A) via l'API Sirene.
 
+## Documentation (à lire avant de modifier le code)
+
+- Contexte, conventions et procédures : `docs/AGENTS_CONTEXT.md`, `docs/AGENTS_TECH.md`, `docs/AGENTS_OPERATIONS.md`.
+- Carte de navigation du code (user stories → modules → fichiers) : `docs/AGENTS_CODEMAP.md`.
+
 ## Fonctionnalités principales
 - Synchronisation complète initiale des établissements actifs (avec pagination `curseur` pour la stabilité).
 - Synchronisations incrémentales quotidiennes basées sur `dateCreationEtablissement` (avec chevauchement configurable) et sur le service `informations`.
