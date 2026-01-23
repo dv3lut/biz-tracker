@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { ApiError, establishmentsApi } from "../../api";
-import type { Establishment, EstablishmentIndividualFilter } from "../../types";
+import { ApiError, establishmentsApi, nafApi } from "../../api";
+import type { Establishment, EstablishmentIndividualFilter, NafCategory } from "../../types";
 import { EstablishmentsView } from "../../components/views/EstablishmentsView";
 import { useGoogleCheckMutation } from "../hooks/useGoogleCheckMutation";
 
@@ -22,18 +22,36 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
   const queryClient = useQueryClient();
   const [limit, setLimit] = useState(20);
   const [page, setPage] = useState(0);
+  const [draftQuery, setDraftQuery] = useState("");
+  const [draftNafCodes, setDraftNafCodes] = useState<string[]>([]);
+  const [draftAddedFrom, setDraftAddedFrom] = useState("");
+  const [draftAddedTo, setDraftAddedTo] = useState("");
+  const [draftIndividualFilter, setDraftIndividualFilter] = useState<EstablishmentIndividualFilter>("all");
+
   const [query, setQuery] = useState("");
+  const [nafCodes, setNafCodes] = useState<string[]>([]);
+  const [addedFrom, setAddedFrom] = useState("");
+  const [addedTo, setAddedTo] = useState("");
   const [individualFilter, setIndividualFilter] = useState<EstablishmentIndividualFilter>("all");
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  const nafCategoriesQuery = useQuery<NafCategory[]>({
+    queryKey: ["naf-categories"],
+    queryFn: () => nafApi.listCategories(),
+    staleTime: 5 * 60 * 1000,
+  });
+
   const establishmentsQuery = useQuery<Establishment[]>({
-    queryKey: ["establishments", limit, page, query, individualFilter],
+    queryKey: ["establishments", limit, page, query, nafCodes, addedFrom, addedTo, individualFilter],
     queryFn: () =>
       establishmentsApi.fetchMany({
         limit,
         offset: page * limit,
         q: query ? query : undefined,
+        nafCodes: nafCodes.length > 0 ? nafCodes : undefined,
+        addedFrom: addedFrom ? addedFrom : undefined,
+        addedTo: addedTo ? addedTo : undefined,
         isIndividual:
           individualFilter === "all" ? undefined : individualFilter === "individual",
       }),
@@ -67,6 +85,13 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     },
     [onUnauthorized],
   );
+
+  useEffect(() => {
+    if (!nafCategoriesQuery.error) {
+      return;
+    }
+    showError(nafCategoriesQuery.error);
+  }, [nafCategoriesQuery.error, showError]);
 
   const invalidateEstablishments = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ["establishments"] });
@@ -119,14 +144,69 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
   }, []);
 
   const handleQueryChange = useCallback((value: string) => {
-    setQuery(value);
-    setPage(0);
+    setDraftQuery(value);
+  }, []);
+
+  const handleNafCodesChange = useCallback((value: string[]) => {
+    setDraftNafCodes(value);
+  }, []);
+
+  const handleAddedFromChange = useCallback((value: string) => {
+    setDraftAddedFrom(value);
+  }, []);
+
+  const handleAddedToChange = useCallback((value: string) => {
+    setDraftAddedTo(value);
   }, []);
 
   const handleIndividualFilterChange = useCallback((value: EstablishmentIndividualFilter) => {
-    setIndividualFilter(value);
+    setDraftIndividualFilter(value);
+  }, []);
+
+  const handleApplyFilters = useCallback(() => {
+    setQuery(draftQuery);
+    setNafCodes(draftNafCodes);
+    setAddedFrom(draftAddedFrom);
+    setAddedTo(draftAddedTo);
+    setIndividualFilter(draftIndividualFilter);
+    setPage(0);
+  }, [draftAddedFrom, draftAddedTo, draftIndividualFilter, draftNafCodes, draftQuery]);
+
+  const handleResetFilters = useCallback(() => {
+    setDraftQuery("");
+    setDraftNafCodes([]);
+    setDraftAddedFrom("");
+    setDraftAddedTo("");
+    setDraftIndividualFilter("all");
+
+    setQuery("");
+    setNafCodes([]);
+    setAddedFrom("");
+    setAddedTo("");
+    setIndividualFilter("all");
     setPage(0);
   }, []);
+
+  const hasPendingFilters = useMemo(() => {
+    if (draftQuery !== query) {
+      return true;
+    }
+    if (draftAddedFrom !== addedFrom) {
+      return true;
+    }
+    if (draftAddedTo !== addedTo) {
+      return true;
+    }
+    if (draftIndividualFilter !== individualFilter) {
+      return true;
+    }
+    if (draftNafCodes.length !== nafCodes.length) {
+      return true;
+    }
+    const a = [...draftNafCodes].sort().join(",");
+    const b = [...nafCodes].sort().join(",");
+    return a !== b;
+  }, [addedFrom, addedTo, draftAddedFrom, draftAddedTo, draftIndividualFilter, draftNafCodes, draftQuery, individualFilter, nafCodes, query]);
 
   const deletingSiret = useMemo(() => {
     if (!deleteEstablishmentMutation.isPending) {
@@ -144,14 +224,25 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
       establishments={establishmentsQuery.data}
       isLoading={establishmentsQuery.isLoading}
       error={establishmentsError}
+      nafCategories={nafCategoriesQuery.data}
+      isLoadingNafCategories={nafCategoriesQuery.isLoading}
       limit={limit}
       page={page}
-      query={query}
-      individualFilter={individualFilter}
+      query={draftQuery}
+      nafCodes={draftNafCodes}
+      addedFrom={draftAddedFrom}
+      addedTo={draftAddedTo}
+      individualFilter={draftIndividualFilter}
       hasNextPage={hasNextPage}
       onLimitChange={handleLimitChange}
       onPageChange={handlePageChange}
       onQueryChange={handleQueryChange}
+      onNafCodesChange={handleNafCodesChange}
+      onAddedFromChange={handleAddedFromChange}
+      onAddedToChange={handleAddedToChange}
+      onApplyFilters={handleApplyFilters}
+      hasPendingFilters={hasPendingFilters}
+      onResetFilters={handleResetFilters}
       onIndividualFilterChange={handleIndividualFilterChange}
       onRefresh={() => establishmentsQuery.refetch()}
       onDeleteEstablishment={handleDeleteEstablishment}

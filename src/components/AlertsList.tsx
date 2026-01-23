@@ -2,6 +2,7 @@ import { ChangeEvent } from "react";
 
 import { Alert } from "../types";
 import { formatDateTime } from "../utils/format";
+import { SiretLink } from "./SiretLink";
 
 type Props = {
   alerts?: Alert[];
@@ -112,7 +113,9 @@ export const AlertsList = ({
                   onClick={() => onSelect(alert.siret)}
                 >
                   <td>{formatDateTime(alert.createdAt)}</td>
-                  <td>{alert.siret}</td>
+                  <td>
+                    <SiretLink value={alert.siret} />
+                  </td>
                   <td>{alert.recipients.join(", ") || "—"}</td>
                   <td>
                     <pre className="payload">{JSON.stringify(alert.payload, null, 2)}</pre>

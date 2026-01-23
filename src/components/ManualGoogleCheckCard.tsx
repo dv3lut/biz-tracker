@@ -2,6 +2,7 @@ import type { FormEvent, ChangeEvent } from "react";
 
 import type { GoogleCheckResult } from "../types";
 import { formatDateTime, formatPercent } from "../utils/format";
+import { SiretLink } from "./SiretLink";
 
 const STATUS_LABELS: Record<string, string> = {
   found: "Fiche trouvée",
@@ -126,7 +127,9 @@ export const ManualGoogleCheckCard = ({
       {feedbackMessage ? <p className="feedback success">{feedbackMessage}</p> : null}
       {errorMessage ? <p className="feedback error">{errorMessage}</p> : null}
       {isSubmitting && isCurrentSiretProcessing ? (
-        <p className="refresh-indicator">Relance en cours pour le SIRET {normalizedSiret}…</p>
+        <p className="refresh-indicator">
+          Relance en cours pour le SIRET <SiretLink value={normalizedSiret} />…
+        </p>
       ) : null}
 
       <form className="manual-google-form" onSubmit={handleSubmit}>
@@ -189,7 +192,9 @@ export const ManualGoogleCheckCard = ({
               </div>
               <div>
                 <p className="muted small">SIRET</p>
-                <p className="manual-google-meta-value">{currentEstablishment.siret}</p>
+                <p className="manual-google-meta-value">
+                  <SiretLink value={currentEstablishment.siret} />
+                </p>
               </div>
               <div>
                 <p className="muted small">Code NAF</p>

@@ -1,3 +1,4 @@
+import { SiretLink } from "./SiretLink";
 import { SyncRun } from "../types";
 import { formatDateTime, formatDuration, formatNumber } from "../utils/format";
 import {
@@ -251,7 +252,7 @@ export const SyncRunDetailModal = ({
                             <li key={item.siret}>
                               <div className="run-sample-main">
                                 <strong>{item.name ?? "Nom indisponible"}</strong>
-                                <span className="muted small">{item.siret}</span>
+                                 <SiretLink value={item.siret} className="muted small" />
                               </div>
                               <div className="run-sample-meta">
                                 <span>{formatLocation(item.libelleCommune, item.codePostal)}</span>
@@ -278,7 +279,7 @@ export const SyncRunDetailModal = ({
                             <li key={`${item.siret}-${item.changedFields.join("-")}`}>
                               <div className="run-sample-main">
                                 <strong>{item.name ?? "Nom indisponible"}</strong>
-                                <span className="muted small">{item.siret}</span>
+                                 <SiretLink value={item.siret} className="muted small" />
                               </div>
                               <div className="run-sample-meta">
                                 <span>{formatLocation(item.libelleCommune, item.codePostal)}</span>
@@ -300,7 +301,7 @@ export const SyncRunDetailModal = ({
                             <li key={`${item.siret}-immediate`}>
                               <div className="run-sample-main">
                                 <strong>{item.name ?? "Nom indisponible"}</strong>
-                                <span className="muted small">{item.siret}</span>
+                                 <SiretLink value={item.siret} className="muted small" />
                               </div>
                               <div className="run-sample-meta">
                                 <span>{formatLocation(item.libelleCommune, item.codePostal)}</span>
@@ -326,7 +327,7 @@ export const SyncRunDetailModal = ({
                             <li key={`${item.siret}-late`}>
                               <div className="run-sample-main">
                                 <strong>{item.name ?? "Nom indisponible"}</strong>
-                                <span className="muted small">{item.siret}</span>
+                                 <SiretLink value={item.siret} className="muted small" />
                               </div>
                               <div className="run-sample-meta">
                                 <span>{formatLocation(item.libelleCommune, item.codePostal)}</span>

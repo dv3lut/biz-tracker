@@ -1,18 +1,29 @@
 import { EstablishmentsSection } from "../EstablishmentsSection";
-import type { Establishment, EstablishmentIndividualFilter } from "../../types";
+import type { Establishment, EstablishmentIndividualFilter, NafCategory } from "../../types";
 
 type Props = {
   establishments: Establishment[] | undefined;
   isLoading: boolean;
   error: Error | null;
+  nafCategories: NafCategory[] | undefined;
+  isLoadingNafCategories: boolean;
   limit: number;
   page: number;
   query: string;
+  nafCodes: string[];
+  addedFrom: string;
+  addedTo: string;
   individualFilter: EstablishmentIndividualFilter;
   hasNextPage: boolean;
   onLimitChange: (limit: number) => void;
   onPageChange: (page: number) => void;
   onQueryChange: (query: string) => void;
+  onNafCodesChange: (value: string[]) => void;
+  onAddedFromChange: (value: string) => void;
+  onAddedToChange: (value: string) => void;
+  onApplyFilters: () => void;
+  hasPendingFilters: boolean;
+  onResetFilters: () => void;
   onIndividualFilterChange: (value: EstablishmentIndividualFilter) => void;
   onRefresh: () => void;
   onDeleteEstablishment: (siret: string) => void;
@@ -30,14 +41,25 @@ export const EstablishmentsView = ({
   establishments,
   isLoading,
   error,
+  nafCategories,
+  isLoadingNafCategories,
   limit,
   page,
   query,
+  nafCodes,
+  addedFrom,
+  addedTo,
   individualFilter,
   hasNextPage,
   onLimitChange,
   onPageChange,
   onQueryChange,
+  onNafCodesChange,
+  onAddedFromChange,
+  onAddedToChange,
+  onApplyFilters,
+  hasPendingFilters,
+  onResetFilters,
   onIndividualFilterChange,
   onRefresh,
   onDeleteEstablishment,
@@ -63,14 +85,25 @@ export const EstablishmentsView = ({
           establishments={establishments}
           isLoading={isLoading}
           error={error}
+          nafCategories={nafCategories}
+          isLoadingNafCategories={isLoadingNafCategories}
           limit={limit}
           page={page}
           query={query}
+          nafCodes={nafCodes}
+          addedFrom={addedFrom}
+          addedTo={addedTo}
           individualFilter={individualFilter}
           hasNextPage={hasNextPage}
           onLimitChange={onLimitChange}
           onPageChange={onPageChange}
           onQueryChange={onQueryChange}
+          onNafCodesChange={onNafCodesChange}
+          onAddedFromChange={onAddedFromChange}
+          onAddedToChange={onAddedToChange}
+          onApplyFilters={onApplyFilters}
+          hasPendingFilters={hasPendingFilters}
+          onResetFilters={onResetFilters}
           onIndividualFilterChange={onIndividualFilterChange}
           onRefresh={onRefresh}
           onDeleteEstablishment={onDeleteEstablishment}

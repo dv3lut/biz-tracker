@@ -2,6 +2,7 @@ import { useEffect } from "react";
 
 import { EstablishmentDetail } from "../types";
 import { formatDateTime } from "../utils/format";
+import { SiretLink } from "./SiretLink";
 
 type Props = {
   isOpen: boolean;
@@ -98,7 +99,9 @@ export const EstablishmentDetailModal = ({
           <div>
             <h2>Fiche établissement</h2>
             {establishment ? (
-              <p className="muted small">SIRET {establishment.siret}</p>
+              <p className="muted small">
+                SIRET <SiretLink value={establishment.siret} className="muted small" />
+              </p>
             ) : (
               <p className="muted small">Chargement en cours…</p>
             )}
@@ -117,7 +120,9 @@ export const EstablishmentDetailModal = ({
               <h3>Identité</h3>
               <dl className="data-grid">
                 <dt>SIRET</dt>
-                <dd>{establishment.siret}</dd>
+                <dd>
+                  <SiretLink value={establishment.siret} />
+                </dd>
                 <dt>SIREN</dt>
                 <dd>{establishment.siren}</dd>
                 <dt>NIC</dt>

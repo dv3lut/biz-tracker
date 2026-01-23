@@ -1,4 +1,5 @@
 import { Establishment, EstablishmentDetail } from "../types";
+import { canonicalizeNafCode } from "../utils/sync";
 import { request } from "./http";
 
 export interface EstablishmentResponse {
@@ -142,6 +143,10 @@ interface ListEstablishmentsParams {
   limit?: number;
   offset?: number;
   q?: string;
+  nafCode?: string;
+  nafCodes?: string[];
+  addedFrom?: string;
+  addedTo?: string;
   isIndividual?: boolean;
 }
 
@@ -156,6 +161,23 @@ export const establishmentsApi = {
     }
     if (params.q) {
       query.set("q", params.q);
+    }
+    if (params.nafCode) {
+      query.set("naf_code", params.nafCode);
+    }
+    if (params.nafCodes && params.nafCodes.length > 0) {
+      params.nafCodes
+        .filter((code) => Boolean(code && code.trim()))
+        .forEach((code) => {
+          const trimmed = code.trim();
+          query.append("naf_codes", canonicalizeNafCode(trimmed) ?? trimmed);
+        });
+    }
+    if (params.addedFrom) {
+      query.set("added_from", params.addedFrom);
+    }
+    if (params.addedTo) {
+      query.set("added_to", params.addedTo);
     }
     if (typeof params.isIndividual === "boolean") {
       query.set("is_individual", String(params.isIndividual));
