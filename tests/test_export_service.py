@@ -138,6 +138,46 @@ def test_build_alerts_workbook_includes_payload_and_links():
     assert sheet.cell(row=2, column=4).hyperlink is not None
 
 
+def test_build_alerts_csv_includes_headers_and_payload():
+    establishment = _make_establishment()
+    alert = SimpleNamespace(
+        establishment=establishment,
+        created_at=datetime(2024, 1, 5, 8, 0, 0),
+        sent_at=None,
+        run_id=uuid4(),
+        recipients=["ops@example.com"],
+        payload={"key": "value"},
+        run=SimpleNamespace(scope_key="restaurants"),
+    )
+
+    content = export_service.build_alerts_csv([alert]).decode("utf-8-sig")
+    lines = [line for line in content.splitlines() if line]
+
+    assert lines[0].startswith("Date création;")
+    assert "ops@example.com" in lines[1]
+    assert '"key": "value"' in lines[1] or "key" in lines[1]
+
+
+def test_build_alerts_client_csv_is_minimal_and_safe():
+    establishment = _make_establishment()
+    alert = SimpleNamespace(
+        establishment=establishment,
+        created_at=datetime(2024, 1, 5, 8, 0, 0),
+        sent_at=None,
+        run_id=uuid4(),
+        recipients=["ops@example.com"],
+        payload={"secret": "value"},
+        run=SimpleNamespace(scope_key="restaurants"),
+    )
+
+    content = export_service.build_alerts_client_csv([alert]).decode("utf-8-sig")
+    header, row = [line for line in content.splitlines() if line][:2]
+
+    assert header == "Date création;Date alerte;Nom;Adresse;Code postal;Commune;Pays;Catégorie"
+    assert "ops@example.com" not in row
+    assert "secret" not in row
+
+
 def test_export_helpers_normalize_values():
     establishment = _make_establishment(indice_repetition="BIS")
 

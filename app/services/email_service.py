@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 import smtplib
 from email.message import EmailMessage
-from typing import Iterable
+from typing import Iterable, Sequence
 
 from app.config import get_settings
 
@@ -39,6 +39,7 @@ class EmailService:
         *,
         html_body: str | None = None,
         reply_to: str | None = None,
+        attachments: Sequence[tuple[str, bytes, str]] | None = None,
     ) -> None:
         settings = self._settings
         recipient_list = [addr for addr in recipients if addr]
@@ -75,6 +76,10 @@ class EmailService:
             message.set_content(body)
             if html_body:
                 message.add_alternative(html_body, subtype="html")
+
+            for filename, content, mime_type in attachments or []:
+                maintype, _sep, subtype = (mime_type or "application/octet-stream").partition("/")
+                message.add_attachment(content, maintype=maintype, subtype=subtype or "octet-stream", filename=filename)
             server.send_message(message, to_addrs=recipient_list)
             _LOGGER.debug(
                 "Email sent via %s to %s (subject=%r)",

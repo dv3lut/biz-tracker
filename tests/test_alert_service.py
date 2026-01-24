@@ -315,6 +315,7 @@ class AlertServiceFilteringTests(unittest.TestCase):
 
         plan, reason = service._prepare_client_dispatch(
             [],
+            {},
             [],
             email_enabled=False,
             email_configured=True,
@@ -329,6 +330,7 @@ class AlertServiceFilteringTests(unittest.TestCase):
 
         plan, reason = service._prepare_client_dispatch(
             [],
+            {},
             [],
             email_enabled=True,
             email_configured=True,
@@ -340,6 +342,7 @@ class AlertServiceFilteringTests(unittest.TestCase):
         with patch("app.services.alert_service.get_active_clients", return_value=[]):
             plan, reason = service._prepare_client_dispatch(
                 [],
+                {},
                 [],
                 email_enabled=True,
                 email_configured=True,
@@ -356,6 +359,7 @@ class AlertServiceFilteringTests(unittest.TestCase):
         with patch("app.services.alert_service.get_active_clients", return_value=[client]):
             plan, reason = service._prepare_client_dispatch(
                 [],
+                {},
                 [],
                 email_enabled=True,
                 email_configured=True,
@@ -372,6 +376,7 @@ class AlertServiceFilteringTests(unittest.TestCase):
         with patch("app.services.alert_service.get_active_clients", return_value=[recipientless]):
             plan, reason = service._prepare_client_dispatch(
                 [],
+                {},
                 [],
                 email_enabled=True,
                 email_configured=True,
@@ -396,6 +401,7 @@ class AlertServiceFilteringTests(unittest.TestCase):
             )
             plan, reason = service._prepare_client_dispatch(
                 [self._make_establishment("recent_creation", suffix="7")],
+                {},
                 [],
                 email_enabled=True,
                 email_configured=True,
@@ -438,6 +444,7 @@ class AlertServiceFilteringTests(unittest.TestCase):
             )
             plan, reason = service._prepare_client_dispatch(
                 [establishment],
+                {},
                 ["admin@example.com"],
                 email_enabled=True,
                 email_configured=True,

@@ -229,7 +229,7 @@ def test_dispatch_email_to_clients_sends_once(monkeypatch):
     monkeypatch.setattr(client_service, "utcnow", lambda: datetime(2024, 1, 10, 12, 0, 0))
 
     client = _client(recipients=[SimpleNamespace(email="ops@example.com")])
-    email_service = SimpleNamespace(send=lambda subject, body, recipients, html_body=None: None)
+    email_service = SimpleNamespace(send=lambda subject, body, recipients, html_body=None, attachments=None: None)
     payload = ClientEmailPayload(client=client, subject="Hi", text_body="Body")
 
     result = client_service.dispatch_email_to_clients(email_service, [payload])

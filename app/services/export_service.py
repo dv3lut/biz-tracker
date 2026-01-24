@@ -1,8 +1,10 @@
 """Utilities to export data snapshots (Excel, CSV, etc.)."""
 from __future__ import annotations
 
+import csv
 import json
 from io import BytesIO
+from io import StringIO
 from typing import Iterable, Literal, Mapping, Sequence
 
 from openpyxl import Workbook
@@ -269,3 +271,137 @@ def build_alerts_workbook(alerts: Iterable[models.Alert]) -> BytesIO:
     workbook.save(buffer)
     buffer.seek(0)
     return buffer
+
+
+def build_alerts_csv(
+    alerts: Iterable[models.Alert],
+    *,
+    delimiter: str = ";",
+    establishments_by_siret: Mapping[str, object] | None = None,
+    scope_key: str | None = None,
+) -> bytes:
+    """Generate a CSV export for alerts.
+
+    Mirrors the columns of :func:`build_alerts_workbook` so that emails and UI exports
+    keep a consistent schema.
+    """
+
+    headers = [
+        "Date création",
+        "Date alerte",
+        "Date envoi",
+        "SIRET",
+        "Nom",
+        "Adresse",
+        "Code postal",
+        "Commune",
+        "Pays",
+        "NAF",
+        "Catégorie entreprise",
+        "Catégorie juridique",
+        "Run ID",
+        "Scope",
+        "Destinataires",
+        "Payload",
+    ]
+
+    def normalize(value: object | None) -> str:
+        if value is None:
+            return ""
+        if isinstance(value, str):
+            return value
+        return str(value)
+
+    buffer = StringIO(newline="")
+    writer = csv.writer(buffer, delimiter=delimiter)
+    writer.writerow(headers)
+
+    for alert in alerts:
+        establishment = getattr(alert, "establishment", None)
+        if establishment is None and establishments_by_siret is not None:
+            establishment = establishments_by_siret.get(getattr(alert, "siret", ""))
+        if establishment is None:
+            continue
+
+        payload_str = json.dumps(getattr(alert, "payload", None) or {}, ensure_ascii=False)
+        recipients = ", ".join(getattr(alert, "recipients", None) or [])
+
+        writer.writerow(
+            [
+                normalize(_format_date(getattr(establishment, "date_creation", None))),
+                normalize(_format_datetime(getattr(alert, "created_at", None))),
+                normalize(_format_datetime(getattr(alert, "sent_at", None))),
+                normalize(getattr(establishment, "siret", None)),
+                normalize(getattr(establishment, "name", None)),
+                normalize(_compose_address(establishment)),
+                normalize(getattr(establishment, "code_postal", None)),
+                normalize(getattr(establishment, "libelle_commune", None) or getattr(establishment, "libelle_commune_etranger", None)),
+                normalize(getattr(establishment, "code_pays", None)),
+                normalize(getattr(establishment, "naf_code", None)),
+                normalize(getattr(establishment, "categorie_entreprise", None)),
+                normalize(getattr(establishment, "categorie_juridique", None)),
+                normalize(str(getattr(alert, "run_id", "")) if getattr(alert, "run_id", None) else ""),
+                normalize(scope_key or getattr(getattr(alert, "run", None), "scope_key", None)),
+                normalize(recipients),
+                normalize(payload_str),
+            ]
+        )
+
+    # utf-8-sig: include BOM so Excel on Windows detects UTF-8 reliably.
+    return buffer.getvalue().encode("utf-8-sig")
+
+
+def build_alerts_client_csv(
+    alerts: Iterable[models.Alert],
+    *,
+    delimiter: str = ";",
+    establishments_by_siret: Mapping[str, object] | None = None,
+) -> bytes:
+    """Generate a client-safe CSV export for alerts.
+
+    Only includes non-sensitive fields suitable for customers.
+    """
+
+    headers = [
+        "Date création",
+        "Date alerte",
+        "Nom",
+        "Adresse",
+        "Code postal",
+        "Commune",
+        "Pays",
+        "Catégorie",
+    ]
+
+    def normalize(value: object | None) -> str:
+        if value is None:
+            return ""
+        if isinstance(value, str):
+            return value
+        return str(value)
+
+    buffer = StringIO(newline="")
+    writer = csv.writer(buffer, delimiter=delimiter)
+    writer.writerow(headers)
+
+    for alert in alerts:
+        establishment = getattr(alert, "establishment", None)
+        if establishment is None and establishments_by_siret is not None:
+            establishment = establishments_by_siret.get(getattr(alert, "siret", ""))
+        if establishment is None:
+            continue
+
+        writer.writerow(
+            [
+                normalize(_format_date(getattr(establishment, "date_creation", None))),
+                normalize(_format_datetime(getattr(alert, "created_at", None))),
+                normalize(getattr(establishment, "name", None)),
+                normalize(_compose_address(establishment)),
+                normalize(getattr(establishment, "code_postal", None)),
+                normalize(getattr(establishment, "libelle_commune", None) or getattr(establishment, "libelle_commune_etranger", None)),
+                normalize(getattr(establishment, "code_pays", None)),
+                normalize(getattr(establishment, "naf_libelle", None)),
+            ]
+        )
+
+    return buffer.getvalue().encode("utf-8-sig")

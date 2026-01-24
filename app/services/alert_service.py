@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime
-from typing import Sequence
+from typing import Mapping, Sequence
 from uuid import UUID
 
 from sqlalchemy import select
@@ -24,9 +25,16 @@ from app.services.client_service import (
     summarize_client_filters,
 )
 from app.services.email_service import EmailService
+from app.services.export_service import build_alerts_client_csv, build_alerts_csv
 from app.utils.dates import utcnow
 
 _ALERT_LOGGER = logging.getLogger("alerts")
+
+
+def _sanitize_filename_token(value: object | None) -> str:
+    token = str(value or "").strip()
+    token = re.sub(r"[^A-Za-z0-9._-]+", "_", token)
+    return token.strip("_-") or "export"
 
 
 class AlertService:
@@ -70,6 +78,8 @@ class AlertService:
 
             self._session.flush()
 
+            alerts_by_siret: dict[str, models.Alert] = {alert.siret: alert for alert in alerts}
+
             message_lines = ["Pages Google My Business associées détectées:", ""]
             for establishment in filtered_establishments:
                 message_lines.extend(self._formatter.format_lines(establishment, include_google=True))
@@ -77,6 +87,7 @@ class AlertService:
             _ALERT_LOGGER.info("\n".join(message_lines).strip())
         else:
             _ALERT_LOGGER.info("Aucune fiche Google détectée pour le run %s", self._run.id)
+            alerts_by_siret = {}
 
         email_enabled = self._email_service.is_enabled()
         email_configured = self._email_service.is_configured()
@@ -86,6 +97,7 @@ class AlertService:
         if self._client_notifications_enabled:
             plan, client_skip_reason = self._prepare_client_dispatch(
                 filtered_establishments,
+                alerts_by_siret,
                 admin_recipients,
                 email_enabled=email_enabled,
                 email_configured=email_configured,
@@ -178,11 +190,24 @@ class AlertService:
                 admin_skip_reason = "email_not_configured"
             else:
                 try:
+                    establishments_by_siret = {item.siret: item for item in filtered_establishments}
+                    attachments = [
+                        (
+                            f"biz-tracker-alertes-{_sanitize_filename_token(self._run.scope_key)}-{utcnow().date().isoformat()}.csv",
+                            build_alerts_csv(
+                                alerts,
+                                establishments_by_siret=establishments_by_siret,
+                                scope_key=self._run.scope_key,
+                            ),
+                            "text/csv",
+                        )
+                    ]
                     self._email_service.send(
                         admin_subject,
                         admin_text_body,
                         admin_recipients,
                         html_body=admin_html_body,
+                        attachments=attachments,
                     )
                 except Exception as exc:  # noqa: BLE001
                     admin_skip_reason = "send_error"
@@ -233,6 +258,7 @@ class AlertService:
     def _prepare_client_dispatch(
         self,
         establishments: Sequence[models.Establishment],
+        alerts_by_siret: Mapping[str, models.Alert],
         admin_recipients: Sequence[str],
         *,
         email_enabled: bool,
@@ -277,6 +303,11 @@ class AlertService:
             matches = assignment_map.get(client.id, [])
             if not matches and not send_zero_digest:
                 continue
+            matched_alerts = [
+                alerts_by_siret[match.siret]
+                for match in matches
+                if getattr(match, "siret", None) in alerts_by_siret
+            ]
             filter_summary = summarize_client_filters(client)
             match_count = len(matches)
             match_fiche_plural = "fiches" if match_count > 1 else "fiche"
@@ -286,6 +317,18 @@ class AlertService:
                 matches,
                 filters=filter_summary,
             )
+            attachment_filename = f"biz-tracker-alertes-{_sanitize_filename_token(client.name)}-{utcnow().date().isoformat()}.csv"
+            establishments_by_siret = {item.siret: item for item in matches if getattr(item, "siret", None)}
+            attachments = [
+                (
+                    attachment_filename,
+                    build_alerts_client_csv(
+                        matched_alerts,
+                        establishments_by_siret=establishments_by_siret,
+                    ),
+                    "text/csv",
+                )
+            ]
             client_payloads.append(
                 ClientEmailPayload(
                     client=client,
@@ -294,6 +337,7 @@ class AlertService:
                     html_body=html_body,
                     establishments=matches,
                     filters=filter_summary,
+                    attachments=attachments,
                 )
             )
 

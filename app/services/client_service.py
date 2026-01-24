@@ -108,6 +108,7 @@ class ClientEmailPayload:
     html_body: str | None = None
     establishments: Sequence[models.Establishment] | None = None
     filters: ClientFilterSummary | None = None
+    attachments: Sequence[tuple[str, bytes, str]] | None = None
 
 
 def summarize_client_filters(client: models.Client) -> ClientFilterSummary:
@@ -304,7 +305,13 @@ def dispatch_email_to_clients(
         if timestamp is None:
             timestamp = utcnow()
         try:
-            email_service.send(payload.subject, payload.text_body, recipients, html_body=payload.html_body)
+            email_service.send(
+                payload.subject,
+                payload.text_body,
+                recipients,
+                html_body=payload.html_body,
+                attachments=payload.attachments,
+            )
         except Exception as exc:  # noqa: BLE001 - let caller handle logging
             failed.append((client, exc))
             continue

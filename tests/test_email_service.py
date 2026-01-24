@@ -49,6 +49,7 @@ def test_email_service_send_skips_when_before_ready(monkeypatch):
 def test_email_service_send_uses_smtp(monkeypatch):
     sent_messages: list[tuple[str, list[str]]] = []
     sent_reply_to: list[str | None] = []
+    sent_attachments: list[list[tuple[str, str]]] = []
 
     class DummySMTP:
         def __init__(self, host, port) -> None:
@@ -71,6 +72,10 @@ def test_email_service_send_uses_smtp(monkeypatch):
         def send_message(self, message, to_addrs):
             sent_messages.append((message["Subject"], to_addrs))
             sent_reply_to.append(message.get("Reply-To"))
+            attachments: list[tuple[str, str]] = []
+            for part in message.iter_attachments():
+                attachments.append((part.get_filename(), part.get_content_type()))
+            sent_attachments.append(attachments)
 
     monkeypatch.setattr(email_service, "get_settings", lambda: SimpleNamespace(email=_settings(use_tls=True, smtp_username="user", smtp_password="pass")))
     monkeypatch.setattr(email_service.smtplib, "SMTP", DummySMTP)
@@ -82,7 +87,9 @@ def test_email_service_send_uses_smtp(monkeypatch):
         ["ops@example.com", None],
         html_body="<p>Body</p>",
         reply_to="contact@business-tracker.fr",
+        attachments=[("alertes.csv", b"col1;col2\n", "text/csv")],
     )
 
     assert sent_messages == [("Hello", ["ops@example.com"])]
     assert sent_reply_to == ["contact@business-tracker.fr"]
+    assert sent_attachments == [[("alertes.csv", "text/csv")]]
