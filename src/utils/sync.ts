@@ -7,7 +7,7 @@ export const describeSyncMode = (mode: SyncMode): string => {
     case "google_pending":
       return "Google — nouveaux uniquement";
     case "google_refresh":
-      return "Google — rafraîchir toutes les fiches";
+      return "Google — relancer sur tous";
     case "day_replay":
       return "Rejouer une journée";
     case "full":

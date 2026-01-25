@@ -65,6 +65,7 @@ export const DashboardSection = ({ onUnauthorized }: Props) => {
     notifyAdmins: true,
     replayReference: DEFAULT_REPLAY_REFERENCE,
     forceGoogleReplay: false,
+    resetGoogleState: false,
   });
   const [isGoogleExportModalOpen, setGoogleExportModalOpen] = useState(false);
   const initialExportRange = useMemo(getDefaultGoogleExportRange, []);
@@ -196,12 +197,19 @@ export const DashboardSection = ({ onUnauthorized }: Props) => {
         notifyAdmins: payload.notifyAdmins ?? pendingSyncRequest.notifyAdmins ?? true,
         forceGoogleReplay: payload.forceGoogleReplay ?? pendingSyncRequest.forceGoogleReplay ?? false,
         replayReference: payload.replayReference ?? pendingSyncRequest.replayReference ?? DEFAULT_REPLAY_REFERENCE,
+        resetGoogleState: payload.resetGoogleState ?? pendingSyncRequest.resetGoogleState ?? false,
       };
       setPendingSyncRequest(persistedRequest);
       syncMutation.mutate(payload);
       setSyncModeModalOpen(false);
     },
-    [pendingSyncRequest.forceGoogleReplay, pendingSyncRequest.notifyAdmins, pendingSyncRequest.replayReference, syncMutation],
+    [
+      pendingSyncRequest.forceGoogleReplay,
+      pendingSyncRequest.notifyAdmins,
+      pendingSyncRequest.replayReference,
+      pendingSyncRequest.resetGoogleState,
+      syncMutation,
+    ],
   );
 
   const handleCloseSyncModeModal = useCallback(() => {
@@ -413,6 +421,7 @@ export const DashboardSection = ({ onUnauthorized }: Props) => {
       <SyncModeModal
         isOpen={isSyncModeModalOpen}
         initialMode={pendingSyncRequest.mode}
+        initialResetGoogleState={pendingSyncRequest.resetGoogleState ?? false}
         initialReplayDate={pendingSyncRequest.replayForDate ?? null}
         initialNafCodes={pendingSyncRequest.nafCodes ?? []}
         nafCategories={dashboardQuery.data?.nafCategoryBreakdown ?? []}

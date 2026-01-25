@@ -147,6 +147,7 @@ interface ListEstablishmentsParams {
   nafCodes?: string[];
   addedFrom?: string;
   addedTo?: string;
+  googleCheckStatus?: string;
   isIndividual?: boolean;
 }
 
@@ -178,6 +179,9 @@ export const establishmentsApi = {
     }
     if (params.addedTo) {
       query.set("added_to", params.addedTo);
+    }
+    if (params.googleCheckStatus) {
+      query.set("google_check_status", params.googleCheckStatus);
     }
     if (typeof params.isIndividual === "boolean") {
       query.set("is_individual", String(params.isIndividual));

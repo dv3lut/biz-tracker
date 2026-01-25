@@ -18,6 +18,7 @@ interface EstablishmentsSectionProps {
   addedFrom: string;
   addedTo: string;
   individualFilter: EstablishmentIndividualFilter;
+  googleCheckStatus: string;
   hasNextPage: boolean;
   onLimitChange: (limit: number) => void;
   onPageChange: (page: number) => void;
@@ -29,6 +30,7 @@ interface EstablishmentsSectionProps {
   hasPendingFilters: boolean;
   onResetFilters: () => void;
   onIndividualFilterChange: (value: EstablishmentIndividualFilter) => void;
+  onGoogleCheckStatusChange: (value: string) => void;
   onRefresh: () => void;
   onDeleteEstablishment: (siret: string) => void;
   deletingSiret: string | null;
@@ -54,6 +56,7 @@ export const EstablishmentsSection = ({
   addedFrom,
   addedTo,
   individualFilter,
+  googleCheckStatus,
   hasNextPage,
   onLimitChange,
   onPageChange,
@@ -65,6 +68,7 @@ export const EstablishmentsSection = ({
   hasPendingFilters,
   onResetFilters,
   onIndividualFilterChange,
+  onGoogleCheckStatusChange,
   onRefresh,
   onDeleteEstablishment,
   deletingSiret,
@@ -121,6 +125,10 @@ export const EstablishmentsSection = ({
 
   const handleIndividualFilterChange = (event: ChangeEvent<HTMLSelectElement>) => {
     onIndividualFilterChange(event.target.value as EstablishmentIndividualFilter);
+  };
+
+  const handleGoogleCheckStatusChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    onGoogleCheckStatusChange(event.target.value);
   };
 
   const handleDeleteOne = (siret: string) => {
@@ -272,6 +280,20 @@ export const EstablishmentsSection = ({
                 <option value="all">Toutes</option>
                 <option value="individual">Oui uniquement</option>
                 <option value="non_individual">Sans EI</option>
+              </select>
+            </label>
+          </div>
+
+          <div className="establishments-control establishments-control--google-status">
+            <label className="muted small">
+              Statut business (Google)
+              <select value={googleCheckStatus} onChange={handleGoogleCheckStatusChange}>
+                <option value="">Tous</option>
+                <option value="found">Trouvées (found)</option>
+                <option value="not_found">Sans résultat (not_found)</option>
+                <option value="insufficient">Identité insuffisante (insufficient)</option>
+                <option value="pending">En attente (pending)</option>
+                <option value="other">Autres statuts</option>
               </select>
             </label>
           </div>

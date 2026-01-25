@@ -234,7 +234,7 @@ export const SyncRunDetailModal = ({
                       {isGoogleOnly ? (
                         <p className="muted small">
                           {activeRun.mode === "google_refresh"
-                            ? "Les alertes sont désactivées pour une remise à zéro complète."
+                            ? "Les alertes sont désactivées pour une relance complète Google."
                             : "Les alertes sont émises uniquement pour les nouvelles fiches Google détectées."}
                         </p>
                       ) : null}

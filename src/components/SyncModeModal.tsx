@@ -43,9 +43,9 @@ const MODE_OPTIONS: Array<{
   },
   {
     value: "google_refresh",
-    title: "Google — rafraîchir toutes les fiches",
-    description: "Réinitialise les correspondances Google pour tous les établissements et relance la détection.",
-    impact: "À utiliser après une mise à jour majeure de la logique de matching.",
+    title: "Google — relancer sur tous",
+    description: "Ne touche pas à Sirene et relance une détection Google sur tous les établissements.",
+    impact: "Optionnel: remettre à zéro les données Google avant de recalculer (plus sûr mais plus intrusif).",
   },
   {
     value: "day_replay",
@@ -143,6 +143,7 @@ type NormalizedCategory = {
 type Props = {
   isOpen: boolean;
   initialMode: SyncMode;
+  initialResetGoogleState?: boolean | null;
   initialReplayDate?: string | null;
   initialNafCodes?: string[] | null;
   nafCategories: NafCategoryStat[];
@@ -155,6 +156,7 @@ type Props = {
   clientsError?: string | null;
   onConfirm: (payload: {
     mode: SyncMode;
+    resetGoogleState?: boolean;
     replayForDate?: string;
     nafCodes?: string[];
     targetClientIds?: string[];
@@ -211,6 +213,7 @@ const buildNormalizedCategories = (categories: NafCategoryStat[]): NormalizedCat
 export const SyncModeModal = ({
   isOpen,
   initialMode,
+  initialResetGoogleState,
   initialReplayDate,
   initialNafCodes,
   nafCategories,
@@ -226,6 +229,7 @@ export const SyncModeModal = ({
   isSubmitting,
 }: Props) => {
   const [mode, setMode] = useState<SyncMode>(initialMode);
+  const [resetGoogleState, setResetGoogleState] = useState<boolean>(false);
   const [replayDate, setReplayDate] = useState<string>(() => {
     if (initialReplayDate) {
       return initialReplayDate;
@@ -245,6 +249,11 @@ export const SyncModeModal = ({
   useEffect(() => {
     if (isOpen) {
       setMode(initialMode);
+      if (initialMode === "google_refresh") {
+        setResetGoogleState(initialResetGoogleState ?? false);
+      } else {
+        setResetGoogleState(false);
+      }
       setReplayDate(initialReplayDate || formatDateInput(new Date()));
       setSelectedNafCodes(normalizeList(initialNafCodes));
       setNafInput("");
@@ -258,6 +267,7 @@ export const SyncModeModal = ({
     }
   }, [
     initialMode,
+    initialResetGoogleState,
     initialReplayDate,
     initialNafCodes,
     initialTargetClientIds,
@@ -334,11 +344,19 @@ export const SyncModeModal = ({
       });
     }
     if (mode === "google_refresh") {
-      notes.push({
-        tone: "warning",
-        title: "Remise à zéro des fiches",
-        detail: "Toutes les correspondances Google existantes seront supprimées avant d'être recalculées.",
-      });
+      if (resetGoogleState) {
+        notes.push({
+          tone: "warning",
+          title: "Remise à zéro des fiches",
+          detail: "Les données Google existantes sont effacées au fil du run (biz-by-biz) puis recalculées.",
+        });
+      } else {
+        notes.push({
+          tone: "info",
+          title: "Relance sans remise à zéro",
+          detail: "Les fiches Google existantes sont conservées en l'absence de nouveau match.",
+        });
+      }
     }
     if (mode === "day_replay") {
       notes.push({
@@ -355,7 +373,7 @@ export const SyncModeModal = ({
       });
     }
     return notes;
-  }, [mode]);
+  }, [mode, resetGoogleState]);
 
   const addNafCodes = (codes: string[]) => {
     const normalized = Array.from(
@@ -490,6 +508,10 @@ export const SyncModeModal = ({
       nafCodes: nafCodesPayload,
     };
 
+    if (mode === "google_refresh") {
+      payload.resetGoogleState = resetGoogleState;
+    }
+
     if (mode === "day_replay") {
       if (selectedClientIds.length > 0) {
         payload.targetClientIds = selectedClientIds;
@@ -553,6 +575,23 @@ export const SyncModeModal = ({
                       />
                     </div>
                     <p className="muted small mode-option-impact">{option.impact}</p>
+                    {option.value === "google_refresh" && isSelected ? (
+                      <div className="form-control">
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={resetGoogleState}
+                            onChange={(event) => setResetGoogleState(event.target.checked)}
+                            disabled={isSubmitting}
+                          />
+                          <span>Réinitialiser les correspondances Google avant relance (purge)</span>
+                        </label>
+                        <p className="muted small">
+                          Si coché, les Place ID / URL existants sont effacés puis recalculés. Sinon, les fiches existantes
+                          sont conservées en l'absence de nouveau match.
+                        </p>
+                      </div>
+                    ) : null}
                     {option.value === "day_replay" && isSelected ? (
                       <div className="form-control">
                         <label htmlFor="replay-date" className="muted small">

@@ -14,26 +14,24 @@ type Props = {
   sections: ReadonlyArray<SectionDefinition>;
   activeSection: SectionKey;
   onSelect: (section: SectionKey) => void;
-  collapsed: boolean;
-  onToggleCollapse: () => void;
+  onClose?: () => void;
 };
 
-export const SidebarNav = ({ sections, activeSection, onSelect, collapsed, onToggleCollapse }: Props) => {
-  const toggleLabel = collapsed ? "Agrandir le menu" : "Réduire le menu";
-  const toggleIcon = collapsed ? "»" : "«";
-
+export const SidebarNav = ({ sections, activeSection, onSelect, onClose }: Props) => {
   return (
-    <aside className={`sidebar${collapsed ? " sidebar--collapsed" : ""}`}>
+    <aside className="sidebar">
       <div className="sidebar-header">
         <div className="sidebar-brand">
           <span className="sidebar-title">Business tracker</span>
           <span className="sidebar-subtitle">Console Admin</span>
         </div>
-        <button type="button" className="sidebar-toggle" onClick={onToggleCollapse} aria-label={toggleLabel}>
-          <span className="sidebar-toggle-icon" aria-hidden="true">
-            {toggleIcon}
-          </span>
-        </button>
+        {onClose ? (
+          <button type="button" className="sidebar-close" onClick={onClose} aria-label="Fermer le menu">
+            <span className="sidebar-close-icon" aria-hidden="true">
+              ×
+            </span>
+          </button>
+        ) : null}
       </div>
       <nav className="sidebar-nav">
         {sections.map((section) => {

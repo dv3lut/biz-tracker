@@ -256,6 +256,7 @@ export interface DashboardMetrics {
 export interface SyncRequestPayload {
   checkForUpdates?: boolean;
   mode?: SyncMode;
+  resetGoogleState?: boolean;
   replayForDate?: string;
   replayReference?: DayReplayReference;
   nafCodes?: string[];

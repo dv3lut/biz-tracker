@@ -298,6 +298,9 @@ export const syncApi = {
     if (payload.mode) {
       body.mode = payload.mode;
     }
+    if (payload.resetGoogleState !== undefined) {
+      body.reset_google_state = payload.resetGoogleState;
+    }
     if (payload.replayForDate) {
       body.replay_for_date = payload.replayForDate;
     }

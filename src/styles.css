@@ -14,7 +14,9 @@ table {
 
 th,
 td {
-  word-break: break-word;
+  word-break: normal;
+  overflow-wrap: break-word;
+  hyphens: manual;
   white-space: normal;
 }
 
@@ -313,6 +315,30 @@ body {
   line-height: 1;
 }
 
+.sidebar .sidebar-close {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-secondary-white);
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.sidebar .sidebar-close:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: translateX(1px);
+}
+
+.sidebar-close-icon {
+  font-size: 1.6rem;
+  line-height: 1;
+}
+
 .sidebar-nav-item {
   background: transparent;
   border: none;
@@ -373,6 +399,22 @@ body {
   gap: 1.5rem;
   flex-wrap: wrap;
   margin-bottom: 2.25rem;
+}
+
+.topbar .topbar__menuButton {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--color-border);
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text);
+}
+
+.topbar .topbar__menuButton:hover {
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .topbar-title {
@@ -1349,7 +1391,9 @@ table td {
   text-align: left;
   vertical-align: top;
   border-bottom: 1px solid var(--color-border);
-  word-break: break-word;
+  word-break: normal;
+  overflow-wrap: break-word;
+  hyphens: manual;
 }
 
 .badge {
@@ -2098,7 +2142,8 @@ table td {
   border-radius: 6px;
   font-size: 0.85rem;
   white-space: pre-wrap;
-  word-break: break-word;
+  word-break: normal;
+  overflow-wrap: break-word;
 }
 
 .establishments-controls {
@@ -2137,6 +2182,11 @@ table td {
 .establishments-control--individual {
   flex: 0 1 240px;
   min-width: 220px;
+}
+
+.establishments-control--google-status {
+  flex: 0 1 260px;
+  min-width: 240px;
 }
 
 .establishments-control--limit {
@@ -2259,8 +2309,9 @@ table td {
 .establishments-controls .naf-multiselect-option span {
   min-width: 0;
   white-space: normal;
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  word-break: normal;
+  overflow-wrap: break-word;
+  hyphens: manual;
 }
 
 .establishments-pagination {

@@ -27,12 +27,14 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
   const [draftAddedFrom, setDraftAddedFrom] = useState("");
   const [draftAddedTo, setDraftAddedTo] = useState("");
   const [draftIndividualFilter, setDraftIndividualFilter] = useState<EstablishmentIndividualFilter>("all");
+  const [draftGoogleCheckStatus, setDraftGoogleCheckStatus] = useState("");
 
   const [query, setQuery] = useState("");
   const [nafCodes, setNafCodes] = useState<string[]>([]);
   const [addedFrom, setAddedFrom] = useState("");
   const [addedTo, setAddedTo] = useState("");
   const [individualFilter, setIndividualFilter] = useState<EstablishmentIndividualFilter>("all");
+  const [googleCheckStatus, setGoogleCheckStatus] = useState("");
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -43,7 +45,7 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
   });
 
   const establishmentsQuery = useQuery<Establishment[]>({
-    queryKey: ["establishments", limit, page, query, nafCodes, addedFrom, addedTo, individualFilter],
+    queryKey: ["establishments", limit, page, query, nafCodes, addedFrom, addedTo, individualFilter, googleCheckStatus],
     queryFn: () =>
       establishmentsApi.fetchMany({
         limit,
@@ -52,6 +54,7 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
         nafCodes: nafCodes.length > 0 ? nafCodes : undefined,
         addedFrom: addedFrom ? addedFrom : undefined,
         addedTo: addedTo ? addedTo : undefined,
+        googleCheckStatus: googleCheckStatus ? googleCheckStatus : undefined,
         isIndividual:
           individualFilter === "all" ? undefined : individualFilter === "individual",
       }),
@@ -163,14 +166,19 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     setDraftIndividualFilter(value);
   }, []);
 
+  const handleGoogleCheckStatusChange = useCallback((value: string) => {
+    setDraftGoogleCheckStatus(value);
+  }, []);
+
   const handleApplyFilters = useCallback(() => {
     setQuery(draftQuery);
     setNafCodes(draftNafCodes);
     setAddedFrom(draftAddedFrom);
     setAddedTo(draftAddedTo);
     setIndividualFilter(draftIndividualFilter);
+    setGoogleCheckStatus(draftGoogleCheckStatus);
     setPage(0);
-  }, [draftAddedFrom, draftAddedTo, draftIndividualFilter, draftNafCodes, draftQuery]);
+  }, [draftAddedFrom, draftAddedTo, draftGoogleCheckStatus, draftIndividualFilter, draftNafCodes, draftQuery]);
 
   const handleResetFilters = useCallback(() => {
     setDraftQuery("");
@@ -178,12 +186,14 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     setDraftAddedFrom("");
     setDraftAddedTo("");
     setDraftIndividualFilter("all");
+    setDraftGoogleCheckStatus("");
 
     setQuery("");
     setNafCodes([]);
     setAddedFrom("");
     setAddedTo("");
     setIndividualFilter("all");
+    setGoogleCheckStatus("");
     setPage(0);
   }, []);
 
@@ -200,13 +210,16 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     if (draftIndividualFilter !== individualFilter) {
       return true;
     }
+    if (draftGoogleCheckStatus !== googleCheckStatus) {
+      return true;
+    }
     if (draftNafCodes.length !== nafCodes.length) {
       return true;
     }
     const a = [...draftNafCodes].sort().join(",");
     const b = [...nafCodes].sort().join(",");
     return a !== b;
-  }, [addedFrom, addedTo, draftAddedFrom, draftAddedTo, draftIndividualFilter, draftNafCodes, draftQuery, individualFilter, nafCodes, query]);
+  }, [addedFrom, addedTo, draftAddedFrom, draftAddedTo, draftGoogleCheckStatus, draftIndividualFilter, draftNafCodes, draftQuery, googleCheckStatus, individualFilter, nafCodes, query]);
 
   const deletingSiret = useMemo(() => {
     if (!deleteEstablishmentMutation.isPending) {
@@ -233,6 +246,7 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
       addedFrom={draftAddedFrom}
       addedTo={draftAddedTo}
       individualFilter={draftIndividualFilter}
+      googleCheckStatus={draftGoogleCheckStatus}
       hasNextPage={hasNextPage}
       onLimitChange={handleLimitChange}
       onPageChange={handlePageChange}
@@ -244,6 +258,7 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
       hasPendingFilters={hasPendingFilters}
       onResetFilters={handleResetFilters}
       onIndividualFilterChange={handleIndividualFilterChange}
+      onGoogleCheckStatusChange={handleGoogleCheckStatusChange}
       onRefresh={() => establishmentsQuery.refetch()}
       onDeleteEstablishment={handleDeleteEstablishment}
       deletingSiret={deletingSiret}

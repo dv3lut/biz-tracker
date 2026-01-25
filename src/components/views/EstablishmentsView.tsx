@@ -14,6 +14,7 @@ type Props = {
   addedFrom: string;
   addedTo: string;
   individualFilter: EstablishmentIndividualFilter;
+  googleCheckStatus: string;
   hasNextPage: boolean;
   onLimitChange: (limit: number) => void;
   onPageChange: (page: number) => void;
@@ -25,6 +26,7 @@ type Props = {
   hasPendingFilters: boolean;
   onResetFilters: () => void;
   onIndividualFilterChange: (value: EstablishmentIndividualFilter) => void;
+  onGoogleCheckStatusChange: (value: string) => void;
   onRefresh: () => void;
   onDeleteEstablishment: (siret: string) => void;
   deletingSiret: string | null;
@@ -50,6 +52,7 @@ export const EstablishmentsView = ({
   addedFrom,
   addedTo,
   individualFilter,
+  googleCheckStatus,
   hasNextPage,
   onLimitChange,
   onPageChange,
@@ -61,6 +64,7 @@ export const EstablishmentsView = ({
   hasPendingFilters,
   onResetFilters,
   onIndividualFilterChange,
+  onGoogleCheckStatusChange,
   onRefresh,
   onDeleteEstablishment,
   deletingSiret,
@@ -94,6 +98,7 @@ export const EstablishmentsView = ({
           addedFrom={addedFrom}
           addedTo={addedTo}
           individualFilter={individualFilter}
+          googleCheckStatus={googleCheckStatus}
           hasNextPage={hasNextPage}
           onLimitChange={onLimitChange}
           onPageChange={onPageChange}
@@ -105,6 +110,7 @@ export const EstablishmentsView = ({
           hasPendingFilters={hasPendingFilters}
           onResetFilters={onResetFilters}
           onIndividualFilterChange={onIndividualFilterChange}
+          onGoogleCheckStatusChange={onGoogleCheckStatusChange}
           onRefresh={onRefresh}
           onDeleteEstablishment={onDeleteEstablishment}
           deletingSiret={deletingSiret}

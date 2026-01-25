@@ -27,7 +27,6 @@ const App = () => {
   } = useAdminSession();
 
   const [activeSection, setActiveSection] = useState<SectionKey>(DEFAULT_SECTION);
-  const [isSidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const isAuthenticated = Boolean(adminToken);
   const { modalProps, openDetail } = useEstablishmentDetailModal(isAuthenticated, handleUnauthorized);
@@ -36,20 +35,14 @@ const App = () => {
     setActiveSection(section);
   }, []);
 
-  const handleToggleSidebar = useCallback(() => {
-    setSidebarCollapsed((value) => !value);
-  }, []);
-
   const handleResetToken = useCallback(() => {
     resetSession();
     setActiveSection(DEFAULT_SECTION);
-    setSidebarCollapsed(false);
   }, [resetSession]);
 
   useEffect(() => {
     if (!adminToken) {
       setActiveSection(DEFAULT_SECTION);
-      setSidebarCollapsed(false);
     }
   }, [adminToken]);
 
@@ -96,8 +89,6 @@ const App = () => {
       <AppFrame
         activeSection={activeSection}
         onSectionChange={handleSectionChange}
-        isSidebarCollapsed={isSidebarCollapsed}
-        onToggleSidebar={handleToggleSidebar}
         onResetToken={handleResetToken}
       >
         {renderSection()}
