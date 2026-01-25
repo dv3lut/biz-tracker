@@ -64,6 +64,7 @@ def test_list_establishments_applies_naf_filter():
         naf_codes=None,
         added_from=None,
         added_to=None,
+        google_check_status=None,
         is_individual=None,
         session=session,  # type: ignore[arg-type]
     )
@@ -87,6 +88,7 @@ def test_list_establishments_applies_added_date_range():
         naf_codes=None,
         added_from=date(2024, 1, 10),
         added_to=date(2024, 1, 12),
+        google_check_status=None,
         is_individual=None,
         session=session,  # type: ignore[arg-type]
     )
@@ -110,6 +112,7 @@ def test_list_establishments_ignores_blank_naf_code():
         naf_codes=None,
         added_from=None,
         added_to=None,
+        google_check_status=None,
         is_individual=None,
         session=session,  # type: ignore[arg-type]
     )
@@ -129,6 +132,7 @@ def test_list_establishments_applies_multi_naf_filter():
         naf_codes=["56.10A", "47 11d"],
         added_from=None,
         added_to=None,
+        google_check_status=None,
         is_individual=None,
         session=session,  # type: ignore[arg-type]
     )
@@ -141,3 +145,44 @@ def test_list_establishments_applies_multi_naf_filter():
     values = _extract_filter_values(session.query_obj)
     assert "5610A" in values
     assert "4711D" in values
+
+
+def test_list_establishments_applies_google_check_status_filter():
+    session = _FakeSession()
+
+    list_establishments(
+        limit=10,
+        offset=0,
+        search=None,
+        naf_code=None,
+        naf_codes=None,
+        added_from=None,
+        added_to=None,
+        google_check_status="not_found",
+        is_individual=None,
+        session=session,  # type: ignore[arg-type]
+    )
+
+    rendered = "\n".join(str(item) for item in session.query_obj.filters)
+    assert "google_check_status" in rendered
+
+
+def test_list_establishments_applies_google_check_status_other_filter():
+    session = _FakeSession()
+
+    list_establishments(
+        limit=10,
+        offset=0,
+        search=None,
+        naf_code=None,
+        naf_codes=None,
+        added_from=None,
+        added_to=None,
+        google_check_status="other",
+        is_individual=None,
+        session=session,  # type: ignore[arg-type]
+    )
+
+    rendered = "\n".join(str(item) for item in session.query_obj.filters)
+    assert "google_check_status" in rendered
+    assert "not in" in rendered.lower()

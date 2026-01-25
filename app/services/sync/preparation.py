@@ -36,6 +36,7 @@ class SyncRunPreparationMixin:
         target_client_ids: list[UUID] | None = None,
         notify_admins: bool = True,
         force_google_replay: bool = False,
+        google_reset_state: bool = False,
     ) -> Optional[models.SyncRun]:
         scope_key = self._settings.sync.scope_key
         state = self._get_or_create_state(session, scope_key)
@@ -113,6 +114,7 @@ class SyncRunPreparationMixin:
                 initial_status="pending",
                 mode=mode,
             )
+            run.google_reset_state = bool(google_reset_state) if mode == SyncMode.GOOGLE_REFRESH else False
         if latest_treated:
             append_run_note(run, f"dateDernierTraitementMaximum: {latest_treated.isoformat()}")
         run.target_naf_codes = naf_filter
@@ -270,7 +272,10 @@ class SyncRunPreparationMixin:
     def _build_context(self, session: Session, run: models.SyncRun, state: models.SyncState) -> SyncContext:
         client = SireneClient()
         try:
-            mode = SyncMode(run.mode)
+            if run.mode == "google_recheck":
+                mode = SyncMode.GOOGLE_REFRESH
+            else:
+                mode = SyncMode(run.mode)
         except ValueError:
             mode = DEFAULT_SYNC_MODE
         replay_for_date = run.replay_for_date
@@ -302,5 +307,6 @@ class SyncRunPreparationMixin:
             target_naf_codes=target_naf_codes or None,
             target_client_ids=target_client_ids or None,
             force_google_replay=bool(getattr(run, "day_replay_force_google", False)),
+            google_reset_state=bool(getattr(run, "google_reset_state", False)),
             replay_reference=replay_reference,
         )

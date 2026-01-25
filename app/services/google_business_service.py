@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.clients.google_places_client import GooglePlacesClient, GooglePlacesError
 from app.config import get_settings
 from app.db import models
-from app.services.google_business import compute_confidence, matches_expected_google_category
+from app.services.google_business import matches_expected_google_category
 from app.services.google_business.constants import PROGRESS_BATCH_SIZE, TYPE_MISMATCH_STATUS
 from app.services.google_business.keywords import build_naf_keyword_map
 from app.services.google_business.lookup_engine import GoogleLookupEngine
@@ -52,7 +52,6 @@ class GoogleBusinessService:
                 neutral_google_types=self._neutral_google_types,
                 category_similarity_threshold=self._category_similarity_threshold,
                 api_call_hook=self._record_api_call,
-                compute_confidence_func=self._compute_confidence,
                 category_matcher=self._matches_expected_google_category,
             )
         self._api_call_count = 0
@@ -91,7 +90,6 @@ class GoogleBusinessService:
             neutral_google_types=neutral_types,
             category_similarity_threshold=similarity_threshold,
             api_call_hook=api_call_hook,
-            compute_confidence_func=self._compute_confidence,
             category_matcher=self._matches_expected_google_category,
         )
         self._lookup_engine = engine
@@ -103,7 +101,8 @@ class GoogleBusinessService:
         *,
         progress_callback: ProgressCallback | None = None,
         include_backlog: bool = True,
-        force_refresh: bool = False,
+        reset_google_state: bool = False,
+        recheck_all: bool = False,
     ) -> GoogleEnrichmentResult:
         if not self._client or not self._rate_limiter or not self._lookup_engine:
             return GoogleEnrichmentResult(
@@ -119,7 +118,14 @@ class GoogleBusinessService:
         self._api_call_count = 0
         unique_new = {establishment.siret: establishment for establishment in new_establishments if establishment.siret}
         new_sirets = set(unique_new)
-        candidates = list(self._filter_candidates(unique_new.values(), now=now, force_refresh=force_refresh))
+        candidates = list(
+            self._filter_candidates(
+                unique_new.values(),
+                now=now,
+                reset_google_state=reset_google_state,
+                recheck_all=recheck_all,
+            )
+        )
         backlog = self._fetch_backlog(now, exclude=new_sirets) if include_backlog else []
         queue = candidates + backlog
 
@@ -127,7 +133,13 @@ class GoogleBusinessService:
         lookup_targets = [
             est
             for est in queue
-            if self._should_lookup(est, now, is_new=(est.siret in new_sirets), force_refresh=force_refresh)
+            if self._should_lookup(
+                est,
+                now,
+                is_new=(est.siret in new_sirets),
+                reset_google_state=reset_google_state,
+                recheck_all=recheck_all,
+            )
         ]
         queue_count = len(lookup_targets)
         pending_count = queue_count
@@ -139,6 +151,11 @@ class GoogleBusinessService:
 
         processed_count = 0
         for establishment in lookup_targets:
+            if reset_google_state:
+                # Important: on purge "biz-by-biz" juste avant le lookup, afin d'éviter
+                # qu'un crash au milieu de la synchro ne supprime les fiches Google d'une
+                # grande partie des établissements non traités.
+                self._reset_google_state(establishment)
             assert self._lookup_engine is not None
             result = self._lookup_engine.lookup(establishment, now=now)
             result = self._lookup_engine.apply_lookup_result(
@@ -174,6 +191,11 @@ class GoogleBusinessService:
             raise GooglePlacesError("Google Places API key is not configured.")
 
         now = utcnow()
+
+        # Un recheck manuel doit refléter le résultat courant, même si une fiche Google
+        # avait été trouvée auparavant. On réinitialise donc l'état avant de relancer
+        # la recherche afin qu'un résultat "not_found" écrase bien les champs en base.
+        self._reset_google_state(establishment)
         if not self._has_searchable_identity(establishment):
             establishment.google_check_status = "insufficient"
             establishment.google_last_checked_at = establishment.google_last_checked_at or now
@@ -191,18 +213,21 @@ class GoogleBusinessService:
         establishments: Iterable[models.Establishment],
         *,
         now: datetime,
-        force_refresh: bool = False,
+        reset_google_state: bool = False,
+        recheck_all: bool = False,
     ) -> list[models.Establishment]:
         filtered: list[models.Establishment] = []
         updated = False
         for establishment in establishments:
-            if not force_refresh and establishment.google_place_url:
+            if not reset_google_state and not recheck_all and establishment.google_place_url:
                 continue
-            if not force_refresh and establishment.google_check_status == TYPE_MISMATCH_STATUS:
+            if not reset_google_state and not recheck_all and establishment.google_check_status == TYPE_MISMATCH_STATUS:
                 continue
-            if force_refresh and self._reset_google_state(establishment):
-                updated = True
             if not self._has_searchable_identity(establishment):
+                # Si on purge les données Google, on le fait quand même, même si on ne peut
+                # pas relancer une recherche fiable (on évite ainsi de conserver une fiche obsolète).
+                if reset_google_state and self._reset_google_state(establishment):
+                    updated = True
                 establishment.google_check_status = "insufficient"
                 establishment.google_last_checked_at = establishment.google_last_checked_at or now
                 updated = True
@@ -285,15 +310,18 @@ class GoogleBusinessService:
         now: datetime,
         *,
         is_new: bool = False,
-        force_refresh: bool = False,
+        reset_google_state: bool = False,
+        recheck_all: bool = False,
     ) -> bool:
-        if not force_refresh and establishment.google_place_url:
+        if not reset_google_state and not recheck_all and establishment.google_place_url:
             return False
-        if not force_refresh and establishment.google_check_status == TYPE_MISMATCH_STATUS:
+        if not reset_google_state and not recheck_all and establishment.google_check_status == TYPE_MISMATCH_STATUS:
             return False
         if not self._has_searchable_identity(establishment):
             return False
-        if force_refresh:
+        if reset_google_state:
+            return True
+        if recheck_all:
             return True
         if is_new:
             return True
@@ -378,14 +406,6 @@ class GoogleBusinessService:
 
     def _is_micro_business(self, establishment: models.Establishment) -> bool:
         return is_micro_company(establishment.categorie_entreprise, establishment.categorie_juridique)
-
-    @staticmethod
-    def _compute_confidence(
-        establishment: models.Establishment,
-        name: str,
-        formatted_address: str,
-    ) -> float:
-        return compute_confidence(establishment, name, formatted_address)
 
     def _matches_expected_google_category(
         self,

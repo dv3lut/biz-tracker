@@ -59,7 +59,8 @@ def run_google_enrichment(
     session: Session,
     targets: Sequence[models.Establishment],
     include_backlog: bool,
-    force_refresh: bool,
+    reset_google_state: bool,
+    recheck_all: bool = False,
     alert_service: AlertService | None = None,
     progress_callback: ProgressCallback = None,
 ) -> tuple[GoogleEnrichmentResult, list[models.Alert]]:
@@ -69,7 +70,8 @@ def run_google_enrichment(
         "sync.google.enrichment.started",
         target_count=len(targets),
         include_backlog=include_backlog,
-        force_refresh=force_refresh,
+        reset_google_state=reset_google_state,
+        recheck_all=recheck_all,
         alerts_enabled=bool(alert_service),
     )
     started_at = time.perf_counter()
@@ -80,7 +82,8 @@ def run_google_enrichment(
             targets,
             progress_callback=progress_callback,
             include_backlog=include_backlog,
-            force_refresh=force_refresh,
+            reset_google_state=reset_google_state,
+            recheck_all=recheck_all,
         )
     finally:
         google_service.close()

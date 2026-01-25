@@ -84,6 +84,8 @@ Recommandations réseau :
 2. Sélectionner le fichier `docs/kibana/dashboards.ndjson` et cocher l’option « Replace index patterns with matching ones » si demandée.
 3. Après import, un data view `biz-tracker-observability-*` et les dashboards **"Business tracker - Synchronisation"** et **"Business tracker - Chronologie run"** sont disponibles.
 
+Note : `docs/kibana/dashboards.ndjson` est l'artefact recommandé à versionner et importer. Tout autre fichier d'export (ex: `export.ndjson`) doit rester aligné avec les champs réellement émis par l'application, sinon il risque d'introduire des colonnes obsolètes lors d'un import.
+
 ## Contenu du dashboard
 
 - **Runs terminés** : liste des synchronisations réussies avec la durée, le nombre de nouveaux établissements et les compteurs Google (file totale, éligibles, fiches trouvées, restant à traiter).

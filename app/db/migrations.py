@@ -175,6 +175,10 @@ def run_schema_upgrades(engine: Engine) -> None:
     ALTER TABLE sync_runs
     ADD COLUMN IF NOT EXISTS mode VARCHAR(32) NOT NULL DEFAULT 'full'
     """,
+    """
+    ALTER TABLE sync_runs
+    ADD COLUMN IF NOT EXISTS google_reset_state BOOLEAN NOT NULL DEFAULT FALSE
+    """,
         """
         ALTER TABLE sync_state
         ADD COLUMN IF NOT EXISTS last_creation_date DATE

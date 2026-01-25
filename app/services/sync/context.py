@@ -32,6 +32,7 @@ class SyncContext:
     admin_notifications_enabled: bool = True
     target_client_ids: list[UUID] | None = None
     force_google_replay: bool = False
+    google_reset_state: bool = False
     replay_reference: DayReplayReference = DEFAULT_DAY_REPLAY_REFERENCE
 
 

@@ -2,8 +2,6 @@
 
 from .matching import (
     build_place_query,
-    compute_confidence,
-    compute_confidence_details,
     extract_postal_code,
     matches_expected_google_category,
     normalize_text,
@@ -24,8 +22,6 @@ from .listing import (
 
 __all__ = [
     "build_place_query",
-    "compute_confidence",
-    "compute_confidence_details",
     "extract_postal_code",
     "matches_expected_google_category",
     "normalize_text",

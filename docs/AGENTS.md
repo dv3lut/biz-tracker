@@ -40,3 +40,10 @@ Merci de maintenir ces fichiers à jour avant toute évolution majeure.
 
 ## Code style & bonnes pratiques
 Bien ajouter des logs, events, kpis sur les steps de logique, et s'assurer de créer des viz ou des dashboards de monitoring dans Kibana en modifiant le fichier docs/kibana/dashboards.ndjson.
+
+### Discipline de refactor (anti code mort)
+- Quand une logique est refactorée, supprimer **dans la même PR** les anciennes fonctions/classes, les flags/vars d'env devenus inutiles, et les champs/colonnes Kibana obsolètes.
+- Vérifier via une recherche globale que les anciens noms ne subsistent plus (ex: `grep` sur le repo) et tenir à jour :
+	- `docs/kibana/dashboards.ndjson` (et tout autre export versionné)
+	- `.env.example` / docs associées
+	- tests (supprimer/adapter ceux qui validaient l'ancienne voie)

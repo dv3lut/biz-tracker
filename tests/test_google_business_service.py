@@ -125,43 +125,6 @@ class GoogleCategoryMatchingTests(unittest.TestCase):
         self.assertGreaterEqual(similarity or 0, 0.72)
 
 
-class GoogleConfidenceScoringTests(unittest.TestCase):
-    """Couvre les variations d'adresse dans le calcul de confiance d'une fiche."""
-
-    def setUp(self) -> None:
-        self.service = GoogleBusinessService.__new__(GoogleBusinessService)
-
-    def _establishment(self, **overrides: object) -> SimpleNamespace:
-        defaults: dict[str, object] = {
-            "name": "Le Bistro Parisien",
-            "code_postal": "75001",
-            "libelle_commune": "Paris",
-            "libelle_commune_etranger": None,
-        }
-        defaults.update(overrides)
-        return SimpleNamespace(**defaults)
-
-    def test_penalizes_city_mismatch_even_with_same_name(self) -> None:
-        establishment = self._establishment()
-        score = self.service._compute_confidence(
-            establishment,
-            "Le Bistro Parisien",
-            "45 Rue de Marseille 69002 Lyon",
-        )
-
-        self.assertLess(score, 0.6)
-
-    def test_rewards_when_name_and_locality_align(self) -> None:
-        establishment = self._establishment()
-        score = self.service._compute_confidence(
-            establishment,
-            "Le Bistro Parisien",
-            "12 Rue du Louvre 75001 Paris",
-        )
-
-        self.assertGreater(score, 0.85)
-
-
 class GoogleConfidencePersistenceTests(unittest.TestCase):
     """S'assure que les confiances sont stockées même sans correspondance finale."""
 
@@ -191,11 +154,9 @@ class GoogleConfidencePersistenceTests(unittest.TestCase):
         self,
         client: object,
         *,
-        min_match_confidence: float,
-        compute_confidence,
         category_matcher=None,
     ) -> GoogleLookupEngine:
-        settings = SimpleNamespace(min_match_confidence=min_match_confidence)
+        settings = SimpleNamespace()
         return GoogleLookupEngine(
             self.session,
             client,  # type: ignore[arg-type]
@@ -205,7 +166,6 @@ class GoogleConfidencePersistenceTests(unittest.TestCase):
             neutral_google_types=self.neutral_google_types,
             category_similarity_threshold=0.72,
             api_call_hook=lambda: None,
-            compute_confidence_func=compute_confidence,
             category_matcher=category_matcher,
         )
 
@@ -223,15 +183,14 @@ class GoogleConfidencePersistenceTests(unittest.TestCase):
 
         engine = self._make_engine(
             DummyClient(),
-            min_match_confidence=0.95,
-            compute_confidence=lambda est, name, addr: 0.6,
             category_matcher=lambda types, keywords: (True, 1.0),
         )
 
         result = engine.lookup(establishment, now=datetime(2024, 1, 1))
 
         self.assertIsNone(result)
-        self.assertAlmostEqual(establishment.google_match_confidence or 0, 0.6)
+        # On persiste le meilleur score de matching même en cas de rejet (ex: CP manquant côté Google).
+        self.assertGreater(establishment.google_match_confidence or 0, 0.5)
         self.assertIsNone(establishment.google_category_match_confidence)
 
     def test_persists_category_confidence_on_type_mismatch(self) -> None:
@@ -239,7 +198,13 @@ class GoogleConfidencePersistenceTests(unittest.TestCase):
 
         class DummyClient:
             def find_place(self, query: str, fields: str) -> list[dict[str, object]]:
-                return [{"place_id": "place1", "name": "Chez Paul", "formatted_address": "Paris"}]
+                return [
+                    {
+                        "place_id": "place1",
+                        "name": "Chez Paul",
+                        "formatted_address": "10 Rue du Test 75001 Paris",
+                    }
+                ]
 
             def get_place_details(self, place_id: str, fields: str) -> dict[str, object]:
                 return {
@@ -252,8 +217,6 @@ class GoogleConfidencePersistenceTests(unittest.TestCase):
 
         engine = self._make_engine(
             DummyClient(),
-            min_match_confidence=0.5,
-            compute_confidence=lambda est, name, addr: 0.92,
             category_matcher=lambda types, keywords: (False, 0.81),
         )
 
@@ -267,7 +230,7 @@ class GoogleConfidencePersistenceTests(unittest.TestCase):
         engine.apply_lookup_result(establishment, result, now)
 
         self.assertEqual(establishment.google_check_status, "type_mismatch")
-        self.assertAlmostEqual(establishment.google_match_confidence or 0, 0.92)
+        self.assertAlmostEqual(establishment.google_match_confidence or 0, 1.0)
         self.assertAlmostEqual(establishment.google_category_match_confidence or 0, 0.81)
         self.assertEqual(establishment.google_place_id, "place1")
         self.assertEqual(establishment.google_place_url, "https://maps.google.com/?cid=123")
@@ -330,6 +293,63 @@ class GoogleListingHelpersTests(unittest.TestCase):
         self.assertEqual(source, "assumed_recent")
         self.assertTrue(assumed_recent)
         self.assertEqual(reviews, [])
+
+
+class ManualGoogleRecheckPersistenceTests(unittest.TestCase):
+    def test_manual_recheck_clears_previous_google_listing_when_not_found(self) -> None:
+        service = GoogleBusinessService.__new__(GoogleBusinessService)
+        service._session = Mock()
+        service._session.flush = Mock()
+        # Marque le service comme "configuré".
+        service._client = object()
+        service._rate_limiter = object()
+
+        establishment = SimpleNamespace(
+            siret="12345678901234",
+            name="Chez Paul",
+            libelle_commune="Paris",
+            libelle_commune_etranger=None,
+            code_postal="75001",
+            # État initial: fiche trouvée.
+            google_place_id="place-old",
+            google_place_url="https://maps.google.com/?cid=old",
+            google_check_status="found",
+            google_last_checked_at=None,
+            google_last_found_at=None,
+            google_match_confidence=0.9,
+            google_category_match_confidence=0.9,
+            google_listing_origin_at=None,
+            google_listing_origin_source="google",
+            google_listing_age_status="recent_creation",
+            google_contact_phone="+33102030405",
+            google_contact_email=None,
+            google_contact_website=None,
+        )
+
+        class FakeEngine:
+            def lookup(self, est, *, now=None):
+                # Le reset doit avoir été fait avant le lookup.
+                assert est.google_place_url is None
+                assert est.google_place_id is None
+                assert est.google_check_status == "pending"
+                return None
+
+            def apply_lookup_result(self, est, result, now, *, newly_found=None):
+                est.google_last_checked_at = now
+                if not result:
+                    if est.google_check_status not in {"found", "type_mismatch"}:
+                        est.google_check_status = "not_found"
+                    return None
+                raise AssertionError("Ce test ne couvre pas le cas found")
+
+        service._lookup_engine = FakeEngine()
+
+        result = GoogleBusinessService.manual_check(service, establishment)  # type: ignore[arg-type]
+
+        self.assertIsNone(result)
+        self.assertIsNone(establishment.google_place_url)
+        self.assertIsNone(establishment.google_place_id)
+        self.assertEqual(establishment.google_check_status, "not_found")
 
 if __name__ == "__main__":
     unittest.main()

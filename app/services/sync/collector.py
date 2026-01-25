@@ -175,7 +175,8 @@ class SyncCollectorMixin(SyncPersistenceMixin):
                 session=context.session,
                 targets=google_candidates,
                 include_backlog=include_backlog,
-                force_refresh=force_refresh_google,
+                reset_google_state=False,
+                recheck_all=force_refresh_google,
                 alert_service=alert_service,
                 progress_callback=progress_callback,
             )
@@ -204,6 +205,8 @@ class SyncCollectorMixin(SyncPersistenceMixin):
                 new_establishment_count=len(new_entities_total),
                 google_candidate_count=len(google_candidates),
                 force_refresh=force_refresh_google,
+                reset_google_state=False,
+                recheck_all=force_refresh_google,
                 include_backlog=include_backlog,
             )
 

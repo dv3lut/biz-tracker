@@ -116,12 +116,6 @@ class GoogleSettings(BaseModel):
         description="Maximum number of Google Places API calls per minute (both search and details combined).",
     )
     language: str = Field(default="fr", description="Language hint provided to Google Places.")
-    min_match_confidence: float = Field(
-        default=0.75,
-        ge=0.0,
-        le=1.0,
-        description="Minimum similarity ratio required to accept a place match.",
-    )
     recheck_hours: int = Field(
         default=24,
         ge=1,

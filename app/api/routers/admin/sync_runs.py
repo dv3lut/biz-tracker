@@ -11,6 +11,7 @@ from app.api.dependencies import get_db_session
 from app.api.schemas import DeleteRunResult, SyncRequest, SyncRunOut, SyncStateOut
 from app.db import models
 from app.observability import log_event
+from app.services.sync.mode import SyncMode
 from app.services.sync_service import SyncService
 
 from .common import serialize_run
@@ -67,6 +68,7 @@ def trigger_sync_run(
         target_client_ids=payload.target_client_ids,
         notify_admins=payload.notify_admins,
         force_google_replay=payload.force_google_replay,
+        google_reset_state=payload.reset_google_state,
     )
     if run is None:
         log_event(
@@ -87,6 +89,7 @@ def trigger_sync_run(
         scope_key=scope_key,
         check_informations=payload.check_for_updates,
         mode=payload.mode.value,
+        reset_google_state=payload.reset_google_state,
         replay_for_date=payload.replay_for_date.isoformat() if payload.replay_for_date else None,
         replay_reference=payload.replay_reference.value,
         target_client_ids=payload.target_client_ids,

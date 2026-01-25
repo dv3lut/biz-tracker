@@ -79,7 +79,8 @@ def collect_day_replay_from_cache(
             session=session,
             targets=establishments,
             include_backlog=False,
-            force_refresh=context.force_google_replay,
+            reset_google_state=False,
+            recheck_all=context.force_google_replay,
             alert_service=alert_service,
             progress_callback=progress_callback,
         )
@@ -99,7 +100,7 @@ def collect_day_replay_from_cache(
                 run_id=str(run.id),
                 scope_key=run.scope_key,
                 matched_count=len(google_matches_payload),
-                force_refresh=context.force_google_replay,
+                recheck_all=context.force_google_replay,
             )
     else:
         google_queue_count = 0

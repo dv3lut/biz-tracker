@@ -44,6 +44,13 @@ def list_establishments(
             "Pour une date exacte, utiliser la même date pour added_from et added_to."
         ),
     ),
+    google_check_status: str | None = Query(
+        None,
+        description=(
+            "Filtrer par statut Google (mêmes statuts que le dashboard): found, not_found, insufficient, pending, other. "
+            "Aucun filtre si vide."
+        ),
+    ),
     is_individual: bool | None = Query(None, description="Filtrer par entreprise individuelle (true/false)."),
     session: Session = Depends(get_db_session),
 ) -> list[EstablishmentOut]:
@@ -80,6 +87,25 @@ def list_establishments(
     if added_to is not None:
         end_exclusive = datetime.combine(added_to, time.min) + timedelta(days=1)
         query = query.filter(models.Establishment.first_seen_at < end_exclusive)
+    if google_check_status:
+        cleaned_status = google_check_status.strip().lower()
+        normalized_status = func.lower(func.trim(models.Establishment.google_check_status))
+        if cleaned_status == "other":
+            query = query.filter(
+                or_(
+                    models.Establishment.google_check_status.is_(None),
+                    normalized_status.notin_(["found", "not_found", "insufficient", "pending"]),
+                )
+            )
+        elif cleaned_status == "pending":
+            query = query.filter(
+                or_(
+                    models.Establishment.google_check_status.is_(None),
+                    normalized_status == "pending",
+                )
+            )
+        else:
+            query = query.filter(normalized_status == cleaned_status)
     if is_individual is not None:
         normalized_filter = models.Establishment.categorie_juridique.ilike("1%")
         if is_individual:

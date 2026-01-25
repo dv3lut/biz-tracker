@@ -146,6 +146,7 @@ class SyncRun(Base):
     target_naf_codes: Mapped[list[str] | None] = mapped_column(JSONB, default=None)
     target_client_ids: Mapped[list[str] | None] = mapped_column(JSONB, default=None)
     notify_admins: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    google_reset_state: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     day_replay_force_google: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     day_replay_reference: Mapped[str] = mapped_column(String(32), default="creation_date", nullable=False)
 

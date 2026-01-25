@@ -144,8 +144,15 @@ class SyncRequest(BaseModel):
         description=(
             "Mode d'exécution: 'full' exécute l'enrichissement Google, 'sirene_only' le désactive, "
             "'google_pending' relance uniquement les établissements jamais enrichis et déclenche les alertes, "
-            "'google_refresh' purge les fiches Google et relance une détection complète sans alertes, "
+            "'google_refresh' relance une détection Google sur tous les établissements (sans alertes), "
             "'day_replay' rejoue une journée complète en limitant les alertes aux administrateurs."
+        ),
+    )
+    reset_google_state: bool = Field(
+        default=False,
+        description=(
+            "Disponible uniquement en mode 'google_refresh': contrôle si les données Google existantes "
+            "sont réinitialisées avant de relancer les appels (reset biz-by-biz)."
         ),
     )
     replay_for_date: Date | None = Field(
@@ -219,6 +226,8 @@ class SyncRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_replay_settings(self) -> "SyncRequest":
+        if "reset_google_state" in self.model_fields_set and self.mode is not SyncMode.GOOGLE_REFRESH:
+            raise ValueError("Le paramètre reset_google_state est disponible uniquement pour les modes Google-only.")
         if self.mode.requires_replay_date and not self.replay_for_date:
             raise ValueError("Une date est requise pour rejouer une journée.")
         if self.replay_for_date and not self.mode.requires_replay_date:
