@@ -48,6 +48,7 @@ class GoogleLookupEngine:
         neutral_google_types: set[str],
         category_similarity_threshold: float,
         api_call_hook: Callable[[], None],
+        api_error_hook: Callable[[str], None] | None = None,
         category_matcher: CategoryMatcher | None = None,
     ) -> None:
         self._session = session
@@ -58,6 +59,7 @@ class GoogleLookupEngine:
         self._neutral_google_types = neutral_google_types
         self._category_similarity_threshold = category_similarity_threshold
         self._api_call_hook = api_call_hook
+        self._api_error_hook = api_error_hook
         self._category_matcher: CategoryMatcher = category_matcher or self._default_category_matcher
 
     def lookup(self, establishment: models.Establishment, *, now: datetime | None = None) -> GoogleMatch | None:
@@ -83,6 +85,7 @@ class GoogleLookupEngine:
             self._record_api_call()
             candidates = self._client.find_place(query, fields="place_id,name,formatted_address,geometry")
         except GooglePlacesError as exc:
+            self._record_api_error("find_place")
             _LOGGER.warning("Recherche Google Places échouée pour %s: %s", establishment.siret, exc)
             log_event(
                 "sync.google.find_place.error",
@@ -184,6 +187,7 @@ class GoogleLookupEngine:
             try:
                 details = self._fetch_details(place_id)
             except GooglePlacesError as exc:
+                self._record_api_error("place_details")
                 _LOGGER.warning(
                     "Lecture des détails Google Places échouée pour %s (place=%s): %s",
                     establishment.siret,
@@ -352,6 +356,7 @@ class GoogleLookupEngine:
             self._record_api_call()
             candidates = self._client.find_place(query, fields="place_id,geometry")
         except GooglePlacesError:
+            self._record_api_error("geocode")
             return None
         if not candidates:
             return None
@@ -420,6 +425,12 @@ class GoogleLookupEngine:
 
     def _record_api_call(self) -> None:
         self._api_call_hook()
+
+    def _record_api_error(self, operation: str) -> None:
+        hook = getattr(self, "_api_error_hook", None)
+        if not hook:
+            return
+        hook(operation)
 
     def _default_category_matcher(
         self,

@@ -14,6 +14,7 @@ from app.services.alert_service import AlertService
 from .context import SyncContext, SyncResult
 from .google_enrichment import create_google_progress_callback, run_google_enrichment
 from .mode import SyncMode
+from .utils import tag_google_error_rate
 
 LogAlertsFn = Callable[[models.SyncRun, Sequence[models.Alert]], list[dict[str, object]]]
 
@@ -63,6 +64,7 @@ def collect_google_only(
     google_matched_count = 0
     google_pending_count = 0
     google_api_call_count = 0
+    google_api_error_count = 0
     google_immediate_matches: list[models.Establishment] = []
     google_late_matches: list[models.Establishment] = []
     google_matches_payload: list[dict[str, object]] = []
@@ -100,6 +102,7 @@ def collect_google_only(
         google_matched_count = enrichment_result.matched_count
         google_pending_count = enrichment_result.pending_count
         google_api_call_count = enrichment_result.api_call_count
+        google_api_error_count = enrichment_result.api_error_count
 
         run.google_queue_count = google_queue_count
         run.google_eligible_count = google_eligible_count
@@ -117,7 +120,21 @@ def collect_google_only(
             matched_count=google_matched_count,
             remaining_count=google_pending_count,
             api_call_count=google_api_call_count,
+            api_error_count=google_api_error_count,
+            error_rate=(
+                round(google_api_error_count / google_api_call_count, 4)
+                if google_api_call_count > 0
+                else 0.0
+            ),
             target_count=len(targets),
+        )
+
+        tag_google_error_rate(
+            run,
+            api_call_count=google_api_call_count,
+            api_error_count=google_api_error_count,
+            threshold=0.10,
+            event_name="sync.google_only.error_rate.high",
         )
 
         if enrichment_result.matches:

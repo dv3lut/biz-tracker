@@ -18,9 +18,15 @@ _MAX_RETRIES = 3
 _TIMEOUT_SECONDS = 10
 _RESPONSE_PREVIEW_LIMIT = 400
 
+_GOOGLE_OK_STATUSES = {"OK", "ZERO_RESULTS", "NOT_FOUND"}
+
 
 class GooglePlacesError(RuntimeError):
     """Erreur levée lors d'un appel Google Places."""
+
+    def __init__(self, message: str, *, google_status: str | None = None) -> None:
+        super().__init__(message)
+        self.google_status = google_status
 
 
 class GooglePlacesClient:
@@ -99,6 +105,28 @@ class GooglePlacesClient:
                             response_preview=preview,
                         )
                         raise GooglePlacesError("Réponse Google Places invalide") from exc
+
+                    google_status = payload.get("status") if isinstance(payload, dict) else None
+                    if isinstance(google_status, str) and google_status and google_status not in _GOOGLE_OK_STATUSES:
+                        error_message = payload.get("error_message") if isinstance(payload, dict) else None
+                        error_message_str = str(error_message) if error_message is not None else ""
+                        self._record_external_call(
+                            operation=operation,
+                            url=url,
+                            params=sanitized_params,
+                            status_code=response.status_code,
+                            duration_ms=duration_ms,
+                            attempt=attempt,
+                            outcome="api_error",
+                            response_size=response_size,
+                            response_preview=preview,
+                        )
+                        raise GooglePlacesError(
+                            "Google Places API error "
+                            f"(operation={operation}, status={google_status}, message={error_message_str[:200]})"
+                            ,
+                            google_status=google_status,
+                        )
 
                     self._record_external_call(
                         operation=operation,

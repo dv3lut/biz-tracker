@@ -12,7 +12,14 @@ from .clients import (
 )
 from .email import AdminEmailConfig, AdminEmailConfigUpdate, EmailTestRequest, EmailTestResponse
 from .establishments import EstablishmentDetailOut, EstablishmentOut
-from .google import GoogleRetryConfigOut, GoogleRetryConfigUpdate, GoogleRetryRule, ManualGoogleCheckResponse
+from .google import (
+    GoogleFindPlaceCandidateOut,
+    GoogleFindPlaceDebugResponse,
+    GoogleRetryConfigOut,
+    GoogleRetryConfigUpdate,
+    GoogleRetryRule,
+    ManualGoogleCheckResponse,
+)
 from .public_contact import PublicContactRequest, PublicContactResponse
 from .naf import (
     NafCategoryCreate,
@@ -70,6 +77,8 @@ __all__ = [
     "EstablishmentDetailOut",
     "EstablishmentOut",
     "GoogleListingAgeBreakdown",
+    "GoogleFindPlaceCandidateOut",
+    "GoogleFindPlaceDebugResponse",
     "GoogleRetryConfigOut",
     "GoogleRetryConfigUpdate",
     "GoogleRetryRule",

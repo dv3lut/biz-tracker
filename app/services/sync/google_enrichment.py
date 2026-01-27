@@ -24,6 +24,7 @@ class GoogleEnrichmentResult:
     matched_count: int
     pending_count: int
     api_call_count: int
+    api_error_count: int
     matches: list[models.Establishment]
 
 
@@ -119,6 +120,7 @@ def run_google_enrichment(
         matched_count=enrichment.matched_count,
         pending_count=enrichment.remaining_count,
         api_call_count=enrichment.api_call_count,
+        api_error_count=enrichment.api_error_count,
         matches=list(enrichment.matches),
     )
     return result, alerts

@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db_session
 from app.api.schemas import (
+    GoogleFindPlaceDebugResponse,
     GoogleRetryConfigOut,
     GoogleRetryConfigUpdate,
     ListingStatus,
@@ -25,6 +26,7 @@ from app.services.google_retry_config import (
 
 from .google_handlers import (
     build_google_places_export_response,
+    debug_google_find_place_action,
     manual_google_check_action,
 )
 
@@ -50,6 +52,18 @@ def manual_google_check(
         notify_clients=notify_clients,
         session=session,
     )
+
+
+@router.get(
+    "/establishments/{siret}/google-find-place",
+    response_model=GoogleFindPlaceDebugResponse,
+    summary="Déboguer la requête Find Place (candidats bruts + scoring)",
+)
+def debug_google_find_place(
+    siret: str,
+    session: Session = Depends(get_db_session),
+) -> GoogleFindPlaceDebugResponse:
+    return debug_google_find_place_action(siret=siret, session=session)
 
 
 @router.get(

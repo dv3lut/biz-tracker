@@ -6,7 +6,7 @@ from unittest import TestCase
 from unittest.mock import MagicMock, patch, call
 
 from fastapi import HTTPException
-from app.api.routers.admin.google import manual_google_check, export_google_places
+from app.api.routers.admin.google import manual_google_check, export_google_places, debug_google_find_place
 
 
 class ManualGoogleCheckRouteTests(TestCase):
@@ -179,6 +179,77 @@ class GoogleExportRouteTests(TestCase):
         self.assertEqual(exported, [found])
         mock_build_workbook.assert_called_once()
         mock_log_event.assert_called_once()
+
+
+class GoogleFindPlaceDebugRouteTests(TestCase):
+    @patch("app.api.routers.admin.google_handlers.get_settings")
+    def test_debug_find_place_disabled_google(self, mock_get_settings) -> None:
+        google_settings = SimpleNamespace(enabled=False)
+        settings = SimpleNamespace(google=google_settings)
+        mock_get_settings.return_value = settings
+
+        session = MagicMock()
+        with self.assertRaises(HTTPException) as ctx:
+            debug_google_find_place("12345678901234", session=session)
+
+        self.assertEqual(ctx.exception.status_code, 400)
+        self.assertIn("désactivé", ctx.exception.detail)
+
+    @patch("app.api.routers.admin.google_handlers.get_settings")
+    def test_debug_find_place_establishment_not_found(self, mock_get_settings) -> None:
+        google_settings = SimpleNamespace(enabled=True)
+        settings = SimpleNamespace(google=google_settings)
+        mock_get_settings.return_value = settings
+
+        session = MagicMock()
+        session.get.return_value = None
+
+        with self.assertRaises(HTTPException) as ctx:
+            debug_google_find_place("99999999999999", session=session)
+
+        self.assertEqual(ctx.exception.status_code, 404)
+        self.assertIn("introuvable", ctx.exception.detail)
+
+    @patch("app.api.routers.admin.google_handlers.log_event")
+    @patch("app.api.routers.admin.google_handlers.GooglePlacesClient")
+    @patch("app.api.routers.admin.google_handlers.get_settings")
+    def test_debug_find_place_returns_candidates(self, mock_get_settings, mock_client_cls, mock_log_event) -> None:
+        google_settings = SimpleNamespace(enabled=True)
+        settings = SimpleNamespace(google=google_settings)
+        mock_get_settings.return_value = settings
+
+        establishment = MagicMock()
+        establishment.siret = "12345678901234"
+        establishment.name = "Chez Paul"
+        establishment.libelle_commune = "Paris"
+        establishment.libelle_commune_etranger = None
+        establishment.code_postal = "75001"
+        establishment.numero_voie = None
+        establishment.indice_repetition = None
+        establishment.type_voie = None
+        establishment.libelle_voie = None
+
+        session = MagicMock()
+        session.get.return_value = establishment
+
+        mock_client = MagicMock()
+        mock_client.find_place.return_value = [
+            {"place_id": "place1", "name": "Chez Paul", "formatted_address": "10 Rue du Test 75001 Paris"},
+            {"place_id": "place2", "name": "Bistrot Paul", "formatted_address": "Paris"},
+        ]
+        mock_client_cls.return_value = mock_client
+
+        response = debug_google_find_place("12345678901234", session=session)
+
+        self.assertEqual(response.query, "Chez Paul Paris 75001")
+        self.assertEqual(response.candidate_count, 2)
+        self.assertEqual(len(response.candidates), 2)
+        self.assertEqual(response.candidates[0].place_id, "place1")
+        self.assertIsNotNone(response.candidates[0].match_score)
+        self.assertIsNotNone(response.candidates[0].decision)
+
+        mock_client.find_place.assert_called_once()
+        mock_log_event.assert_called()
 
     @patch("app.api.routers.admin.google_handlers.build_google_places_workbook")
     @patch("app.api.routers.admin.google_handlers.log_event")

@@ -24,7 +24,7 @@ from app.utils.hashing import sha256_digest
 from .context import SyncContext, SyncResult, UpdatedEstablishmentInfo
 from .pages import collect_pages
 from .persistence import SyncPersistenceMixin
-from .utils import append_run_note, format_target_naf_note
+from .utils import append_run_note, format_target_naf_note, tag_google_error_rate
 
 
 class SyncCollectorMixin(SyncPersistenceMixin):
@@ -73,7 +73,10 @@ class SyncCollectorMixin(SyncPersistenceMixin):
             creation_range = (replay_for_date, replay_for_date)
         since_creation: date | None = None
         if creation_range is None:
-            since_creation = self._compute_since_creation(state, months_back=months_back)
+            if context.initial_backfill:
+                since_creation = subtract_months(self._current_date(), months_back)
+            else:
+                since_creation = self._compute_since_creation(state, months_back=months_back)
         if context.target_naf_codes:
             naf_codes = context.target_naf_codes
             append_run_note(context.run, format_target_naf_note(context.target_naf_codes))
@@ -104,7 +107,6 @@ class SyncCollectorMixin(SyncPersistenceMixin):
             )
             state.last_cursor = None
             state.cursor_completed = False
-            state.last_creation_date = None
         if should_persist_state:
             state.query_checksum = checksum
 
@@ -155,6 +157,7 @@ class SyncCollectorMixin(SyncPersistenceMixin):
         google_matched_count = 0
         google_pending_count = 0
         google_api_call_count = 0
+        google_api_error_count = 0
         google_candidates, force_refresh_google = self._resolve_google_candidates(
             context,
             new_entities_total,
@@ -162,12 +165,17 @@ class SyncCollectorMixin(SyncPersistenceMixin):
         )
 
         if context.mode.google_enabled:
-            alert_service = AlertService(
-                context.session,
-                context.run,
-                client_notifications_enabled=context.client_notifications_enabled,
-                admin_notifications_enabled=context.admin_notifications_enabled,
-                target_client_ids=context.target_client_ids,
+            alerts_enabled = context.mode.dispatch_alerts and not context.initial_backfill
+            alert_service = (
+                AlertService(
+                    context.session,
+                    context.run,
+                    client_notifications_enabled=context.client_notifications_enabled,
+                    admin_notifications_enabled=context.admin_notifications_enabled,
+                    target_client_ids=context.target_client_ids,
+                )
+                if alerts_enabled
+                else None
             )
             include_backlog = not force_refresh_google
             progress_callback = create_google_progress_callback(context.session, context.run)
@@ -186,12 +194,19 @@ class SyncCollectorMixin(SyncPersistenceMixin):
             google_matched_count = enrichment_result.matched_count
             google_pending_count = enrichment_result.pending_count
             google_api_call_count = enrichment_result.api_call_count
+            google_api_error_count = enrichment_result.api_error_count
 
             context.run.google_queue_count = google_queue_count
             context.run.google_eligible_count = google_eligible_count
             context.run.google_matched_count = google_matched_count
             context.run.google_pending_count = google_pending_count
             context.run.google_api_call_count = google_api_call_count
+
+            google_error_rate = (
+                round(google_api_error_count / google_api_call_count, 4)
+                if google_api_call_count > 0
+                else 0.0
+            )
 
             log_event(
                 "sync.google.summary",
@@ -202,12 +217,22 @@ class SyncCollectorMixin(SyncPersistenceMixin):
                 matched_count=google_matched_count,
                 remaining_count=google_pending_count,
                 api_call_count=google_api_call_count,
+                api_error_count=google_api_error_count,
+                error_rate=google_error_rate,
                 new_establishment_count=len(new_entities_total),
                 google_candidate_count=len(google_candidates),
                 force_refresh=force_refresh_google,
                 reset_google_state=False,
                 recheck_all=force_refresh_google,
                 include_backlog=include_backlog,
+            )
+
+            tag_google_error_rate(
+                context.run,
+                api_call_count=google_api_call_count,
+                api_error_count=google_api_error_count,
+                threshold=0.10,
+                event_name="sync.google.error_rate.high",
             )
 
             if enrichment_result.matches:

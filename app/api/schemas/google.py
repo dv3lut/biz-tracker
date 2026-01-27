@@ -16,6 +16,30 @@ class ManualGoogleCheckResponse(BaseModel):
     establishment: EstablishmentOut = Field(description="Représentation de l'établissement après mise à jour.")
 
 
+class GoogleFindPlaceCandidateOut(BaseModel):
+    place_id: str | None = Field(default=None, description="Place ID renvoyé par Google Places (Find Place).")
+    name: str | None = Field(default=None, description="Nom du candidat renvoyé par Google Places.")
+    formatted_address: str | None = Field(default=None, description="Adresse formatée du candidat renvoyé par Google.")
+    match_score: float | None = Field(
+        default=None,
+        description="Score de matching interne (rule-based) calculé sur name + formatted_address.",
+    )
+    decision: str | None = Field(
+        default=None,
+        description="Décision de la règle (accepted / needs_distance / rejected) avant les appels Place Details.",
+    )
+    decision_details: dict[str, object] | None = Field(
+        default=None,
+        description="Détails du scoring interne (ratios, hard reasons, etc.).",
+    )
+
+
+class GoogleFindPlaceDebugResponse(BaseModel):
+    query: str = Field(description="Requête texte envoyée à Google Places Find Place.")
+    candidate_count: int = Field(description="Nombre de candidats renvoyés par Google Places.")
+    candidates: list[GoogleFindPlaceCandidateOut] = Field(default_factory=list)
+
+
 class GoogleRetryRule(BaseModel):
     max_age_days: int | None = Field(
         default=None,
@@ -73,5 +97,7 @@ __all__ = [
     "GoogleRetryConfigOut",
     "GoogleRetryConfigUpdate",
     "GoogleRetryRule",
+    "GoogleFindPlaceCandidateOut",
+    "GoogleFindPlaceDebugResponse",
     "ManualGoogleCheckResponse",
 ]

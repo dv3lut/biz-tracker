@@ -14,6 +14,7 @@ from app.services.google_business import (
 from app.services.google_business import listing as listing_utils
 from app.services.google_business.lookup_engine import GoogleLookupEngine
 from app.services.google_business_service import GoogleBusinessService
+from app.clients.google_places_client import GooglePlacesError
 
 
 class GoogleListingAgeStatusTests(unittest.TestCase):
@@ -155,6 +156,7 @@ class GoogleConfidencePersistenceTests(unittest.TestCase):
         client: object,
         *,
         category_matcher=None,
+        api_error_hook=None,
     ) -> GoogleLookupEngine:
         settings = SimpleNamespace()
         return GoogleLookupEngine(
@@ -166,6 +168,7 @@ class GoogleConfidencePersistenceTests(unittest.TestCase):
             neutral_google_types=self.neutral_google_types,
             category_similarity_threshold=0.72,
             api_call_hook=lambda: None,
+            api_error_hook=api_error_hook,
             category_matcher=category_matcher,
         )
 
@@ -192,6 +195,25 @@ class GoogleConfidencePersistenceTests(unittest.TestCase):
         # On persiste le meilleur score de matching même en cas de rejet (ex: CP manquant côté Google).
         self.assertGreater(establishment.google_match_confidence or 0, 0.5)
         self.assertIsNone(establishment.google_category_match_confidence)
+
+    def test_records_google_api_error_on_find_place_failure(self) -> None:
+        establishment = self._establishment()
+        calls: list[str] = []
+
+        class DummyClient:
+            def find_place(self, query: str, fields: str) -> list[dict[str, object]]:
+                raise GooglePlacesError("REQUEST_DENIED", google_status="REQUEST_DENIED")
+
+        engine = self._make_engine(
+            DummyClient(),
+            category_matcher=lambda types, keywords: (True, 1.0),
+            api_error_hook=calls.append,
+        )
+
+        result = engine.lookup(establishment, now=datetime(2024, 1, 1))
+
+        self.assertIsNone(result)
+        self.assertIn("find_place", calls)
 
     def test_persists_category_confidence_on_type_mismatch(self) -> None:
         establishment = self._establishment()

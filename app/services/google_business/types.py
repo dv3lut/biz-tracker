@@ -30,3 +30,4 @@ class GoogleEnrichmentResult:
     matched_count: int
     remaining_count: int
     api_call_count: int
+    api_error_count: int

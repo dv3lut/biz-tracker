@@ -52,9 +52,15 @@ class GoogleBusinessService:
                 neutral_google_types=self._neutral_google_types,
                 category_similarity_threshold=self._category_similarity_threshold,
                 api_call_hook=self._record_api_call,
+                api_error_hook=self._record_api_error,
                 category_matcher=self._matches_expected_google_category,
             )
         self._api_call_count = 0
+        self._api_error_count = 0
+
+    def _record_api_error(self, _operation: str) -> None:
+        current = getattr(self, "_api_error_count", 0)
+        self._api_error_count = current + 1
 
     def close(self) -> None:
         if self._client:
@@ -80,6 +86,7 @@ class GoogleBusinessService:
             getattr(settings, "category_similarity_threshold", 0.72),
         )
         api_call_hook = getattr(self, "_record_api_call", lambda: None)
+        api_error_hook = getattr(self, "_record_api_error", None)
 
         engine = GoogleLookupEngine(
             session,
@@ -90,6 +97,7 @@ class GoogleBusinessService:
             neutral_google_types=neutral_types,
             category_similarity_threshold=similarity_threshold,
             api_call_hook=api_call_hook,
+            api_error_hook=api_error_hook,
             category_matcher=self._matches_expected_google_category,
         )
         self._lookup_engine = engine
@@ -112,10 +120,12 @@ class GoogleBusinessService:
                 matched_count=0,
                 remaining_count=0,
                 api_call_count=0,
+                api_error_count=0,
             )
 
         now = utcnow()
         self._api_call_count = 0
+        self._api_error_count = 0
         unique_new = {establishment.siret: establishment for establishment in new_establishments if establishment.siret}
         new_sirets = set(unique_new)
         candidates = list(
@@ -182,6 +192,7 @@ class GoogleBusinessService:
             matched_count=len(newly_found),
             remaining_count=remaining,
             api_call_count=self._api_call_count,
+            api_error_count=self._api_error_count,
         )
 
     def manual_check(self, establishment: models.Establishment) -> GoogleMatch | None:

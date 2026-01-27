@@ -65,6 +65,7 @@ def trigger_sync_run(
         replay_for_date=payload.replay_for_date,
         replay_reference=payload.replay_reference,
         target_naf_codes=payload.naf_codes,
+        initial_backfill=payload.initial_backfill,
         target_client_ids=payload.target_client_ids,
         notify_admins=payload.notify_admins,
         force_google_replay=payload.force_google_replay,

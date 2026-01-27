@@ -15,6 +15,7 @@ from app.services.sync.replay_reference import DayReplayReference, DEFAULT_DAY_R
 
 from .context import SyncContext, SyncResult
 from .google_enrichment import create_google_progress_callback, run_google_enrichment
+from .utils import tag_google_error_rate
 
 LogAlertsFn = Callable[[models.SyncRun, Sequence[models.Alert]], list[dict[str, object]]]
 
@@ -68,6 +69,7 @@ def collect_day_replay_from_cache(
     google_matched_count = 0
     google_pending_count = 0
     google_api_call_count = 0
+    google_api_error_count = 0
     google_immediate_matches: list[models.Establishment] = []
     google_late_matches: list[models.Establishment] = []
     google_matches_payload: list[dict[str, object]] = []
@@ -90,6 +92,7 @@ def collect_day_replay_from_cache(
         google_matched_count = enrichment_result.matched_count
         google_pending_count = enrichment_result.pending_count
         google_api_call_count = enrichment_result.api_call_count
+        google_api_error_count = enrichment_result.api_error_count
         google_immediate_matches = [match for match in enrichment_result.matches if match.created_run_id == run.id]
         google_late_matches = [match for match in enrichment_result.matches if match.created_run_id != run.id]
         google_matches_payload = [serialize_establishment(item) for item in enrichment_result.matches]
@@ -102,6 +105,14 @@ def collect_day_replay_from_cache(
                 matched_count=len(google_matches_payload),
                 recheck_all=context.force_google_replay,
             )
+
+        tag_google_error_rate(
+            run,
+            api_call_count=google_api_call_count,
+            api_error_count=google_api_error_count,
+            threshold=0.10,
+            event_name="sync.day_replay.google.error_rate.high",
+        )
     else:
         google_queue_count = 0
         google_eligible_count = len(ready_matches)
@@ -154,6 +165,12 @@ def collect_day_replay_from_cache(
         force_google=context.force_google_replay,
         ready_matches=len(ready_matches),
         google_api_call_count=google_api_call_count,
+        google_api_error_count=google_api_error_count,
+        google_error_rate=(
+            round(google_api_error_count / google_api_call_count, 4)
+            if google_api_call_count > 0
+            else 0.0
+        ),
         alerts_created=len(alerts_created),
         alerts_sent=alerts_sent_count,
     )

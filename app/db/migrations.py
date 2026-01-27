@@ -213,6 +213,10 @@ def run_schema_upgrades(engine: Engine) -> None:
     """,
         """
         ALTER TABLE sync_runs
+        ADD COLUMN IF NOT EXISTS initial_backfill BOOLEAN NOT NULL DEFAULT FALSE
+        """,
+        """
+        ALTER TABLE sync_runs
         ADD COLUMN IF NOT EXISTS target_client_ids JSONB
         """,
         """

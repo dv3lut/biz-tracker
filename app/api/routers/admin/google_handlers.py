@@ -12,12 +12,18 @@ from sqlalchemy.orm import Session
 
 from app.api.schemas import (
     EstablishmentOut,
+    GoogleFindPlaceCandidateOut,
+    GoogleFindPlaceDebugResponse,
     ListingStatus,
     ManualGoogleCheckResponse,
 )
 from app.config import get_settings
 from app.db import models
 from app.observability import log_event
+from app.clients.google_places_client import GooglePlacesClient, GooglePlacesError
+from app.services.google_business.constants import PLACEHOLDER_TOKENS
+from app.services.google_business.match_rules import evaluate_candidate_match
+from app.services.google_business.matching import build_place_query
 from app.services.client_service import (
     ClientEmailPayload,
     collect_client_emails,
@@ -241,6 +247,100 @@ def manual_google_check_action(
         check_status=check_status,
         establishment=establishment_payload,
     )
+
+
+def debug_google_find_place_action(*, siret: str, session: Session) -> GoogleFindPlaceDebugResponse:
+    """Retourne les candidats Find Place (bruts + score) pour investiguer les not found.
+
+    Cette action est volontairement sans effet de bord sur l'établissement.
+    """
+
+    settings = get_settings()
+    google_settings = settings.google
+    if not google_settings.enabled:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="L'enrichissement Google est désactivé ou la clé API est absente.",
+        )
+
+    establishment = session.get(models.Establishment, siret)
+    if establishment is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Établissement introuvable.")
+
+    query = build_place_query(establishment, PLACEHOLDER_TOKENS)
+    if not query:
+        log_event(
+            "manual_google.find_place.skipped",
+            establishment={"siret": siret, "name": establishment.name},
+            reason="insufficient_query",
+        )
+        return GoogleFindPlaceDebugResponse(query="", candidate_count=0, candidates=[])
+
+    client = GooglePlacesClient()
+    try:
+        candidates = client.find_place(query, fields="place_id,name,formatted_address,geometry")
+    except GooglePlacesError as exc:
+        google_status = getattr(exc, "google_status", None)
+        detail = "Erreur lors de l'appel Google Places (find_place)."
+        if google_status == "REQUEST_DENIED":
+            detail = "Google Places a refusé la requête (clé/quota/crédit)."
+        elif google_status in {"OVER_QUERY_LIMIT", "OVER_DAILY_LIMIT"}:
+            detail = "Quota Google Places dépassé."
+        elif google_status == "INVALID_REQUEST":
+            detail = "Requête Google Places invalide."
+
+        log_event(
+            "manual_google.find_place.error",
+            establishment={"siret": siret, "name": establishment.name},
+            query=query,
+            error={"type": type(exc).__name__, "message": str(exc)},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=detail,
+        ) from exc
+    finally:
+        client.close()
+
+    scored: list[GoogleFindPlaceCandidateOut] = []
+    for candidate in candidates:
+        place_id = candidate.get("place_id")
+        name = candidate.get("name")
+        formatted_address = candidate.get("formatted_address")
+
+        decision = None
+        match_score = None
+        decision_details: dict[str, object] | None = None
+        if isinstance(name, str):
+            decision_obj = evaluate_candidate_match(establishment, name, formatted_address if isinstance(formatted_address, str) else None)
+            match_score = float(decision_obj.score)
+            decision_details = dict(decision_obj.details)
+            decision = (
+                "accepted"
+                if decision_obj.accept
+                else "needs_distance"
+                if decision_obj.needs_distance_check
+                else "rejected"
+            )
+
+        scored.append(
+            GoogleFindPlaceCandidateOut(
+                place_id=str(place_id) if place_id is not None else None,
+                name=str(name) if name is not None else None,
+                formatted_address=str(formatted_address) if formatted_address is not None else None,
+                match_score=match_score,
+                decision=decision,
+                decision_details=decision_details,
+            )
+        )
+
+    log_event(
+        "manual_google.find_place.debug",
+        establishment={"siret": siret, "name": establishment.name},
+        query=query,
+        candidate_count=len(candidates),
+    )
+    return GoogleFindPlaceDebugResponse(query=query, candidate_count=len(candidates), candidates=scored)
 
 
 def build_google_places_export_response(
