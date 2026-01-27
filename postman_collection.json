@@ -659,7 +659,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"check_for_updates\": true\n}"
+                  "raw": "{\n  \"check_for_updates\": true,\n  \"initial_backfill\": false\n}"
                 },
                 "url": {
                   "raw": "{{baseUrl}}/admin/sync",
@@ -699,7 +699,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"check_for_updates\": true\n}"
+                  "raw": "{\n  \"check_for_updates\": true,\n  \"initial_backfill\": false\n}"
                 },
                 "url": {
                   "raw": "{{baseUrl}}/admin/sync",

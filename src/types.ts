@@ -260,6 +260,7 @@ export interface SyncRequestPayload {
   replayForDate?: string;
   replayReference?: DayReplayReference;
   nafCodes?: string[];
+  initialBackfill?: boolean;
   targetClientIds?: string[];
   notifyAdmins?: boolean;
   forceGoogleReplay?: boolean;
@@ -415,6 +416,21 @@ export interface GoogleCheckResult {
 export interface GoogleRetryRule {
   maxAgeDays: number | null;
   frequencyDays: number;
+}
+
+export interface GoogleFindPlaceCandidate {
+  placeId: string | null;
+  name: string | null;
+  formattedAddress: string | null;
+  matchScore: number | null;
+  decision: string | null;
+  decisionDetails: Record<string, unknown> | null;
+}
+
+export interface GoogleFindPlaceDebugResult {
+  query: string;
+  candidateCount: number;
+  candidates: GoogleFindPlaceCandidate[];
 }
 
 export interface GoogleRetryConfig {

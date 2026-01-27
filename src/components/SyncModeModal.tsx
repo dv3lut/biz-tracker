@@ -159,6 +159,7 @@ type Props = {
     resetGoogleState?: boolean;
     replayForDate?: string;
     nafCodes?: string[];
+    initialBackfill?: boolean;
     targetClientIds?: string[];
     notifyAdmins?: boolean;
     forceGoogleReplay?: boolean;
@@ -243,6 +244,7 @@ export const SyncModeModal = ({
   const [notifyAdmins, setNotifyAdmins] = useState<boolean>(initialNotifyAdmins ?? true);
   const [forceGoogleReplay, setForceGoogleReplay] = useState<boolean>(initialForceGoogleReplay ?? false);
   const [replayReference, setReplayReference] = useState<DayReplayReference>(initialReplayReference ?? DEFAULT_REPLAY_REFERENCE);
+  const [initialBackfill, setInitialBackfill] = useState<boolean>(false);
   const [clientSearch, setClientSearch] = useState<string>("");
   const [recipientError, setRecipientError] = useState<string | null>(null);
 
@@ -262,6 +264,7 @@ export const SyncModeModal = ({
       setNotifyAdmins(initialNotifyAdmins ?? true);
       setForceGoogleReplay(initialForceGoogleReplay ?? false);
       setReplayReference(initialReplayReference ?? DEFAULT_REPLAY_REFERENCE);
+      setInitialBackfill(false);
       setClientSearch("");
       setRecipientError(null);
     }
@@ -285,6 +288,12 @@ export const SyncModeModal = ({
       setRecipientError(null);
     }
   }, [mode]);
+
+  useEffect(() => {
+    if (mode !== "full" || selectedNafCodes.length === 0) {
+      setInitialBackfill(false);
+    }
+  }, [mode, selectedNafCodes.length]);
 
   useEffect(() => {
     if (mode === "day_replay" && (notifyAdmins || selectedClientIds.length > 0)) {
@@ -508,6 +517,10 @@ export const SyncModeModal = ({
       nafCodes: nafCodesPayload,
     };
 
+    if (initialBackfill) {
+      payload.initialBackfill = true;
+    }
+
     if (mode === "google_refresh") {
       payload.resetGoogleState = resetGoogleState;
     }
@@ -652,6 +665,23 @@ export const SyncModeModal = ({
                   ? `${selectedCount} code(s) NAF ciblés · ${remainingSlots} emplacement(s) disponible(s)`
                   : "Aucun filtrage NAF — run global"}
               </p>
+              {mode === "full" && selectedCount > 0 ? (
+                <div className="form-control">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={initialBackfill}
+                      onChange={(event) => setInitialBackfill(event.target.checked)}
+                      disabled={isSubmitting}
+                    />
+                    <span>Synchro initiale (backfill months_back · sans alertes)</span>
+                  </label>
+                  <p className="muted small">
+                    À utiliser après ajout de nouveaux codes NAF : rejoue la fenêtre months_back pour ces NAF uniquement, et n'envoie
+                    aucune alerte.
+                  </p>
+                </div>
+              ) : null}
             </div>
             {modeHighlights.length > 0 ? (
               <div className="mode-highlights">

@@ -1,8 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import toast from "react-hot-toast";
 
-import { ApiError, establishmentsApi, nafApi } from "../../api";
-import type { Establishment, EstablishmentIndividualFilter, NafCategory } from "../../types";
+import { ApiError, establishmentsApi, googleApi, nafApi } from "../../api";
+import type {
+  Establishment,
+  EstablishmentIndividualFilter,
+  GoogleFindPlaceDebugResult,
+  NafCategory,
+} from "../../types";
 import { EstablishmentsView } from "../../components/views/EstablishmentsView";
 import { useGoogleCheckMutation } from "../hooks/useGoogleCheckMutation";
 
@@ -37,6 +43,10 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
   const [googleCheckStatus, setGoogleCheckStatus] = useState("");
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const [googleFindPlaceDebugModal, setGoogleFindPlaceDebugModal] = useState<
+    { siret: string; result: GoogleFindPlaceDebugResult } | null
+  >(null);
 
   const nafCategoriesQuery = useQuery<NafCategory[]>({
     queryKey: ["naf-categories"],
@@ -83,8 +93,11 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
         onUnauthorized();
         return;
       }
-      setErrorMessage(buildErrorMessage(error));
+      const message = buildErrorMessage(error);
+      setErrorMessage(message);
       setFeedbackMessage(null);
+
+      toast.error(message, { id: message });
     },
     [onUnauthorized],
   );
@@ -120,6 +133,34 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     onError: (message) => {
       setErrorMessage(message);
       setFeedbackMessage(null);
+
+      toast.error(message, { id: message });
+    },
+  });
+
+  const [debuggingGoogleFindPlaceSiret, setDebuggingGoogleFindPlaceSiret] = useState<string | null>(null);
+  const googleFindPlaceDebugMutation = useMutation<GoogleFindPlaceDebugResult, unknown, string>({
+    mutationFn: (siret) => googleApi.debugFindPlace(siret),
+    onMutate: (siret) => {
+      setDebuggingGoogleFindPlaceSiret(siret);
+    },
+    onSuccess: (result, siret) => {
+      setGoogleFindPlaceDebugModal({ siret, result });
+      setErrorMessage(null);
+    },
+    onError: (error) => {
+      if (error instanceof ApiError && error.status === 403) {
+        onUnauthorized();
+        return;
+      }
+      const message = buildErrorMessage(error);
+      setErrorMessage(message);
+      setFeedbackMessage(null);
+
+      toast.error(message, { id: message });
+    },
+    onSettled: () => {
+      setDebuggingGoogleFindPlaceSiret(null);
     },
   });
 
@@ -135,6 +176,13 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
       triggerGoogleCheck({ siret, source: "establishments" });
     },
     [triggerGoogleCheck],
+  );
+
+  const handleGoogleFindPlaceDebug = useCallback(
+    (siret: string) => {
+      googleFindPlaceDebugMutation.mutate(siret);
+    },
+    [googleFindPlaceDebugMutation],
   );
 
   const handleLimitChange = useCallback((value: number) => {
@@ -268,6 +316,11 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
       onTriggerGoogleCheck={handleGoogleCheck}
       isCheckingGoogle={isCheckingGoogle}
       checkingGoogleSiret={checkingSiret}
+      onTriggerGoogleFindPlaceDebug={handleGoogleFindPlaceDebug}
+      isDebuggingGoogleFindPlace={googleFindPlaceDebugMutation.isPending}
+      debuggingGoogleFindPlaceSiret={debuggingGoogleFindPlaceSiret}
+      googleFindPlaceDebugModal={googleFindPlaceDebugModal}
+      onCloseGoogleFindPlaceDebugModal={() => setGoogleFindPlaceDebugModal(null)}
       onSelectEstablishment={onOpenEstablishmentDetail}
     />
   );

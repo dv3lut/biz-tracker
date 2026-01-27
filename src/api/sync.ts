@@ -310,6 +310,9 @@ export const syncApi = {
     if (payload.nafCodes && payload.nafCodes.length > 0) {
       body.naf_codes = payload.nafCodes;
     }
+    if (payload.initialBackfill !== undefined) {
+      body.initial_backfill = payload.initialBackfill;
+    }
     if (payload.targetClientIds && payload.targetClientIds.length > 0) {
       body.target_client_ids = payload.targetClientIds;
     }

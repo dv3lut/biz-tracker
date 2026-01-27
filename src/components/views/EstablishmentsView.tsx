@@ -1,5 +1,10 @@
 import { EstablishmentsSection } from "../EstablishmentsSection";
-import type { Establishment, EstablishmentIndividualFilter, NafCategory } from "../../types";
+import type {
+  Establishment,
+  EstablishmentIndividualFilter,
+  GoogleFindPlaceDebugResult,
+  NafCategory,
+} from "../../types";
 
 type Props = {
   establishments: Establishment[] | undefined;
@@ -36,6 +41,11 @@ type Props = {
   onTriggerGoogleCheck: (siret: string) => void;
   isCheckingGoogle: boolean;
   checkingGoogleSiret: string | null;
+  onTriggerGoogleFindPlaceDebug: (siret: string) => void;
+  isDebuggingGoogleFindPlace: boolean;
+  debuggingGoogleFindPlaceSiret: string | null;
+  googleFindPlaceDebugModal: { siret: string; result: GoogleFindPlaceDebugResult } | null;
+  onCloseGoogleFindPlaceDebugModal: () => void;
   onSelectEstablishment: (siret: string) => void;
 };
 
@@ -74,6 +84,11 @@ export const EstablishmentsView = ({
   onTriggerGoogleCheck,
   isCheckingGoogle,
   checkingGoogleSiret,
+  onTriggerGoogleFindPlaceDebug,
+  isDebuggingGoogleFindPlace,
+  debuggingGoogleFindPlaceSiret,
+  googleFindPlaceDebugModal,
+  onCloseGoogleFindPlaceDebugModal,
   onSelectEstablishment,
 }: Props) => {
   return (
@@ -120,6 +135,11 @@ export const EstablishmentsView = ({
           onTriggerGoogleCheck={onTriggerGoogleCheck}
           isCheckingGoogle={isCheckingGoogle}
           checkingGoogleSiret={checkingGoogleSiret}
+          onTriggerGoogleFindPlaceDebug={onTriggerGoogleFindPlaceDebug}
+          isDebuggingGoogleFindPlace={isDebuggingGoogleFindPlace}
+          debuggingGoogleFindPlaceSiret={debuggingGoogleFindPlaceSiret}
+          googleFindPlaceDebugModal={googleFindPlaceDebugModal}
+          onCloseGoogleFindPlaceDebugModal={onCloseGoogleFindPlaceDebugModal}
           onSelectEstablishment={onSelectEstablishment}
         />
       </div>

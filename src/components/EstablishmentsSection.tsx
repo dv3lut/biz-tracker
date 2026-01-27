@@ -3,7 +3,10 @@ import { ChangeEvent, useEffect, useRef, useState } from "react";
 import { Establishment, EstablishmentIndividualFilter, NafCategory } from "../types";
 import { formatDateTime } from "../utils/format";
 import { canonicalizeNafCode, normalizeNafCode } from "../utils/sync";
+import { openGoogleSearchForEstablishment } from "../utils/googleSearch";
+import toast from "react-hot-toast";
 import { SiretLink } from "./SiretLink";
+import { GoogleFindPlaceDebugModal } from "./GoogleFindPlaceDebugModal";
 
 interface EstablishmentsSectionProps {
   establishments?: Establishment[];
@@ -40,6 +43,11 @@ interface EstablishmentsSectionProps {
   onTriggerGoogleCheck: (siret: string) => void;
   isCheckingGoogle: boolean;
   checkingGoogleSiret: string | null;
+  onTriggerGoogleFindPlaceDebug: (siret: string) => void;
+  isDebuggingGoogleFindPlace: boolean;
+  debuggingGoogleFindPlaceSiret: string | null;
+  googleFindPlaceDebugModal: { siret: string; result: import("../types").GoogleFindPlaceDebugResult } | null;
+  onCloseGoogleFindPlaceDebugModal: () => void;
   onSelectEstablishment: (siret: string) => void;
 }
 
@@ -78,6 +86,11 @@ export const EstablishmentsSection = ({
   onTriggerGoogleCheck,
   isCheckingGoogle,
   checkingGoogleSiret,
+  onTriggerGoogleFindPlaceDebug,
+  isDebuggingGoogleFindPlace,
+  debuggingGoogleFindPlaceSiret,
+  googleFindPlaceDebugModal,
+  onCloseGoogleFindPlaceDebugModal,
   onSelectEstablishment,
 }: EstablishmentsSectionProps) => {
   const nafDetailsRef = useRef<HTMLDetailsElement | null>(null);
@@ -450,6 +463,41 @@ export const EstablishmentsSection = ({
                       className="ghost"
                       onClick={(event) => {
                         event.stopPropagation();
+                        const opened = openGoogleSearchForEstablishment({
+                          name: establishment.name,
+                          libelleCommune: establishment.libelleCommune,
+                          codePostal: establishment.codePostal,
+                        });
+                        if (!opened) {
+                          toast.error(
+                            "Impossible de construire une recherche Google (nom / commune / code postal manquants).",
+                            { id: "google-search-missing-data" },
+                          );
+                        }
+                      }}
+                    >
+                      Recherche Google
+                    </button>
+                    <br />
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onTriggerGoogleFindPlaceDebug(establishment.siret);
+                      }}
+                      disabled={isDebuggingGoogleFindPlace && debuggingGoogleFindPlaceSiret === establishment.siret}
+                    >
+                      {isDebuggingGoogleFindPlace && debuggingGoogleFindPlaceSiret === establishment.siret
+                        ? "Récupération..."
+                        : "Debug API Google"}
+                    </button>
+                    <br />
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={(event) => {
+                        event.stopPropagation();
                         onTriggerGoogleCheck(establishment.siret);
                       }}
                       disabled={isCheckingGoogle && checkingGoogleSiret === establishment.siret}
@@ -480,6 +528,14 @@ export const EstablishmentsSection = ({
 
       {feedbackMessage && <p className="feedback success">{feedbackMessage}</p>}
       {errorMessage && <p className="feedback error">{errorMessage}</p>}
+
+      {googleFindPlaceDebugModal ? (
+        <GoogleFindPlaceDebugModal
+          siret={googleFindPlaceDebugModal.siret}
+          result={googleFindPlaceDebugModal.result}
+          onClose={onCloseGoogleFindPlaceDebugModal}
+        />
+      ) : null}
     </section>
   );
 };

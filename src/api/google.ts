@@ -1,4 +1,10 @@
-import { GoogleCheckResult, GoogleRetryConfig, GoogleRetryRule, ListingStatus } from "../types";
+import {
+  GoogleCheckResult,
+  GoogleFindPlaceDebugResult,
+  GoogleRetryConfig,
+  GoogleRetryRule,
+  ListingStatus,
+} from "../types";
 import { getAdminToken } from "./auth";
 import { ApiError, request } from "./http";
 import { EstablishmentResponse, mapEstablishment } from "./establishments";
@@ -33,6 +39,21 @@ interface GoogleRetryConfigResponse {
   retry_weekdays: number[];
   default_rules: GoogleRetryRuleResponse[];
   micro_rules: GoogleRetryRuleResponse[];
+}
+
+interface GoogleFindPlaceCandidateResponse {
+  place_id: string | null;
+  name: string | null;
+  formatted_address: string | null;
+  match_score: number | null;
+  decision: string | null;
+  decision_details: Record<string, unknown> | null;
+}
+
+interface GoogleFindPlaceDebugResponse {
+  query: string;
+  candidate_count: number;
+  candidates: GoogleFindPlaceCandidateResponse[];
 }
 
 const mapRetryRule = (rule: GoogleRetryRuleResponse): GoogleRetryRule => ({
@@ -135,5 +156,22 @@ export const googleApi = {
       body,
     });
     return mapRetryConfig(data);
+  },
+
+  async debugFindPlace(siret: string): Promise<GoogleFindPlaceDebugResult> {
+    const path = `/admin/establishments/${encodeURIComponent(siret)}/google-find-place`;
+    const { data } = await request<GoogleFindPlaceDebugResponse>(path);
+    return {
+      query: data.query,
+      candidateCount: data.candidate_count,
+      candidates: (data.candidates ?? []).map((candidate) => ({
+        placeId: candidate.place_id,
+        name: candidate.name,
+        formattedAddress: candidate.formatted_address,
+        matchScore: candidate.match_score,
+        decision: candidate.decision,
+        decisionDetails: candidate.decision_details,
+      })),
+    };
   },
 };
