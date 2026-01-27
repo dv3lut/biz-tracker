@@ -252,7 +252,9 @@ class NafCategory(Base):
     subcategories: Mapped[list["NafSubCategory"]] = relationship(
         "NafSubCategory",
         back_populates="category",
+        cascade="all, delete",
         order_by="NafSubCategory.naf_code",
+        passive_deletes=True,
     )
 
 
@@ -280,6 +282,8 @@ class NafSubCategory(Base):
     subscriptions: Mapped[list["ClientSubscription"]] = relationship(
         "ClientSubscription",
         back_populates="subcategory",
+        cascade="all, delete",
+        passive_deletes=True,
     )
 
 
