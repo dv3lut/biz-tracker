@@ -93,6 +93,7 @@ export const ClientsSection = ({
                 <th>Période d'activation</th>
                 <th>Destinataires</th>
                 <th>Abonnements NAF</th>
+                <th>Abonnements Stripe</th>
                 <th>Statuts Google</th>
                 <th>Statistiques</th>
                 <th>Actions</th>
@@ -142,6 +143,27 @@ export const ClientsSection = ({
                           {client.subscriptions.map((subscription) => (
                             <span key={subscription.subcategoryId} className="chip">
                               {subscription.subcategory.nafCode} · {subscription.subcategory.name}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                    <td>
+                      {client.stripeSubscriptions.length === 0 ? (
+                        <span className="small muted">Aucun historique Stripe</span>
+                      ) : (
+                        <div className="chip-list">
+                          {client.stripeSubscriptions.map((subscription) => (
+                            <span key={subscription.id} className="chip">
+                              {subscription.planKey ?? "plan"} · {subscription.status ?? "statut"}
+                              <br />
+                              <span className="small muted">
+                                Achat: {formatDateTime(subscription.purchasedAt)}
+                              </span>
+                              <br />
+                              <span className="small muted">
+                                Début payant: {formatDateTime(subscription.paidStartAt)}
+                              </span>
                             </span>
                           ))}
                         </div>

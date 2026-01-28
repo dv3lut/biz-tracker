@@ -9,6 +9,9 @@ export { syncApi, type TriggerSyncResult, type DeleteRunResponse } from "./sync"
 export { clientsApi, type ClientCreatePayload, type ClientUpdatePayload } from "./clients";
 export { adminConfigApi, type AdminEmailConfigPayload } from "./adminConfig";
 export {
+	stripeSettingsApi,
+} from "./stripeSettings";
+export {
 	nafApi,
 	type NafCategoryPayload,
 	type NafSubCategoryCreatePayload,

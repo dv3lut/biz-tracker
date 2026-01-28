@@ -41,6 +41,12 @@ npm run preview
 - Déclenchement de la synchronisation unifiée (`/admin/sync`).
 - Envoi d'un e-mail de test pour valider la configuration SMTP (`/admin/email/test`).
 - Pilotage des catégories/sous-catégories NAF et des abonnements clients (`/admin/naf-*`).
+- Gestion de la durée d'essai Stripe depuis la section Facturation (`/admin/stripe/settings`).
+
+## Facturation Stripe (essai gratuit)
+
+La section **Facturation** permet d'ajuster `trial_period_days` (0 à 60) utilisé par Stripe lors des nouvelles souscriptions. 
+Vous pouvez également appliquer la nouvelle durée aux essais déjà en cours via l'option dédiée, ce qui met à jour les abonnements en statut `trialing`.
 
 ## Gestion des catégories NAF et abonnements clients
 

@@ -385,6 +385,27 @@ export interface ClientSubscription {
   subcategory: NafSubCategory;
 }
 
+export interface StripeSubscriptionHistory {
+  id: string;
+  clientId: string;
+  stripeSubscriptionId: string;
+  stripeCustomerId: string | null;
+  status: string | null;
+  planKey: string | null;
+  priceId: string | null;
+  purchasedAt: string | null;
+  trialStartAt: string | null;
+  trialEndAt: string | null;
+  paidStartAt: string | null;
+  currentPeriodStart: string | null;
+  currentPeriodEnd: string | null;
+  cancelAt: string | null;
+  canceledAt: string | null;
+  endedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Client {
   id: string;
   name: string;
@@ -397,10 +418,26 @@ export interface Client {
   updatedAt: string;
   recipients: ClientRecipient[];
   subscriptions: ClientSubscription[];
+  stripeSubscriptions: StripeSubscriptionHistory[];
 }
 
 export interface AdminEmailConfig {
   recipients: string[];
+}
+
+export interface AdminStripeSettings {
+  trialPeriodDays: number;
+}
+
+export interface AdminStripeSettingsUpdatePayload {
+  trialPeriodDays: number;
+  applyToExistingTrials: boolean;
+}
+
+export interface AdminStripeSettingsUpdateResult {
+  trialPeriodDays: number;
+  updatedTrials: number;
+  failedTrials: number;
 }
 
 export interface GoogleCheckResult {
