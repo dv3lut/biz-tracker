@@ -60,6 +60,15 @@ This project is built with:
 - shadcn-ui
 - Tailwind CSS
 
+## Stripe & essai gratuit
+
+La landing consomme l'API publique du backend pour :
+
+- récupérer la durée d'essai via `GET /public/stripe/settings` (affichée dans le hero, les tarifs et la FAQ),
+- déclencher les sessions Stripe Checkout et l'accès au portail client.
+
+Assurez-vous que `VITE_APP_API_BASE_URL` pointe vers l'API backend afin d'afficher la durée d'essai configurée et d'ouvrir correctement les flows Stripe.
+
 ## How can I deploy this project?
 
 Simply open [Lovable](https://lovable.dev/projects/619cb703-f550-4ece-9122-aa6c767aa7b0) and click on Share -> Publish.

@@ -15,7 +15,11 @@ import {
 import { CalendarDays, Mail, Phone, MapPin } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-const ContactForm = () => {
+type Props = {
+  trialPeriodDays?: number;
+};
+
+const ContactForm = ({ trialPeriodDays = 14 }: Props) => {
   const { toast } = useToast();
   const [formData, setFormData] = useState({
     name: "",
@@ -171,7 +175,7 @@ const ContactForm = () => {
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-12">
             <h2 className="text-3xl md:text-4xl font-bold mb-4">
-              Essai gratuit 14 jours
+              Essai gratuit {trialPeriodDays} jours
             </h2>
             <p className="text-lg text-muted-foreground">
               Découvrez la qualité de nos données gratuitement

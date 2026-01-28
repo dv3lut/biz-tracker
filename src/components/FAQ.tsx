@@ -5,7 +5,11 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 
-const FAQ = () => {
+type Props = {
+  trialPeriodDays?: number;
+};
+
+const FAQ = ({ trialPeriodDays = 14 }: Props) => {
   const faqs = [
     {
       question: "D'où viennent les données ?",
@@ -25,7 +29,7 @@ const FAQ = () => {
     },
     {
       question: "Puis-je annuler mon abonnement à tout moment ?",
-      answer: "Oui, sans engagement. Vous pouvez suspendre ou annuler votre abonnement à tout moment. Toutes nos formules incluent 14 jours d’essai gratuit.",
+      answer: `Oui, sans engagement. Vous pouvez suspendre ou annuler votre abonnement à tout moment. Toutes nos formules incluent ${trialPeriodDays} jours d’essai gratuit.`,
     },
     {
       question: "Que contient une alerte ?",
