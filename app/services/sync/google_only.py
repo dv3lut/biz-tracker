@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.db import models
 from app.observability import log_event, serialize_establishment
-from app.services.alert_service import AlertService
+from app.services.alerts.alert_service import AlertService
 
 from .context import SyncContext, SyncResult
 from .google_enrichment import create_google_progress_callback, run_google_enrichment

@@ -17,7 +17,7 @@ from app.api.schemas import (
     ManualGoogleCheckResponse,
 )
 from app.observability import log_event
-from app.services.google_retry_config import (
+from app.services.google.google_retry_config import (
     ensure_google_retry_config,
     load_runtime_google_retry_config,
     serialize_google_retry_config,

@@ -6,7 +6,7 @@ from unittest import TestCase
 from unittest.mock import MagicMock, patch, call
 
 from fastapi import HTTPException
-from app.api.routers.admin.google import manual_google_check, export_google_places, debug_google_find_place
+from app.api.routers.admin.google_router import manual_google_check, export_google_places, debug_google_find_place
 
 
 class ManualGoogleCheckRouteTests(TestCase):

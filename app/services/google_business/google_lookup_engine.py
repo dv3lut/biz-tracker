@@ -9,22 +9,21 @@ from sqlalchemy.orm import Session
 from app.clients.google_places_client import GooglePlacesClient, GooglePlacesError
 from app.db import models
 from app.observability import log_event
-from app.services.google_business import (
-    adjust_listing_status_for_contacts,
-    build_place_query,
-    compute_listing_age_status,
-    extract_listing_origin,
-    extract_ratings_total,
-    matches_expected_google_category,
-)
-from app.services.google_business.constants import (
+from app.services.google_business.google_constants import (
     PLACE_DETAILS_FIELDS,
     PLACEHOLDER_TOKENS,
     TYPE_MISMATCH_STATUS,
 )
-from app.services.google_business.keywords import resolve_expected_keywords
-from app.services.google_business.types import GoogleMatch
-from app.services.google_business.match_rules import evaluate_candidate_match, haversine_distance_m
+from app.services.google_business.google_keywords import resolve_expected_keywords
+from app.services.google_business.google_listing import (
+    adjust_listing_status_for_contacts,
+    compute_listing_age_status,
+    extract_listing_origin,
+    extract_ratings_total,
+)
+from app.services.google_business.google_match_rules import evaluate_candidate_match, haversine_distance_m
+from app.services.google_business.google_matching import build_place_query, matches_expected_google_category
+from app.services.google_business.google_types import GoogleMatch
 from app.services.rate_limiter import RateLimiter
 from app.utils.dates import utcnow
 
@@ -398,39 +397,68 @@ class GoogleLookupEngine:
             _LOGGER.debug("Résultat Google Places trouvé sans URL exploitable pour %s", establishment.siret)
 
         new_status = result.status_override or "found"
-        establishment.google_check_status = new_status
-        if new_status == "found" and newly_found is not None:
-            newly_found.append(establishment)
+        if new_status == TYPE_MISMATCH_STATUS:
+            establishment.google_check_status = TYPE_MISMATCH_STATUS
+        else:
+            establishment.google_check_status = "found"
 
         establishment.google_listing_origin_at = result.listing_origin_at
-        establishment.google_listing_origin_source = result.listing_origin_source or "unknown"
-        establishment.google_listing_age_status = result.listing_age_status or "unknown"
-        if result.category_confidence is not None:
-            establishment.google_category_match_confidence = result.category_confidence
+        establishment.google_listing_origin_source = result.listing_origin_source
+        establishment.google_listing_age_status = result.listing_age_status
+        establishment.google_match_confidence = result.confidence
+        establishment.google_category_match_confidence = result.category_confidence
         establishment.google_contact_phone = result.contact_phone
         establishment.google_contact_email = result.contact_email
         establishment.google_contact_website = result.contact_website
+        establishment.google_last_checked_at = now
+        if result.place_url:
+            establishment.google_last_found_at = now
+        self._session.flush()
+
+        if newly_found is not None and establishment.created_run_id == establishment.last_run_id:
+            newly_found.append(establishment)
+
         return result
 
-    def _fetch_details(self, place_id: str) -> dict[str, object] | None:
-        try:
-            self._rate_limiter.acquire()
-            self._record_api_call()
-            details = self._client.get_place_details(place_id, fields=PLACE_DETAILS_FIELDS)
-        except GooglePlacesError:
-            raise
-        if not details:
-            return None
-        return details
+    def _fetch_details(self, place_id: str) -> dict[str, object]:
+        self._rate_limiter.acquire()
+        self._record_api_call()
+        details_fetcher = getattr(self._client, "place_details", None)
+        if details_fetcher is None:
+            details_fetcher = getattr(self._client, "get_place_details", None)
+        if details_fetcher is None:
+            raise AttributeError("Google Places client lacks a place details method")
+        return details_fetcher(place_id, fields=PLACE_DETAILS_FIELDS)
+
+    def _serialize_establishment(self, establishment: models.Establishment) -> dict[str, object]:
+        return {
+            "siret": getattr(establishment, "siret", None),
+            "siren": getattr(establishment, "siren", None),
+            "name": getattr(establishment, "name", None),
+            "naf_code": getattr(establishment, "naf_code", None),
+            "code_postal": getattr(establishment, "code_postal", None),
+            "libelle_commune": getattr(establishment, "libelle_commune", None),
+        }
 
     def _record_api_call(self) -> None:
         self._api_call_hook()
 
     def _record_api_error(self, operation: str) -> None:
-        hook = getattr(self, "_api_error_hook", None)
-        if not hook:
+        if self._api_error_hook is None:
             return
-        hook(operation)
+        self._api_error_hook(operation)
+
+    def _extract_contact_details(
+        self, details: dict[str, object]
+    ) -> tuple[str | None, str | None, str | None]:
+        phone = details.get("formatted_phone_number") or details.get("international_phone_number")
+        if phone and not isinstance(phone, str):
+            phone = None
+        website = details.get("website")
+        if website and not isinstance(website, str):
+            website = None
+        email = None
+        return phone, email, website
 
     def _default_category_matcher(
         self,
@@ -443,42 +471,3 @@ class GoogleLookupEngine:
             neutral_types=self._neutral_google_types,
             similarity_threshold=self._category_similarity_threshold,
         )
-
-    @staticmethod
-    def _extract_contact_details(details: dict[str, object]) -> tuple[str | None, str | None, str | None]:
-        phone = details.get("formatted_phone_number")
-        if isinstance(phone, str):
-            phone = phone.strip() or None
-        if not phone:
-            alt_phone = details.get("international_phone_number")
-            if isinstance(alt_phone, str):
-                phone = alt_phone.strip() or None
-        email = None
-        for key in ("email", "business_email", "contact_email"):
-            raw = details.get(key)
-            if isinstance(raw, str) and raw.strip():
-                email = raw.strip()
-                break
-        website = details.get("website")
-        if isinstance(website, str) and website.strip():
-            website = website.strip()
-        else:
-            website = None
-        return phone, email, website
-
-    @staticmethod
-    def _serialize_establishment(establishment: models.Establishment) -> dict[str, object]:
-        payload: dict[str, object] = {
-            "siret": establishment.siret,
-            "name": establishment.name,
-            "code_postal": establishment.code_postal,
-            "libelle_commune": establishment.libelle_commune or establishment.libelle_commune_etranger,
-            "naf_code": establishment.naf_code,
-        }
-        created_run_id = getattr(establishment, "created_run_id", None)
-        last_run_id = getattr(establishment, "last_run_id", None)
-        if created_run_id is not None:
-            payload["created_run_id"] = str(created_run_id)
-        if last_run_id is not None:
-            payload["last_run_id"] = str(last_run_id)
-        return payload

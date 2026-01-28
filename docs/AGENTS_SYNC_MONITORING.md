@@ -5,7 +5,7 @@ Ce document sert à 2 choses :
 1. **Comprendre la synchro** (Sirene → DB → Google → alertes) avec ses modes.
 2. **Diagnostiquer vite** dans Kibana : “pourquoi pas d’alertes ?”, “pourquoi beaucoup d’alertes ?”, “où ça a déraillé ?”.
 
-> Source de vérité technique : `app/services/sync/*`, `app/services/google_business/*`, `app/services/alert_service.py`.
+> Source de vérité technique : `app/services/sync/*`, `app/services/google_business/*`, `app/services/alerts/alert_service.py`.
 
 ## Schéma (vue pipeline)
 

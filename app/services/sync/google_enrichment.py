@@ -9,8 +9,8 @@ from sqlalchemy.orm import Session
 
 from app.db import models
 from app.observability import log_event
-from app.services.alert_service import AlertService
-from app.services.google_business_service import GoogleBusinessService
+from app.services.alerts.alert_service import AlertService
+from app.services.google_business.google_business_service import GoogleBusinessService
 
 ProgressCallback = Callable[[int, int, int, int, int], None] | None
 

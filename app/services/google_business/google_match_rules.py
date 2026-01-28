@@ -15,7 +15,12 @@ import math
 import re
 from typing import Any
 
-from app.services.google_business.matching import extract_postal_code, normalize_text, token_similarity, tokenize_name
+from app.services.google_business.google_matching import (
+    extract_postal_code,
+    normalize_text,
+    token_similarity,
+    tokenize_name,
+)
 
 
 # Stopwords génériques (langue + formes juridiques).

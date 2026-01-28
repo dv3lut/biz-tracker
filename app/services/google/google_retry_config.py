@@ -20,6 +20,7 @@ _DEFAULT_MICRO_RULES = [
     {"max_age_days": None, "frequency_days": 60},
 ]
 
+
 @dataclass(frozen=True)
 class RetryRule:
     max_age_days: int | None
@@ -34,7 +35,9 @@ class GoogleRetryRuntimeConfig:
 
 
 def ensure_google_retry_config(session: Session) -> models.GoogleRetryConfig:
-    config = session.execute(select(models.GoogleRetryConfig).order_by(models.GoogleRetryConfig.id.asc()).limit(1)).scalar_one_or_none()
+    config = session.execute(
+        select(models.GoogleRetryConfig).order_by(models.GoogleRetryConfig.id.asc()).limit(1)
+    ).scalar_one_or_none()
     if config is None:
         config = models.GoogleRetryConfig(
             retry_weekdays=list(_DEFAULT_RETRY_WEEKDAYS),
@@ -108,7 +111,10 @@ def update_google_retry_config(
     micro_rules: list[dict[str, object]],
 ) -> models.GoogleRetryConfig:
     record = ensure_google_retry_config(session)
-    sanitized_weekdays = sorted({day for day in retry_weekdays if isinstance(day, int) and 0 <= day <= 6}) or list(_DEFAULT_RETRY_WEEKDAYS)
+    sanitized_weekdays = (
+        sorted({day for day in retry_weekdays if isinstance(day, int) and 0 <= day <= 6})
+        or list(_DEFAULT_RETRY_WEEKDAYS)
+    )
     record.retry_weekdays = sanitized_weekdays
     record.default_rules = _serialize_rules_for_storage(default_rules, _DEFAULT_DEFAULT_RULES)
     record.micro_rules = _serialize_rules_for_storage(micro_rules, _DEFAULT_MICRO_RULES)

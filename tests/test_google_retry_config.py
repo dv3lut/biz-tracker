@@ -6,7 +6,7 @@ from uuid import uuid4
 import pytest
 
 from app.db import models
-from app.services import google_retry_config as grc
+from app.services.google import google_retry_config as grc
 
 
 def _make_session(record: models.GoogleRetryConfig | None):

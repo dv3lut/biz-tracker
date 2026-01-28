@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Iterable
 
-from app.services.google_business.constants import RECENT_NO_CONTACT_STATUS
+from app.services.google_business.google_constants import RECENT_NO_CONTACT_STATUS
 from app.utils.google_listing import normalize_listing_age_status
 
 _RECENT_REVIEW_THRESHOLD_DAYS = 14

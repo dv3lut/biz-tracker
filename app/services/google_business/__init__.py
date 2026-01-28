@@ -1,6 +1,6 @@
 """Shared helpers for the GoogleBusinessService."""
 
-from .matching import (
+from .google_matching import (
     build_place_query,
     extract_postal_code,
     matches_expected_google_category,
@@ -9,7 +9,7 @@ from .matching import (
     tokenize_name,
     tokenize_text,
 )
-from .listing import (
+from .google_listing import (
     adjust_listing_status_for_contacts,
     collect_review_dates,
     compute_listing_age_status,

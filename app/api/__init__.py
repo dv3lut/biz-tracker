@@ -14,7 +14,7 @@ from app.services.sync_scheduler import SyncScheduler
 from .middlewares.rate_limit_middleware import RateLimitMiddleware, RateLimitPolicy
 from .middlewares.access_log_middleware import AccessLogMiddleware
 
-from .routers import admin, health, public
+from .routers import admin_router, health_router, public_router
 
 _SYNC_SCHEDULER = SyncScheduler()
 
@@ -65,9 +65,9 @@ def create_app() -> FastAPI:
         public_policy=RateLimitPolicy(max_per_second=5, max_per_minute=30),
     )
 
-    app.include_router(health.router)
-    app.include_router(admin.router)
-    app.include_router(public.router)
+    app.include_router(health_router.router)
+    app.include_router(admin_router.router)
+    app.include_router(public_router.router)
 
     return app
 

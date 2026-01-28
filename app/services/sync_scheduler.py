@@ -10,6 +10,7 @@ from app.db import models
 from app.db.session import session_scope
 from app.services.sync.mode import DEFAULT_SYNC_MODE
 from app.services.sync_service import SyncService
+from app.services.stripe.stripe_reporting_service import send_weekly_stripe_summary_if_due
 from app.observability import log_event
 from app.utils.dates import utcnow
 
@@ -87,6 +88,8 @@ class SyncScheduler:
         minimum_delay = timedelta(minutes=self._service.settings.sync.minimum_delay_minutes)
 
         with session_scope() as session:
+            send_weekly_stripe_summary_if_due(session, self._service.settings)
+
             if self._service.has_active_run(session, scope_key):
                 _LOGGER.debug("A synchronisation is already active; skipping auto trigger.")
                 log_event(

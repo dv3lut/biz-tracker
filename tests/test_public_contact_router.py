@@ -3,7 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest import TestCase
 from unittest.mock import patch
-from app.api.routers import public
+from app.api.routers import public_router as public
 from app.api.schemas import PublicContactRequest
 
 
@@ -14,7 +14,7 @@ class PublicContactRouterTests(TestCase):
             headers={"user-agent": "pytest"},
         )
 
-    @patch("app.api.routers.public.get_settings")
+    @patch("app.api.routers.public_router.get_settings")
     def test_honeypot_skips_email_send(self, mock_settings) -> None:
         mock_settings.return_value = SimpleNamespace(
             public_contact=SimpleNamespace(enabled=True, inbox_address="contact@business-tracker.fr")
@@ -32,7 +32,7 @@ class PublicContactRouterTests(TestCase):
             def send(self, subject, body, recipients, *, html_body=None, reply_to=None):
                 sent.append((subject, tuple(recipients)))
 
-        with patch("app.api.routers.public.EmailService", DummyEmail):
+        with patch("app.api.routers.public_router.EmailService", DummyEmail):
             payload = PublicContactRequest(
                 name="Jean",
                 email="jean@example.com",
@@ -46,7 +46,7 @@ class PublicContactRouterTests(TestCase):
         self.assertTrue(result.accepted)
         self.assertEqual(sent, [])
 
-    @patch("app.api.routers.public.get_settings")
+    @patch("app.api.routers.public_router.get_settings")
     def test_sends_contact_email(self, mock_settings) -> None:
         inbox = "contact@business-tracker.fr"
         mock_settings.return_value = SimpleNamespace(
@@ -65,7 +65,7 @@ class PublicContactRouterTests(TestCase):
             def send(self, subject, body, recipients, *, html_body=None, reply_to=None):
                 sent.append((subject, tuple(recipients), reply_to))
 
-        with patch("app.api.routers.public.EmailService", DummyEmail):
+        with patch("app.api.routers.public_router.EmailService", DummyEmail):
             payload = PublicContactRequest(
                 name="Jean",
                 email="jean@example.com",
@@ -81,7 +81,7 @@ class PublicContactRouterTests(TestCase):
         self.assertEqual(sent[0][1], (inbox,))
         self.assertEqual(sent[0][2], "jean@example.com")
 
-    @patch("app.api.routers.public.get_settings")
+    @patch("app.api.routers.public_router.get_settings")
     def test_returns_404_when_endpoint_disabled(self, mock_settings) -> None:
         mock_settings.return_value = SimpleNamespace(
             public_contact=SimpleNamespace(enabled=False, inbox_address="contact@business-tracker.fr")
@@ -101,7 +101,7 @@ class PublicContactRouterTests(TestCase):
         # FastAPI HTTPException has status_code attribute.
         self.assertEqual(getattr(ctx.exception, "status_code", None), 404)
 
-    @patch("app.api.routers.public.get_settings")
+    @patch("app.api.routers.public_router.get_settings")
     def test_returns_503_when_email_service_unavailable(self, mock_settings) -> None:
         mock_settings.return_value = SimpleNamespace(
             public_contact=SimpleNamespace(enabled=True, inbox_address="contact@business-tracker.fr")
@@ -114,7 +114,7 @@ class PublicContactRouterTests(TestCase):
             def is_configured(self):  # pragma: no cover - should not matter
                 return False
 
-        with patch("app.api.routers.public.EmailService", DummyEmail):
+        with patch("app.api.routers.public_router.EmailService", DummyEmail):
             with self.assertRaises(Exception) as ctx:
                 payload = PublicContactRequest(
                     name="Jean",
@@ -141,7 +141,7 @@ class PublicContactRouterTests(TestCase):
         self.assertIn("Téléphone: -", body)
         self.assertTrue(body.strip().endswith("-"))
 
-    @patch("app.api.routers.public.get_settings")
+    @patch("app.api.routers.public_router.get_settings")
     def test_inbox_empty_returns_503(self, mock_settings) -> None:
         mock_settings.return_value = SimpleNamespace(public_contact=SimpleNamespace(enabled=True, inbox_address=" "))
 
@@ -152,7 +152,7 @@ class PublicContactRouterTests(TestCase):
             def is_configured(self):
                 return True
 
-        with patch("app.api.routers.public.EmailService", DummyEmail):
+        with patch("app.api.routers.public_router.EmailService", DummyEmail):
             with self.assertRaises(Exception) as ctx:
                 payload = PublicContactRequest(
                     name="Jean",

@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import models
-from app.services.google_business import tokenize_text
+from app.services.google_business.google_matching import tokenize_text
 
 
 def sanitize_naf_code(naf_code: str | None) -> str:

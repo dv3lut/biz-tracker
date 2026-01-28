@@ -31,6 +31,7 @@ def get_active_clients(session: Session) -> list[models.Client]:
         .options(
             selectinload(models.Client.recipients),
             selectinload(models.Client.subscriptions).selectinload(models.ClientSubscription.subcategory),
+            selectinload(models.Client.stripe_subscriptions),
         )
         .where(
             models.Client.start_date <= today,
@@ -69,6 +70,7 @@ def get_all_clients(session: Session) -> list[models.Client]:
         .options(
             selectinload(models.Client.recipients),
             selectinload(models.Client.subscriptions).selectinload(models.ClientSubscription.subcategory),
+            selectinload(models.Client.stripe_subscriptions),
         )
         .order_by(models.Client.name)
     )

@@ -221,6 +221,9 @@ class AlertService:
                     )
                 else:
                     admin_sent_at = utcnow()
+                    for alert in alerts:
+                        if alert.sent_at is None:
+                            alert.sent_at = admin_sent_at
                     log_event(
                         "alerts.email.admin_sent",
                         run_id=str(self._run.id),
@@ -239,20 +242,6 @@ class AlertService:
                     recipients=admin_recipients,
                 )
 
-            if admin_sent_at:
-                for alert in alerts:
-                    if alert.sent_at is None or alert.sent_at > admin_sent_at:
-                        alert.sent_at = admin_sent_at
-        elif filtered_establishments and not self._admin_notifications_enabled:
-            log_event(
-                "alerts.email.admin_skipped",
-                run_id=str(self._run.id),
-                scope_key=self._run.scope_key,
-                reason="admin_notifications_disabled",
-                recipient_count=0,
-                recipients=[],
-            )
-
         return alerts
 
     def _prepare_client_dispatch(
@@ -268,94 +257,104 @@ class AlertService:
     ) -> tuple[ClientDispatchPlan | None, str | None]:
         if not email_enabled:
             return None, "email_disabled"
+
         if not email_configured:
             return None, "email_not_configured"
+
         if not has_previous_success:
             return None, "initial_sync"
 
-        active_clients = get_active_clients(self._session)
-        if not active_clients:
+        clients = get_active_clients(self._session)
+        if target_client_ids:
+            target_ids = {str(value) for value in target_client_ids}
+            clients = [client for client in clients if str(client.id) in target_ids]
+            if not clients:
+                return None, "no_targeted_clients"
+        if not clients:
             return None, "no_clients"
 
-        if target_client_ids:
-            target_lookup: set[str] = set()
-            for client_id in target_client_ids:
-                try:
-                    target_lookup.add(str(UUID(str(client_id))))
-                except (TypeError, ValueError):
-                    continue
-            if not target_lookup:
-                return None, "no_targeted_clients"
-            filtered_clients = [client for client in active_clients if str(getattr(client, "id", "")) in target_lookup]
-            if not filtered_clients:
-                return None, "no_targeted_clients"
-        else:
-            filtered_clients = active_clients
-
-        eligible_clients = [client for client in filtered_clients if any(recipient.email for recipient in client.recipients)]
-        if not eligible_clients:
+        has_recipients = any(
+            recipient.email
+            for client in clients
+            for recipient in client.recipients
+        )
+        if not has_recipients:
             return None, "no_active_recipients"
 
-        assignment_map, filters_configured = assign_establishments_to_clients(eligible_clients, establishments)
-        send_zero_digest = len(establishments) == 0 or bool(target_client_ids)
-        client_payloads: list[ClientEmailPayload] = []
-        for client in eligible_clients:
-            matches = assignment_map.get(client.id, [])
-            if not matches and not send_zero_digest:
-                continue
-            matched_alerts = [
-                alerts_by_siret[match.siret]
-                for match in matches
-                if getattr(match, "siret", None) in alerts_by_siret
+        assignments: dict[object, list[models.Establishment]] = {}
+        filters_configured = False
+        if establishments:
+            assignments, filters_configured = assign_establishments_to_clients(clients, establishments)
+            if not assignments:
+                if filters_configured and not target_client_ids:
+                    return None, "no_matching_filters"
+                if not filters_configured and not target_client_ids:
+                    return None, "no_assignments"
+        else:
+            assignments = {client.id: [] for client in clients}
+
+        payloads: list[ClientEmailPayload] = []
+        unique_recipients = set(admin_recipients)
+        for client in clients:
+            client_establishments = assignments.get(client.id, [])
+            client_alerts = [
+                alerts_by_siret[item.siret]
+                for item in client_establishments
+                if item.siret in alerts_by_siret
             ]
-            filter_summary = summarize_client_filters(client)
-            match_count = len(matches)
-            match_fiche_plural = "fiches" if match_count > 1 else "fiche"
-            subject = f"Business tracker · {match_count} {match_fiche_plural} Google détectée{'s' if match_count > 1 else ''}"
+            subject = self._build_client_subject(len(client_establishments))
+            filters = summarize_client_filters(client)
             text_body, html_body = render_client_email(
                 self._formatter,
-                matches,
-                filters=filter_summary,
+                client_establishments,
+                filters=filters,
             )
-            attachment_filename = f"biz-tracker-alertes-{_sanitize_filename_token(client.name)}-{utcnow().date().isoformat()}.csv"
-            establishments_by_siret = {item.siret: item for item in matches if getattr(item, "siret", None)}
-            attachments = [
-                (
-                    attachment_filename,
-                    build_alerts_client_csv(
-                        matched_alerts,
-                        establishments_by_siret=establishments_by_siret,
-                    ),
-                    "text/csv",
-                )
-            ]
-            client_payloads.append(
+            payloads.append(
                 ClientEmailPayload(
                     client=client,
                     subject=subject,
                     text_body=text_body,
                     html_body=html_body,
-                    establishments=matches,
-                    filters=filter_summary,
-                    attachments=attachments,
+                    establishments=client_establishments,
+                    filters=filters,
+                    attachments=[
+                        (
+                            f"biz-tracker-alertes-{_sanitize_filename_token(client.name)}-{utcnow().date().isoformat()}.csv",
+                            build_alerts_client_csv(
+                                client_alerts,
+                                establishments_by_siret={
+                                    item.siret: item for item in client_establishments if getattr(item, "siret", None)
+                                },
+                            ),
+                            "text/csv",
+                        )
+                    ],
                 )
             )
+            for recipient in client.recipients:
+                if recipient.email:
+                    unique_recipients.add(recipient.email)
 
-        if not client_payloads:
-            reason = "no_matching_filters" if filters_configured else "no_active_recipients"
-            return None, reason
+        if not payloads:
+            return None, "no_payloads"
 
-        targeted_clients = [payload.client for payload in client_payloads]
-        targeted_recipient_addresses = collect_client_emails(targeted_clients)
-        combined_recipient_addresses = sorted({*targeted_recipient_addresses, *admin_recipients})
-
-        plan = ClientDispatchPlan(
-            client_payloads=client_payloads,
-            targeted_clients=targeted_clients,
-            targeted_recipient_addresses=targeted_recipient_addresses,
-            combined_recipient_addresses=combined_recipient_addresses,
+        targeted_recipient_addresses = collect_client_emails(clients)
+        combined_recipient_addresses = sorted(unique_recipients)
+        return (
+            ClientDispatchPlan(
+                client_payloads=payloads,
+                targeted_clients=[payload.client for payload in payloads],
+                targeted_recipient_addresses=targeted_recipient_addresses,
+                combined_recipient_addresses=combined_recipient_addresses,
+            ),
+            None,
         )
-        return plan, None
+
+    @staticmethod
+    def _build_client_subject(match_count: int) -> str:
+        fiche_plural = "fiches" if match_count > 1 else "fiche"
+        suffix = "s" if match_count > 1 else ""
+        return f"Business tracker · {match_count} {fiche_plural} Google détectée{suffix}"
 
     def _has_previous_successful_run(self) -> bool:
         stmt = (

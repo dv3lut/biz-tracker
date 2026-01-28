@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.db import models
 from app.observability import log_event, serialize_alert, serialize_establishment
-from app.services.alert_service import AlertService
+from app.services.alerts.alert_service import AlertService
 from app.services.sync.day_replay import (
     collect_day_replay_from_cache,
     filter_ready_google_matches,

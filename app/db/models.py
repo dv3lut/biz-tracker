@@ -200,6 +200,13 @@ class Client(Base):
     name: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
     end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    stripe_customer_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    stripe_subscription_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    stripe_subscription_status: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    stripe_current_period_end: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    stripe_cancel_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    stripe_plan_key: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    stripe_price_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     listing_statuses: Mapped[list[str]] = mapped_column(
         JSONB,
         default=_default_client_listing_statuses,
@@ -222,6 +229,44 @@ class Client(Base):
         cascade="all, delete-orphan",
         single_parent=True,
     )
+    stripe_subscriptions: Mapped[list["ClientStripeSubscription"]] = relationship(
+        "ClientStripeSubscription",
+        back_populates="client",
+        cascade="all, delete-orphan",
+        order_by="ClientStripeSubscription.created_at.desc()",
+    )
+
+
+class ClientStripeSubscription(Base):
+    """Historique des abonnements Stripe rattachés à un client."""
+
+    __tablename__ = "client_stripe_subscriptions"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    client_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("clients.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    stripe_subscription_id: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    stripe_customer_id: Mapped[str | None] = mapped_column(String(255), index=True, nullable=True)
+    status: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    plan_key: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    price_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    purchased_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    trial_start_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    trial_end_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    paid_start_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    current_period_start: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    current_period_end: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    cancel_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    canceled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
+
+    client: Mapped[Client] = relationship("Client", back_populates="stripe_subscriptions")
 
 
 class ClientRecipient(Base):
@@ -316,6 +361,17 @@ class AdminRecipient(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
+
+
+class StripeBillingSettings(Base):
+    """Persisted Stripe billing configuration (ex: trial period)."""
+
+    __tablename__ = "stripe_billing_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    trial_period_days: Mapped[int] = mapped_column(Integer, default=14, nullable=False)
+    last_weekly_summary_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
 
 
