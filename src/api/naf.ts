@@ -35,7 +35,7 @@ export interface NafSubCategoryCreatePayload {
   name: string;
   nafCode: string;
   description?: string | null;
-  priceEur: number;
+  priceEur?: number;
   isActive?: boolean;
 }
 
@@ -77,14 +77,19 @@ const serializeCategoryPayload = (payload: NafCategoryPayload) => ({
   keywords: payload.keywords,
 });
 
-const serializeSubCategoryCreatePayload = (payload: NafSubCategoryCreatePayload) => ({
-  category_id: payload.categoryId,
-  name: payload.name,
-  naf_code: payload.nafCode,
-  description: payload.description ?? null,
-  price_eur: payload.priceEur,
-  is_active: payload.isActive ?? true,
-});
+const serializeSubCategoryCreatePayload = (payload: NafSubCategoryCreatePayload) => {
+  const body: Record<string, unknown> = {
+    category_id: payload.categoryId,
+    name: payload.name,
+    naf_code: payload.nafCode,
+    description: payload.description ?? null,
+    is_active: payload.isActive ?? true,
+  };
+  if (payload.priceEur !== undefined) {
+    body.price_eur = payload.priceEur;
+  }
+  return body;
+};
 
 const serializeSubCategoryUpdatePayload = (payload: NafSubCategoryUpdatePayload) => {
   const body: Record<string, unknown> = {};

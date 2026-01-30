@@ -393,6 +393,7 @@ export interface StripeSubscriptionHistory {
   status: string | null;
   planKey: string | null;
   priceId: string | null;
+  referrerName: string | null;
   purchasedAt: string | null;
   trialStartAt: string | null;
   trialEndAt: string | null;

@@ -126,7 +126,7 @@ export const ClientsSection = ({
                       {client.recipients.length === 0 ? (
                         <span className="small muted">Aucun destinataire</span>
                       ) : (
-                        <div className="chip-list">
+                        <div className="chip-list chip-list--plain">
                           {client.recipients.map((recipient) => (
                             <span key={recipient.id} className="chip">
                               {recipient.email}
@@ -139,7 +139,7 @@ export const ClientsSection = ({
                       {client.subscriptions.length === 0 ? (
                         <span className="small muted">Aucun code NAF sélectionné</span>
                       ) : (
-                        <div className="chip-list">
+                        <div className="chip-list chip-list--plain">
                           {client.subscriptions.map((subscription) => (
                             <span key={subscription.subcategoryId} className="chip">
                               {subscription.subcategory.nafCode} · {subscription.subcategory.name}
@@ -152,7 +152,7 @@ export const ClientsSection = ({
                       {client.stripeSubscriptions.length === 0 ? (
                         <span className="small muted">Aucun historique Stripe</span>
                       ) : (
-                        <div className="chip-list">
+                        <div className="chip-list chip-list--plain">
                           {client.stripeSubscriptions.map((subscription) => (
                             <span key={subscription.id} className="chip">
                               {subscription.planKey ?? "plan"} · {subscription.status ?? "statut"}
@@ -164,6 +164,14 @@ export const ClientsSection = ({
                               <span className="small muted">
                                 Début payant: {formatDateTime(subscription.paidStartAt)}
                               </span>
+                              {subscription.referrerName ? (
+                                <>
+                                  <br />
+                                  <span className="small muted">
+                                    Parrain: {subscription.referrerName}
+                                  </span>
+                                </>
+                              ) : null}
                             </span>
                           ))}
                         </div>
@@ -173,7 +181,7 @@ export const ClientsSection = ({
                       {client.listingStatuses.length === 0 ? (
                         <span className="small muted">Tous les statuts</span>
                       ) : (
-                        <div className="chip-list">
+                        <div className="chip-list chip-list--plain">
                           {client.listingStatuses.map((status) => (
                             <span key={status} className="chip">
                               {LISTING_STATUS_LABELS[status] ?? status}

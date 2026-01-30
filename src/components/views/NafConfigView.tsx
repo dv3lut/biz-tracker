@@ -219,6 +219,9 @@ export const NafConfigView = ({
         priceEur: payload.priceEur,
         isActive: payload.isActive,
       };
+      if (basePayload.priceEur === undefined) {
+        delete basePayload.priceEur;
+      }
       if (subcategoryModalState?.mode === "edit" && subcategoryModalState.subcategory) {
         const updatePayload: NafSubCategoryUpdatePayload = {
           categoryId: basePayload.categoryId,

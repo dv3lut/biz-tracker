@@ -31,6 +31,7 @@ type StripeSubscriptionResponse = {
   status: string | null;
   plan_key: string | null;
   price_id: string | null;
+  referrer_name: string | null;
   purchased_at: string | null;
   trial_start_at: string | null;
   trial_end_at: string | null;
@@ -99,6 +100,7 @@ const mapClient = (client: ClientResponse): Client => {
       status: subscription.status,
       planKey: subscription.plan_key,
       priceId: subscription.price_id,
+      referrerName: subscription.referrer_name,
       purchasedAt: subscription.purchased_at,
       trialStartAt: subscription.trial_start_at,
       trialEndAt: subscription.trial_end_at,
