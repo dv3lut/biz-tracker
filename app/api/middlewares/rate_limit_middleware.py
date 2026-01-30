@@ -71,6 +71,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         path = request.url.path
         if path == "/" or path.startswith("/health"):
             return await call_next(request)
+        if path == "/public/stripe/webhook":
+            return await call_next(request)
         if any(path.startswith(prefix) for prefix in self._excluded_prefixes):
             return await call_next(request)
 

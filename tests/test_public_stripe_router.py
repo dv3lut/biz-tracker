@@ -43,12 +43,14 @@ def test_create_stripe_checkout_returns_url(monkeypatch):
 
 def test_create_stripe_portal_returns_url(monkeypatch):
     monkeypatch.setattr(public, "get_settings", lambda: SimpleNamespace())
-    monkeypatch.setattr(public, "create_portal_session", lambda session, settings, email: "https://portal")
+    sent = {}
+    monkeypatch.setattr(public, "send_portal_access_email", lambda session, settings, email: sent.setdefault("ok", True))
 
     payload = PublicStripePortalRequest(email="jean@example.com")
     result = public.create_stripe_portal(payload=payload, session=SimpleNamespace())
 
-    assert result.url == "https://portal"
+    assert result.sent is True
+    assert sent.get("ok") is True
 
 
 def test_update_stripe_subscription_returns_url(monkeypatch):

@@ -319,6 +319,7 @@ def run_schema_upgrades(engine: Engine) -> None:
             status VARCHAR(64),
             plan_key VARCHAR(32),
             price_id VARCHAR(255),
+            referrer_name VARCHAR(255),
             purchased_at TIMESTAMP,
             trial_start_at TIMESTAMP,
             trial_end_at TIMESTAMP,
@@ -343,6 +344,10 @@ def run_schema_upgrades(engine: Engine) -> None:
         """
         CREATE INDEX IF NOT EXISTS ix_client_stripe_subscriptions_customer_id
         ON client_stripe_subscriptions (stripe_customer_id)
+        """,
+        """
+        ALTER TABLE client_stripe_subscriptions
+        ADD COLUMN IF NOT EXISTS referrer_name VARCHAR(255)
         """,
     ]
 

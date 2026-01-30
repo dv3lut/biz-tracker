@@ -254,6 +254,7 @@ class ClientStripeSubscription(Base):
     status: Mapped[str | None] = mapped_column(String(64), nullable=True)
     plan_key: Mapped[str | None] = mapped_column(String(32), nullable=True)
     price_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    referrer_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     purchased_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     trial_start_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     trial_end_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

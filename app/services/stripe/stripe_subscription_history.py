@@ -47,6 +47,9 @@ def upsert_subscription_history(
     record.price_id = price_id or record.price_id
     plan_key = subscription.get("metadata", {}).get("plan_key")
     record.plan_key = plan_key or record.plan_key
+    referrer_name = subscription.get("metadata", {}).get("referrer_name")
+    if isinstance(referrer_name, str) and referrer_name.strip():
+        record.referrer_name = referrer_name.strip()
     if not record.plan_key and price_id:
         record.plan_key = _resolve_plan_key(settings, price_id)
 

@@ -24,13 +24,13 @@ from app.api.schemas import (
 from app.config import get_settings
 from app.observability import log_event
 from app.services.email_service import EmailService
-from app.services.stripe.stripe_service import (
+from app.services.stripe.stripe_checkout_service import (
     create_checkout_session,
-    create_portal_session,
-    handle_stripe_webhook,
     list_public_categories,
     update_subscription,
 )
+from app.services.stripe.stripe_portal_service import send_portal_access_email
+from app.services.stripe.stripe_webhook_service import handle_stripe_webhook
 from app.services.stripe.stripe_settings_service import get_billing_settings
 
 router = APIRouter(prefix="/public", tags=["public"])
@@ -142,8 +142,8 @@ def create_stripe_portal(
     session: Session = Depends(get_db_session),
 ) -> PublicStripePortalResponse:
     settings = get_settings()
-    url = create_portal_session(session, settings, payload.email)
-    return PublicStripePortalResponse(url=url)
+    send_portal_access_email(session, settings, payload.email)
+    return PublicStripePortalResponse(sent=True)
 
 
 @router.get(

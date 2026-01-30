@@ -149,7 +149,7 @@ def create_naf_subcategory(payload: NafSubCategoryCreate, session: Session = Dep
     except ValueError as exc:  # noqa: BLE001
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
 
-    price_cents = euros_to_cents(payload.price_eur)
+    price_cents = euros_to_cents(payload.price_eur or 0)
     description = (payload.description.strip() or None) if payload.description is not None else None
     subcategory = models.NafSubCategory(
         category_id=category.id,

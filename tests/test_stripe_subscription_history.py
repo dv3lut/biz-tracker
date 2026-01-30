@@ -26,7 +26,7 @@ def test_upsert_subscription_history_creates_record():
         "id": "sub_123",
         "customer": "cus_123",
         "status": "trialing",
-        "metadata": {"plan_key": "starter"},
+        "metadata": {"plan_key": "starter", "referrer_name": "Alice Martin"},
         "created": 1700000000,
         "trial_end": 1700600000,
         "current_period_start": 1700000000,
@@ -51,6 +51,7 @@ def test_upsert_subscription_history_creates_record():
     assert record.stripe_subscription_id == "sub_123"
     assert record.plan_key == "starter"
     assert record.price_id == "price_123"
+    assert record.referrer_name == "Alice Martin"
     assert record.purchased_at == datetime.fromtimestamp(1700000000, tz=timezone.utc).replace(tzinfo=None)
     assert record.paid_start_at == datetime.fromtimestamp(1700600000, tz=timezone.utc).replace(tzinfo=None)
 

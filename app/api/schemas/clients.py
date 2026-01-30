@@ -39,6 +39,7 @@ class ClientStripeSubscriptionOut(BaseModel):
     status: str | None
     plan_key: str | None
     price_id: str | None
+    referrer_name: str | None
     purchased_at: datetime | None
     trial_start_at: datetime | None
     trial_end_at: datetime | None
