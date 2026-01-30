@@ -2,13 +2,13 @@ import { Button } from "@/components/ui/button";
 import { ArrowRight, CalendarDays, Sparkles } from "lucide-react";
 import heroBg from "@/assets/hero-bg.jpg";
 
-type Props = {
-  trialPeriodDays?: number;
-};
-
-const Hero = ({ trialPeriodDays = 14 }: Props) => {
+const Hero = () => {
   const scrollToContact = () => {
     document.getElementById("contact")?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  const scrollToPricing = () => {
+    document.getElementById("pricing")?.scrollIntoView({ behavior: "smooth" });
   };
 
   return (
@@ -50,19 +50,19 @@ const Hero = ({ trialPeriodDays = 14 }: Props) => {
             <Button 
               size="lg" 
               variant="hero"
-              onClick={scrollToContact}
+              onClick={scrollToPricing}
               className="text-lg px-8 py-6 h-auto"
             >
-              Essai gratuit {trialPeriodDays} jours
+              Choisir une formule
               <ArrowRight className="ml-2 w-5 h-5" />
             </Button>
             <Button 
               size="lg" 
               variant="outline-light"
-              onClick={() => document.getElementById("pricing")?.scrollIntoView({ behavior: "smooth" })}
+              onClick={scrollToContact}
               className="text-lg px-8 py-6 h-auto"
             >
-              Voir les tarifs
+              Nous contacter
             </Button>
             <Button
               asChild

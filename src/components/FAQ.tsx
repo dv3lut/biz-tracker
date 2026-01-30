@@ -29,7 +29,7 @@ const FAQ = ({ trialPeriodDays = 14 }: Props) => {
     },
     {
       question: "Puis-je annuler mon abonnement à tout moment ?",
-      answer: `Oui, sans engagement. Vous pouvez suspendre ou annuler votre abonnement à tout moment. Toutes nos formules incluent ${trialPeriodDays} jours d’essai gratuit.`,
+      answer: `Oui, sans engagement. Vous pouvez suspendre ou annuler votre abonnement à tout moment depuis le portail. L’essai de ${trialPeriodDays} jours démarre après la souscription (paiement requis) et vous pouvez annuler avant la première facturation.`,
     },
     {
       question: "Que contient une alerte ?",

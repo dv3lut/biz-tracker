@@ -42,14 +42,14 @@ const Index = () => {
 
   return (
     <div className="min-h-screen">
-      <Hero trialPeriodDays={trialPeriodDays} />
+      <Hero />
       <HowItWorks />
       <TargetAudience />
       <WhatYouGet />
       <Benefits />
       <Pricing trialPeriodDays={trialPeriodDays} />
       <FAQ trialPeriodDays={trialPeriodDays} />
-      <ContactForm trialPeriodDays={trialPeriodDays} />
+      <ContactForm />
       <Footer />
     </div>
   );

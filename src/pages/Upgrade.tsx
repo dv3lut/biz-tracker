@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 
@@ -25,10 +24,6 @@ const Upgrade = () => {
   const [categories, setCategories] = useState<PublicNafCategory[]>([]);
   const [isLoadingCategories, setIsLoadingCategories] = useState(false);
   const [categoriesError, setCategoriesError] = useState<string | null>(null);
-
-  const [portalEmail, setPortalEmail] = useState("");
-  const [portalError, setPortalError] = useState<string | null>(null);
-  const [isPortalLoading, setIsPortalLoading] = useState(false);
 
   const [plan, setPlan] = useState<PlanKey>("starter");
   const [categoryIds, setCategoryIds] = useState<string[]>([]);
@@ -88,47 +83,6 @@ const Upgrade = () => {
       }
       return [...current, categoryId];
     });
-  };
-
-  const handlePortalSubmit = async () => {
-    if (!portalEmail.trim()) {
-      setPortalError("Merci de renseigner votre email.");
-      return;
-    }
-
-    setPortalError(null);
-    setIsPortalLoading(true);
-
-    try {
-      const response = await fetch(`${apiBaseUrl}/public/stripe/portal`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: portalEmail.trim() }),
-      });
-
-      if (!response.ok) {
-        let detail = "Impossible d'ouvrir le portail.";
-        try {
-          const payload = await response.json();
-          if (typeof payload?.detail === "string") {
-            detail = payload.detail;
-          }
-        } catch {
-          // ignore
-        }
-        setPortalError(detail);
-        return;
-      }
-
-      const payload = (await response.json()) as { url: string };
-      if (payload.url) {
-        window.location.href = payload.url;
-      } else {
-        setPortalError("URL Stripe invalide.");
-      }
-    } finally {
-      setIsPortalLoading(false);
-    }
   };
 
   const handleUpdateSubmit = async () => {
@@ -196,30 +150,9 @@ const Upgrade = () => {
       </header>
 
       <main className="container mx-auto px-4 py-12 space-y-10">
-        <section id="portal">
-          <Card className="p-8 space-y-4">
-            <div>
-              <h2 className="text-xl font-semibold">Accéder au portail Stripe</h2>
-              <p className="text-sm text-muted-foreground">
-                Gérez votre abonnement (résiliation en fin de période, factures, moyens de paiement).
-              </p>
-            </div>
-            <div className="grid gap-3 max-w-md">
-              <Label htmlFor="portalEmail">Email professionnel</Label>
-              <Input
-                id="portalEmail"
-                type="email"
-                value={portalEmail}
-                onChange={(event) => setPortalEmail(event.target.value)}
-                placeholder="vous@entreprise.fr"
-              />
-              {portalError ? <p className="text-sm text-destructive">{portalError}</p> : null}
-              <Button onClick={handlePortalSubmit} disabled={isPortalLoading}>
-                {isPortalLoading ? "Ouverture…" : "Ouvrir le portail"}
-              </Button>
-            </div>
-          </Card>
-        </section>
+        <Card className="p-6 text-sm text-muted-foreground">
+          Le portail Stripe est accessible uniquement via le lien sécurisé envoyé par email.
+        </Card>
 
         <section id="upgrade">
           <Card className="p-8 space-y-6">
