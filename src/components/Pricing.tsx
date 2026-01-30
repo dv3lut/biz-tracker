@@ -70,7 +70,7 @@ const Pricing = ({ trialPeriodDays = 14 }: Props) => {
         "1 secteur sélectionné (sur le catalogue complet)",
         "Nouvelles entreprises détectées en France",
       ],
-      cta: "Commencer",
+      cta: "Démarrer maintenant",
       highlighted: false,
     },
     {
@@ -396,9 +396,12 @@ const Pricing = ({ trialPeriodDays = 14 }: Props) => {
           <p className="text-muted-foreground">
             Toutes les offres incluent {trialPeriodDays} jours d’essai (activation après souscription)
           </p>
-          <div className="mt-6">
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
             <Button variant="outline" onClick={() => setIsPortalOpen(true)}>
               Portail client
+            </Button>
+            <Button variant="outline" asChild>
+              <a href="/upgrade">Changer d'abonnement</a>
             </Button>
           </div>
         </div>
