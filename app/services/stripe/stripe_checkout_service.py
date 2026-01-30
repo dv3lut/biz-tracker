@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from datetime import datetime
+from decimal import Decimal, InvalidOperation
 from typing import Iterable
 from uuid import UUID
 
@@ -20,13 +22,16 @@ from app.api.schemas import (
 from app.config import Settings, StripeSettings
 from app.db import models
 from app.observability import log_event
+from app.services.email_service import EmailService
 from app.services.stripe.stripe_common import ensure_stripe_configured, find_client_by_email
 from app.services.stripe.stripe_settings_service import get_trial_period_days
 from app.services.stripe.stripe_subscription_history import upsert_subscription_history
 from app.services.stripe.stripe_subscription_utils import (
     apply_stripe_fields,
     apply_subscriptions_from_categories,
+    parse_category_ids,
     resolve_end_date,
+    to_datetime,
 )
 
 PLAN_CATEGORY_LIMITS: dict[StripePlanKey, int] = {
@@ -40,6 +45,13 @@ class StripePlanConfig:
     key: StripePlanKey
     price_id: str
     category_limit: int
+
+
+@dataclass(frozen=True)
+class StripeSubscriptionUpdateResult:
+    payment_url: str | None
+    action: str
+    effective_at: datetime | None
 
 
 def list_public_categories(session: Session) -> list[PublicNafCategoryOut]:
@@ -119,7 +131,11 @@ def create_checkout_session(
     return stripe_session.url
 
 
-def update_subscription(session: Session, settings: Settings, payload: PublicStripeUpdateRequest) -> str | None:
+def update_subscription(
+    session: Session,
+    settings: Settings,
+    payload: PublicStripeUpdateRequest,
+) -> StripeSubscriptionUpdateResult:
     stripe_config = ensure_stripe_configured(settings)
     plan = _resolve_plan_config(stripe_config, payload.plan_key)
     category_ids = _normalize_category_ids(payload.category_ids)
@@ -136,23 +152,47 @@ def update_subscription(session: Session, settings: Settings, payload: PublicStr
     if not items:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Abonnement Stripe invalide.")
 
+    current_price_id = (items[0].get("price") or {}).get("id")
+    current_amount = _get_price_amount(current_price_id)
+    target_amount = _get_price_amount(plan.price_id)
+    is_upgrade = _is_upgrade(current_amount=current_amount, target_amount=target_amount)
+
+    current_metadata = subscription.get("metadata") or {}
+    current_plan_key = current_metadata.get("plan_key") or getattr(client, "stripe_plan_key", None) or payload.plan_key
+    current_category_ids = parse_category_ids(current_metadata.get("category_ids"))
+    if not current_category_ids:
+        current_category_ids = category_ids
+
     metadata = {
         "plan_key": payload.plan_key,
         "category_ids": json.dumps([str(identifier) for identifier in category_ids]),
     }
+    effective_at = None
+    if not is_upgrade:
+        pending_effective_at = subscription.get("current_period_end")
+        metadata = {
+            "plan_key": current_plan_key,
+            "category_ids": json.dumps([str(identifier) for identifier in current_category_ids]),
+            "pending_plan_key": payload.plan_key,
+            "pending_category_ids": json.dumps([str(identifier) for identifier in category_ids]),
+        }
+        if pending_effective_at:
+            metadata["pending_effective_at"] = str(pending_effective_at)
+            effective_at = to_datetime(pending_effective_at)
 
     updated = stripe.Subscription.modify(
         client.stripe_subscription_id,
         items=[{"id": items[0].get("id"), "price": plan.price_id}],
-        proration_behavior="always_invoice",
+        proration_behavior="always_invoice" if is_upgrade else "none",
         metadata=metadata,
         expand=["latest_invoice"],
     )
 
-    if category_ids:
+    if category_ids and is_upgrade:
         apply_subscriptions_from_categories(session, client, category_ids)
 
-    apply_stripe_fields(client, settings, updated, updated.get("customer"), updated.get("id"), payload.plan_key)
+    plan_key_for_apply = payload.plan_key if is_upgrade else current_plan_key
+    apply_stripe_fields(client, settings, updated, updated.get("customer"), updated.get("id"), plan_key_for_apply)
     upsert_subscription_history(session, client=client, subscription=updated, settings=settings)
 
     if updated.get("cancel_at_period_end"):
@@ -174,7 +214,19 @@ def update_subscription(session: Session, settings: Settings, payload: PublicStr
         plan_key=payload.plan_key,
     )
 
-    return payment_url
+    _send_subscription_update_email(
+        settings=settings,
+        email=payload.email,
+        action="upgrade" if is_upgrade else "downgrade",
+        effective_at=effective_at,
+        payment_url=payment_url,
+    )
+
+    return StripeSubscriptionUpdateResult(
+        payment_url=payment_url,
+        action="upgrade" if is_upgrade else "downgrade",
+        effective_at=effective_at,
+    )
 
 
 def _resolve_plan_config(stripe_config: StripeSettings, plan_key: StripePlanKey) -> StripePlanConfig:
@@ -227,3 +279,104 @@ def _validate_categories_exist(session: Session, category_ids: list[UUID]) -> No
     missing = [str(identifier) for identifier in category_ids if identifier not in found]
     if missing:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Catégorie introuvable ou inactive.")
+
+
+def _get_price_amount(price_id: str | None) -> Decimal | None:
+    if not price_id:
+        return None
+    price = stripe.Price.retrieve(price_id)
+    unit_amount = price.get("unit_amount")
+    if unit_amount is not None:
+        return Decimal(unit_amount)
+    unit_amount_decimal = price.get("unit_amount_decimal")
+    if unit_amount_decimal is None:
+        return None
+    try:
+        return Decimal(str(unit_amount_decimal))
+    except (InvalidOperation, TypeError):
+        return None
+
+
+def _send_subscription_update_email(
+    *,
+    settings: Settings,
+    email: str,
+    action: str,
+    effective_at: datetime | None,
+    payment_url: str | None,
+) -> None:
+    email_service = EmailService()
+    if not email_service.is_enabled() or not email_service.is_configured():
+        return
+
+    safe_email = email.strip().lower()
+    if not safe_email:
+        return
+
+    upgrade_url = settings.stripe.upgrade_url
+    subject = "[Business Tracker] Mise à jour de votre abonnement"
+
+    if action == "downgrade":
+        effective_label = (
+            effective_at.strftime("%d/%m/%Y") if isinstance(effective_at, datetime) else "la prochaine période"
+        )
+        lines = [
+            "Bonjour,",
+            "",
+            "Votre demande de changement de plan a bien été prise en compte.",
+            "",
+            f"Le downgrade prendra effet le {effective_label}.",
+            "Aucun remboursement n'est appliqué sur la période en cours : vous conservez donc votre plan actuel jusqu'à la prochaine facturation.",
+        ]
+        if upgrade_url:
+            lines.append("")
+            lines.append(f"Gérer mon abonnement : {upgrade_url}")
+    else:
+        lines = [
+            "Bonjour,",
+            "",
+            "Votre changement de plan est effectif immédiatement.",
+            "La différence de prix sera facturée au prorata de l'avancement dans le mois.",
+        ]
+        if payment_url:
+            lines.append("")
+            lines.append(f"Finaliser le paiement : {payment_url}")
+        if upgrade_url:
+            lines.append("")
+            lines.append(f"Gérer mon abonnement : {upgrade_url}")
+
+    html_lines = [
+        "<div style=\"font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;color:#0f172a;\">",
+        "<h1 style=\"font-size:20px;margin-bottom:12px;\">Mise à jour de votre abonnement</h1>",
+    ]
+    if action == "downgrade":
+        effective_label = (
+            effective_at.strftime("%d/%m/%Y") if isinstance(effective_at, datetime) else "la prochaine période"
+        )
+        html_lines.append(
+            f"<p>Le downgrade prendra effet <strong>{effective_label}</strong>. Vous conservez votre plan actuel jusqu'à cette date.</p>"
+        )
+        html_lines.append("<p>Aucun remboursement n'est appliqué sur la période en cours.</p>")
+    else:
+        html_lines.append("<p>Votre changement de plan est <strong>effectif immédiatement</strong>.</p>")
+        html_lines.append(
+            "<p>La différence de prix sera facturée au prorata de l'avancement dans le mois.</p>"
+        )
+        if payment_url:
+            html_lines.append(f"<p><a href=\"{payment_url}\">Finaliser le paiement</a></p>")
+    if upgrade_url:
+        html_lines.append(f"<p><a href=\"{upgrade_url}\">Gérer mon abonnement</a></p>")
+    html_lines.append("</div>")
+
+    email_service.send(
+        subject=subject,
+        body="\n".join(lines),
+        html_body="".join(html_lines),
+        recipients=[safe_email],
+    )
+
+
+def _is_upgrade(*, current_amount: Decimal | None, target_amount: Decimal | None) -> bool:
+    if current_amount is None or target_amount is None:
+        return True
+    return target_amount > current_amount

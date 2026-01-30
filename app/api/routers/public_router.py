@@ -166,8 +166,12 @@ def update_stripe_subscription(
     session: Session = Depends(get_db_session),
 ) -> PublicStripeUpdateResponse:
     settings = get_settings()
-    payment_url = update_subscription(session, settings, payload)
-    return PublicStripeUpdateResponse(payment_url=payment_url)
+    result = update_subscription(session, settings, payload)
+    return PublicStripeUpdateResponse(
+        payment_url=result.payment_url,
+        action=result.action,
+        effective_at=result.effective_at,
+    )
 
 
 @router.post(

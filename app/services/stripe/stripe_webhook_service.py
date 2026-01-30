@@ -212,6 +212,15 @@ def _handle_subscription_updated(session: Session, settings: Settings, payload: 
     customer_id = payload.get("customer")
     metadata = payload.get("metadata") or {}
     category_ids = parse_category_ids(metadata.get("category_ids"))
+    pending_plan_key = metadata.get("pending_plan_key")
+    pending_category_ids = parse_category_ids(metadata.get("pending_category_ids"))
+    pending_effective_at_raw = metadata.get("pending_effective_at")
+    pending_effective_at = None
+    if pending_effective_at_raw is not None:
+        try:
+            pending_effective_at = to_datetime(int(pending_effective_at_raw))
+        except (TypeError, ValueError):
+            pending_effective_at = None
 
     client = find_client(session, customer_id=customer_id, subscription_id=subscription_id, email=None)
     if client is None:
@@ -219,10 +228,39 @@ def _handle_subscription_updated(session: Session, settings: Settings, payload: 
 
     previous_cancel_at = client.stripe_cancel_at
 
-    if category_ids:
-        apply_subscriptions_from_categories(session, client, category_ids)
+    current_period_start = to_datetime(payload.get("current_period_start"))
+    should_apply_pending = False
+    if pending_plan_key and pending_effective_at and current_period_start:
+        should_apply_pending = pending_effective_at <= current_period_start
 
-    apply_stripe_fields(client, settings, payload, customer_id, subscription_id, metadata.get("plan_key"))
+    if pending_plan_key and pending_effective_at and not should_apply_pending:
+        # Downgrade planifié : on conserve les avantages jusqu'à la prochaine période.
+        apply_stripe_fields(client, settings, payload, customer_id, subscription_id, metadata.get("plan_key"))
+    else:
+        if pending_plan_key and pending_category_ids:
+            category_ids = pending_category_ids
+            plan_key = pending_plan_key
+            try:
+                stripe.api_key = settings.stripe.secret_key
+                stripe.Subscription.modify(
+                    subscription_id,
+                    metadata={
+                        "plan_key": pending_plan_key,
+                        "category_ids": metadata.get("pending_category_ids"),
+                        "pending_plan_key": None,
+                        "pending_category_ids": None,
+                        "pending_effective_at": None,
+                    },
+                )
+            except stripe.error.StripeError:
+                pass
+        else:
+            plan_key = metadata.get("plan_key")
+
+        if category_ids:
+            apply_subscriptions_from_categories(session, client, category_ids)
+
+        apply_stripe_fields(client, settings, payload, customer_id, subscription_id, plan_key)
     upsert_subscription_history(session, client=client, subscription=payload, settings=settings)
 
     if payload.get("cancel_at_period_end"):

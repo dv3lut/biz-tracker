@@ -1,6 +1,7 @@
 """Schemas publics pour Stripe (checkout + portal)."""
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
@@ -39,6 +40,8 @@ class PublicStripeUpdateRequest(BaseModel):
 
 class PublicStripeUpdateResponse(BaseModel):
     payment_url: str | None = None
+    action: Literal["upgrade", "downgrade"]
+    effective_at: datetime | None = None
 
 
 __all__ = [

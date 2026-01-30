@@ -55,7 +55,15 @@ def test_create_stripe_portal_returns_url(monkeypatch):
 
 def test_update_stripe_subscription_returns_url(monkeypatch):
     monkeypatch.setattr(public, "get_settings", lambda: SimpleNamespace())
-    monkeypatch.setattr(public, "update_subscription", lambda session, settings, payload: "https://invoice")
+    monkeypatch.setattr(
+        public,
+        "update_subscription",
+        lambda session, settings, payload: SimpleNamespace(
+            payment_url="https://invoice",
+            action="upgrade",
+            effective_at=None,
+        ),
+    )
 
     payload = PublicStripeUpdateRequest(
         plan_key="starter",
@@ -65,6 +73,7 @@ def test_update_stripe_subscription_returns_url(monkeypatch):
 
     result = public.update_stripe_subscription(payload=payload, session=SimpleNamespace())
     assert result.payment_url == "https://invoice"
+    assert result.action == "upgrade"
 
 
 @pytest.mark.anyio

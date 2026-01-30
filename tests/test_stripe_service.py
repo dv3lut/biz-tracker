@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+from decimal import Decimal
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -180,10 +181,10 @@ def test_notify_admins_of_stripe_event_sends_email(monkeypatch):
         def is_configured(self):
             return True
 
-        def send(self, subject, body, recipients, **_kwargs):
+        def send(self, subject, body, recipients, *, html_body=None, **_kwargs):
             sent["subject"] = subject
             sent["body"] = body
-            sent["html"] = _kwargs.get("html_body")
+            sent["html"] = html_body
             sent["recipients"] = recipients
 
     monkeypatch.setattr(stripe_admin_notifications, "EmailService", lambda: DummyEmail())
@@ -232,7 +233,7 @@ def test_notify_admins_of_stripe_event_skips_when_email_disabled(monkeypatch):
         def is_configured(self):
             return False
 
-        def send(self, *_args, **_kwargs):
+        def send(self, subject, body, recipients, *, html_body=None, **_kwargs):
             raise AssertionError("send should not be called")
 
     monkeypatch.setattr(stripe_admin_notifications, "EmailService", lambda: DummyEmail())
@@ -544,6 +545,7 @@ def test_send_portal_access_email_requires_email_service(monkeypatch):
 
 def test_update_subscription_returns_payment_url(monkeypatch):
     settings = _settings()
+    sent = {}
     category_id = uuid4()
     client = SimpleNamespace(
         id=uuid4(),
@@ -560,7 +562,7 @@ def test_update_subscription_returns_payment_url(monkeypatch):
     class DummySubscription:
         @staticmethod
         def retrieve(_subscription_id):
-            return {"items": {"data": [{"id": "si_123"}]}}
+            return {"items": {"data": [{"id": "si_123", "price": {"id": "price_starter"}}]}}
 
         @staticmethod
         def modify(_subscription_id, **_kwargs):
@@ -573,6 +575,25 @@ def test_update_subscription_returns_payment_url(monkeypatch):
             }
 
     monkeypatch.setattr(stripe_checkout_service.stripe, "Subscription", DummySubscription)
+
+    class DummyEmail:
+        def is_enabled(self):
+            return True
+
+        def is_configured(self):
+            return True
+
+        def send(self, subject, body, recipients, **_kwargs):
+            sent["subject"] = subject
+            sent["body"] = body
+            sent["recipients"] = recipients
+
+    monkeypatch.setattr(stripe_checkout_service, "EmailService", lambda: DummyEmail())
+
+    def price_retrieve(price_id):
+        return {"unit_amount": 5600 if price_id == "price_starter" else 12800}
+
+    monkeypatch.setattr(stripe_checkout_service.stripe, "Price", SimpleNamespace(retrieve=price_retrieve))
 
     payload = PublicStripeUpdateRequest(
         plan_key="business",
@@ -590,13 +611,17 @@ def test_update_subscription_returns_payment_url(monkeypatch):
         def flush(self):
             return None
 
-    url = stripe_checkout_service.update_subscription(DummySession(), settings, payload)
-    assert url == "https://invoice.example.com"
+    result = stripe_checkout_service.update_subscription(DummySession(), settings, payload)
+    assert result.payment_url == "https://invoice.example.com"
+    assert result.action == "upgrade"
+    assert result.effective_at is None
+    assert "prorata" in sent.get("body", "")
 
 
 def test_update_subscription_handles_cancel_at_period_end(monkeypatch):
     settings = _settings()
     category_id = uuid4()
+    sent = {}
     client = SimpleNamespace(
         id=uuid4(),
         stripe_subscription_id="sub_123",
@@ -612,7 +637,7 @@ def test_update_subscription_handles_cancel_at_period_end(monkeypatch):
     class DummySubscription:
         @staticmethod
         def retrieve(_subscription_id):
-            return {"items": {"data": [{"id": "si_123"}]}}
+            return {"items": {"data": [{"id": "si_123", "price": {"id": "price_starter"}}]}}
 
         @staticmethod
         def modify(_subscription_id, **_kwargs):
@@ -626,6 +651,25 @@ def test_update_subscription_handles_cancel_at_period_end(monkeypatch):
             }
 
     monkeypatch.setattr(stripe_checkout_service.stripe, "Subscription", DummySubscription)
+
+    class DummyEmail:
+        def is_enabled(self):
+            return True
+
+        def is_configured(self):
+            return True
+
+        def send(self, subject, body, recipients, **_kwargs):
+            sent["subject"] = subject
+            sent["body"] = body
+            sent["recipients"] = recipients
+
+    monkeypatch.setattr(stripe_checkout_service, "EmailService", lambda: DummyEmail())
+
+    def price_retrieve(price_id):
+        return {"unit_amount": 5600 if price_id == "price_starter" else 12800}
+
+    monkeypatch.setattr(stripe_checkout_service.stripe, "Price", SimpleNamespace(retrieve=price_retrieve))
 
     payload = PublicStripeUpdateRequest(
         plan_key="business",
@@ -694,6 +738,117 @@ def test_update_subscription_requires_item(monkeypatch):
         stripe_checkout_service.update_subscription(SimpleNamespace(flush=lambda: None), settings, payload)
     assert exc.value.status_code == status.HTTP_409_CONFLICT
 
+
+def test_update_subscription_downgrade_has_no_proration(monkeypatch):
+    settings = _settings()
+    category_id = uuid4()
+    sent = {}
+    client = SimpleNamespace(
+        id=uuid4(),
+        stripe_subscription_id="sub_123",
+        stripe_customer_id="cus_123",
+        subscriptions=[],
+        end_date=None,
+    )
+
+    monkeypatch.setattr(stripe_checkout_service, "_validate_categories_exist", lambda session, ids: None)
+    monkeypatch.setattr(stripe_checkout_service, "find_client_by_email", lambda session, email: client)
+    called = {}
+    monkeypatch.setattr(
+        stripe_checkout_service,
+        "apply_subscriptions_from_categories",
+        lambda *args, **kwargs: called.setdefault("apply", True),
+    )
+
+    captured = {}
+
+    class DummySubscription:
+        @staticmethod
+        def retrieve(_subscription_id):
+            return {
+                "items": {"data": [{"id": "si_123", "price": {"id": "price_business"}}]},
+                "current_period_end": 1700000000,
+            }
+
+        @staticmethod
+        def modify(_subscription_id, **_kwargs):
+            captured.update(_kwargs)
+            return {
+                "id": _subscription_id,
+                "customer": "cus_123",
+                "items": {"data": [{"price": {"id": "price_starter"}}]},
+                "latest_invoice": None,
+                "cancel_at_period_end": False,
+            }
+
+    monkeypatch.setattr(stripe_checkout_service.stripe, "Subscription", DummySubscription)
+
+    class DummyEmail:
+        def is_enabled(self):
+            return True
+
+        def is_configured(self):
+            return True
+
+        def send(self, subject, body, recipients, **_kwargs):
+            sent["subject"] = subject
+            sent["body"] = body
+            sent["recipients"] = recipients
+
+    monkeypatch.setattr(stripe_checkout_service, "EmailService", lambda: DummyEmail())
+
+    def price_retrieve(price_id):
+        return {"unit_amount": 12800 if price_id == "price_business" else 5600}
+
+    monkeypatch.setattr(stripe_checkout_service.stripe, "Price", SimpleNamespace(retrieve=price_retrieve))
+
+    payload = PublicStripeUpdateRequest(
+        plan_key="starter",
+        category_ids=[category_id],
+        email="jean@example.com",
+    )
+
+    class DummySession:
+        def execute(self, stmt):
+            return _FakeResult(None)
+
+        def add(self, obj):
+            return None
+
+        def flush(self):
+            return None
+
+    result = stripe_checkout_service.update_subscription(DummySession(), settings, payload)
+    assert captured.get("proration_behavior") == "none"
+    assert called == {}
+    assert captured.get("metadata", {}).get("pending_plan_key") == "starter"
+    assert "pending_category_ids" in captured.get("metadata", {})
+    assert "pending_effective_at" in captured.get("metadata", {})
+    assert result.action == "downgrade"
+    assert result.effective_at is not None
+    assert "prochaine" in sent.get("body", "")
+
+def test_get_price_amount_uses_decimal(monkeypatch):
+    def price_retrieve(_price_id):
+        return {"unit_amount": None, "unit_amount_decimal": "5600.00"}
+
+    monkeypatch.setattr(stripe_checkout_service.stripe, "Price", SimpleNamespace(retrieve=price_retrieve))
+
+    assert stripe_checkout_service._get_price_amount("price_123") == Decimal("5600.00")
+
+def test_get_price_amount_returns_none_for_invalid_decimal(monkeypatch):
+    def price_retrieve(_price_id):
+        return {"unit_amount": None, "unit_amount_decimal": "invalid"}
+
+    monkeypatch.setattr(stripe_checkout_service.stripe, "Price", SimpleNamespace(retrieve=price_retrieve))
+
+    assert stripe_checkout_service._get_price_amount("price_123") is None
+
+def test_get_price_amount_returns_none_for_missing_id():
+    assert stripe_checkout_service._get_price_amount(None) is None
+
+def test_is_upgrade_handles_downgrade():
+    assert stripe_checkout_service._is_upgrade(current_amount=Decimal("100"), target_amount=Decimal("50")) is False
 
 def test_build_post_purchase_email_html_contains_links():
     html = stripe_webhook_service._build_post_purchase_email_html(
@@ -1009,6 +1164,7 @@ def test_handle_subscription_updated_sets_end_date(monkeypatch):
         stripe_subscription_id="sub",
         stripe_customer_id="cus",
         stripe_cancel_at=None,
+        stripe_subscription_status="active",
     )
 
     monkeypatch.setattr(stripe_webhook_service, "find_client", lambda *args, **kwargs: client)
@@ -1037,6 +1193,132 @@ def test_handle_subscription_updated_sets_end_date(monkeypatch):
 
     stripe_webhook_service._handle_subscription_updated(DummySession(), settings, payload)
     assert client.end_date == date.fromtimestamp(1700000000)
+
+
+def test_handle_subscription_updated_pending_downgrade_defers(monkeypatch):
+    settings = _settings()
+    client = SimpleNamespace(
+        id=uuid4(),
+        stripe_subscription_id="sub",
+        stripe_customer_id="cus",
+        stripe_cancel_at=None,
+        stripe_subscription_status="active",
+    )
+    called = {}
+
+    monkeypatch.setattr(stripe_webhook_service, "find_client", lambda *args, **kwargs: client)
+    monkeypatch.setattr(
+        stripe_webhook_service,
+        "apply_subscriptions_from_categories",
+        lambda *args, **kwargs: called.setdefault("apply", True),
+    )
+    monkeypatch.setattr(
+        stripe_webhook_service,
+        "apply_stripe_fields",
+        lambda _client, _settings, _payload, _customer, _subscription, plan_key: called.setdefault(
+            "plan_key", plan_key
+        ),
+    )
+    monkeypatch.setattr(stripe_webhook_service, "log_event", lambda *args, **kwargs: None)
+
+    payload = {
+        "id": "sub",
+        "customer": "cus",
+        "metadata": {
+            "category_ids": "[]",
+            "plan_key": "business",
+            "pending_plan_key": "starter",
+            "pending_category_ids": f"[\"{uuid4()}\"]",
+            "pending_effective_at": "1700000000",
+        },
+        "current_period_start": 1690000000,
+        "current_period_end": 1700000000,
+        "items": {"data": [{"price": {"id": "price_business"}}]},
+        "status": "active",
+    }
+
+    class DummySession:
+        def execute(self, stmt):
+            return _FakeResult(None)
+
+        def add(self, obj):
+            return None
+
+        def flush(self):
+            return None
+
+    stripe_webhook_service._handle_subscription_updated(DummySession(), settings, payload)
+    assert called.get("plan_key") == "business"
+    assert "apply" not in called
+
+
+def test_handle_subscription_updated_pending_downgrade_applies_on_renewal(monkeypatch):
+    settings = _settings()
+    client = SimpleNamespace(
+        id=uuid4(),
+        stripe_subscription_id="sub",
+        stripe_customer_id="cus",
+        stripe_cancel_at=None,
+        stripe_subscription_status="active",
+    )
+    called = {}
+
+    monkeypatch.setattr(stripe_webhook_service, "find_client", lambda *args, **kwargs: client)
+    monkeypatch.setattr(
+        stripe_webhook_service,
+        "apply_subscriptions_from_categories",
+        lambda _session, _client, category_ids: called.setdefault("categories", category_ids),
+    )
+    monkeypatch.setattr(
+        stripe_webhook_service,
+        "apply_stripe_fields",
+        lambda _client, _settings, _payload, _customer, _subscription, plan_key: called.setdefault(
+            "plan_key", plan_key
+        ),
+    )
+    monkeypatch.setattr(stripe_webhook_service, "log_event", lambda *args, **kwargs: None)
+
+    captured = {}
+
+    class DummySubscription:
+        @staticmethod
+        def modify(_subscription_id, **_kwargs):
+            captured.update(_kwargs)
+            return {}
+
+    monkeypatch.setattr(stripe_webhook_service.stripe, "Subscription", DummySubscription)
+
+    pending_category_id = uuid4()
+    payload = {
+        "id": "sub",
+        "customer": "cus",
+        "metadata": {
+            "category_ids": "[]",
+            "plan_key": "business",
+            "pending_plan_key": "starter",
+            "pending_category_ids": f"[\"{pending_category_id}\"]",
+            "pending_effective_at": "1700000000",
+        },
+        "current_period_start": 1700000000,
+        "current_period_end": 1702600000,
+        "items": {"data": [{"price": {"id": "price_starter"}}]},
+        "status": "active",
+    }
+
+    class DummySession:
+        def execute(self, stmt):
+            return _FakeResult(None)
+
+        def add(self, obj):
+            return None
+
+        def flush(self):
+            return None
+
+    stripe_webhook_service._handle_subscription_updated(DummySession(), settings, payload)
+    assert called.get("plan_key") == "starter"
+    assert called.get("categories") == [pending_category_id]
+    assert captured.get("metadata", {}).get("pending_plan_key") is None
 
 
 def test_handle_subscription_deleted_sets_end_date(monkeypatch):
