@@ -424,6 +424,7 @@ export interface Client {
 
 export interface AdminEmailConfig {
   recipients: string[];
+  includePreviousMonthDayAlerts: boolean;
 }
 
 export interface AdminStripeSettings {
@@ -473,6 +474,8 @@ export interface GoogleFindPlaceDebugResult {
 
 export interface GoogleRetryConfig {
   retryWeekdays: number[];
+  retryMissingContactEnabled: boolean;
+  retryMissingContactFrequencyDays: number;
   defaultRules: GoogleRetryRule[];
   microRules: GoogleRetryRule[];
 }

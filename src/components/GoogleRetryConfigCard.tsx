@@ -14,6 +14,8 @@ const WEEKDAYS: { label: string; value: number }[] = [
 
 const DEFAULT_CONFIG: GoogleRetryConfig = {
   retryWeekdays: [0],
+  retryMissingContactEnabled: true,
+  retryMissingContactFrequencyDays: 14,
   defaultRules: [
     { maxAgeDays: 60, frequencyDays: 7 },
     { maxAgeDays: 120, frequencyDays: 14 },
@@ -218,6 +220,45 @@ export const GoogleRetryConfigCard = ({
             <legend>Jours autorisés</legend>
             <p className="muted small">Les relances automatiques ne seront déclenchées que ces jours-là.</p>
             <div className="weekday-grid">{weekdayLabel}</div>
+          </fieldset>
+
+          <fieldset className="google-retry-fieldset">
+            <legend>Fiches sans contact</legend>
+            <p className="muted small">
+              Relance les fiches au statut « Création récente sans contact » pour détecter l'ajout de coordonnées.
+            </p>
+            <div className="switch-row">
+              <label className="switch-row__label">
+                <input
+                  className="switch-row__checkbox"
+                  type="checkbox"
+                  checked={formState.retryMissingContactEnabled}
+                  onChange={(event) =>
+                    setFormState((current) => ({
+                      ...current,
+                      retryMissingContactEnabled: event.target.checked,
+                    }))
+                  }
+                  disabled={isDisabled}
+                />
+                <span>Activer la relance des fiches sans contact</span>
+              </label>
+              <label className="switch-row__input">
+                <span className="input-label">Fréquence min (jours)</span>
+                <input
+                  type="number"
+                  min={1}
+                  value={formState.retryMissingContactFrequencyDays}
+                  onChange={(event) =>
+                    setFormState((current) => ({
+                      ...current,
+                      retryMissingContactFrequencyDays: Math.max(1, Number(event.target.value || 1)),
+                    }))
+                  }
+                  disabled={isDisabled || !formState.retryMissingContactEnabled}
+                />
+              </label>
+            </div>
           </fieldset>
 
           {renderRules(

@@ -1574,6 +1574,37 @@ table td {
   margin: 0;
 }
 
+.switch-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.5rem;
+}
+
+.switch-row__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.switch-row__checkbox {
+  margin: 0;
+  width: auto;
+  flex: 0 0 auto;
+}
+
+.switch-row__input {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 200px;
+}
+
+.switch-row__input input {
+  padding: 0.45rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+}
+
 .rule-list {
   display: grid;
   gap: 0.75rem;

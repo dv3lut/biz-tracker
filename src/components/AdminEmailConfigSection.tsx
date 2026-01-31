@@ -39,18 +39,24 @@ export const AdminEmailConfigSection = ({
   isSubmitting,
 }: Props) => {
   const [recipientsText, setRecipientsText] = useState<string>("");
+  const [includePreviousMonthDayAlerts, setIncludePreviousMonthDayAlerts] = useState<boolean>(false);
 
   useEffect(() => {
     if (!config) {
       setRecipientsText("");
+      setIncludePreviousMonthDayAlerts(false);
       return;
     }
     setRecipientsText(joinRecipients(config.recipients));
+    setIncludePreviousMonthDayAlerts(config.includePreviousMonthDayAlerts);
   }, [config]);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    onSubmit({ recipients: splitRecipients(recipientsText) });
+    onSubmit({
+      recipients: splitRecipients(recipientsText),
+      includePreviousMonthDayAlerts,
+    });
   };
 
   return (
@@ -86,6 +92,14 @@ export const AdminEmailConfigSection = ({
             />
           </label>
           <p className="muted small">Une adresse par ligne ou séparée par des virgules.</p>
+          <label className="form-checkbox">
+            <input
+              type="checkbox"
+              checked={includePreviousMonthDayAlerts}
+              onChange={(event) => setIncludePreviousMonthDayAlerts(event.target.checked)}
+            />
+            <span>Inclure un rappel des alertes du même jour le mois précédent</span>
+          </label>
           <div className="card-actions">
             <button type="submit" className="primary" disabled={isSubmitting}>
               {isSubmitting ? "Enregistrement…" : "Enregistrer"}

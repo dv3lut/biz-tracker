@@ -37,6 +37,8 @@ interface GoogleRetryRuleResponse {
 
 interface GoogleRetryConfigResponse {
   retry_weekdays: number[];
+  retry_missing_contact_enabled?: boolean;
+  retry_missing_contact_frequency_days?: number;
   default_rules: GoogleRetryRuleResponse[];
   micro_rules: GoogleRetryRuleResponse[];
 }
@@ -63,6 +65,8 @@ const mapRetryRule = (rule: GoogleRetryRuleResponse): GoogleRetryRule => ({
 
 const mapRetryConfig = (payload: GoogleRetryConfigResponse): GoogleRetryConfig => ({
   retryWeekdays: payload.retry_weekdays ?? [],
+  retryMissingContactEnabled: payload.retry_missing_contact_enabled ?? true,
+  retryMissingContactFrequencyDays: payload.retry_missing_contact_frequency_days ?? 14,
   defaultRules: (payload.default_rules ?? []).map(mapRetryRule),
   microRules: (payload.micro_rules ?? []).map(mapRetryRule),
 });
@@ -74,6 +78,8 @@ const serializeRule = (rule: GoogleRetryRule): GoogleRetryRuleResponse => ({
 
 const serializeConfig = (payload: GoogleRetryConfig): GoogleRetryConfigResponse => ({
   retry_weekdays: payload.retryWeekdays,
+  retry_missing_contact_enabled: payload.retryMissingContactEnabled,
+  retry_missing_contact_frequency_days: payload.retryMissingContactFrequencyDays,
   default_rules: payload.defaultRules.map(serializeRule),
   micro_rules: payload.microRules.map(serializeRule),
 });
