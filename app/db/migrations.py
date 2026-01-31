@@ -296,8 +296,18 @@ def run_schema_upgrades(engine: Engine) -> None:
             micro_rules JSONB NOT NULL DEFAULT '[]'::jsonb,
             micro_company_categories JSONB NOT NULL DEFAULT '[]'::jsonb,
             micro_legal_categories JSONB NOT NULL DEFAULT '[]'::jsonb,
+            retry_missing_contact_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+            retry_missing_contact_frequency_days INTEGER NOT NULL DEFAULT 14,
             updated_at TIMESTAMP NOT NULL DEFAULT NOW()
         )
+        """,
+        """
+        ALTER TABLE google_retry_config
+        ADD COLUMN IF NOT EXISTS retry_missing_contact_enabled BOOLEAN NOT NULL DEFAULT TRUE
+        """,
+        """
+        ALTER TABLE google_retry_config
+        ADD COLUMN IF NOT EXISTS retry_missing_contact_frequency_days INTEGER NOT NULL DEFAULT 14
         """,
         """
         CREATE TABLE IF NOT EXISTS stripe_billing_settings (

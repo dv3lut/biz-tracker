@@ -6,7 +6,13 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import MagicMock
 
-from app.services.alerts.email_renderer import render_admin_email, render_client_email
+from app.services.alerts.email_renderer import (
+    _format_listing_status_labels,
+    _section_title_for_status,
+    get_client_listing_status_label,
+    render_admin_email,
+    render_client_email,
+)
 from app.services.alerts.formatter import EstablishmentFormatter
 from app.services.client_service import ClientFilterSummary
 
@@ -113,6 +119,53 @@ class EmailRendererTests(unittest.TestCase):
         self.assertIn("0 nouvel établissement détecté", text_body)
         self.assertIn("Nous vous notifierons", text_body)
         self.assertIn("0 nouvel établissement détecté", html_body)
+
+    def test_client_email_includes_previous_month_day_section(self) -> None:
+        establishment = self._make_establishment(
+            name="Bistrot du Mois",
+            status="recent_creation",
+            google_url="https://maps.google.com/?cid=42",
+        )
+        establishment_second = self._make_establishment(
+            name="Ancien Bistro",
+            status="not_recent_creation",
+            google_url="https://maps.google.com/?cid=99",
+        )
+        previous_date = date(2024, 12, 16)
+
+        text_body, html_body = render_client_email(
+            self.formatter,
+            [],
+            previous_month_day_establishments=[establishment_second, establishment],
+            previous_month_day_date=previous_date,
+        )
+
+        self.assertIn("Pour rappel, voici les alertes qui ont été générées le 16 décembre 2024", text_body)
+        self.assertIn("Bistrot du Mois", text_body)
+        self.assertIn("[Rappel mensuel] Bistrot du Mois", text_body)
+        self.assertLess(text_body.find("Bistrot du Mois"), text_body.find("Ancien Bistro"))
+        self.assertIn("Rappel mensuel", html_body)
+
+    def test_client_email_previous_month_section_empty(self) -> None:
+        previous_date = date(2024, 12, 16)
+
+        text_body, html_body = render_client_email(
+            self.formatter,
+            [],
+            previous_month_day_establishments=[],
+            previous_month_day_date=previous_date,
+        )
+
+        self.assertIn("Aucune alerte n'a été générée ce jour-là", text_body)
+        self.assertIn("Aucune alerte n'a été générée ce jour-là", html_body)
+
+    def test_client_email_helper_labels(self) -> None:
+        labels = _format_listing_status_labels(["recent_creation", "unknown"])
+
+        self.assertEqual(labels[0], "Création récente")
+        self.assertEqual(labels[1], "Non déterminé")
+        self.assertEqual(_section_title_for_status("recent_creation_missing_contact"), "Création récente sans contact")
+        self.assertEqual(get_client_listing_status_label(None), "Non déterminé")
 
 
 if __name__ == "__main__":

@@ -31,3 +31,8 @@ class GoogleEnrichmentResult:
     remaining_count: int
     api_call_count: int
     api_error_count: int
+    missing_contact_checked_count: int = 0
+    missing_contact_updated_count: int = 0
+    retry_backlog_count: int = 0
+    retry_backlog_age_buckets: dict[str, int] | None = None
+    missing_contact_age_buckets: dict[str, int] | None = None

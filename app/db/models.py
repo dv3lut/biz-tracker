@@ -365,6 +365,16 @@ class AdminRecipient(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
 
 
+class AlertEmailSettings(Base):
+    """Configuration for client alert emails."""
+
+    __tablename__ = "alert_email_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    include_previous_month_day_alerts: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
+
+
 class StripeBillingSettings(Base):
     """Persisted Stripe billing configuration (ex: trial period)."""
 
@@ -387,4 +397,6 @@ class GoogleRetryConfig(Base):
     micro_rules: Mapped[list[dict[str, object]]] = mapped_column(JSONB, default=list, nullable=False)
     micro_company_categories: Mapped[list[str]] = mapped_column(JSONB, default=list, nullable=False)
     micro_legal_categories: Mapped[list[str]] = mapped_column(JSONB, default=list, nullable=False)
+    retry_missing_contact_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    retry_missing_contact_frequency_days: Mapped[int] = mapped_column(Integer, default=14, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)

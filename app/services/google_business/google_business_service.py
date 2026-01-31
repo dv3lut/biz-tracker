@@ -11,7 +11,13 @@ from sqlalchemy.orm import Session
 from app.clients.google_places_client import GooglePlacesClient, GooglePlacesError
 from app.config import get_settings
 from app.db import models
-from app.services.google_business.google_constants import PROGRESS_BATCH_SIZE, TYPE_MISMATCH_STATUS
+from app.observability import log_event
+from app.services.google_business.google_constants import (
+    PLACE_DETAILS_FIELDS,
+    PROGRESS_BATCH_SIZE,
+    RECENT_NO_CONTACT_STATUS,
+    TYPE_MISMATCH_STATUS,
+)
 from app.services.google_business.google_keywords import build_naf_keyword_map
 from app.services.google_business.google_lookup_engine import GoogleLookupEngine
 from app.services.google_business.google_matching import matches_expected_google_category
@@ -20,8 +26,10 @@ from app.services.google.google_retry_config import GoogleRetryRuntimeConfig, lo
 from app.services.rate_limiter import RateLimiter
 from app.utils.business_types import is_micro_company
 from app.utils.dates import utcnow
+from app.utils.google_listing import normalize_listing_age_status
 
 ProgressCallback = Callable[[int, int, int, int, int], None]
+AgeBuckets = dict[str, int]
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -122,6 +130,11 @@ class GoogleBusinessService:
                 remaining_count=0,
                 api_call_count=0,
                 api_error_count=0,
+                missing_contact_checked_count=0,
+                missing_contact_updated_count=0,
+                retry_backlog_count=0,
+                retry_backlog_age_buckets=None,
+                missing_contact_age_buckets=None,
             )
 
         now = utcnow()
@@ -141,6 +154,9 @@ class GoogleBusinessService:
         queue = candidates + backlog
 
         newly_found: list[models.Establishment] = []
+        missing_contact_checked = 0
+        missing_contact_updated = 0
+        missing_contact_age_buckets: AgeBuckets | None = None
         lookup_targets = [
             est
             for est in queue
@@ -152,6 +168,8 @@ class GoogleBusinessService:
                 recheck_all=recheck_all,
             )
         ]
+        retry_backlog_targets = [est for est in lookup_targets if est.siret not in new_sirets]
+        retry_backlog_age_buckets = self._bucket_age_days(retry_backlog_targets, now)
         queue_count = len(lookup_targets)
         pending_count = queue_count
         eligible_count = queue_count
@@ -185,6 +203,12 @@ class GoogleBusinessService:
                 progress_callback(queue_count, eligible_count, processed_count, matched_count, pending_count)
 
         self._session.flush()
+        if include_backlog:
+            (
+                missing_contact_checked,
+                missing_contact_updated,
+                missing_contact_age_buckets,
+            ) = self._refresh_missing_contact_listings(now)
         remaining = max(queue_count - processed_count, 0)
         return GoogleEnrichmentResult(
             matches=newly_found,
@@ -194,6 +218,11 @@ class GoogleBusinessService:
             remaining_count=remaining,
             api_call_count=self._api_call_count,
             api_error_count=self._api_error_count,
+            missing_contact_checked_count=missing_contact_checked,
+            missing_contact_updated_count=missing_contact_updated,
+            retry_backlog_count=len(retry_backlog_targets),
+            retry_backlog_age_buckets=retry_backlog_age_buckets,
+            missing_contact_age_buckets=missing_contact_age_buckets,
         )
 
     def manual_check(self, establishment: models.Establishment) -> GoogleMatch | None:
@@ -255,6 +284,121 @@ class GoogleBusinessService:
             if len(eligible) >= self._settings.daily_retry_limit:
                 break
         return eligible
+
+    def _refresh_missing_contact_listings(self, now: datetime) -> tuple[int, int, AgeBuckets]:
+        retry_config = self._retry_config
+        if not retry_config.retry_missing_contact_enabled:
+            return 0, 0, {}
+        if now.weekday() not in retry_config.retry_weekdays:
+            return 0, 0, {}
+        if not self._client or not self._rate_limiter:
+            return 0, 0, {}
+
+        stmt = (
+            select(models.Establishment)
+            .where(models.Establishment.google_listing_age_status == RECENT_NO_CONTACT_STATUS)
+            .where(models.Establishment.google_check_status == "found")
+            .where(models.Establishment.google_place_id.is_not(None))
+            .order_by(models.Establishment.google_last_checked_at.asc().nullsfirst())
+        )
+        candidates = self._session.execute(stmt).scalars().all()
+        checked_count = 0
+        updated_count = 0
+        age_buckets: AgeBuckets = {}
+
+        for establishment in candidates:
+            if establishment.google_last_checked_at:
+                age_days = (now - establishment.google_last_checked_at).days
+                if age_days < retry_config.retry_missing_contact_frequency_days:
+                    continue
+            place_id = establishment.google_place_id
+            if not place_id:
+                continue
+            checked_count += 1
+            self._increment_bucket(age_buckets, establishment.google_last_checked_at, now)
+            try:
+                details = self._fetch_place_details(place_id)
+            except GooglePlacesError as exc:
+                self._record_api_error("place_details")
+                _LOGGER.warning(
+                    "Lecture des contacts Google Places échouée pour %s (place=%s): %s",
+                    establishment.siret,
+                    place_id,
+                    exc,
+                )
+                continue
+            contact_phone, contact_email, contact_website = self._extract_contact_details(details)
+            establishment.google_last_checked_at = now
+            if not any([contact_phone, contact_email, contact_website]):
+                continue
+            establishment.google_contact_phone = contact_phone
+            establishment.google_contact_email = contact_email
+            establishment.google_contact_website = contact_website
+            if normalize_listing_age_status(establishment.google_listing_age_status) == RECENT_NO_CONTACT_STATUS:
+                establishment.google_listing_age_status = "recent_creation"
+            place_url = details.get("url") or contact_website
+            if isinstance(place_url, str) and place_url:
+                if not establishment.google_place_url:
+                    establishment.google_place_url = place_url
+                if establishment.google_last_found_at is None:
+                    establishment.google_last_found_at = now
+            updated_count += 1
+
+        if checked_count:
+            self._session.flush()
+
+        return checked_count, updated_count, age_buckets
+
+    @staticmethod
+    def _increment_bucket(buckets: AgeBuckets, last_checked_at: datetime | None, now: datetime) -> None:
+        if last_checked_at is None:
+            buckets["never_checked"] = buckets.get("never_checked", 0) + 1
+            return
+        age_days = (now - last_checked_at).days
+        if age_days < 0:
+            age_days = 0
+        if age_days <= 7:
+            key = "0_7"
+        elif age_days <= 14:
+            key = "8_14"
+        elif age_days <= 30:
+            key = "15_30"
+        elif age_days <= 60:
+            key = "31_60"
+        elif age_days <= 120:
+            key = "61_120"
+        else:
+            key = "121_plus"
+        buckets[key] = buckets.get(key, 0) + 1
+
+    def _bucket_age_days(self, establishments: Sequence[models.Establishment], now: datetime) -> AgeBuckets:
+        buckets: AgeBuckets = {}
+        for establishment in establishments:
+            self._increment_bucket(buckets, establishment.google_last_checked_at, now)
+        return buckets
+
+    def _fetch_place_details(self, place_id: str) -> dict[str, object]:
+        if not self._client or not self._rate_limiter:
+            raise RuntimeError("Google Places client is not initialised.")
+        self._rate_limiter.acquire()
+        self._record_api_call()
+        details_fetcher = getattr(self._client, "place_details", None)
+        if details_fetcher is None:
+            details_fetcher = getattr(self._client, "get_place_details", None)
+        if details_fetcher is None:
+            raise AttributeError("Google Places client lacks a place details method")
+        return details_fetcher(place_id, fields=PLACE_DETAILS_FIELDS)
+
+    @staticmethod
+    def _extract_contact_details(details: dict[str, object]) -> tuple[str | None, str | None, str | None]:
+        phone = details.get("formatted_phone_number") or details.get("international_phone_number")
+        if phone and not isinstance(phone, str):
+            phone = None
+        website = details.get("website")
+        if website and not isinstance(website, str):
+            website = None
+        email = None
+        return phone, email, website
 
     def _should_lookup(
         self,

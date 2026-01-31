@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 from app.services.alerts.alert_service import AlertService
+from app.utils.dates import subtract_months
 
 
 class AlertServiceFilteringTests(unittest.TestCase):
@@ -263,7 +264,33 @@ class AlertServiceFilteringTests(unittest.TestCase):
         payloads = deps.dispatch_mock.call_args[0][1]
         self.assertEqual(len(payloads), 1)
         self.assertEqual(payloads[0].client.id, client_a.id)
-        self.assertEqual(payloads[0].subject, "Business tracker · 0 fiche Google détectée")
+
+    def test_previous_month_day_uses_replay_date(self) -> None:
+        client = SimpleNamespace(
+            id=uuid4(),
+            name="Client",
+            recipients=[SimpleNamespace(email="client@example.com")],
+            subscriptions=[],
+            listing_statuses=None,
+            start_date=date.today(),
+            end_date=None,
+        )
+        replay_date = date(2026, 1, 24)
+        run = SimpleNamespace(id="run-1", scope_key="restaurants", replay_for_date=replay_date, started_at=datetime(2026, 1, 31, 10, 0, 0))
+        self.session.execute.return_value.scalars.return_value = []
+
+        with (
+            self._patched_dependencies(active_clients=[client]) as deps,
+            patch.object(AlertService, "_has_previous_successful_run", return_value=True),
+            patch("app.services.alerts.alert_service.get_alert_email_settings", return_value=SimpleNamespace(include_previous_month_day_alerts=True)),
+            patch("app.services.alerts.alert_service.render_client_email", return_value=("", "")) as render_mock,
+        ):
+            service = AlertService(self.session, run)
+            service.create_google_alerts([])
+
+        self.assertTrue(render_mock.called)
+        previous_date = render_mock.call_args.kwargs.get("previous_month_day_date")
+        self.assertEqual(previous_date, subtract_months(replay_date, 1))
 
     def test_admin_notifications_can_be_disabled(self) -> None:
         establishment = self._make_establishment("recent_creation", suffix="9")

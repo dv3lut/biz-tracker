@@ -26,6 +26,11 @@ class GoogleEnrichmentResult:
     api_call_count: int
     api_error_count: int
     matches: list[models.Establishment]
+    missing_contact_checked_count: int
+    missing_contact_updated_count: int
+    retry_backlog_count: int
+    retry_backlog_age_buckets: dict[str, int] | None
+    missing_contact_age_buckets: dict[str, int] | None
 
 
 def create_google_progress_callback(session: Session, run: models.SyncRun) -> Callable[[int, int, int, int, int], None]:
@@ -98,6 +103,11 @@ def run_google_enrichment(
         matched_count=enrichment.matched_count,
         remaining_count=enrichment.remaining_count,
         api_call_count=enrichment.api_call_count,
+        missing_contact_checked_count=enrichment.missing_contact_checked_count,
+        missing_contact_updated_count=enrichment.missing_contact_updated_count,
+        retry_backlog_count=enrichment.retry_backlog_count,
+        retry_backlog_age_buckets=enrichment.retry_backlog_age_buckets,
+        missing_contact_age_buckets=enrichment.missing_contact_age_buckets,
     )
 
     alerts: list[models.Alert] = []
@@ -122,5 +132,10 @@ def run_google_enrichment(
         api_call_count=enrichment.api_call_count,
         api_error_count=enrichment.api_error_count,
         matches=list(enrichment.matches),
+        missing_contact_checked_count=enrichment.missing_contact_checked_count,
+        missing_contact_updated_count=enrichment.missing_contact_updated_count,
+        retry_backlog_count=enrichment.retry_backlog_count,
+        retry_backlog_age_buckets=enrichment.retry_backlog_age_buckets,
+        missing_contact_age_buckets=enrichment.missing_contact_age_buckets,
     )
     return result, alerts

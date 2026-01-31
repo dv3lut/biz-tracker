@@ -114,6 +114,8 @@ def update_google_retry_config_endpoint(
         retry_weekdays=payload.retry_weekdays,
         default_rules=[rule.model_dump() for rule in payload.default_rules],
         micro_rules=[rule.model_dump() for rule in payload.micro_rules],
+        retry_missing_contact_enabled=payload.retry_missing_contact_enabled,
+        retry_missing_contact_frequency_days=payload.retry_missing_contact_frequency_days,
     )
     session.flush()
     payload_dict = serialize_google_retry_config(record)
@@ -123,5 +125,7 @@ def update_google_retry_config_endpoint(
         retry_weekdays=list(runtime.retry_weekdays),
         default_rules=len(runtime.default_rules),
         micro_rules=len(runtime.micro_rules),
+        retry_missing_contact_enabled=runtime.retry_missing_contact_enabled,
+        retry_missing_contact_frequency_days=runtime.retry_missing_contact_frequency_days,
     )
     return GoogleRetryConfigOut(**payload_dict)

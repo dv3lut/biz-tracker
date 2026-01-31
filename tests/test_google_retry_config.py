@@ -30,6 +30,8 @@ def test_load_runtime_config_inserts_defaults_when_missing():
     assert runtime.retry_weekdays == {0}
     assert all(rule.frequency_days > 0 for rule in runtime.default_rules)
     assert all(rule.frequency_days > 0 for rule in runtime.micro_rules)
+    assert runtime.retry_missing_contact_enabled is True
+    assert runtime.retry_missing_contact_frequency_days == 14
 
 
 def test_update_runtime_config_sanitizes_weekdays(monkeypatch):
@@ -37,6 +39,8 @@ def test_update_runtime_config_sanitizes_weekdays(monkeypatch):
         retry_weekdays=[0],
         default_rules=[{"max_age_days": 10, "frequency_days": 5}],
         micro_rules=[{"max_age_days": None, "frequency_days": 30}],
+        retry_missing_contact_enabled=False,
+        retry_missing_contact_frequency_days=7,
     )
     session = _make_session(record)
 
@@ -45,11 +49,15 @@ def test_update_runtime_config_sanitizes_weekdays(monkeypatch):
         retry_weekdays=[-1, 2, 2, 99],
         default_rules=[{"max_age_days": "15", "frequency_days": "7"}],
         micro_rules=[{"max_age_days": 0, "frequency_days": 21}],
+        retry_missing_contact_enabled=True,
+        retry_missing_contact_frequency_days=14,
     )
 
     assert updated.retry_weekdays == [2]
     assert updated.default_rules[0]["frequency_days"] == 7
     assert updated.micro_rules[0]["max_age_days"] == 0
+    assert updated.retry_missing_contact_enabled is True
+    assert updated.retry_missing_contact_frequency_days == 14
 
 
 def test_normalize_rules_falls_back_on_invalid_entries():
@@ -72,11 +80,15 @@ def test_serialize_google_retry_config_returns_defaults_when_empty():
         retry_weekdays=[],
         default_rules=[],
         micro_rules=[],
+        retry_missing_contact_enabled=None,
+        retry_missing_contact_frequency_days=0,
     )
     serialized = grc.serialize_google_retry_config(record)
     assert serialized["retry_weekdays"]
     assert serialized["default_rules"]
     assert serialized["micro_rules"]
+    assert serialized["retry_missing_contact_enabled"] is True
+    assert serialized["retry_missing_contact_frequency_days"] == 14
 
 
 def test_serialize_rules_for_storage_falls_back_to_defaults():
@@ -90,9 +102,13 @@ def test_load_runtime_config_sanitizes_invalid_weekdays():
         retry_weekdays=[-1, 9],
         default_rules=[{"max_age_days": 10, "frequency_days": 5}],
         micro_rules=[{"max_age_days": 20, "frequency_days": 10}],
+        retry_missing_contact_enabled=None,
+        retry_missing_contact_frequency_days=-5,
     )
     session = _make_session(record)
 
     runtime = grc.load_runtime_google_retry_config(session)
 
     assert runtime.retry_weekdays == {0}
+    assert runtime.retry_missing_contact_enabled is True
+    assert runtime.retry_missing_contact_frequency_days == 14

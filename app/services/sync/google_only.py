@@ -103,6 +103,11 @@ def collect_google_only(
         google_pending_count = enrichment_result.pending_count
         google_api_call_count = enrichment_result.api_call_count
         google_api_error_count = enrichment_result.api_error_count
+        missing_contact_checked_count = enrichment_result.missing_contact_checked_count
+        missing_contact_updated_count = enrichment_result.missing_contact_updated_count
+        retry_backlog_count = enrichment_result.retry_backlog_count
+        retry_backlog_age_buckets = enrichment_result.retry_backlog_age_buckets
+        missing_contact_age_buckets = enrichment_result.missing_contact_age_buckets
 
         run.google_queue_count = google_queue_count
         run.google_eligible_count = google_eligible_count
@@ -121,6 +126,11 @@ def collect_google_only(
             remaining_count=google_pending_count,
             api_call_count=google_api_call_count,
             api_error_count=google_api_error_count,
+            missing_contact_checked_count=missing_contact_checked_count,
+            missing_contact_updated_count=missing_contact_updated_count,
+            retry_backlog_count=retry_backlog_count,
+            retry_backlog_age_buckets=retry_backlog_age_buckets,
+            missing_contact_age_buckets=missing_contact_age_buckets,
             error_rate=(
                 round(google_api_error_count / google_api_call_count, 4)
                 if google_api_call_count > 0

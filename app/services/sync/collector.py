@@ -195,6 +195,11 @@ class SyncCollectorMixin(SyncPersistenceMixin):
             google_pending_count = enrichment_result.pending_count
             google_api_call_count = enrichment_result.api_call_count
             google_api_error_count = enrichment_result.api_error_count
+            missing_contact_checked_count = enrichment_result.missing_contact_checked_count
+            missing_contact_updated_count = enrichment_result.missing_contact_updated_count
+            retry_backlog_count = enrichment_result.retry_backlog_count
+            retry_backlog_age_buckets = enrichment_result.retry_backlog_age_buckets
+            missing_contact_age_buckets = enrichment_result.missing_contact_age_buckets
 
             context.run.google_queue_count = google_queue_count
             context.run.google_eligible_count = google_eligible_count
@@ -219,6 +224,11 @@ class SyncCollectorMixin(SyncPersistenceMixin):
                 api_call_count=google_api_call_count,
                 api_error_count=google_api_error_count,
                 error_rate=google_error_rate,
+                missing_contact_checked_count=missing_contact_checked_count,
+                missing_contact_updated_count=missing_contact_updated_count,
+                retry_backlog_count=retry_backlog_count,
+                retry_backlog_age_buckets=retry_backlog_age_buckets,
+                missing_contact_age_buckets=missing_contact_age_buckets,
                 new_establishment_count=len(new_entities_total),
                 google_candidate_count=len(google_candidates),
                 force_refresh=force_refresh_google,

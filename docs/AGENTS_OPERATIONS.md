@@ -26,6 +26,7 @@
 - Les logs applicatifs sont dans `logs/app.log`, les alertes dans `logs/alerts.log`.
 - Les statistiques et états sont consultables via l’API (`GET /admin/stats/summary`, `/admin/stats/dashboard`, `/admin/sync-runs`, `/admin/sync-state`, `/admin/alerts/recent`).
 - `POST /admin/email/test` permet de vérifier la configuration SMTP active (destinataires admin par défaut, sinon clients actifs ou ceux fournis dans le corps de la requête).
+- La configuration e-mail admin inclut un toggle pour ajouter un rappel dans les e-mails clients avec les alertes du même jour le mois précédent (basé sur `establishments.date_creation`).
 - `GET /admin/google/places-export` retourne un export Excel des établissements disposant d’une fiche Google (utilisé après la première synchronisation massive).
 - `GET /admin/google/places-export` accepte aussi `listing_statuses=...` (query multi-valeurs). Si aucun statut n’est fourni, l’API renverra une erreur 422 ; utiliser la modale front pour rester aligné avec la configuration par défaut.
 - `GET /admin/alerts/export?days=30` produit un Excel des alertes dont l'établissement a été créé dans la fenêtre demandée (filtre sur `date_creation` plutôt que sur la date d'alerte).

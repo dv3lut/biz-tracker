@@ -10,6 +10,7 @@ from app.api.schemas import AdminEmailConfig, AdminEmailConfigUpdate, EmailTestR
 from app.config import get_settings
 from app.db import models
 from app.observability import log_event
+from app.services.alerts.alert_email_settings import get_alert_email_settings, update_alert_email_settings
 from app.services.client_service import collect_client_emails, get_active_clients, get_admin_emails
 from app.services.email_service import EmailService
 
@@ -71,7 +72,11 @@ def send_test_email(
 )
 def get_admin_email_recipients(session: Session = Depends(get_db_session)) -> AdminEmailConfig:
     recipients = get_admin_emails(session)
-    return AdminEmailConfig(recipients=recipients)
+    settings = get_alert_email_settings(session, create_if_missing=True)
+    return AdminEmailConfig(
+        recipients=recipients,
+        include_previous_month_day_alerts=settings.include_previous_month_day_alerts,
+    )
 
 
 @router.put(
@@ -103,4 +108,16 @@ def update_admin_email_recipients(
     event_name = "admin.email.recipients.cleared" if not updated else "admin.email.recipients.updated"
     log_event(event_name, count=len(updated))
 
-    return AdminEmailConfig(recipients=[recipient.email for recipient in updated])
+    settings = update_alert_email_settings(
+        session,
+        include_previous_month_day_alerts=payload.include_previous_month_day_alerts,
+    )
+    log_event(
+        "admin.email.settings.updated",
+        include_previous_month_day_alerts=settings.include_previous_month_day_alerts,
+    )
+
+    return AdminEmailConfig(
+        recipients=[recipient.email for recipient in updated],
+        include_previous_month_day_alerts=settings.include_previous_month_day_alerts,
+    )

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import datetime
+from datetime import date, datetime
 from typing import Mapping, Sequence
 from uuid import UUID
 
@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.db import models
 from app.observability import log_event
+from app.services.alerts.alert_email_settings import get_alert_email_settings
 from app.services.alerts.email_renderer import render_admin_email, render_client_email
 from app.services.alerts.formatter import EstablishmentFormatter
 from app.services.alerts.types import ClientDispatchPlan
@@ -26,7 +27,7 @@ from app.services.client_service import (
 )
 from app.services.email_service import EmailService
 from app.services.export_service import build_alerts_client_csv, build_alerts_csv
-from app.utils.dates import utcnow
+from app.utils.dates import subtract_months, utcnow
 
 _ALERT_LOGGER = logging.getLogger("alerts")
 
@@ -293,6 +294,32 @@ class AlertService:
         else:
             assignments = {client.id: [] for client in clients}
 
+        previous_month_day_assignments: dict[object, list[models.Establishment]] = {}
+        previous_month_day_date: date | None = None
+        if clients:
+            settings = get_alert_email_settings(self._session, create_if_missing=False)
+            if settings.include_previous_month_day_alerts:
+                replay_for_date = getattr(self._run, "replay_for_date", None)
+                started_at = getattr(self._run, "started_at", None)
+                reference_date = (
+                    replay_for_date
+                    or (started_at.date() if started_at is not None else None)
+                    or date.today()
+                )
+                previous_month_day_date = subtract_months(reference_date, 1)
+                stmt = (
+                    select(models.Establishment)
+                    .where(
+                        models.Establishment.date_creation == previous_month_day_date,
+                        models.Establishment.google_check_status == "found",
+                    )
+                )
+                previous_month_day_items = list(self._session.execute(stmt).scalars())
+                previous_month_day_assignments, _ = assign_establishments_to_clients(
+                    clients,
+                    previous_month_day_items,
+                )
+
         payloads: list[ClientEmailPayload] = []
         unique_recipients = set(admin_recipients)
         for client in clients:
@@ -304,10 +331,15 @@ class AlertService:
             ]
             subject = self._build_client_subject(len(client_establishments))
             filters = summarize_client_filters(client)
+            previous_month_day_establishments: Sequence[models.Establishment] | None = None
+            if previous_month_day_date is not None:
+                previous_month_day_establishments = previous_month_day_assignments.get(client.id, [])
             text_body, html_body = render_client_email(
                 self._formatter,
                 client_establishments,
                 filters=filters,
+                previous_month_day_establishments=previous_month_day_establishments,
+                previous_month_day_date=previous_month_day_date,
             )
             payloads.append(
                 ClientEmailPayload(

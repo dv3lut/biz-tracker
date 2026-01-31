@@ -57,6 +57,17 @@ class GoogleRetryConfigOut(BaseModel):
         default_factory=list,
         description="Jours de la semaine autorisés pour les relances (0=lundi).",
     )
+    retry_missing_contact_enabled: bool = Field(
+        default=True,
+        description=(
+            "Relance des fiches 'création récente sans contact' pour vérifier si des contacts ont été ajoutés."
+        ),
+    )
+    retry_missing_contact_frequency_days: int = Field(
+        default=14,
+        gt=0,
+        description="Fréquence minimale (en jours) de relance des fiches sans contact.",
+    )
     default_rules: list[GoogleRetryRule] = Field(description="Règles appliquées à l'ensemble des établissements.")
     micro_rules: list[GoogleRetryRule] = Field(
         description="Règles spécifiques aux micro/auto-entreprises.",
