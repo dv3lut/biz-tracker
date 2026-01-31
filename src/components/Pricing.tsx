@@ -528,7 +528,7 @@ const Pricing = ({ trialPeriodDays = 14 }: Props) => {
                 <Label htmlFor="checkout-referrer">Parrain (optionnel)</Label>
                 <Input
                   id="checkout-referrer"
-                  placeholder="Nom / prénom de la personne qui vous a conseillé"
+                  placeholder="Nom / prénom de la personne qui vous a conseillé Business Tracker"
                   value={checkoutForm.referrerName}
                   onChange={(event) =>
                     setCheckoutForm((current) => ({
