@@ -53,6 +53,22 @@ class ClientStripeSubscriptionOut(BaseModel):
     updated_at: datetime
 
 
+class ClientSubscriptionEventOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    client_id: UUID
+    stripe_subscription_id: str | None
+    event_type: str
+    from_plan_key: str | None
+    to_plan_key: str | None
+    from_category_ids: list[str] | None
+    to_category_ids: list[str] | None
+    effective_at: datetime | None
+    source: str | None
+    created_at: datetime
+
+
 class ClientOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -68,6 +84,7 @@ class ClientOut(BaseModel):
     recipients: list[ClientRecipientOut]
     subscriptions: list[ClientSubscriptionOut]
     stripe_subscriptions: list[ClientStripeSubscriptionOut]
+    subscription_events: list[ClientSubscriptionEventOut] = Field(default_factory=list)
 
 
 class ClientCreate(BaseModel):
@@ -125,6 +142,7 @@ from app.api.schemas.naf import NafSubCategoryOut  # noqa: E402  (import circula
 
 ClientSubscriptionOut.model_rebuild()
 ClientStripeSubscriptionOut.model_rebuild()
+ClientSubscriptionEventOut.model_rebuild()
 ClientOut.model_rebuild()
 
 __all__ = [
@@ -133,6 +151,7 @@ __all__ = [
     "ClientRecipientOut",
     "ClientSubscriptionOut",
     "ClientStripeSubscriptionOut",
+    "ClientSubscriptionEventOut",
     "ClientUpdate",
     "ListingStatus",
 ]

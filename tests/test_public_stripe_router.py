@@ -7,7 +7,14 @@ import pytest
 from fastapi import HTTPException
 
 from app.api.routers import public_router as public
-from app.api.schemas import PublicStripeCheckoutRequest, PublicStripePortalRequest, PublicStripeUpdateRequest
+from app.api.schemas import (
+    PublicStripeCheckoutRequest,
+    PublicStripePortalRequest,
+    PublicStripePortalSessionRequest,
+    PublicStripeSubscriptionInfoRequest,
+    PublicStripeUpdatePreviewRequest,
+    PublicStripeUpdateRequest,
+)
 
 
 @pytest.fixture
@@ -53,6 +60,20 @@ def test_create_stripe_portal_returns_url(monkeypatch):
     assert sent.get("ok") is True
 
 
+def test_create_stripe_portal_session_returns_url(monkeypatch):
+    monkeypatch.setattr(public, "get_settings", lambda: SimpleNamespace())
+    monkeypatch.setattr(
+        public,
+        "create_portal_session_for_access_token",
+        lambda session, settings, access_token: "https://portal.example.com",
+    )
+
+    payload = PublicStripePortalSessionRequest(access_token="token_123456")
+    result = public.create_stripe_portal_session(payload=payload, session=SimpleNamespace())
+
+    assert result.url == "https://portal.example.com"
+
+
 def test_update_stripe_subscription_returns_url(monkeypatch):
     monkeypatch.setattr(public, "get_settings", lambda: SimpleNamespace())
     monkeypatch.setattr(
@@ -68,12 +89,74 @@ def test_update_stripe_subscription_returns_url(monkeypatch):
     payload = PublicStripeUpdateRequest(
         plan_key="starter",
         category_ids=[uuid4()],
-        email="jean@example.com",
+        access_token="token_123456",
     )
 
     result = public.update_stripe_subscription(payload=payload, session=SimpleNamespace())
     assert result.payment_url == "https://invoice"
     assert result.action == "upgrade"
+
+
+def test_preview_stripe_subscription_update_returns_payload(monkeypatch):
+    monkeypatch.setattr(public, "get_settings", lambda: SimpleNamespace())
+    monkeypatch.setattr(
+        public,
+        "get_subscription_update_preview",
+        lambda session, settings, payload: SimpleNamespace(
+            amount_due=1200,
+            currency="eur",
+            is_upgrade=True,
+            is_trial=False,
+            has_payment_method=True,
+        ),
+    )
+
+    payload = PublicStripeUpdatePreviewRequest(
+        plan_key="business",
+        category_ids=[uuid4(), uuid4(), uuid4()],
+        access_token="token_123456",
+    )
+
+    result = public.preview_stripe_subscription_update(payload=payload, session=SimpleNamespace())
+    assert result.amount_due == 1200
+    assert result.currency == "eur"
+    assert result.is_upgrade is True
+    assert result.is_trial is False
+    assert result.has_payment_method is True
+
+
+def test_get_stripe_subscription_info_returns_payload(monkeypatch):
+    monkeypatch.setattr(public, "get_settings", lambda: SimpleNamespace())
+    monkeypatch.setattr(
+        public,
+        "get_subscription_info",
+        lambda session, settings, access_token: SimpleNamespace(
+            plan_key="starter",
+            status="active",
+            current_period_end=None,
+            cancel_at=None,
+            contact_name="Jean Dupont",
+            contact_email="jean@example.com",
+            categories=[{"id": uuid4(), "name": "Restauration"}],
+        ),
+    )
+
+    payload = PublicStripeSubscriptionInfoRequest(access_token="token_123456")
+    result = public.get_stripe_subscription_info(payload=payload, session=SimpleNamespace())
+
+    assert result.plan_key == "starter"
+    assert result.status == "active"
+    assert result.contact_name == "Jean Dupont"
+    assert result.contact_email == "jean@example.com"
+    assert result.categories
+
+
+def test_get_public_stripe_settings_returns_trial_days(monkeypatch):
+    monkeypatch.setattr(public, "get_billing_settings", lambda session: SimpleNamespace(trial_period_days=14))
+
+    result = public.get_public_stripe_settings(session=SimpleNamespace())
+
+    assert result.trial_period_days == 14
 
 
 @pytest.mark.anyio

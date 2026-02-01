@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any, Sequence
 
@@ -55,14 +56,21 @@ class ElasticsearchLogHandler(logging.Handler):
         self._index_prefix = index_prefix.rstrip("-")
         self._environment = environment
         self._timeout = timeout_seconds
+        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="es-log")
 
     def emit(self, record: logging.LogRecord) -> None:
         try:
             document = self._build_document(record)
             index_name = f"{self._index_prefix}-{utcnow():%Y.%m.%d}"
-            self._client.index(index=index_name, document=document, request_timeout=self._timeout)
+            self._executor.submit(self._safe_index, index_name, document)
         except Exception:  # pragma: no cover - defensive path
             self.handleError(record)
+
+    def _safe_index(self, index_name: str, document: dict[str, Any]) -> None:
+        try:
+            self._client.index(index=index_name, document=document, request_timeout=self._timeout)
+        except Exception:
+            return
 
     def _build_document(self, record: logging.LogRecord) -> dict[str, Any]:
         document = getattr(record, "elastic_doc", None)

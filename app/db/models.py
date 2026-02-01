@@ -235,6 +235,12 @@ class Client(Base):
         cascade="all, delete-orphan",
         order_by="ClientStripeSubscription.created_at.desc()",
     )
+    subscription_events: Mapped[list["ClientSubscriptionEvent"]] = relationship(
+        "ClientSubscriptionEvent",
+        back_populates="client",
+        cascade="all, delete-orphan",
+        order_by="ClientSubscriptionEvent.created_at.desc()",
+    )
 
 
 class ClientStripeSubscription(Base):
@@ -268,6 +274,31 @@ class ClientStripeSubscription(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
 
     client: Mapped[Client] = relationship("Client", back_populates="stripe_subscriptions")
+
+
+class ClientSubscriptionEvent(Base):
+    """Historique des évolutions de souscription (plan/catégories)."""
+
+    __tablename__ = "client_subscription_events"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    client_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("clients.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    stripe_subscription_id: Mapped[str | None] = mapped_column(String(255), index=True, nullable=True)
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    from_plan_key: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    to_plan_key: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    from_category_ids: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
+    to_category_ids: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
+    effective_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    source: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+
+    client: Mapped[Client] = relationship("Client", back_populates="subscription_events")
 
 
 class ClientRecipient(Base):

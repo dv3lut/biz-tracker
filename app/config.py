@@ -70,6 +70,7 @@ class EmailSettings(BaseModel):
     enabled: bool = Field(default=False)
     smtp_host: Optional[str] = None
     smtp_port: int = Field(default=587, ge=1)
+    smtp_timeout_seconds: int = Field(default=10, ge=1)
     smtp_username: Optional[str] = None
     smtp_password: Optional[str] = None
     use_tls: bool = Field(default=True)

@@ -356,6 +356,33 @@ def run_schema_upgrades(engine: Engine) -> None:
         ON client_stripe_subscriptions (stripe_customer_id)
         """,
         """
+        CREATE TABLE IF NOT EXISTS client_subscription_events (
+            id UUID PRIMARY KEY,
+            client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+            stripe_subscription_id VARCHAR(255),
+            event_type VARCHAR(64) NOT NULL,
+            from_plan_key VARCHAR(32),
+            to_plan_key VARCHAR(32),
+            from_category_ids JSONB,
+            to_category_ids JSONB,
+            effective_at TIMESTAMP,
+            source VARCHAR(32),
+            created_at TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS ix_client_subscription_events_client_id
+        ON client_subscription_events (client_id)
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS ix_client_subscription_events_subscription_id
+        ON client_subscription_events (stripe_subscription_id)
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS ix_client_subscription_events_created_at
+        ON client_subscription_events (created_at)
+        """,
+        """
         ALTER TABLE client_stripe_subscriptions
         ADD COLUMN IF NOT EXISTS referrer_name VARCHAR(255)
         """,

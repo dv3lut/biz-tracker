@@ -17,8 +17,14 @@ from app.api.schemas import (
     PublicStripeCheckoutResponse,
     PublicStripePortalRequest,
     PublicStripePortalResponse,
+    PublicStripePortalSessionRequest,
+    PublicStripePortalSessionResponse,
+    PublicStripeSubscriptionInfoRequest,
+    PublicStripeSubscriptionInfoResponse,
     PublicStripeUpdateRequest,
     PublicStripeUpdateResponse,
+    PublicStripeUpdatePreviewRequest,
+    PublicStripeUpdatePreviewResponse,
     PublicStripeSettingsOut,
 )
 from app.config import get_settings
@@ -26,10 +32,15 @@ from app.observability import log_event
 from app.services.email_service import EmailService
 from app.services.stripe.stripe_checkout_service import (
     create_checkout_session,
+    get_subscription_update_preview,
+    get_subscription_info,
     list_public_categories,
     update_subscription,
 )
-from app.services.stripe.stripe_portal_service import send_portal_access_email
+from app.services.stripe.stripe_portal_service import (
+    create_portal_session_for_access_token,
+    send_portal_access_email,
+)
 from app.services.stripe.stripe_webhook_service import handle_stripe_webhook
 from app.services.stripe.stripe_settings_service import get_billing_settings
 
@@ -146,6 +157,20 @@ def create_stripe_portal(
     return PublicStripePortalResponse(sent=True)
 
 
+@router.post(
+    "/stripe/portal-session",
+    response_model=PublicStripePortalSessionResponse,
+    summary="Créer une session Stripe Customer Portal via lien sécurisé",
+)
+def create_stripe_portal_session(
+    payload: PublicStripePortalSessionRequest,
+    session: Session = Depends(get_db_session),
+) -> PublicStripePortalSessionResponse:
+    settings = get_settings()
+    url = create_portal_session_for_access_token(session, settings, payload.access_token)
+    return PublicStripePortalSessionResponse(url=url)
+
+
 @router.get(
     "/stripe/settings",
     response_model=PublicStripeSettingsOut,
@@ -165,12 +190,63 @@ def update_stripe_subscription(
     payload: PublicStripeUpdateRequest,
     session: Session = Depends(get_db_session),
 ) -> PublicStripeUpdateResponse:
+    import logging
+    _logger = logging.getLogger(__name__)
+    _logger.info("update_stripe_subscription: START")
     settings = get_settings()
     result = update_subscription(session, settings, payload)
-    return PublicStripeUpdateResponse(
+    _logger.info(
+        "update_stripe_subscription: END action=%s payment_url=%s effective_at=%s",
+        result.action, result.payment_url, result.effective_at
+    )
+    response = PublicStripeUpdateResponse(
         payment_url=result.payment_url,
         action=result.action,
         effective_at=result.effective_at,
+    )
+    _logger.info("update_stripe_subscription: RESPONSE_CREATED")
+    return response
+
+
+@router.post(
+    "/stripe/subscription-update-preview",
+    response_model=PublicStripeUpdatePreviewResponse,
+    summary="Prévisualiser un upgrade Stripe",
+)
+def preview_stripe_subscription_update(
+    payload: PublicStripeUpdatePreviewRequest,
+    session: Session = Depends(get_db_session),
+) -> PublicStripeUpdatePreviewResponse:
+    settings = get_settings()
+    preview = get_subscription_update_preview(session, settings, payload)
+    return PublicStripeUpdatePreviewResponse(
+        amount_due=preview.amount_due,
+        currency=preview.currency,
+        is_upgrade=preview.is_upgrade,
+        is_trial=preview.is_trial,
+        has_payment_method=preview.has_payment_method,
+    )
+
+
+@router.post(
+    "/stripe/subscription-info",
+    response_model=PublicStripeSubscriptionInfoResponse,
+    summary="Récupérer les informations d'un abonnement Stripe",
+)
+def get_stripe_subscription_info(
+    payload: PublicStripeSubscriptionInfoRequest,
+    session: Session = Depends(get_db_session),
+) -> PublicStripeSubscriptionInfoResponse:
+    settings = get_settings()
+    info = get_subscription_info(session, settings, payload.access_token)
+    return PublicStripeSubscriptionInfoResponse(
+        plan_key=info.plan_key,
+        status=info.status,
+        current_period_end=info.current_period_end,
+        cancel_at=info.cancel_at,
+        contact_name=info.contact_name,
+        contact_email=info.contact_email,
+        categories=info.categories,
     )
 
 
