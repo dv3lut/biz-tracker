@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from app.api.routers.admin.establishments import list_establishments
+from app.api.routers.admin.establishments_router import list_establishments
 
 
 class _FakeQuery:

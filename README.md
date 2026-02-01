@@ -118,6 +118,17 @@ Le scheduler (`SyncScheduler`) applique cette séquence automatiquement selon `s
 
 Un fichier Postman de référence est disponible (`docs/postman_collection.json`). Pensez à définir la variable `baseUrl` et l'en-tête `X-Admin-Token` dans votre environnement Postman avant utilisation.
 
+## Stripe & facturation
+
+Le backend expose la configuration Stripe et la gestion de l'essai gratuit :
+
+- `GET /admin/stripe/settings` : récupère la durée d'essai configurée.
+- `PUT /admin/stripe/settings` : met à jour `trial_period_days` et peut appliquer la nouvelle valeur aux essais déjà en cours (`apply_to_existing_trials`).
+- `GET /public/stripe/settings` : expose la durée d'essai côté landing page.
+- `POST /public/stripe/checkout` / `POST /public/stripe/webhook` : création des sessions Stripe et réception des webhooks.
+
+Le guide complet de tests end-to-end (checkout, essai, upgrade, résiliation) est disponible dans `docs/STRIPE_TEST_SCENARIOS.md`.
+
 ## Interface web d'administration
 
 - Un projet React dédié (`biz-tracker-admin-ui`) vit à la racine du dossier parent du dépôt backend. Il consomme les endpoints `/admin/*` mentionnés ci-dessus.
@@ -133,6 +144,12 @@ Un fichier Postman de référence est disponible (`docs/postman_collection.json`
 - La section « Monitoring quotidien » de l'UI consomme `GET /admin/stats/dashboard` pour restituer les courbes journalières (nouveaux établissements, appels API), la répartition Google (global et dernier run), les alertes envoyées et le bilan des statuts établissements.
 
 ## Proxy Nginx (whitelist IP)
+
+Docker compose NGINX : 
+
+```yaml
+cd /opt/proxy
+```
 
 Le backend est souvent exposé via `jwilder/nginx-proxy` + `letsencrypt-nginx-proxy-companion`. Pour restreindre certains hôtes ou chemins a une IP precise, placez un fichier par hostname dans `vhost.d`.
 

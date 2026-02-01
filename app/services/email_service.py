@@ -62,7 +62,19 @@ class EmailService:
             recipient_list,
             subject,
         )
-        with smtplib.SMTP(settings.smtp_host, settings.smtp_port) as server:
+        timeout_seconds = getattr(settings, "smtp_timeout_seconds", 10)
+        try:
+            server_context = smtplib.SMTP(
+                settings.smtp_host,
+                settings.smtp_port,
+                timeout=timeout_seconds,
+            )
+        except TypeError:
+            server_context = smtplib.SMTP(
+                settings.smtp_host,
+                settings.smtp_port,
+            )
+        with server_context as server:
             if settings.use_tls:
                 server.starttls()
             if settings.smtp_username and settings.smtp_password:

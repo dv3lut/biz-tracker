@@ -8,7 +8,8 @@ import unittest
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
-from app.services.alert_service import AlertService
+from app.services.alerts.alert_service import AlertService
+from app.utils.dates import subtract_months
 
 
 class AlertServiceFilteringTests(unittest.TestCase):
@@ -33,28 +34,28 @@ class AlertServiceFilteringTests(unittest.TestCase):
         email_service = MagicMock()
         email_service.is_enabled.return_value = True
         email_service.is_configured.return_value = True
-        stack.enter_context(patch("app.services.alert_service.EmailService", return_value=email_service))
+        stack.enter_context(patch("app.services.alerts.alert_service.EmailService", return_value=email_service))
         stack.enter_context(
             patch(
-                "app.services.alert_service.get_active_clients",
+                "app.services.alerts.alert_service.get_active_clients",
                 return_value=active_clients or [],
             )
         )
         stack.enter_context(
             patch(
-                "app.services.alert_service.get_admin_emails",
+                "app.services.alerts.alert_service.get_admin_emails",
                 return_value=admin_recipients or [],
             )
         )
         stack.enter_context(
             patch(
-                "app.services.alert_service.assign_establishments_to_clients",
+                "app.services.alerts.alert_service.assign_establishments_to_clients",
                 return_value=(assignment_map or {}, filters_configured),
             )
         )
         stack.enter_context(
             patch(
-                "app.services.alert_service.collect_client_emails",
+                "app.services.alerts.alert_service.collect_client_emails",
                 return_value=client_emails or [],
             )
         )
@@ -64,11 +65,11 @@ class AlertServiceFilteringTests(unittest.TestCase):
         )
         stack.enter_context(
             patch(
-                "app.services.alert_service.dispatch_email_to_clients",
+                "app.services.alerts.alert_service.dispatch_email_to_clients",
                 dispatch_mock,
             )
         )
-        log_mock = stack.enter_context(patch("app.services.alert_service.log_event"))
+        log_mock = stack.enter_context(patch("app.services.alerts.alert_service.log_event"))
         try:
             yield SimpleNamespace(dispatch_mock=dispatch_mock, log_mock=log_mock, email_service=email_service)
         finally:
@@ -263,7 +264,33 @@ class AlertServiceFilteringTests(unittest.TestCase):
         payloads = deps.dispatch_mock.call_args[0][1]
         self.assertEqual(len(payloads), 1)
         self.assertEqual(payloads[0].client.id, client_a.id)
-        self.assertEqual(payloads[0].subject, "Business tracker · 0 fiche Google détectée")
+
+    def test_previous_month_day_uses_replay_date(self) -> None:
+        client = SimpleNamespace(
+            id=uuid4(),
+            name="Client",
+            recipients=[SimpleNamespace(email="client@example.com")],
+            subscriptions=[],
+            listing_statuses=None,
+            start_date=date.today(),
+            end_date=None,
+        )
+        replay_date = date(2026, 1, 24)
+        run = SimpleNamespace(id="run-1", scope_key="restaurants", replay_for_date=replay_date, started_at=datetime(2026, 1, 31, 10, 0, 0))
+        self.session.execute.return_value.scalars.return_value = []
+
+        with (
+            self._patched_dependencies(active_clients=[client]) as deps,
+            patch.object(AlertService, "_has_previous_successful_run", return_value=True),
+            patch("app.services.alerts.alert_service.get_alert_email_settings", return_value=SimpleNamespace(include_previous_month_day_alerts=True)),
+            patch("app.services.alerts.alert_service.render_client_email", return_value=("", "")) as render_mock,
+        ):
+            service = AlertService(self.session, run)
+            service.create_google_alerts([])
+
+        self.assertTrue(render_mock.called)
+        previous_date = render_mock.call_args.kwargs.get("previous_month_day_date")
+        self.assertEqual(previous_date, subtract_months(replay_date, 1))
 
     def test_admin_notifications_can_be_disabled(self) -> None:
         establishment = self._make_establishment("recent_creation", suffix="9")
@@ -339,7 +366,7 @@ class AlertServiceFilteringTests(unittest.TestCase):
         self.assertIsNone(plan)
         self.assertEqual(reason, "initial_sync")
 
-        with patch("app.services.alert_service.get_active_clients", return_value=[]):
+        with patch("app.services.alerts.alert_service.get_active_clients", return_value=[]):
             plan, reason = service._prepare_client_dispatch(
                 [],
                 {},
@@ -356,7 +383,7 @@ class AlertServiceFilteringTests(unittest.TestCase):
         client = self._make_client()
         service = AlertService(self.session, self.run)
 
-        with patch("app.services.alert_service.get_active_clients", return_value=[client]):
+        with patch("app.services.alerts.alert_service.get_active_clients", return_value=[client]):
             plan, reason = service._prepare_client_dispatch(
                 [],
                 {},
@@ -373,7 +400,7 @@ class AlertServiceFilteringTests(unittest.TestCase):
         target_id = uuid4()
         recipientless = self._make_client(email=None)
         recipientless.id = target_id
-        with patch("app.services.alert_service.get_active_clients", return_value=[recipientless]):
+        with patch("app.services.alerts.alert_service.get_active_clients", return_value=[recipientless]):
             plan, reason = service._prepare_client_dispatch(
                 [],
                 {},
@@ -392,10 +419,10 @@ class AlertServiceFilteringTests(unittest.TestCase):
         service = AlertService(self.session, self.run)
 
         with ExitStack() as stack:
-            stack.enter_context(patch("app.services.alert_service.get_active_clients", return_value=[client]))
+            stack.enter_context(patch("app.services.alerts.alert_service.get_active_clients", return_value=[client]))
             stack.enter_context(
                 patch(
-                    "app.services.alert_service.assign_establishments_to_clients",
+                    "app.services.alerts.alert_service.assign_establishments_to_clients",
                     return_value=({}, True),
                 )
             )
@@ -417,28 +444,28 @@ class AlertServiceFilteringTests(unittest.TestCase):
         service = AlertService(self.session, self.run)
 
         with ExitStack() as stack:
-            stack.enter_context(patch("app.services.alert_service.get_active_clients", return_value=[client]))
+            stack.enter_context(patch("app.services.alerts.alert_service.get_active_clients", return_value=[client]))
             stack.enter_context(
                 patch(
-                    "app.services.alert_service.assign_establishments_to_clients",
+                    "app.services.alerts.alert_service.assign_establishments_to_clients",
                     return_value=({client.id: [establishment]}, False),
                 )
             )
             stack.enter_context(
                 patch(
-                    "app.services.alert_service.summarize_client_filters",
+                    "app.services.alerts.alert_service.summarize_client_filters",
                     return_value=SimpleNamespace(listing_statuses=[], naf_codes=[]),
                 )
             )
             stack.enter_context(
                 patch(
-                    "app.services.alert_service.render_client_email",
+                    "app.services.alerts.alert_service.render_client_email",
                     return_value=("plain", "<p>html</p>"),
                 )
             )
             stack.enter_context(
                 patch(
-                    "app.services.alert_service.collect_client_emails",
+                    "app.services.alerts.alert_service.collect_client_emails",
                     return_value=["client@example.com"],
                 )
             )

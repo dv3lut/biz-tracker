@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.db import models
 from app.observability import log_event, serialize_establishment
-from app.services.alert_service import AlertService
+from app.services.alerts.alert_service import AlertService
 from app.services.sync.replay_reference import DayReplayReference, DEFAULT_DAY_REPLAY_REFERENCE
 
 from .context import SyncContext, SyncResult

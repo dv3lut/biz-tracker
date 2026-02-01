@@ -21,9 +21,9 @@ from app.config import get_settings
 from app.db import models
 from app.observability import log_event
 from app.clients.google_places_client import GooglePlacesClient, GooglePlacesError
-from app.services.google_business.constants import PLACEHOLDER_TOKENS
-from app.services.google_business.match_rules import evaluate_candidate_match
-from app.services.google_business.matching import build_place_query
+from app.services.google_business.google_constants import PLACEHOLDER_TOKENS
+from app.services.google_business.google_match_rules import evaluate_candidate_match
+from app.services.google_business.google_matching import build_place_query
 from app.services.client_service import (
     ClientEmailPayload,
     collect_client_emails,
@@ -35,7 +35,7 @@ from app.services.client_service import (
 )
 from app.services.email_service import EmailService
 from app.services.export_service import build_google_places_workbook
-from app.services.google_business_service import GoogleBusinessService
+from app.services.google_business.google_business_service import GoogleBusinessService
 from app.utils.dates import utcnow
 from app.utils.google_listing import normalize_listing_age_status, normalize_listing_status_filters
 

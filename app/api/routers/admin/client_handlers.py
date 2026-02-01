@@ -37,6 +37,8 @@ def _client_eager_load() -> tuple[selectinload, ...]:
     return (
         selectinload(models.Client.recipients),
         selectinload(models.Client.subscriptions).selectinload(models.ClientSubscription.subcategory),
+        selectinload(models.Client.stripe_subscriptions),
+        selectinload(models.Client.subscription_events),
     )
 
 

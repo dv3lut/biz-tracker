@@ -24,40 +24,40 @@ Objectif : permettre de localiser rapidement **où se trouve une fonctionnalité
 
 ### Public
 
-- `GET /health` → `app/api/routers/health.py`
-- `POST /public/contact` → `app/api/routers/public.py`
+- `GET /health` → `app/api/routers/health_router.py`
+- `POST /public/contact` → `app/api/routers/public_router.py`
   - Utilisé par la landing page.
   - Honeypot anti-spam : champ `website` rempli ⇒ **accepté** mais **pas d’e-mail**.
 
 ### Admin (token requis)
 
-Le router admin est dans `app/api/routers/admin/__init__.py` (préfixe `/admin`).
+Le router admin est dans `app/api/routers/admin/admin_router.py` (préfixe `/admin`).
 
-- **Synchronisation** : `app/api/routers/admin/sync_runs.py`
+- **Synchronisation** : `app/api/routers/admin/sync_runs_router.py`
   - `POST /admin/sync` déclenche un run (tâche de fond FastAPI).
   - `GET /admin/sync-runs` historique.
   - `GET /admin/sync-state` checkpoints.
   - `DELETE /admin/sync-runs/{run_id}` purge un run + données associées.
-- **Établissements** : `app/api/routers/admin/establishments.py`
+- **Établissements** : `app/api/routers/admin/establishments_router.py`
   - `GET /admin/establishments` (filtres `q`, `is_individual`).
   - `GET /admin/establishments/{siret}` détail.
   - `DELETE /admin/establishments/{siret}` suppression.
-- **Alertes** : `app/api/routers/admin/alerts.py`
+- **Alertes** : `app/api/routers/admin/alerts_router.py`
   - `GET /admin/alerts/recent`.
   - `GET /admin/alerts/export?days=…` (Excel basé sur `date_creation`).
-- **Google** : `app/api/routers/admin/google.py`
+- **Google** : `app/api/routers/admin/google_router.py`
   - `POST /admin/establishments/{siret}/google-check`.
   - `GET /admin/google/places-export` (Excel).
   - `GET/PUT /admin/google/retry-config`.
-- **Stats** : `app/api/routers/admin/stats.py`
+- **Stats** : `app/api/routers/admin/stats_router.py`
   - `GET /admin/stats/summary`.
   - `GET /admin/stats/dashboard?days=…`.
-- **Email** : `app/api/routers/admin/email.py`
+- **Email** : `app/api/routers/admin/email_router.py`
   - `POST /admin/email/test`.
   - `GET/PUT /admin/email/admin-recipients`.
-- **Clients** : `app/api/routers/admin/clients.py` (+ handlers dédiés)
+- **Clients** : `app/api/routers/admin/clients_router.py` (+ handlers dédiés)
   - CRUD sur clients + recipients + subscriptions.
-- **Catalogue NAF** : `app/api/routers/admin/naf_categories.py`
+- **Catalogue NAF** : `app/api/routers/admin/naf_categories_router.py`
   - CRUD sur catégories et sous-catégories NAF (inclut `keywords` et `is_active`).
 
 ## Pipeline de synchronisation (Sirene → DB → Google → alertes)
@@ -83,30 +83,30 @@ Clients externes :
 ## Workflows (user stories) → où chercher quoi
 
 - **Déclencher un run (UI/POST /admin/sync)**
-  - Route : `app/api/routers/admin/sync_runs.py`
+  - Route : `app/api/routers/admin/sync_runs_router.py`
   - Pipeline : `app/services/sync_service.py` + `app/services/sync/*`
 - **Auto-run (scheduler)**
   - Worker : `app/services/sync_scheduler.py`
   - Règles : `APP_ENVIRONMENT`, `SYNC__AUTO_*`, `SYNC__MINIMUM_DELAY_MINUTES`
 - **Gérer le catalogue NAF (codes actifs, descriptions, keywords)**
-  - Route : `app/api/routers/admin/naf_categories.py`
+  - Route : `app/api/routers/admin/naf_categories_router.py`
   - Modèle : `app/db/models.py` (`naf_categories`, `naf_subcategories`)
   - Validation : `app/utils/naf.py`
 - **Configurer un client (période, statuts Google, destinataires)**
-  - Routes : `app/api/routers/admin/clients.py`, `app/api/routers/admin/email.py`
+  - Routes : `app/api/routers/admin/clients_router.py`, `app/api/routers/admin/email_router.py`
   - Service : `app/services/client_service.py`
   - Modèles : `Client`, `ClientRecipient`, `ClientSubscription`
 - **Enrichissement Google / exports**
-  - Route export : `app/api/routers/admin/google.py` + `app/api/routers/admin/google_handlers.py`
-  - Matching : `app/services/google_business/*` et `app/services/google_business_service.py`
-  - Quotas/retry : `app/services/rate_limiter.py`, `app/services/google_retry_config.py`
+  - Route export : `app/api/routers/admin/google_router.py` + `app/api/routers/admin/google_handlers.py`
+  - Matching : `app/services/google_business/google_*` et `app/services/google_business/google_business_service.py`
+  - Quotas/retry : `app/services/rate_limiter.py`, `app/services/google/google_retry_config.py`
 - **Alertes & exports alertes**
-  - Route : `app/api/routers/admin/alerts.py`
-  - Génération : `app/services/alert_service.py`
+  - Route : `app/api/routers/admin/alerts_router.py`
+  - Génération : `app/services/alerts/alert_service.py`
   - Rendu e-mail : `app/services/alerts/email_renderer.py`
   - Export : `app/services/export_service.py`
 - **Formulaire landing (/public/contact)**
-  - Route : `app/api/routers/public.py`
+  - Route : `app/api/routers/public_router.py`
   - E-mail : `app/services/email_service.py`
 
 ## Modèle de données (repères)

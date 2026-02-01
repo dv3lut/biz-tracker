@@ -13,7 +13,7 @@ Merci de maintenir ces fichiers à jour avant toute évolution majeure.
 ## Repères express par couche
 
 - **API FastAPI (`app/api/…`)**
-	- `routers/*.py` : endpoints REST par ressource (`sync`, `stats`, `alerts`, `google`, `email`).
+	- `routers/*_router.py` (+ `routers/admin/*_router.py`) : endpoints REST par ressource (`sync`, `stats`, `alerts`, `google`, `email`).
 	- `dependencies.py` : session SQLAlchemy, vérification du token admin, injection du scheduler.
 	- `schemas.py` : Pydantic models partagés entre routes.
 - **Clients externes (`app/clients/…`)**
@@ -21,9 +21,9 @@ Merci de maintenir ces fichiers à jour avant toute évolution majeure.
 	- `google_places_client.py` : wrapper Places API + backoff (utilisé uniquement par GoogleBusinessService).
 - **Services métier (`app/services/…`)**
 	- Collecte : `sync_service.py` (orchestrateur), modules `sync/` (`collector.py`, `runner.py`, `persistence.py`) pour la fenêtre et la reprise, `establishment_mapper.py` (nettoyage), `sync_scheduler.py` et `incremental_scheduler.py` (cron interne).
-	- Alertes & emails : `alert_service.py`, `email_service.py`, `client_service.py`, `export_service.py`.
-	- Google : `google_business_service.py` pilote le backlog, `google_business/lookup_engine.py` fait les appels API, `constants.py` / `types.py` / `keywords.py` centralisent les briques communes.
-	- Gouvernance : `rate_limiter.py` + `google_retry_config.py` (quotas, jours autorisés).
+	- Alertes & emails : `alerts/alert_service.py`, `email_service.py`, `client_service.py`, `export_service.py`.
+	- Google : `google_business/google_business_service.py` pilote le backlog, `google_business/google_lookup_engine.py` fait les appels API, `google_business/google_constants.py` / `google_business/google_types.py` / `google_business/google_keywords.py` centralisent les briques communes.
+	- Gouvernance : `rate_limiter.py` + `google/google_retry_config.py` (quotas, jours autorisés).
 - **Données & utilitaires**
 	- `app/db/models.py` : schéma complet (establishments, sync_runs, clients...).
 	- `app/db/session.py` : ouverture de session + `init_db`.

@@ -84,7 +84,7 @@ class NafSubCategoryCreate(BaseModel):
     name: str
     naf_code: str
     description: str | None = None
-    price_eur: float = Field(ge=0, description="Tarif de référence en euros TTC.")
+    price_eur: float | None = Field(default=None, ge=0, description="Tarif de référence en euros TTC.")
     is_active: bool = True
 
 

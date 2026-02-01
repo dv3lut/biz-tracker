@@ -97,6 +97,7 @@ def test_create_client_action_success(monkeypatch):
             obj.emails_sent_count = 0
             obj.recipients = []
             obj.subscriptions = []
+            obj.stripe_subscriptions = []
 
         def flush(self):
             return None
@@ -173,6 +174,7 @@ def test_update_client_action_applies_optional_sections(monkeypatch):
     updated_at=utcnow(),
         recipients=[],
         subscriptions=[],
+        stripe_subscriptions=[],
     )
     session = SimpleNamespace(flush=lambda: None, refresh=lambda obj: None, rollback=lambda: None)
     monkeypatch.setattr(handlers, "_get_client_or_404", lambda sess, client_id: client)

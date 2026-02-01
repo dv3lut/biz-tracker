@@ -85,6 +85,42 @@ def run_schema_upgrades(engine: Engine) -> None:
         )
         """,
         """
+        ALTER TABLE clients
+        ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR(255)
+        """,
+        """
+        ALTER TABLE clients
+        ADD COLUMN IF NOT EXISTS stripe_subscription_id VARCHAR(255)
+        """,
+        """
+        ALTER TABLE clients
+        ADD COLUMN IF NOT EXISTS stripe_subscription_status VARCHAR(64)
+        """,
+        """
+        ALTER TABLE clients
+        ADD COLUMN IF NOT EXISTS stripe_current_period_end TIMESTAMP
+        """,
+        """
+        ALTER TABLE clients
+        ADD COLUMN IF NOT EXISTS stripe_cancel_at TIMESTAMP
+        """,
+        """
+        ALTER TABLE clients
+        ADD COLUMN IF NOT EXISTS stripe_plan_key VARCHAR(32)
+        """,
+        """
+        ALTER TABLE clients
+        ADD COLUMN IF NOT EXISTS stripe_price_id VARCHAR(255)
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS ix_clients_stripe_customer_id
+        ON clients (stripe_customer_id)
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS ix_clients_stripe_subscription_id
+        ON clients (stripe_subscription_id)
+        """,
+        """
         ALTER TABLE establishments
         ADD COLUMN IF NOT EXISTS google_place_id VARCHAR(128)
         """,
@@ -260,8 +296,95 @@ def run_schema_upgrades(engine: Engine) -> None:
             micro_rules JSONB NOT NULL DEFAULT '[]'::jsonb,
             micro_company_categories JSONB NOT NULL DEFAULT '[]'::jsonb,
             micro_legal_categories JSONB NOT NULL DEFAULT '[]'::jsonb,
+            retry_missing_contact_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+            retry_missing_contact_frequency_days INTEGER NOT NULL DEFAULT 14,
             updated_at TIMESTAMP NOT NULL DEFAULT NOW()
         )
+        """,
+        """
+        ALTER TABLE google_retry_config
+        ADD COLUMN IF NOT EXISTS retry_missing_contact_enabled BOOLEAN NOT NULL DEFAULT TRUE
+        """,
+        """
+        ALTER TABLE google_retry_config
+        ADD COLUMN IF NOT EXISTS retry_missing_contact_frequency_days INTEGER NOT NULL DEFAULT 14
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS stripe_billing_settings (
+            id SERIAL PRIMARY KEY,
+            trial_period_days INTEGER NOT NULL DEFAULT 14,
+            updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+        """,
+        """
+        ALTER TABLE stripe_billing_settings
+        ADD COLUMN IF NOT EXISTS last_weekly_summary_at TIMESTAMP
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS client_stripe_subscriptions (
+            id UUID PRIMARY KEY,
+            client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+            stripe_subscription_id VARCHAR(255) NOT NULL UNIQUE,
+            stripe_customer_id VARCHAR(255),
+            status VARCHAR(64),
+            plan_key VARCHAR(32),
+            price_id VARCHAR(255),
+            referrer_name VARCHAR(255),
+            purchased_at TIMESTAMP,
+            trial_start_at TIMESTAMP,
+            trial_end_at TIMESTAMP,
+            paid_start_at TIMESTAMP,
+            current_period_start TIMESTAMP,
+            current_period_end TIMESTAMP,
+            cancel_at TIMESTAMP,
+            canceled_at TIMESTAMP,
+            ended_at TIMESTAMP,
+            created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS ix_client_stripe_subscriptions_client_id
+        ON client_stripe_subscriptions (client_id)
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS ix_client_stripe_subscriptions_subscription_id
+        ON client_stripe_subscriptions (stripe_subscription_id)
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS ix_client_stripe_subscriptions_customer_id
+        ON client_stripe_subscriptions (stripe_customer_id)
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS client_subscription_events (
+            id UUID PRIMARY KEY,
+            client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+            stripe_subscription_id VARCHAR(255),
+            event_type VARCHAR(64) NOT NULL,
+            from_plan_key VARCHAR(32),
+            to_plan_key VARCHAR(32),
+            from_category_ids JSONB,
+            to_category_ids JSONB,
+            effective_at TIMESTAMP,
+            source VARCHAR(32),
+            created_at TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS ix_client_subscription_events_client_id
+        ON client_subscription_events (client_id)
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS ix_client_subscription_events_subscription_id
+        ON client_subscription_events (stripe_subscription_id)
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS ix_client_subscription_events_created_at
+        ON client_subscription_events (created_at)
+        """,
+        """
+        ALTER TABLE client_stripe_subscriptions
+        ADD COLUMN IF NOT EXISTS referrer_name VARCHAR(255)
         """,
     ]
 

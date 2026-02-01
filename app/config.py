@@ -70,6 +70,7 @@ class EmailSettings(BaseModel):
     enabled: bool = Field(default=False)
     smtp_host: Optional[str] = None
     smtp_port: int = Field(default=587, ge=1)
+    smtp_timeout_seconds: int = Field(default=10, ge=1)
     smtp_username: Optional[str] = None
     smtp_password: Optional[str] = None
     use_tls: bool = Field(default=True)
@@ -255,6 +256,31 @@ class PublicContactSettings(BaseModel):
     )
 
 
+class StripeSettings(BaseModel):
+    secret_key: Optional[str] = Field(default=None, description="Clé secrète Stripe.")
+    webhook_secret: Optional[str] = Field(default=None, description="Secret de signature des webhooks Stripe.")
+    success_url: str = Field(
+        default="https://business-tracker.fr/#pricing",
+        description="URL de redirection après paiement réussi.",
+    )
+    cancel_url: str = Field(
+        default="https://business-tracker.fr/#pricing",
+        description="URL de redirection après annulation du paiement.",
+    )
+    portal_return_url: str = Field(
+        default="https://business-tracker.fr/upgrade",
+        description="URL de retour depuis le Customer Portal.",
+    )
+    upgrade_url: str = Field(
+        default="https://business-tracker.fr/upgrade",
+        description="URL de la page dédiée pour la gestion et l'upgrade de plan.",
+    )
+    price_ids: Dict[str, str] = Field(
+        default_factory=dict,
+        description="Mapping plan_key -> price_id Stripe.",
+    )
+
+
 def _permissive_json_loads(value: str) -> Any:
     trimmed = value.strip()
     if not trimmed:
@@ -324,6 +350,7 @@ class Settings(BaseSettings):
     api: ApiSettings = Field(default_factory=ApiSettings)
     google: GoogleSettings = Field(default_factory=GoogleSettings)
     public_contact: PublicContactSettings = Field(default_factory=PublicContactSettings)
+    stripe: StripeSettings = Field(default_factory=StripeSettings)
 
     @property
     def is_local(self) -> bool:

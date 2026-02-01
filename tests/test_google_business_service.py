@@ -11,9 +11,9 @@ from app.services.google_business import (
     compute_listing_age_status,
     should_assume_recent_listing,
 )
-from app.services.google_business import listing as listing_utils
-from app.services.google_business.lookup_engine import GoogleLookupEngine
-from app.services.google_business_service import GoogleBusinessService
+from app.services.google_business import google_listing as listing_utils
+from app.services.google_business.google_lookup_engine import GoogleLookupEngine
+from app.services.google_business.google_business_service import GoogleBusinessService
 from app.clients.google_places_client import GooglePlacesError
 
 

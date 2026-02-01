@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from html import escape
 from typing import Final, Sequence
 
@@ -51,6 +52,26 @@ STATUS_COLORS: Final[dict[str, dict[str, str]]] = {
     "not_recent_creation": {"bg": "#dbeafe", "text": "#1e40af", "border": "#93c5fd"},
     "unknown": {"bg": "#f3f4f6", "text": "#6b7280", "border": "#d1d5db"},
 }
+
+MONTH_LABELS_FR: Final[dict[int, str]] = {
+    1: "janvier",
+    2: "février",
+    3: "mars",
+    4: "avril",
+    5: "mai",
+    6: "juin",
+    7: "juillet",
+    8: "août",
+    9: "septembre",
+    10: "octobre",
+    11: "novembre",
+    12: "décembre",
+}
+
+
+def _format_date_fr(value: date) -> str:
+    month_label = MONTH_LABELS_FR.get(value.month, str(value.month))
+    return f"{value.day} {month_label} {value.year}"
 
 
 def _section_title_for_status(status: str) -> str:
@@ -110,6 +131,8 @@ def render_client_email(
     establishments: Sequence[models.Establishment],
     *,
     filters: ClientFilterSummary | None = None,
+    previous_month_day_establishments: Sequence[models.Establishment] | None = None,
+    previous_month_day_date: date | None = None,
 ) -> tuple[str, str]:
     match_count = len(establishments)
     selected_statuses = list(filters.listing_statuses) if filters and filters.listing_statuses else list(STATUS_SECTION_ORDER)
@@ -143,7 +166,11 @@ def render_client_email(
 
     ordered_establishments = _order_establishments_by_status(establishments, ordered_statuses=section_statuses)
 
-    def _build_item_blocks(establishment: models.Establishment) -> tuple[list[str], str]:
+    def _build_item_blocks(
+        establishment: models.Establishment,
+        *,
+        context_label: str | None = None,
+    ) -> tuple[list[str], str]:
         name = establishment.name or "(nom indisponible)"
         full_address = formatter.format_full_address(establishment)
         category_name, subcategory_name = formatter.resolve_category_and_subcategory(establishment.naf_code)
@@ -151,9 +178,14 @@ def render_client_email(
             category_name = establishment.naf_libelle
         normalized_status = normalize_listing_age_status(establishment.google_listing_age_status)
         border_color = STATUS_COLORS.get(normalized_status, STATUS_COLORS["unknown"])["border"]
+        item_bg = theme["item_bg"]
+        if context_label:
+            item_bg = "#eef2f7"
+            border_color = "#94a3b8"
         google_url = establishment.google_place_url
 
-        item_lines = [f"- {name}"]
+        prefix = f"[{context_label}] " if context_label else ""
+        item_lines = [f"- {prefix}{name}"]
         if full_address:
             item_lines.append(f"  {full_address}")
         if category_name:
@@ -167,7 +199,15 @@ def render_client_email(
             client_label = CLIENT_STATUS_LABELS.get(normalized_status, status_label)
             item_lines.append(f"  Statut fiche Google : {client_label}")
 
-        item_html_parts = [f"<strong style=\"font-size:15px;color:{theme['text']};\">{escape(name)}</strong>"]
+        item_html_parts: list[str] = []
+        if context_label:
+            item_html_parts.append(
+                f"<div style=\"font-size:11px;text-transform:uppercase;letter-spacing:0.08em;"
+                f"color:{theme['text_muted']};margin-bottom:6px;\">{escape(context_label)}</div>"
+            )
+        item_html_parts.append(
+            f"<strong style=\"font-size:15px;color:{theme['text']};\">{escape(name)}</strong>"
+        )
         if full_address:
             item_html_parts.append(
                 f"<div style=\"margin-top:4px;color:{theme['text_muted']};font-size:13px;\">{escape(full_address)}</div>"
@@ -197,7 +237,7 @@ def render_client_email(
             badge = _get_status_badge_html(normalized_status, client_label)
             item_html_parts.append(f"<div style=\"margin-top:10px;\">Statut : {badge}</div>")
         item_html = (
-            f"<li style=\"margin-bottom:20px;padding:14px;background:#f9fafb;border-radius:8px;"
+            f"<li style=\"margin-bottom:20px;padding:14px;background:{item_bg};border-radius:8px;"
             f"border-left:4px solid {border_color};\">"
             + "".join(item_html_parts)
             + "</li>"
@@ -208,11 +248,12 @@ def render_client_email(
         items: Sequence[models.Establishment],
         *,
         show_empty_placeholder: bool,
+        context_label: str | None = None,
     ) -> None:
         if items:
             html_parts.append("<ul style=\"list-style:none;padding:0;margin:0;\">")
             for establishment in items:
-                item_lines, item_html = _build_item_blocks(establishment)
+                item_lines, item_html = _build_item_blocks(establishment, context_label=context_label)
                 lines.extend(item_lines)
                 lines.append("")
                 html_parts.append(item_html)
@@ -249,6 +290,44 @@ def render_client_email(
         html_parts.append(
             f"<p style=\"margin-top:24px;color:{theme['text_subtle']};\">Nous vous notifierons dès qu'un nouvel établissement correspondra à ces critères.</p>"
         )
+
+    if previous_month_day_date is not None:
+        previous_label = _format_date_fr(previous_month_day_date)
+        lines.append("\n".join([
+            "—" * 52,
+            f"Pour rappel, voici les alertes qui ont été générées le {previous_label} :",
+            "—" * 52,
+            "",
+        ]).strip("\n"))
+        html_parts.append(
+            f"<div style=\"margin:28px 0 16px;padding:14px 16px;border:1px dashed {theme['border']};"
+            f"border-radius:10px;background:{theme['item_bg']};\">"
+            f"<p style=\"margin:0 0 6px;font-size:12px;color:{theme['text_muted']};text-transform:uppercase;letter-spacing:0.08em;\">"
+            "Rappel mensuel"
+            "</p>"
+            f"<h3 style=\"margin:0;font-size:15px;color:{theme['text']};\">"
+            f"Alertes générées le {escape(previous_label)}"
+            "</h3>"
+            "</div>"
+        )
+        previous_items = list(previous_month_day_establishments or [])
+        if previous_items:
+            ordered_previous_items = _order_establishments_by_status(
+                previous_items,
+                ordered_statuses=section_statuses,
+            )
+            _append_establishments(
+                ordered_previous_items,
+                show_empty_placeholder=False,
+                context_label="Rappel mensuel",
+            )
+        else:
+            lines.append("Aucune alerte n'a été générée ce jour-là.")
+            lines.append("")
+            html_parts.append(
+                f"<p style=\"margin:0 0 16px;color:{theme['text_muted']};\">"
+                "Aucune alerte n'a été générée ce jour-là.</p>"
+            )
 
     lines.extend(["Cordialement,", "L'équipe Business tracker"])
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from app.services.google_business.match_rules import evaluate_candidate_match
+from app.services.google_business.google_match_rules import evaluate_candidate_match
 
 
 def _est(
