@@ -7,7 +7,7 @@ export type NafSubCategoryFormPayload = {
   name: string;
   description: string | null;
   nafCode: string;
-  priceEur: number;
+  priceEur?: number;
   isActive: boolean;
 };
 
@@ -78,9 +78,7 @@ export const NafSubCategoryModal = ({
   }, [isOpen, mode, subcategory, categories, initialCategoryId]);
 
   const isValid = useMemo(() => {
-    return Boolean(
-      formState.categoryId && formState.name.trim() && formState.nafCode.trim() && formState.priceEur.trim(),
-    );
+    return Boolean(formState.categoryId && formState.name.trim() && formState.nafCode.trim());
   }, [formState]);
 
   const handleChange = (field: TextField) =>
@@ -98,7 +96,7 @@ export const NafSubCategoryModal = ({
       name: formState.name.trim(),
       description: formState.description.trim() ? formState.description.trim() : null,
       nafCode: formState.nafCode.trim(),
-      priceEur: Number(formState.priceEur),
+      priceEur: formState.priceEur.trim() ? Number(formState.priceEur) : undefined,
       isActive: formState.isActive,
     };
     onSubmit(payload);
@@ -183,8 +181,7 @@ export const NafSubCategoryModal = ({
                   min="0"
                   value={formState.priceEur}
                   onChange={handleChange("priceEur")}
-                  placeholder="99"
-                  required
+                  placeholder="Optionnel"
                 />
               </div>
               <label className="form-checkbox">

@@ -5,6 +5,7 @@ export type SectionKey =
   | "clients"
   | "naf-config"
   | "emails"
+  | "billing"
   | "establishments";
 
 export interface SectionDefinition {
@@ -21,5 +22,6 @@ export const NAV_SECTIONS: ReadonlyArray<SectionDefinition> = [
   { key: "clients", label: "Clients", description: "Destinataires par client" },
   { key: "naf-config", label: "Config NAF", description: "Catégories et souscriptions" },
   { key: "emails", label: "E-mails", description: "Configuration & tests" },
+  { key: "billing", label: "Facturation", description: "Essai Stripe" },
   { key: "establishments", label: "Etablissements", description: "Recherche & actions" },
 ];

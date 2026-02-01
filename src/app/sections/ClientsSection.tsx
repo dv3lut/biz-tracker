@@ -165,6 +165,7 @@ export const ClientsSection = ({ onUnauthorized }: Props) => {
     <>
       <ClientsView
         clients={clientsQuery.data}
+        nafCategories={nafCategoriesQuery.data}
         isLoading={clientsQuery.isLoading}
         isRefreshing={clientsIsRefreshing}
         error={clientsError}

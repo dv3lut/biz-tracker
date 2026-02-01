@@ -385,6 +385,42 @@ export interface ClientSubscription {
   subcategory: NafSubCategory;
 }
 
+export interface StripeSubscriptionHistory {
+  id: string;
+  clientId: string;
+  stripeSubscriptionId: string;
+  stripeCustomerId: string | null;
+  status: string | null;
+  planKey: string | null;
+  priceId: string | null;
+  referrerName: string | null;
+  purchasedAt: string | null;
+  trialStartAt: string | null;
+  trialEndAt: string | null;
+  paidStartAt: string | null;
+  currentPeriodStart: string | null;
+  currentPeriodEnd: string | null;
+  cancelAt: string | null;
+  canceledAt: string | null;
+  endedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ClientSubscriptionEvent {
+  id: string;
+  clientId: string;
+  stripeSubscriptionId: string | null;
+  eventType: string;
+  fromPlanKey: string | null;
+  toPlanKey: string | null;
+  fromCategoryIds: string[] | null;
+  toCategoryIds: string[] | null;
+  effectiveAt: string | null;
+  source: string | null;
+  createdAt: string;
+}
+
 export interface Client {
   id: string;
   name: string;
@@ -397,10 +433,28 @@ export interface Client {
   updatedAt: string;
   recipients: ClientRecipient[];
   subscriptions: ClientSubscription[];
+  stripeSubscriptions: StripeSubscriptionHistory[];
+  subscriptionEvents: ClientSubscriptionEvent[];
 }
 
 export interface AdminEmailConfig {
   recipients: string[];
+  includePreviousMonthDayAlerts: boolean;
+}
+
+export interface AdminStripeSettings {
+  trialPeriodDays: number;
+}
+
+export interface AdminStripeSettingsUpdatePayload {
+  trialPeriodDays: number;
+  applyToExistingTrials: boolean;
+}
+
+export interface AdminStripeSettingsUpdateResult {
+  trialPeriodDays: number;
+  updatedTrials: number;
+  failedTrials: number;
 }
 
 export interface GoogleCheckResult {
@@ -435,6 +489,8 @@ export interface GoogleFindPlaceDebugResult {
 
 export interface GoogleRetryConfig {
   retryWeekdays: number[];
+  retryMissingContactEnabled: boolean;
+  retryMissingContactFrequencyDays: number;
   defaultRules: GoogleRetryRule[];
   microRules: GoogleRetryRule[];
 }

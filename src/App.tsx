@@ -9,6 +9,7 @@ import { DashboardSection } from "./app/sections/DashboardSection";
 import { EmailsSection } from "./app/sections/EmailsSection";
 import { EstablishmentsSection } from "./app/sections/EstablishmentsSection";
 import { NafConfigSection } from "./app/sections/NafConfigSection";
+import { StripeSettingsSection } from "./app/sections/StripeSettingsSection";
 import { SyncSection } from "./app/sections/SyncSection";
 import type { SectionKey } from "./constants/sections";
 import { AdminTokenPrompt } from "./components/AdminTokenPrompt";
@@ -68,6 +69,8 @@ const App = () => {
         );
       case "emails":
         return <EmailsSection onUnauthorized={handleUnauthorized} />;
+      case "billing":
+        return <StripeSettingsSection onUnauthorized={handleUnauthorized} />;
       case "establishments":
         return (
           <EstablishmentsSection
