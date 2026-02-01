@@ -21,6 +21,7 @@ type ClientResponse = {
   recipients: ClientRecipientResponse[];
   subscriptions: ClientSubscriptionResponse[];
   stripe_subscriptions: StripeSubscriptionResponse[];
+  subscription_events: ClientSubscriptionEventResponse[];
 };
 
 type StripeSubscriptionResponse = {
@@ -50,6 +51,20 @@ type ClientSubscriptionResponse = {
   subcategory_id: string;
   created_at: string;
   subcategory: NafSubCategoryResponse;
+};
+
+type ClientSubscriptionEventResponse = {
+  id: string;
+  client_id: string;
+  stripe_subscription_id: string | null;
+  event_type: string;
+  from_plan_key: string | null;
+  to_plan_key: string | null;
+  from_category_ids: string[] | null;
+  to_category_ids: string[] | null;
+  effective_at: string | null;
+  source: string | null;
+  created_at: string;
 };
 
 export interface ClientCreatePayload {
@@ -112,6 +127,19 @@ const mapClient = (client: ClientResponse): Client => {
       endedAt: subscription.ended_at,
       createdAt: subscription.created_at,
       updatedAt: subscription.updated_at,
+    })),
+    subscriptionEvents: (client.subscription_events || []).map((event) => ({
+      id: event.id,
+      clientId: event.client_id,
+      stripeSubscriptionId: event.stripe_subscription_id,
+      eventType: event.event_type,
+      fromPlanKey: event.from_plan_key,
+      toPlanKey: event.to_plan_key,
+      fromCategoryIds: event.from_category_ids,
+      toCategoryIds: event.to_category_ids,
+      effectiveAt: event.effective_at,
+      source: event.source,
+      createdAt: event.created_at,
     })),
   };
 };

@@ -1,9 +1,13 @@
-import { Client } from "../types";
+import { useState } from "react";
+
+import { Client, NafCategory } from "../types";
 import { formatDate, formatDateTime, formatNumber } from "../utils/format";
 import { LISTING_STATUS_LABELS } from "../constants/listingStatuses";
+import { ClientDetailModal } from "./ClientDetailModal";
 
 type Props = {
   clients?: Client[];
+  nafCategories?: NafCategory[];
   isLoading: boolean;
   isRefreshing: boolean;
   error: Error | null;
@@ -34,6 +38,7 @@ const isClientActive = (client: Client): boolean => {
 
 export const ClientsSection = ({
   clients,
+  nafCategories,
   isLoading,
   isRefreshing,
   error,
@@ -45,6 +50,9 @@ export const ClientsSection = ({
   onDelete,
   deletingClientId,
 }: Props) => {
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+
   const handleDelete = (client: Client) => {
     const confirmed = window.confirm(
       `Supprimer le client "${client.name}" et toutes ses adresses e-mail associées ?`
@@ -52,6 +60,16 @@ export const ClientsSection = ({
     if (confirmed) {
       onDelete(client);
     }
+  };
+
+  const handleOpenDetail = (client: Client) => {
+    setSelectedClient(client);
+    setIsDetailOpen(true);
+  };
+
+  const handleCloseDetail = () => {
+    setIsDetailOpen(false);
+    setSelectedClient(null);
   };
 
   return (
@@ -103,7 +121,7 @@ export const ClientsSection = ({
               {clients.map((client) => {
                 const active = isClientActive(client);
                 return (
-                  <tr key={client.id}>
+                  <tr key={client.id} onClick={() => handleOpenDetail(client)}>
                     <td>
                       <strong>{client.name}</strong>
                       <br />
@@ -201,13 +219,23 @@ export const ClientsSection = ({
                     </td>
                     <td>
                       <div className="card-actions">
-                        <button type="button" className="ghost" onClick={() => onEdit(client)}>
+                        <button
+                          type="button"
+                          className="ghost"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onEdit(client);
+                          }}
+                        >
                           Modifier
                         </button>
                         <button
                           type="button"
                           className="danger"
-                          onClick={() => handleDelete(client)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleDelete(client);
+                          }}
                           disabled={deletingClientId === client.id}
                         >
                           {deletingClientId === client.id ? "Suppression…" : "Supprimer"}
@@ -221,6 +249,13 @@ export const ClientsSection = ({
           </table>
         </div>
       )}
+
+      <ClientDetailModal
+        isOpen={isDetailOpen}
+        client={selectedClient}
+        nafCategories={nafCategories}
+        onClose={handleCloseDetail}
+      />
     </section>
   );
 };

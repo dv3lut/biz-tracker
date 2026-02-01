@@ -407,6 +407,20 @@ export interface StripeSubscriptionHistory {
   updatedAt: string;
 }
 
+export interface ClientSubscriptionEvent {
+  id: string;
+  clientId: string;
+  stripeSubscriptionId: string | null;
+  eventType: string;
+  fromPlanKey: string | null;
+  toPlanKey: string | null;
+  fromCategoryIds: string[] | null;
+  toCategoryIds: string[] | null;
+  effectiveAt: string | null;
+  source: string | null;
+  createdAt: string;
+}
+
 export interface Client {
   id: string;
   name: string;
@@ -420,6 +434,7 @@ export interface Client {
   recipients: ClientRecipient[];
   subscriptions: ClientSubscription[];
   stripeSubscriptions: StripeSubscriptionHistory[];
+  subscriptionEvents: ClientSubscriptionEvent[];
 }
 
 export interface AdminEmailConfig {
