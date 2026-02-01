@@ -123,3 +123,17 @@ All colors MUST be HSL.
     @apply bg-background text-foreground;
   }
 }
+
+@keyframes bt-ring-blink {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 hsl(var(--secondary) / 0);
+  }
+  50% {
+    box-shadow: 0 0 0 3px hsl(var(--secondary) / 0.8);
+  }
+}
+
+.bt-ring-blink {
+  animation: bt-ring-blink 0.9s ease-in-out 4;
+}

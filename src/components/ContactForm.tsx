@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -17,6 +17,9 @@ import { useToast } from "@/hooks/use-toast";
 
 const ContactForm = () => {
   const { toast } = useToast();
+  const [submittedName, setSubmittedName] = useState<string | null>(null);
+  const [highlightContact, setHighlightContact] = useState(false);
+  const highlightTimeoutRef = useRef<number | null>(null);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -90,6 +93,47 @@ const ContactForm = () => {
     return () => window.clearInterval(interval);
   }, [cooldownUntilMs]);
 
+  useEffect(() => {
+    const triggerHighlight = () => {
+      setHighlightContact(true);
+      if (highlightTimeoutRef.current) {
+        window.clearTimeout(highlightTimeoutRef.current);
+      }
+      highlightTimeoutRef.current = window.setTimeout(() => {
+        setHighlightContact(false);
+        highlightTimeoutRef.current = null;
+      }, 1500);
+    };
+
+    const applyPrefill = (message: string) => {
+      setFormData((current) => ({
+        ...current,
+        message,
+      }));
+      triggerHighlight();
+    };
+
+    const storedMessage = sessionStorage.getItem("bt_contact_prefill_message");
+    if (storedMessage) {
+      applyPrefill(storedMessage);
+      sessionStorage.removeItem("bt_contact_prefill_message");
+    }
+
+    const handler = (event: Event) => {
+      const customEvent = event as CustomEvent<{ message?: string }>;
+      if (!customEvent.detail?.message) return;
+      applyPrefill(customEvent.detail.message);
+    };
+
+    window.addEventListener("bt:prefill-contact", handler as EventListener);
+    return () => {
+      window.removeEventListener("bt:prefill-contact", handler as EventListener);
+      if (highlightTimeoutRef.current) {
+        window.clearTimeout(highlightTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitting || isInCooldown) return;
@@ -150,6 +194,7 @@ const ContactForm = () => {
         phone: "",
         message: "",
       });
+      setSubmittedName(formData.name.trim() || null);
       setIsSuccessDialogOpen(true);
     } finally {
       setIsSubmitting(false);
@@ -171,16 +216,20 @@ const ContactForm = () => {
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-12">
             <h2 className="text-3xl md:text-4xl font-bold mb-4">
-              Essai gratuit 14 jours
+              Parlons de vos besoins
             </h2>
             <p className="text-lg text-muted-foreground">
-              Découvrez la qualité de nos données gratuitement
+              Une question, un besoin spécifique ou une demande Enterprise ? Nous répondons rapidement.
             </p>
           </div>
 
           <div className="grid md:grid-cols-3 gap-8">
             <div className="md:col-span-2">
-              <Card className="p-8">
+              <Card
+                className={`p-8 transition-shadow ${
+                  highlightContact ? "bt-ring-blink shadow-lg" : ""
+                }`}
+              >
                 <form onSubmit={handleSubmit} className="space-y-6">
                   <div className="grid md:grid-cols-2 gap-4">
                     <div>
@@ -263,7 +312,7 @@ const ContactForm = () => {
                         <span className="sr-only">Envoi en cours...</span>
                       </>
                     ) : (
-                      "Envoyer ma demande d'essai gratuit"
+                      "Envoyer mon message"
                     )}
                   </Button>
 
@@ -375,7 +424,8 @@ const ContactForm = () => {
           <DialogHeader>
             <DialogTitle>Message envoyé</DialogTitle>
             <DialogDescription>
-              Merci ! Votre demande a bien été envoyée. Nous revenons vers vous très vite.
+              {submittedName ? `Merci ${submittedName} ! ` : "Merci ! "}
+              Votre demande a bien été envoyée. Nous revenons vers vous dans les plus brefs délais.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

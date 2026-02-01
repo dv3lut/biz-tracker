@@ -7,6 +7,10 @@ const Hero = () => {
     document.getElementById("contact")?.scrollIntoView({ behavior: "smooth" });
   };
 
+  const scrollToPricing = () => {
+    document.getElementById("pricing")?.scrollIntoView({ behavior: "smooth" });
+  };
+
   return (
     <section 
       className="relative min-h-[90vh] flex items-center justify-center overflow-hidden"
@@ -46,19 +50,19 @@ const Hero = () => {
             <Button 
               size="lg" 
               variant="hero"
-              onClick={scrollToContact}
+              onClick={scrollToPricing}
               className="text-lg px-8 py-6 h-auto"
             >
-              Essai gratuit 14 jours
+              Choisir une formule
               <ArrowRight className="ml-2 w-5 h-5" />
             </Button>
             <Button 
               size="lg" 
               variant="outline-light"
-              onClick={() => document.getElementById("pricing")?.scrollIntoView({ behavior: "smooth" })}
+              onClick={scrollToContact}
               className="text-lg px-8 py-6 h-auto"
             >
-              Voir les tarifs
+              Nous contacter
             </Button>
             <Button
               asChild
