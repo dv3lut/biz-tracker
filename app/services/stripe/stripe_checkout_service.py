@@ -190,11 +190,20 @@ def get_subscription_update_preview(
     if not items:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Abonnement Stripe invalide.")
 
+    current_metadata = subscription.get("metadata") or {}
     current_price_id = (items[0].get("price") or {}).get("id")
     current_amount = _get_price_amount(current_price_id)
     target_amount = _get_price_amount(plan.price_id)
     is_plan_change = current_price_id != plan.price_id
     is_upgrade = _is_upgrade(current_amount=current_amount, target_amount=target_amount) if is_plan_change else False
+    current_plan_key = current_metadata.get("plan_key") or resolve_plan_key(settings, current_price_id)
+    pending_plan_key = current_metadata.get("pending_plan_key")
+    is_canceling_pending_downgrade = (
+        bool(pending_plan_key)
+        and pending_plan_key != payload.plan_key
+        and current_plan_key == payload.plan_key
+        and current_price_id == plan.price_id
+    )
 
     trial_end = to_datetime(subscription.get("trial_end"))
     now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -210,6 +219,15 @@ def get_subscription_update_preview(
             or invoice_settings.get("default_payment_method")
         )
         has_payment_method = bool(default_payment_method)
+
+    if is_canceling_pending_downgrade:
+        return StripeSubscriptionUpdatePreview(
+            amount_due=0,
+            currency=(subscription.get("currency") or None),
+            is_upgrade=False,
+            is_trial=False,
+            has_payment_method=has_payment_method,
+        )
 
     if not is_plan_change or not is_upgrade or is_trial_active:
         return StripeSubscriptionUpdatePreview(
@@ -279,6 +297,9 @@ def update_subscription(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Abonnement Stripe invalide.")
 
     current_metadata = subscription.get("metadata") or {}
+    trial_end = to_datetime(subscription.get("trial_end"))
+    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+    is_trial_active = trial_end is not None and trial_end > now_utc
     current_price_id = (items[0].get("price") or {}).get("id")
     inferred_plan_key = resolve_plan_key(settings, current_price_id) if current_price_id else None
     current_plan_key = (
@@ -296,7 +317,16 @@ def update_subscription(
     )
     current_amount = _get_price_amount(current_price_id)
     target_amount = _get_price_amount(plan.price_id)
+    pending_plan_key = current_metadata.get("pending_plan_key")
+    is_canceling_pending_downgrade = (
+        bool(pending_plan_key)
+        and pending_plan_key != payload.plan_key
+        and current_plan_key == payload.plan_key
+        and current_price_id == plan.price_id
+    )
     is_plan_change = (current_price_id != plan.price_id) or (current_plan_key != payload.plan_key)
+    if is_canceling_pending_downgrade:
+        is_plan_change = False
     if is_plan_change:
         if current_amount is not None and target_amount is not None:
             is_upgrade = _is_upgrade(current_amount=current_amount, target_amount=target_amount)
@@ -355,10 +385,14 @@ def update_subscription(
 
     modify_payload = {
         # always_invoice crée et finalise une facture immédiate pour le prorata
-        "proration_behavior": "always_invoice" if is_upgrade and is_plan_change else "none",
+        "proration_behavior": (
+            "none" if is_trial_active else "always_invoice"
+        )
+        if is_upgrade and is_plan_change
+        else "none",
         "metadata": metadata,
     }
-    if is_plan_change and is_upgrade:
+    if is_plan_change and is_upgrade and not is_trial_active:
         modify_payload["expand"] = ["latest_invoice"]
     if is_plan_change:
         modify_payload["items"] = [{"id": items[0].get("id"), "price": plan.price_id}]
@@ -422,9 +456,11 @@ def update_subscription(
     latest_invoice_status = None
     payment_url = None
     if is_plan_change and is_upgrade:
-        trial_end = to_datetime(updated.get("trial_end"))
+        updated_trial_end = to_datetime(updated.get("trial_end"))
         now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
-        is_trial_active = trial_end is not None and trial_end > now_utc
+        is_trial_active = is_trial_active or (
+            updated_trial_end is not None and updated_trial_end > now_utc
+        )
         if not is_trial_active:
             # Récupérer l'invoice générée automatiquement par Stripe lors du modify
             latest_invoice = updated.get("latest_invoice")
