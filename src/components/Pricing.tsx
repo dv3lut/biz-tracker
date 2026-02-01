@@ -400,9 +400,6 @@ const Pricing = ({ trialPeriodDays = 14 }: Props) => {
             <Button variant="outline" onClick={() => setIsPortalOpen(true)}>
               Portail client
             </Button>
-            <Button variant="outline" asChild>
-              <a href="/upgrade">Changer d'abonnement</a>
-            </Button>
           </div>
         </div>
       </div>

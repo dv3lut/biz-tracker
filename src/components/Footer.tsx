@@ -24,11 +24,6 @@ const Footer = () => {
                 </a>
               </li>
               <li>
-                <a href="/upgrade" className="text-primary-foreground/80 hover:text-primary-foreground transition-colors">
-                  Gérer mon abonnement
-                </a>
-              </li>
-              <li>
                 <a href="#contact" className="text-primary-foreground/80 hover:text-primary-foreground transition-colors">
                   Contact
                 </a>
