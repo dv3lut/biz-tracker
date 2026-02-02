@@ -429,7 +429,11 @@ class GoogleBusinessService:
             return True
 
         # Micro-entreprises: on fait une rotation moins fréquente.
-        rules = self._retry_config.micro_rules if is_micro_company(establishment) else self._retry_config.default_rules
+        rules = (
+            self._retry_config.micro_rules
+            if is_micro_company(establishment.categorie_entreprise, establishment.categorie_juridique)
+            else self._retry_config.default_rules
+        )
         for rule in rules:
             if rule.max_age_days is None or age_days <= rule.max_age_days:
                 return age_days >= rule.frequency_days
