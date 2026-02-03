@@ -15,6 +15,7 @@ from . import (
     stats_router,
     stripe_router,
     sync_runs_router,
+    tools_router,
 )
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)])
@@ -29,6 +30,7 @@ for subrouter in (
     email_router.router,
     clients_router.router,
     stripe_router.router,
+    tools_router.router,
 ):
     router.include_router(subrouter)
 

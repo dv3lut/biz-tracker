@@ -694,6 +694,82 @@
           ]
         },
         {
+          "name": "POST Sirene New Establishments",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Admin-Token",
+                "value": "{{adminToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"start_date\": \"2025-10-30\",\n  \"end_date\": \"2025-10-31\",\n  \"naf_codes\": [\"56.10A\"],\n  \"limit\": 50\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/tools/sirene/new-establishments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "tools",
+                "sirene",
+                "new-establishments"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Example 200",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Admin-Token",
+                    "value": "{{adminToken}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"start_date\": \"2025-10-30\",\n  \"end_date\": \"2025-10-31\",\n  \"naf_codes\": [\"56.10A\"],\n  \"limit\": 50\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/admin/tools/sirene/new-establishments",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "tools",
+                    "sirene",
+                    "new-establishments"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"total\": 2,\n  \"returned\": 2,\n  \"establishments\": [\n    {\n      \"siret\": \"12345678900011\",\n      \"siren\": \"123456789\",\n      \"nic\": \"00011\",\n      \"name\": \"Bistrot du Centre\",\n      \"naf_code\": \"5610A\",\n      \"naf_label\": \"Restauration traditionnelle\",\n      \"date_creation\": \"2025-10-30\",\n      \"is_individual\": true,\n      \"leader_name\": \"Jeanne Dupont\",\n      \"denomination_unite_legale\": \"Bistrot du Centre\",\n      \"denomination_usuelle_unite_legale\": null,\n      \"denomination_usuelle_etablissement\": \"Bistrot du Centre\",\n      \"enseigne1\": \"Bistrot du Centre\",\n      \"enseigne2\": null,\n      \"enseigne3\": null,\n      \"complement_adresse\": null,\n      \"numero_voie\": \"12\",\n      \"indice_repetition\": null,\n      \"type_voie\": \"RUE\",\n      \"libelle_voie\": \"de la Paix\",\n      \"code_postal\": \"75002\",\n      \"libelle_commune\": \"Paris\",\n      \"libelle_commune_etranger\": null\n    }\n  ]\n}"
+            }
+          ]
+        },
+        {
           "name": "POST Sync",
           "request": {
             "method": "POST",

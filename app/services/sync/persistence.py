@@ -91,6 +91,7 @@ class SyncPersistenceMixin:
             "nomUsageUniteLegale",
             "nomUniteLegale",
             "prenom1UniteLegale",
+            "prenomUsuelUniteLegale",
         }
         return ",".join(sorted(fields))
 

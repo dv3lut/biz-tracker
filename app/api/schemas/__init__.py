@@ -72,6 +72,11 @@ from .sync import (
     SyncRunReport,
     SyncStateOut,
 )
+from .tools import (
+    SireneNewBusinessOut,
+    SireneNewBusinessesRequest,
+    SireneNewBusinessesResponse,
+)
 from .stripe_settings import (
     AdminStripeSettingsOut,
     AdminStripeSettingsUpdate,
@@ -148,4 +153,7 @@ __all__ = [
     "PublicStripeUpdatePreviewRequest",
     "PublicStripeUpdatePreviewResponse",
     "StripePlanKey",
+    "SireneNewBusinessOut",
+    "SireneNewBusinessesRequest",
+    "SireneNewBusinessesResponse",
 ]
