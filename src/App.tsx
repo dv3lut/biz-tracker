@@ -11,6 +11,7 @@ import { EstablishmentsSection } from "./app/sections/EstablishmentsSection";
 import { NafConfigSection } from "./app/sections/NafConfigSection";
 import { StripeSettingsSection } from "./app/sections/StripeSettingsSection";
 import { SyncSection } from "./app/sections/SyncSection";
+import { ToolsSection } from "./app/sections/ToolsSection";
 import type { SectionKey } from "./constants/sections";
 import { AdminTokenPrompt } from "./components/AdminTokenPrompt";
 import { EstablishmentDetailModal } from "./components/EstablishmentDetailModal";
@@ -69,6 +70,8 @@ const App = () => {
         );
       case "emails":
         return <EmailsSection onUnauthorized={handleUnauthorized} />;
+      case "tools":
+        return <ToolsSection onUnauthorized={handleUnauthorized} />;
       case "billing":
         return <StripeSettingsSection onUnauthorized={handleUnauthorized} />;
       case "establishments":

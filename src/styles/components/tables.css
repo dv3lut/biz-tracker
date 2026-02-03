@@ -1,0 +1,140 @@
+table tbody tr.clickable {
+  cursor: pointer;
+}
+
+table tbody tr.clickable:hover {
+  background-color: var(--color-table-row-hover);
+}
+
+table {
+  width: 100%;
+  max-width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+table thead {
+  background-color: var(--color-table-header);
+}
+
+table th,
+table td {
+  padding: 0.7rem;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--color-border);
+  word-break: normal;
+  overflow-wrap: break-word;
+  hyphens: manual;
+  white-space: normal;
+}
+
+th,
+td {
+  word-break: normal;
+  overflow-wrap: break-word;
+  hyphens: manual;
+  white-space: normal;
+}
+
+.table-wrapper {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  min-width: 0;
+}
+
+.card .table-wrapper,
+.category-card .table-wrapper,
+.category-table-block .table-wrapper {
+  min-width: 0;
+}
+
+.table-wrapper > table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.subcategory-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.subcategory-table th,
+.subcategory-table td {
+  padding: 0.6rem 0.5rem;
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.subcategory-table th {
+  background: var(--color-surface-alt);
+  font-size: 0.78rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.subcategory-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.subcategory-name {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.statistics-table-wrapper {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.statistics-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: min(960px, 100%);
+}
+
+.statistics-table th,
+.statistics-table td {
+  padding: 0.55rem 0.5rem;
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+}
+
+.statistics-table thead th {
+  background: var(--color-surface-alt);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-muted);
+}
+
+.statistics-table thead tr:first-child th {
+  background: var(--color-surface);
+  text-align: center;
+  font-size: 0.8rem;
+}
+
+.statistics-table thead tr:nth-child(2) th {
+  text-align: center;
+}
+
+.statistics-table-category td {
+  background: var(--color-surface-alt);
+  border-bottom: none;
+  padding: 0.65rem 0.75rem;
+}
+
+.statistics-table-total-row td {
+  background: var(--color-surface);
+  font-weight: 600;
+}
+
+.category-table-total td {
+  font-weight: 600;
+  background: var(--color-surface-alt);
+}

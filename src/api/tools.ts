@@ -1,0 +1,89 @@
+import { request } from "./http";
+import type { SireneNewBusiness, SireneNewBusinessesResult } from "../types";
+
+export interface SireneNewBusinessesPayload {
+  startDate: string;
+  endDate?: string;
+  nafCodes: string[];
+  limit?: number;
+}
+
+interface SireneNewBusinessResponse {
+  siret: string;
+  siren: string | null;
+  nic: string | null;
+  name: string | null;
+  naf_code: string | null;
+  naf_label: string | null;
+  date_creation: string | null;
+  is_individual: boolean;
+  leader_name: string | null;
+  denomination_unite_legale: string | null;
+  denomination_usuelle_unite_legale: string | null;
+  denomination_usuelle_etablissement: string | null;
+  enseigne1: string | null;
+  enseigne2: string | null;
+  enseigne3: string | null;
+  complement_adresse: string | null;
+  numero_voie: string | null;
+  indice_repetition: string | null;
+  type_voie: string | null;
+  libelle_voie: string | null;
+  code_postal: string | null;
+  libelle_commune: string | null;
+  libelle_commune_etranger: string | null;
+}
+
+interface SireneNewBusinessesResponse {
+  total: number;
+  returned: number;
+  establishments: SireneNewBusinessResponse[];
+}
+
+const mapSireneNewBusiness = (payload: SireneNewBusinessResponse): SireneNewBusiness => ({
+  siret: payload.siret,
+  siren: payload.siren ?? null,
+  nic: payload.nic ?? null,
+  name: payload.name ?? null,
+  nafCode: payload.naf_code ?? null,
+  nafLabel: payload.naf_label ?? null,
+  dateCreation: payload.date_creation ?? null,
+  isIndividual: payload.is_individual,
+  leaderName: payload.leader_name ?? null,
+  denominationUniteLegale: payload.denomination_unite_legale ?? null,
+  denominationUsuelleUniteLegale: payload.denomination_usuelle_unite_legale ?? null,
+  denominationUsuelleEtablissement: payload.denomination_usuelle_etablissement ?? null,
+  enseigne1: payload.enseigne1 ?? null,
+  enseigne2: payload.enseigne2 ?? null,
+  enseigne3: payload.enseigne3 ?? null,
+  complementAdresse: payload.complement_adresse ?? null,
+  numeroVoie: payload.numero_voie ?? null,
+  indiceRepetition: payload.indice_repetition ?? null,
+  typeVoie: payload.type_voie ?? null,
+  libelleVoie: payload.libelle_voie ?? null,
+  codePostal: payload.code_postal ?? null,
+  libelleCommune: payload.libelle_commune ?? null,
+  libelleCommuneEtranger: payload.libelle_commune_etranger ?? null,
+});
+
+export const toolsApi = {
+  fetchSireneNewBusinesses: async (
+    payload: SireneNewBusinessesPayload,
+  ): Promise<SireneNewBusinessesResult> => {
+    const response = await request<SireneNewBusinessesResponse>("/admin/tools/sirene/new-establishments", {
+      method: "POST",
+      body: JSON.stringify({
+        start_date: payload.startDate,
+        end_date: payload.endDate ?? null,
+        naf_codes: payload.nafCodes,
+        limit: payload.limit ?? 100,
+      }),
+    });
+
+    return {
+      total: response.data.total,
+      returned: response.data.returned,
+      establishments: response.data.establishments.map(mapSireneNewBusiness),
+    };
+  },
+};

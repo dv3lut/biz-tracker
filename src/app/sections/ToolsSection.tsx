@@ -1,0 +1,195 @@
+import { useCallback, useEffect, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import toast from "react-hot-toast";
+
+import { ApiError, googleApi, nafApi, toolsApi } from "../../api";
+import type { GoogleFindPlaceDebugResult, NafCategory, SireneNewBusinessesResult } from "../../types";
+import { openGoogleSearchForEstablishment } from "../../utils/googleSearch";
+import { parseNafInput, sanitizeNafCodes } from "../../utils/sync";
+import { GoogleFindPlaceDebugModal } from "../../components/GoogleFindPlaceDebugModal";
+import { ToolsView } from "../../components/views/ToolsView";
+
+const DEFAULT_LIMIT = 100;
+
+const buildDefaultStartDate = (): string => {
+  const now = new Date();
+  return now.toISOString().slice(0, 10);
+};
+
+type Props = {
+  onUnauthorized: () => void;
+};
+
+export const ToolsSection = ({ onUnauthorized }: Props) => {
+  const [startDate, setStartDate] = useState(buildDefaultStartDate);
+  const [endDate, setEndDate] = useState("");
+  const [nafCodesInput, setNafCodesInput] = useState("");
+  const [selectedNafCodes, setSelectedNafCodes] = useState<string[]>([]);
+  const [limit, setLimit] = useState(DEFAULT_LIMIT);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [result, setResult] = useState<SireneNewBusinessesResult | null>(null);
+  const [googleFindPlaceDebugModal, setGoogleFindPlaceDebugModal] = useState<
+    { siret: string; result: GoogleFindPlaceDebugResult } | null
+  >(null);
+
+  const nafCategoriesQuery = useQuery<NafCategory[]>({
+    queryKey: ["naf-categories"],
+    queryFn: () => nafApi.listCategories(),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const mutation = useMutation({
+    mutationFn: toolsApi.fetchSireneNewBusinesses,
+    onSuccess: (data) => {
+      setResult(data);
+      setErrorMessage(null);
+    },
+    onError: (error: unknown) => {
+      if (error instanceof ApiError && error.status === 403) {
+        onUnauthorized();
+        return;
+      }
+      const message = error instanceof ApiError ? error.message : "Une erreur est survenue.";
+      setErrorMessage(message);
+    },
+  });
+
+  const googleFindPlaceDebugMutation = useMutation<GoogleFindPlaceDebugResult, unknown, string>({
+    mutationFn: (siret) => googleApi.debugFindPlace(siret),
+    onSuccess: (debugResult, siret) => {
+      setGoogleFindPlaceDebugModal({ siret, result: debugResult });
+      setErrorMessage(null);
+    },
+    onError: (error: unknown) => {
+      if (error instanceof ApiError && error.status === 403) {
+        onUnauthorized();
+        return;
+      }
+      const message = error instanceof ApiError ? error.message : "Une erreur est survenue.";
+      setErrorMessage(message);
+      toast.error(message, { id: message });
+    },
+  });
+
+  useEffect(() => {
+    if (!nafCategoriesQuery.error) {
+      return;
+    }
+    const error = nafCategoriesQuery.error;
+    if (error instanceof ApiError && error.status === 403) {
+      onUnauthorized();
+      return;
+    }
+    const message = error instanceof ApiError ? error.message : "Une erreur est survenue.";
+    setErrorMessage(message);
+    toast.error(message, { id: message });
+  }, [nafCategoriesQuery.error, onUnauthorized]);
+
+  const handleSubmit = useCallback(() => {
+    if (!startDate) {
+      setErrorMessage("La date de début est requise.");
+      return;
+    }
+    const parsedCodes = sanitizeNafCodes([
+      ...selectedNafCodes,
+      ...parseNafInput(nafCodesInput),
+    ]);
+    if (parsedCodes.length === 0) {
+      setErrorMessage("Renseignez au moins un code NAF valide.");
+      return;
+    }
+    setErrorMessage(null);
+    mutation.mutate({
+      startDate,
+      endDate: endDate || undefined,
+      nafCodes: parsedCodes,
+      limit,
+    });
+  }, [startDate, selectedNafCodes, nafCodesInput, endDate, limit, mutation]);
+
+  const handleReset = useCallback(() => {
+    setStartDate(buildDefaultStartDate());
+    setEndDate("");
+    setNafCodesInput("");
+    setSelectedNafCodes([]);
+    setLimit(DEFAULT_LIMIT);
+    setErrorMessage(null);
+    setResult(null);
+  }, []);
+
+  const handleToggleNafCode = useCallback((code: string) => {
+    setSelectedNafCodes((current) => {
+      if (current.includes(code)) {
+        return current.filter((item) => item !== code);
+      }
+      return [...current, code];
+    });
+  }, []);
+
+  const handleGoogleSearch = useCallback(
+    (siret: string) => {
+      const entry = result?.establishments.find((item) => item.siret === siret);
+      if (!entry) {
+        return;
+      }
+      const opened = openGoogleSearchForEstablishment({
+        name: entry.name,
+        libelleCommune: entry.libelleCommune,
+        libelleCommuneEtranger: entry.libelleCommuneEtranger,
+        codePostal: entry.codePostal,
+      });
+      if (!opened) {
+        const message = "Impossible de construire la recherche Google pour cet établissement.";
+        setErrorMessage(message);
+        toast.error(message, { id: message });
+      }
+    },
+    [result],
+  );
+
+  const handleDebugGoogleFindPlace = useCallback(
+    (siret: string) => {
+      googleFindPlaceDebugMutation.mutate(siret);
+    },
+    [googleFindPlaceDebugMutation],
+  );
+
+  return (
+    <>
+      <ToolsView
+        startDate={startDate}
+        endDate={endDate}
+        nafCodesInput={nafCodesInput}
+        selectedNafCodes={selectedNafCodes}
+        limit={limit}
+        isLoading={mutation.isPending}
+        nafCategories={nafCategoriesQuery.data}
+        isLoadingNafCategories={nafCategoriesQuery.isLoading}
+        errorMessage={errorMessage}
+        result={result}
+        onStartDateChange={setStartDate}
+        onEndDateChange={setEndDate}
+        onNafCodesInputChange={setNafCodesInput}
+        onToggleNafCode={handleToggleNafCode}
+        onLimitChange={setLimit}
+        onSubmit={handleSubmit}
+        onReset={handleReset}
+        onGoogleSearch={handleGoogleSearch}
+        onDebugGoogleFindPlace={handleDebugGoogleFindPlace}
+        debuggingGoogleFindPlaceSiret={
+          googleFindPlaceDebugMutation.isPending
+            ? ((googleFindPlaceDebugMutation.variables as string | undefined) ?? null)
+            : null
+        }
+      />
+
+      {googleFindPlaceDebugModal ? (
+        <GoogleFindPlaceDebugModal
+          siret={googleFindPlaceDebugModal.siret}
+          result={googleFindPlaceDebugModal.result}
+          onClose={() => setGoogleFindPlaceDebugModal(null)}
+        />
+      ) : null}
+    </>
+  );
+};

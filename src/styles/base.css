@@ -1,0 +1,156 @@
+:root {
+  font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: var(--color-text);
+  background-color: var(--color-background);
+  --color-background: #030712;
+  --color-surface: #0d111f;
+  --color-card: #111827;
+  --color-surface-alt: #0f172a;
+  --color-border: #1f2937;
+  --color-border-soft: #262f3e;
+  --color-text: #f8fafc;
+  --color-muted: #94a3b8;
+  --color-secondary-white: #ffffff;
+  --color-secondary-orange: #f97316;
+  --color-secondary-orange-dark: #ef5805;
+  --color-secondary-orange-soft: rgba(249, 115, 22, 0.15);
+  --color-primary: #f97316;
+  --color-status-success-bg: rgba(16, 185, 129, 0.15);
+  --color-status-success-text: #22c55e;
+  --color-status-success-border: rgba(16, 185, 129, 0.35);
+  --color-status-error-bg: rgba(239, 68, 68, 0.15);
+  --color-status-error-text: #f87171;
+  --color-status-error-border: rgba(239, 68, 68, 0.35);
+  --color-status-warning-bg: rgba(251, 191, 36, 0.15);
+  --color-status-warning-text: #facc15;
+  --color-status-info-bg: rgba(59, 130, 246, 0.15);
+  --color-status-info-text: #7dd3fc;
+  --color-secondary-orange-active: rgba(249, 115, 22, 0.25);
+  --color-overlay: rgba(2, 6, 23, 0.75);
+  --color-shadow: 0 20px 55px rgba(0, 0, 0, 0.6);
+  --color-card-shadow: 0 10px 35px rgba(0, 0, 0, 0.5);
+  --color-input-bg: #0f172a;
+  --color-input-border: #1f2937;
+  --color-table-row-hover: rgba(255, 255, 255, 0.02);
+  --color-table-header: rgba(255, 255, 255, 0.04);
+  --color-chip-border: #2d3748;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+button {
+  border: none;
+  border-radius: 999px;
+  padding: 0.5rem 1rem;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+button.primary {
+  background-color: var(--color-primary);
+  color: var(--color-secondary-white);
+  border: none;
+}
+
+button.primary:hover:not(:disabled) {
+  background-color: var(--color-secondary-orange-dark);
+}
+
+button.secondary {
+  background-color: transparent;
+  border: 1px solid var(--color-secondary-white);
+  color: var(--color-secondary-white);
+}
+
+button.secondary:hover:not(:disabled) {
+  background-color: var(--color-secondary-white);
+  color: var(--color-text);
+}
+
+button.ghost {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-muted);
+}
+
+button.ghost:hover:not(:disabled) {
+  border-color: var(--color-secondary-orange);
+  color: var(--color-secondary-orange);
+}
+
+button.danger {
+  background-color: var(--color-status-error-bg);
+  color: var(--color-status-error-text);
+}
+
+button.danger:hover:not(:disabled) {
+  background-color: var(--color-status-error-border);
+}
+
+input,
+textarea,
+select {
+  background-color: var(--color-input-bg);
+  color: var(--color-text);
+  border: 1px solid var(--color-input-border);
+  border-radius: 10px;
+  padding: 0.65rem 0.85rem;
+  font-size: 0.95rem;
+  width: 100%;
+}
+
+textarea {
+  resize: vertical;
+  min-height: 120px;
+}
+
+select {
+  appearance: none;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: 2px solid var(--color-secondary-orange);
+  outline-offset: 1px;
+  border-color: var(--color-secondary-orange);
+}
+
+.muted {
+  color: var(--color-muted);
+}
+
+.small {
+  font-size: 0.85rem;
+}
+
+.big {
+  font-size: 1.75rem;
+  font-weight: 600;
+}
+
+.error {
+  color: var(--color-status-error-text);
+}
+
+.preformatted {
+  white-space: pre-line;
+}
+
+.mb-1 {
+  margin-bottom: 0.5rem;
+}

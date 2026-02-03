@@ -5,6 +5,7 @@ const SECTION_BADGES: Record<SectionKey, string> = {
   sync: "SY",
   alerts: "AL",
   emails: "EM",
+  tools: "OT",
   billing: "FA",
   establishments: "ET",
   clients: "CL",

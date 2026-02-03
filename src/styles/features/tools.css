@@ -1,0 +1,27 @@
+.tools-form-compact {
+  gap: 0.5rem;
+}
+
+.tools-form-compact .form-field {
+  gap: 0.3rem;
+}
+
+.tools-naf-row {
+  display: grid;
+  gap: 0.4rem;
+}
+
+@media (min-width: 900px) {
+  .tools-naf-row {
+    grid-template-columns: minmax(220px, 1fr) minmax(220px, 1fr);
+    align-items: start;
+  }
+}
+
+.tools-naf-select .establishments-controls {
+  margin: 0;
+}
+
+.tools-naf-input textarea {
+  min-height: 88px;
+}

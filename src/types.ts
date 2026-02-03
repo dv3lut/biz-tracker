@@ -494,3 +494,35 @@ export interface GoogleRetryConfig {
   defaultRules: GoogleRetryRule[];
   microRules: GoogleRetryRule[];
 }
+
+export interface SireneNewBusiness {
+  siret: string;
+  siren: string | null;
+  nic: string | null;
+  name: string | null;
+  nafCode: string | null;
+  nafLabel: string | null;
+  dateCreation: string | null;
+  isIndividual: boolean;
+  leaderName: string | null;
+  denominationUniteLegale: string | null;
+  denominationUsuelleUniteLegale: string | null;
+  denominationUsuelleEtablissement: string | null;
+  enseigne1: string | null;
+  enseigne2: string | null;
+  enseigne3: string | null;
+  complementAdresse: string | null;
+  numeroVoie: string | null;
+  indiceRepetition: string | null;
+  typeVoie: string | null;
+  libelleVoie: string | null;
+  codePostal: string | null;
+  libelleCommune: string | null;
+  libelleCommuneEtranger: string | null;
+}
+
+export interface SireneNewBusinessesResult {
+  total: number;
+  returned: number;
+  establishments: SireneNewBusiness[];
+}

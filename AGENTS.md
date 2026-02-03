@@ -44,7 +44,7 @@ Le frontend est organisé selon :
 | Hooks React | `src/hooks/useAdminToken.ts`, `useDashboard.ts`, etc. centralisent les effets React Query. |
 | Composants | `src/components/*.tsx` groupent les vues métier (modals, sections, cartes, tableaux). |
 | Utilities | `src/utils/sync.ts`, `dates.ts`, etc. exposent des fonctions transverses. |
-| Styles | `src/styles.css` définit le thème et les layouts globaux. |
+| Styles | `src/styles/index.css` agrège les styles split (base, layout, components, features). |
 | Build & config | `vite.config.ts`, `tsconfig*.json`, `package.json` pour Vite et TypeScript. |
 
 ## Validation et build
@@ -72,9 +72,20 @@ Cela validera la cohérence des types et produira un bundle minifié dans `dist/
 ## Notes pour les prochaines itérations
 
 1. **NAF codes** : normalisation frontend (sans point interne) vs affichage formaté (avec point). Voir `src/utils/sync.ts` pour `normalizeNafCode`, `canonicalizeNafCode`, et `denormalizeNafCode`.
-2. **Modal SyncModeModal** : les contrôles (radio/checkboxes) sont positionnés à droite du contenu ; vérifier `src/styles.css` (`.mode-option-body`, `.naf-category-header`, etc.) si vous modifiez la structure.
+2. **Modal SyncModeModal** : les contrôles (radio/checkboxes) sont positionnés à droite du contenu ; vérifier `src/styles/features/sync.css` (`.mode-option-body`, `.naf-category-header`, etc.) si vous modifiez la structure.
 3. **Build/test cycle** : souvenez-vous de sourcer nvm avant npm. Intégrer cela dans les raccourcis ou scripts de développement.
 4. **Warnings de Rollup** : les chunks dépassent 500 KiB ; c'est un warning d'optimisation non bloquant pour le moment. Considérer une amélioration du chunking si la taille continue de croître.
+
+## Styles — organisation
+
+Les styles sont désormais split par responsabilité :
+
+- `src/styles/base.css` : variables CSS, reset, typographie et contrôles communs.
+- `src/styles/layout.css` : layout global (sidebar, topbar, grilles de sections).
+- `src/styles/components/*` : cartes, modals, tables, badges, composants transverses.
+- `src/styles/features/*` : styles spécifiques aux domaines (dashboard, sync, naf, google, tools, etc.).
+
+Le point d'entrée est `src/styles/index.css`, importé dans `src/main.tsx`.
 
 ---
 
