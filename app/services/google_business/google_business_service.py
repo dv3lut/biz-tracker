@@ -23,10 +23,12 @@ from app.services.google_business.google_lookup_engine import GoogleLookupEngine
 from app.services.google_business.google_matching import matches_expected_google_category
 from app.services.google_business.google_types import GoogleEnrichmentResult, GoogleMatch
 from app.services.google.google_retry_config import GoogleRetryRuntimeConfig, load_runtime_google_retry_config
+from app.services.client_service import resolve_enabled_department_codes
 from app.services.rate_limiter import RateLimiter
 from app.utils.business_types import is_micro_company
 from app.utils.dates import utcnow
 from app.utils.google_listing import normalize_listing_age_status
+from app.utils.regions import resolve_department_code
 
 ProgressCallback = Callable[[int, int, int, int, int], None]
 AgeBuckets = dict[str, int]
@@ -140,17 +142,23 @@ class GoogleBusinessService:
         now = utcnow()
         self._api_call_count = 0
         self._api_error_count = 0
+        allowed_departments = resolve_enabled_department_codes(self._session)
         unique_new = {establishment.siret: establishment for establishment in new_establishments if establishment.siret}
-        new_sirets = set(unique_new)
+        filtered_new = self._filter_establishments_for_departments(unique_new.values(), allowed_departments)
+        new_sirets = {establishment.siret for establishment in filtered_new if establishment.siret}
         candidates = list(
             self._filter_candidates(
-                unique_new.values(),
+                filtered_new,
                 now=now,
                 reset_google_state=reset_google_state,
                 recheck_all=recheck_all,
             )
         )
-        backlog = self._fetch_backlog(now, exclude=new_sirets) if include_backlog else []
+        backlog = (
+            self._fetch_backlog(now, exclude=new_sirets, allowed_departments=allowed_departments)
+            if include_backlog
+            else []
+        )
         queue = candidates + backlog
 
         newly_found: list[models.Establishment] = []
@@ -208,7 +216,7 @@ class GoogleBusinessService:
                 missing_contact_checked,
                 missing_contact_updated,
                 missing_contact_age_buckets,
-            ) = self._refresh_missing_contact_listings(now)
+            ) = self._refresh_missing_contact_listings(now, allowed_departments=allowed_departments)
         remaining = max(queue_count - processed_count, 0)
         return GoogleEnrichmentResult(
             matches=newly_found,
@@ -264,7 +272,13 @@ class GoogleBusinessService:
             if self._should_lookup(establishment, now, is_new=True, reset_google_state=False, recheck_all=False):
                 yield establishment
 
-    def _fetch_backlog(self, now: datetime, *, exclude: set[str]) -> list[models.Establishment]:
+    def _fetch_backlog(
+        self,
+        now: datetime,
+        *,
+        exclude: set[str],
+        allowed_departments: set[str] | None,
+    ) -> list[models.Establishment]:
         retry_config = self._retry_config
         if now.weekday() not in retry_config.retry_weekdays:
             return []
@@ -277,6 +291,7 @@ class GoogleBusinessService:
             .order_by(models.Establishment.google_last_checked_at.asc().nullsfirst())
         )
         candidates = self._session.execute(stmt).scalars().all()
+        candidates = self._filter_establishments_for_departments(candidates, allowed_departments)
         eligible: list[models.Establishment] = []
         for establishment in candidates:
             if self._should_lookup(establishment, now, is_new=False, reset_google_state=False, recheck_all=False):
@@ -285,7 +300,12 @@ class GoogleBusinessService:
                 break
         return eligible
 
-    def _refresh_missing_contact_listings(self, now: datetime) -> tuple[int, int, AgeBuckets]:
+    def _refresh_missing_contact_listings(
+        self,
+        now: datetime,
+        *,
+        allowed_departments: set[str] | None,
+    ) -> tuple[int, int, AgeBuckets]:
         retry_config = self._retry_config
         if not retry_config.retry_missing_contact_enabled:
             return 0, 0, {}
@@ -302,6 +322,7 @@ class GoogleBusinessService:
             .order_by(models.Establishment.google_last_checked_at.asc().nullsfirst())
         )
         candidates = self._session.execute(stmt).scalars().all()
+        candidates = self._filter_establishments_for_departments(candidates, allowed_departments)
         checked_count = 0
         updated_count = 0
         age_buckets: AgeBuckets = {}
@@ -465,6 +486,30 @@ class GoogleBusinessService:
         establishment.google_contact_phone = None
         establishment.google_contact_email = None
         establishment.google_contact_website = None
+
+    @staticmethod
+    def _filter_establishments_for_departments(
+        establishments: Iterable[models.Establishment],
+        allowed_departments: set[str] | None,
+    ) -> list[models.Establishment]:
+        if allowed_departments is None:
+            return [establishment for establishment in establishments]
+        if not allowed_departments:
+            return []
+        filtered: list[models.Establishment] = []
+        for establishment in establishments:
+            department_code = resolve_department_code(
+                getattr(establishment, "code_commune", None),
+                getattr(establishment, "code_postal", None),
+            )
+            if not department_code:
+                continue
+            if department_code == "20" and ("2A" in allowed_departments or "2B" in allowed_departments):
+                filtered.append(establishment)
+                continue
+            if department_code in allowed_departments:
+                filtered.append(establishment)
+        return filtered
 
     def _record_api_call(self) -> None:
         current = getattr(self, "_api_call_count", 0)

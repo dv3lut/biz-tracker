@@ -349,6 +349,9 @@ class AlertService:
                     html_body=html_body,
                     establishments=client_establishments,
                     filters=filters,
+                    extra_recipients=admin_recipients
+                    if getattr(client, "include_admins_in_client_alerts", False)
+                    else None,
                     attachments=[
                         (
                             f"biz-tracker-alertes-{_sanitize_filename_token(client.name)}-{utcnow().date().isoformat()}.csv",

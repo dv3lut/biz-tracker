@@ -20,7 +20,7 @@ from app.utils.google_listing import (
     normalize_listing_status_filters,
 )
 from app.utils.naf import normalize_naf_code
-from app.utils.regions import ALL_REGION_CODES, resolve_region_code
+from app.utils.regions import ALL_DEPARTMENT_CODES, resolve_department_code
 
 
 def get_active_clients(session: Session) -> list[models.Client]:
@@ -33,7 +33,7 @@ def get_active_clients(session: Session) -> list[models.Client]:
             selectinload(models.Client.recipients),
             selectinload(models.Client.subscriptions).selectinload(models.ClientSubscription.subcategory),
             selectinload(models.Client.stripe_subscriptions),
-            selectinload(models.Client.regions),
+            selectinload(models.Client.departments),
         )
         .where(
             models.Client.start_date <= today,
@@ -73,7 +73,7 @@ def get_all_clients(session: Session) -> list[models.Client]:
             selectinload(models.Client.recipients),
             selectinload(models.Client.subscriptions).selectinload(models.ClientSubscription.subcategory),
             selectinload(models.Client.stripe_subscriptions),
-            selectinload(models.Client.regions),
+            selectinload(models.Client.departments),
         )
         .order_by(models.Client.name)
     )
@@ -114,6 +114,37 @@ class ClientEmailPayload:
     establishments: Sequence[models.Establishment] | None = None
     filters: ClientFilterSummary | None = None
     attachments: Sequence[tuple[str, bytes, str]] | None = None
+    extra_recipients: Sequence[str] | None = None
+
+
+def resolve_enabled_department_codes(
+    session: Session,
+    *,
+    on_date: date | None = None,
+) -> set[str] | None:
+    """Return the set of enabled department codes across active clients.
+
+    Returns None when at least one active client targets all departments.
+    Returns an empty set when no active client is configured.
+    """
+
+    clients = get_all_clients(session)
+    if not clients:
+        return set()
+    reference_date = on_date or date.today()
+    department_codes: set[str] = set()
+    for client in clients:
+        if not is_client_active(client, on_date=reference_date):
+            continue
+        client_departments = {
+            department.code
+            for department in getattr(client, "departments", [])
+            if getattr(department, "code", None)
+        }
+        if not client_departments:
+            return None
+        department_codes.update(client_departments)
+    return department_codes
 
 
 def summarize_client_filters(client: models.Client) -> ClientFilterSummary:
@@ -215,28 +246,28 @@ def assign_establishments_to_clients(
     subscription_map, code_index = build_subscription_index(clients)
     status_map: dict[UUID, set[str]] = {}
     status_filtering_enabled = False
-    region_map: dict[UUID, set[str] | None] = {}
-    region_filtering_enabled = False
-    all_regions = set(ALL_REGION_CODES)
+    department_map: dict[UUID, set[str] | None] = {}
+    department_filtering_enabled = False
+    all_departments = set(ALL_DEPARTMENT_CODES)
     for client in clients:
         statuses = set(resolve_client_listing_statuses(client))
         status_map[client.id] = statuses
         if len(statuses) < len(FILTERABLE_LISTING_STATUSES):
             status_filtering_enabled = True
-        region_codes = {
-            region.code
-            for region in getattr(client, "regions", [])
-            if getattr(region, "code", None)
+        department_codes = {
+            department.code
+            for department in getattr(client, "departments", [])
+            if getattr(department, "code", None)
         }
-        if region_codes:
-            region_codes = region_codes & all_regions
-        if not region_codes or region_codes == all_regions:
-            region_map[client.id] = None
+        if department_codes:
+            department_codes = department_codes & all_departments
+        if not department_codes or department_codes == all_departments:
+            department_map[client.id] = None
         else:
-            region_filtering_enabled = True
-            region_map[client.id] = region_codes
+            department_filtering_enabled = True
+            department_map[client.id] = department_codes
 
-    filters_configured = bool(subscription_map) or status_filtering_enabled or region_filtering_enabled
+    filters_configured = bool(subscription_map) or status_filtering_enabled or department_filtering_enabled
 
     if not establishments:
         return {}, filters_configured
@@ -245,12 +276,12 @@ def assign_establishments_to_clients(
         assignments: dict[UUID, list[models.Establishment]] = {}
         for client in clients:
             allowed_statuses = status_map.get(client.id, set())
-            allowed_regions = region_map.get(client.id)
+            allowed_departments = department_map.get(client.id)
             matches = [
                 establishment
                 for establishment in establishments
                 if _establishment_matches_listing_status(establishment, allowed_statuses)
-                and _establishment_matches_region(establishment, allowed_regions)
+                and _establishment_matches_department(establishment, allowed_departments)
             ]
             if matches:
                 assignments[client.id] = matches
@@ -262,7 +293,7 @@ def assign_establishments_to_clients(
         code = normalize_naf_code(establishment.naf_code)
         if not code:
             continue
-        region_code = resolve_region_code(
+        department_code = resolve_department_code(
             getattr(establishment, "code_commune", None),
             getattr(establishment, "code_postal", None),
         )
@@ -270,8 +301,8 @@ def assign_establishments_to_clients(
             allowed_statuses = status_map.get(client.id, set())
             if not _establishment_matches_listing_status(establishment, allowed_statuses):
                 continue
-            allowed_regions = region_map.get(client.id)
-            if not _region_allows_establishment(region_code, allowed_regions):
+            allowed_departments = department_map.get(client.id)
+            if not _department_allows_establishment(department_code, allowed_departments):
                 continue
             if establishment.siret in seen_sirets[client.id]:
                 continue
@@ -312,26 +343,28 @@ def _establishment_matches_listing_status(
     return False
 
 
-def _establishment_matches_region(
+def _establishment_matches_department(
     establishment: models.Establishment,
-    allowed_regions: set[str] | None,
+    allowed_departments: set[str] | None,
 ) -> bool:
-    region_code = resolve_region_code(
+    department_code = resolve_department_code(
         getattr(establishment, "code_commune", None),
         getattr(establishment, "code_postal", None),
     )
-    return _region_allows_establishment(region_code, allowed_regions)
+    return _department_allows_establishment(department_code, allowed_departments)
 
 
-def _region_allows_establishment(
-    region_code: str | None,
-    allowed_regions: set[str] | None,
+def _department_allows_establishment(
+    department_code: str | None,
+    allowed_departments: set[str] | None,
 ) -> bool:
-    if allowed_regions is None:
+    if allowed_departments is None:
         return True
-    if not region_code:
+    if not department_code:
         return False
-    return region_code in allowed_regions
+    if department_code == "20" and ("2A" in allowed_departments or "2B" in allowed_departments):
+        return True
+    return department_code in allowed_departments
 
 
 def dispatch_email_to_clients(
@@ -351,6 +384,8 @@ def dispatch_email_to_clients(
         if not is_client_active(client, on_date=today):
             continue
         recipients = [recipient.email for recipient in client.recipients if recipient.email]
+        extra_recipients = [email for email in (payload.extra_recipients or []) if email]
+        recipients = sorted({*recipients, *extra_recipients})
         if not recipients:
             continue
         if timestamp is None:

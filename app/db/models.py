@@ -212,6 +212,11 @@ class Client(Base):
         default=_default_client_listing_statuses,
         nullable=False,
     )
+    include_admins_in_client_alerts: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+    )
     emails_sent_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     last_email_sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
@@ -241,17 +246,17 @@ class Client(Base):
         cascade="all, delete-orphan",
         order_by="ClientSubscriptionEvent.created_at.desc()",
     )
-    region_links: Mapped[list["ClientRegion"]] = relationship(
-        "ClientRegion",
+    department_links: Mapped[list["ClientDepartment"]] = relationship(
+        "ClientDepartment",
         back_populates="client",
         cascade="all, delete-orphan",
         single_parent=True,
     )
-    regions: Mapped[list["Region"]] = relationship(
-        "Region",
-        secondary="client_regions",
+    departments: Mapped[list["Department"]] = relationship(
+        "Department",
+        secondary="client_departments",
         viewonly=True,
-        order_by="Region.order_index",
+        order_by="Department.order_index",
     )
 
 
@@ -267,9 +272,36 @@ class Region(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
 
-    client_links: Mapped[list["ClientRegion"]] = relationship(
-        "ClientRegion",
+    departments: Mapped[list["Department"]] = relationship(
+        "Department",
         back_populates="region",
+        cascade="all, delete-orphan",
+        order_by="Department.order_index",
+    )
+
+
+class Department(Base):
+    """French department reference linked to a region."""
+
+    __tablename__ = "departments"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    region_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("regions.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    code: Mapped[str] = mapped_column(String(8), unique=True, nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    order_index: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
+
+    region: Mapped[Region] = relationship("Region", back_populates="departments")
+    client_links: Mapped[list["ClientDepartment"]] = relationship(
+        "ClientDepartment",
+        back_populates="department",
         cascade="all, delete-orphan",
     )
 
@@ -416,25 +448,25 @@ class ClientSubscription(Base):
     subcategory: Mapped[NafSubCategory] = relationship("NafSubCategory", back_populates="subscriptions")
 
 
-class ClientRegion(Base):
-    """Association table linking clients to the regions they subscribe to."""
+class ClientDepartment(Base):
+    """Association table linking clients to the departments they subscribe to."""
 
-    __tablename__ = "client_regions"
+    __tablename__ = "client_departments"
 
     client_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("clients.id", ondelete="CASCADE"),
         primary_key=True,
     )
-    region_id: Mapped[uuid.UUID] = mapped_column(
+    department_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("regions.id", ondelete="CASCADE"),
+        ForeignKey("departments.id", ondelete="CASCADE"),
         primary_key=True,
     )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
 
-    client: Mapped[Client] = relationship("Client", back_populates="region_links")
-    region: Mapped[Region] = relationship("Region", back_populates="client_links")
+    client: Mapped[Client] = relationship("Client", back_populates="department_links")
+    department: Mapped[Department] = relationship("Department", back_populates="client_links")
 
 
 class AdminRecipient(Base):

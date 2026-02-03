@@ -6,14 +6,15 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db_session
 from app.api.schemas import RegionOut
-from app.services.regions_service import list_regions
+from app.services.regions_service import list_departments, list_regions
 
 router = APIRouter(tags=["admin"])
 
 
 @router.get("/regions", response_model=list[RegionOut], summary="Lister les régions")
 def list_regions_endpoint(session: Session = Depends(get_db_session)) -> list[RegionOut]:
-    regions = list_regions(session)
+    list_departments(session)
+    regions = list_regions(session, include_departments=True)
     return [RegionOut.model_validate(region) for region in regions]
 
 

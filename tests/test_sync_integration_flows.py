@@ -15,6 +15,7 @@ from sqlalchemy.orm import sessionmaker
 from app.db import models
 from app.db.base import Base
 from app.services.google_business.google_types import GoogleMatch
+from app.services.regions_service import list_departments
 from app.services.sync.mode import SyncMode
 from app.services.sync_service import SyncService
 from app.utils.dates import utcnow
@@ -345,6 +346,18 @@ def test_google_pending_flow_targets_unchecked_establishments(monkeypatch):
 
     with _session_scope() as session:
         _seed_google_retry_config(session)
+
+        departments = list_departments(session)
+        paris_department = next(department for department in departments if department.code == "75")
+        client = models.Client(
+            name="Client IDF",
+            start_date=date(2024, 1, 1),
+            listing_statuses=["recent_creation"],
+        )
+        session.add(client)
+        session.flush()
+        session.add(models.ClientDepartment(client_id=client.id, department_id=paris_department.id))
+        session.commit()
 
         pending = models.Establishment(
             siret="55555555555555",

@@ -18,6 +18,7 @@ def _client(
     listing_statuses: list[str] | None = None,
     recipients: list[SimpleNamespace] | None = None,
     subscriptions: list[SimpleNamespace] | None = None,
+    departments: list[SimpleNamespace] | None = None,
 ) -> SimpleNamespace:
     return SimpleNamespace(
         id=uuid4(),
@@ -27,6 +28,7 @@ def _client(
         listing_statuses=listing_statuses or ["recent_creation", "not_recent_creation"],
         recipients=recipients or [],
         subscriptions=subscriptions or [],
+        departments=departments or [],
         emails_sent_count=0,
         last_email_sent_at=None,
         categorie_juridique="5498",
@@ -229,14 +231,25 @@ def test_dispatch_email_to_clients_sends_once(monkeypatch):
     monkeypatch.setattr(client_service, "utcnow", lambda: datetime(2024, 1, 10, 12, 0, 0))
 
     client = _client(recipients=[SimpleNamespace(email="ops@example.com")])
-    email_service = SimpleNamespace(send=lambda subject, body, recipients, html_body=None, attachments=None: None)
-    payload = ClientEmailPayload(client=client, subject="Hi", text_body="Body")
+    sent_recipients: list[str] = []
+
+    def _send(subject, body, recipients, html_body=None, attachments=None):  # noqa: ARG001
+        sent_recipients.extend(recipients)
+
+    email_service = SimpleNamespace(send=_send)
+    payload = ClientEmailPayload(
+        client=client,
+        subject="Hi",
+        text_body="Body",
+        extra_recipients=["admin@example.com"],
+    )
 
     result = client_service.dispatch_email_to_clients(email_service, [payload])
 
     assert result.delivered == [client]
     assert result.sent_at == datetime(2024, 1, 10, 12, 0, 0)
     assert str(client.id) in result.recipients
+    assert set(sent_recipients) == {"ops@example.com", "admin@example.com"}
 
 
 def test_dispatch_email_to_clients_skips_inactive_or_recipientless(monkeypatch):

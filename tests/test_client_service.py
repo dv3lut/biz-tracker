@@ -13,7 +13,7 @@ def _make_client(
     *,
     listing_statuses: list[str] | None = None,
     subscriptions: list[object] | None = None,
-    regions: list[object] | None = None,
+    departments: list[object] | None = None,
     identifier: UUID | None = None,
 ) -> SimpleNamespace:
     return SimpleNamespace(
@@ -21,7 +21,7 @@ def _make_client(
         listing_statuses=listing_statuses if listing_statuses is not None else ["recent_creation"],
         subscriptions=subscriptions or [],
         recipients=[],
-        regions=regions or [],
+        departments=departments or [],
     )
 
 
@@ -144,35 +144,35 @@ class ClientServiceListingStatusTests(unittest.TestCase):
         self.assertEqual(len(filtered), 1)
         self.assertIn("recent_creation", filtered[0].listing_statuses)
 
-    def test_assignments_filter_by_region(self) -> None:
-        client_idf = _make_client(
-            listing_statuses=["recent_creation"],
-            subscriptions=[_make_subscription("5610A")],
-            regions=[SimpleNamespace(code="IDF")],
-            identifier=uuid4(),
-        )
-        client_all = _make_client(
-            listing_statuses=["recent_creation"],
-            subscriptions=[_make_subscription("5610A")],
-            regions=[],
-            identifier=uuid4(),
-        )
-        establishments = [
-            _make_establishment("5610A", "recent_creation", siret="40000000000000", code_postal="75001"),
-            _make_establishment("5610A", "recent_creation", siret="50000000000000", code_postal="33000"),
-        ]
+        def test_assignments_filter_by_department(self) -> None:
+            client_paris = _make_client(
+                listing_statuses=["recent_creation"],
+                subscriptions=[_make_subscription("5610A")],
+                departments=[SimpleNamespace(code="75")],
+                identifier=uuid4(),
+            )
+            client_all = _make_client(
+                listing_statuses=["recent_creation"],
+                subscriptions=[_make_subscription("5610A")],
+                departments=[],
+                identifier=uuid4(),
+            )
+            establishments = [
+                _make_establishment("5610A", "recent_creation", siret="40000000000000", code_postal="75001"),
+                _make_establishment("5610A", "recent_creation", siret="50000000000000", code_postal="33000"),
+            ]
 
-        assignments, filters_enabled = assign_establishments_to_clients(
-            [client_idf, client_all],
-            establishments,
-        )
+            assignments, filters_enabled = assign_establishments_to_clients(
+                [client_paris, client_all],
+                establishments,
+            )
 
-        self.assertTrue(filters_enabled)
-        self.assertEqual({est.siret for est in assignments[client_idf.id]}, {"40000000000000"})
-        self.assertEqual(
-            {est.siret for est in assignments[client_all.id]},
-            {"40000000000000", "50000000000000"},
-        )
+            self.assertTrue(filters_enabled)
+            self.assertEqual({est.siret for est in assignments[client_paris.id]}, {"40000000000000"})
+            self.assertEqual(
+                {est.siret for est in assignments[client_all.id]},
+                {"40000000000000", "50000000000000"},
+            )
 
 
 if __name__ == "__main__":

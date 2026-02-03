@@ -1,135 +1,21 @@
-"""Region definitions and helpers."""
+"""Region and department definitions and helpers."""
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Iterable
 
+from app.utils.regions_data import DEPARTMENT_DEFINITIONS, REGION_DEFINITIONS, DepartmentDefinition, RegionDefinition
 
-@dataclass(frozen=True)
-class RegionDefinition:
-    code: str
-    name: str
-    department_codes: tuple[str, ...]
-    order_index: int
-
-
-REGION_DEFINITIONS: tuple[RegionDefinition, ...] = (
-    RegionDefinition(
-        code="ARA",
-        name="Auvergne-Rhône-Alpes",
-        department_codes=("01", "03", "07", "15", "26", "38", "42", "43", "63", "69", "73", "74"),
-        order_index=1,
-    ),
-    RegionDefinition(
-        code="BFC",
-        name="Bourgogne-Franche-Comté",
-        department_codes=("21", "25", "39", "58", "70", "71", "89", "90"),
-        order_index=2,
-    ),
-    RegionDefinition(
-        code="BRE",
-        name="Bretagne",
-        department_codes=("22", "29", "35", "56"),
-        order_index=3,
-    ),
-    RegionDefinition(
-        code="CVL",
-        name="Centre-Val de Loire",
-        department_codes=("18", "28", "36", "37", "41", "45"),
-        order_index=4,
-    ),
-    RegionDefinition(
-        code="COR",
-        name="Corse",
-        department_codes=("2A", "2B", "20"),
-        order_index=5,
-    ),
-    RegionDefinition(
-        code="GES",
-        name="Grand Est",
-        department_codes=("08", "10", "51", "52", "54", "55", "57", "67", "68", "88"),
-        order_index=6,
-    ),
-    RegionDefinition(
-        code="HDF",
-        name="Hauts-de-France",
-        department_codes=("02", "59", "60", "62", "80"),
-        order_index=7,
-    ),
-    RegionDefinition(
-        code="IDF",
-        name="Île-de-France",
-        department_codes=("75", "77", "78", "91", "92", "93", "94", "95"),
-        order_index=8,
-    ),
-    RegionDefinition(
-        code="NOR",
-        name="Normandie",
-        department_codes=("14", "27", "50", "61", "76"),
-        order_index=9,
-    ),
-    RegionDefinition(
-        code="NAQ",
-        name="Nouvelle-Aquitaine",
-        department_codes=("16", "17", "19", "23", "24", "33", "40", "47", "64", "79", "86", "87"),
-        order_index=10,
-    ),
-    RegionDefinition(
-        code="OCC",
-        name="Occitanie",
-        department_codes=("09", "11", "12", "30", "31", "32", "34", "46", "48", "65", "66", "81", "82"),
-        order_index=11,
-    ),
-    RegionDefinition(
-        code="PDL",
-        name="Pays de la Loire",
-        department_codes=("44", "49", "53", "72", "85"),
-        order_index=12,
-    ),
-    RegionDefinition(
-        code="PAC",
-        name="Provence-Alpes-Côte d'Azur",
-        department_codes=("04", "05", "06", "13", "83", "84"),
-        order_index=13,
-    ),
-    RegionDefinition(
-        code="GUA",
-        name="Guadeloupe",
-        department_codes=("971",),
-        order_index=14,
-    ),
-    RegionDefinition(
-        code="MTQ",
-        name="Martinique",
-        department_codes=("972",),
-        order_index=15,
-    ),
-    RegionDefinition(
-        code="GUY",
-        name="Guyane",
-        department_codes=("973",),
-        order_index=16,
-    ),
-    RegionDefinition(
-        code="LRE",
-        name="La Réunion",
-        department_codes=("974",),
-        order_index=17,
-    ),
-    RegionDefinition(
-        code="MAY",
-        name="Mayotte",
-        department_codes=("976",),
-        order_index=18,
-    ),
-)
 
 ALL_REGION_CODES: tuple[str, ...] = tuple(definition.code for definition in REGION_DEFINITIONS)
+ALL_DEPARTMENT_CODES: tuple[str, ...] = tuple(definition.code for definition in DEPARTMENT_DEFINITIONS)
 
 _DEPARTMENT_TO_REGION: dict[str, str] = {}
-for _definition in REGION_DEFINITIONS:
-    for _dept in _definition.department_codes:
-        _DEPARTMENT_TO_REGION[_dept] = _definition.code
+_REGION_TO_DEPARTMENTS: dict[str, list[str]] = {}
+for _definition in DEPARTMENT_DEFINITIONS:
+    _DEPARTMENT_TO_REGION[_definition.code] = _definition.region_code
+    _REGION_TO_DEPARTMENTS.setdefault(_definition.region_code, []).append(_definition.code)
+if "COR" in _REGION_TO_DEPARTMENTS:
+    _DEPARTMENT_TO_REGION.setdefault("20", "COR")
 
 
 def get_region_definitions() -> Iterable[RegionDefinition]:
@@ -138,6 +24,48 @@ def get_region_definitions() -> Iterable[RegionDefinition]:
 
 def get_all_region_codes() -> list[str]:
     return list(ALL_REGION_CODES)
+
+
+def get_all_department_codes() -> list[str]:
+    return list(ALL_DEPARTMENT_CODES)
+
+
+def get_department_definitions() -> Iterable[DepartmentDefinition]:
+    return DEPARTMENT_DEFINITIONS
+
+
+def get_department_codes_for_region_codes(region_codes: Iterable[str]) -> list[str]:
+    normalized = {str(code).strip().upper() for code in region_codes if code}
+    if not normalized:
+        return []
+    department_codes: list[str] = []
+    seen: set[str] = set()
+    for region_code in normalized:
+        for dept in _REGION_TO_DEPARTMENTS.get(region_code, []):
+            if dept in seen:
+                continue
+            seen.add(dept)
+            department_codes.append(dept)
+    return department_codes
+
+
+def normalize_department_codes(codes: Iterable[str]) -> list[str]:
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for raw in codes:
+        if not raw:
+            continue
+        token = str(raw).strip().upper()
+        if not token:
+            continue
+        if token in seen:
+            continue
+        seen.add(token)
+        normalized.append(token)
+    if "2A" in seen or "2B" in seen:
+        if "20" not in seen:
+            normalized.append("20")
+    return normalized
 
 
 def resolve_department_code(code_commune: str | None, code_postal: str | None) -> str | None:
@@ -165,9 +93,15 @@ def resolve_region_code(code_commune: str | None, code_postal: str | None) -> st
 
 __all__ = [
     "ALL_REGION_CODES",
+    "ALL_DEPARTMENT_CODES",
+    "DepartmentDefinition",
     "RegionDefinition",
+    "get_department_definitions",
+    "get_department_codes_for_region_codes",
+    "get_all_department_codes",
     "get_all_region_codes",
     "get_region_definitions",
+    "normalize_department_codes",
     "resolve_department_code",
     "resolve_region_code",
 ]
