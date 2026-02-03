@@ -217,6 +217,21 @@ export const ClientDetailModal = ({ isOpen, client, nafCategories, onClose }: Pr
           </section>
 
           <section>
+            <h3>Régions</h3>
+            {client.regions.length === 0 ? (
+              <p className="muted">Toutes les régions.</p>
+            ) : (
+              <div className="chip-list chip-list--plain">
+                {client.regions.map((region) => (
+                  <span key={region.id} className="chip">
+                    {region.name}
+                  </span>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section>
             <h3>Statuts Google</h3>
             <div className="chip-list chip-list--plain">
               {listingStatuses.map((status) => (

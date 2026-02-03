@@ -8,6 +8,7 @@ export { googleApi } from "./google";
 export { toolsApi, type SireneNewBusinessesPayload } from "./tools";
 export { syncApi, type TriggerSyncResult, type DeleteRunResponse } from "./sync";
 export { clientsApi, type ClientCreatePayload, type ClientUpdatePayload } from "./clients";
+export { regionsApi } from "./regions";
 export { adminConfigApi, type AdminEmailConfigPayload } from "./adminConfig";
 export {
 	stripeSettingsApi,

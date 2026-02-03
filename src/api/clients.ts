@@ -1,4 +1,4 @@
-import type { Client, ListingStatus } from "../types";
+import type { Client, ListingStatus, Region } from "../types";
 import { mapNafSubCategoryResponse, type NafSubCategoryResponse } from "./naf";
 import { request } from "./http";
 
@@ -20,8 +20,16 @@ type ClientResponse = {
   updated_at: string;
   recipients: ClientRecipientResponse[];
   subscriptions: ClientSubscriptionResponse[];
+  regions: RegionResponse[];
   stripe_subscriptions: StripeSubscriptionResponse[];
   subscription_events: ClientSubscriptionEventResponse[];
+};
+
+type RegionResponse = {
+  id: string;
+  code: string;
+  name: string;
+  order_index: number;
 };
 
 type StripeSubscriptionResponse = {
@@ -74,6 +82,7 @@ export interface ClientCreatePayload {
   listingStatuses: ListingStatus[];
   recipients: string[];
   subscriptionIds: string[];
+  regionIds: string[];
 }
 
 export interface ClientUpdatePayload {
@@ -83,7 +92,15 @@ export interface ClientUpdatePayload {
   listingStatuses?: ListingStatus[];
   recipients?: string[];
   subscriptionIds?: string[];
+  regionIds?: string[];
 }
+
+const mapRegionResponse = (region: RegionResponse): Region => ({
+  id: region.id,
+  code: region.code,
+  name: region.name,
+  orderIndex: region.order_index,
+});
 
 const mapClient = (client: ClientResponse): Client => {
   return {
@@ -91,7 +108,7 @@ const mapClient = (client: ClientResponse): Client => {
     name: client.name,
     startDate: client.start_date,
     endDate: client.end_date,
-  listingStatuses: (client.listing_statuses ?? []) as ListingStatus[],
+    listingStatuses: (client.listing_statuses ?? []) as ListingStatus[],
     emailsSentCount: client.emails_sent_count,
     lastEmailSentAt: client.last_email_sent_at,
     createdAt: client.created_at,
@@ -107,6 +124,7 @@ const mapClient = (client: ClientResponse): Client => {
       createdAt: subscription.created_at,
       subcategory: mapNafSubCategoryResponse(subscription.subcategory),
     })),
+    regions: (client.regions || []).map(mapRegionResponse),
     stripeSubscriptions: (client.stripe_subscriptions || []).map((subscription) => ({
       id: subscription.id,
       clientId: subscription.client_id,
@@ -151,6 +169,7 @@ const serializeCreatePayload = (payload: ClientCreatePayload) => ({
   listing_statuses: payload.listingStatuses,
   recipients: payload.recipients,
   subscription_ids: payload.subscriptionIds,
+  region_ids: payload.regionIds,
 });
 
 const serializeUpdatePayload = (payload: ClientUpdatePayload) => {
@@ -172,6 +191,9 @@ const serializeUpdatePayload = (payload: ClientUpdatePayload) => {
   }
   if (payload.subscriptionIds !== undefined) {
     body.subscription_ids = payload.subscriptionIds;
+  }
+  if (payload.regionIds !== undefined) {
+    body.region_ids = payload.regionIds;
   }
   return body;
 };

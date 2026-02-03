@@ -378,6 +378,13 @@ export interface NafCategory {
   subcategories: NafSubCategory[];
 }
 
+export interface Region {
+  id: string;
+  code: string;
+  name: string;
+  orderIndex: number;
+}
+
 export interface ClientSubscription {
   clientId: string;
   subcategoryId: string;
@@ -433,6 +440,7 @@ export interface Client {
   updatedAt: string;
   recipients: ClientRecipient[];
   subscriptions: ClientSubscription[];
+  regions: Region[];
   stripeSubscriptions: StripeSubscriptionHistory[];
   subscriptionEvents: ClientSubscriptionEvent[];
 }

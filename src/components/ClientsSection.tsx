@@ -111,6 +111,7 @@ export const ClientsSection = ({
                 <th>Période d'activation</th>
                 <th>Destinataires</th>
                 <th>Abonnements NAF</th>
+                <th>Régions</th>
                 <th>Abonnements Stripe</th>
                 <th>Statuts Google</th>
                 <th>Statistiques</th>
@@ -161,6 +162,19 @@ export const ClientsSection = ({
                           {client.subscriptions.map((subscription) => (
                             <span key={subscription.subcategoryId} className="chip">
                               {subscription.subcategory.nafCode} · {subscription.subcategory.name}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                    <td>
+                      {client.regions.length === 0 ? (
+                        <span className="small muted">Toutes les régions</span>
+                      ) : (
+                        <div className="chip-list chip-list--plain">
+                          {client.regions.map((region) => (
+                            <span key={region.id} className="chip">
+                              {region.name}
                             </span>
                           ))}
                         </div>
