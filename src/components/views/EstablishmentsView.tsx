@@ -4,6 +4,7 @@ import type {
   EstablishmentIndividualFilter,
   GoogleFindPlaceDebugResult,
   NafCategory,
+  Region,
 } from "../../types";
 
 type Props = {
@@ -12,10 +13,13 @@ type Props = {
   error: Error | null;
   nafCategories: NafCategory[] | undefined;
   isLoadingNafCategories: boolean;
+  regions: Region[] | undefined;
+  isLoadingRegions: boolean;
   limit: number;
   page: number;
   query: string;
   nafCodes: string[];
+  departmentCodes: string[];
   addedFrom: string;
   addedTo: string;
   individualFilter: EstablishmentIndividualFilter;
@@ -25,6 +29,7 @@ type Props = {
   onPageChange: (page: number) => void;
   onQueryChange: (query: string) => void;
   onNafCodesChange: (value: string[]) => void;
+  onDepartmentCodesChange: (value: string[]) => void;
   onAddedFromChange: (value: string) => void;
   onAddedToChange: (value: string) => void;
   onApplyFilters: () => void;
@@ -55,10 +60,13 @@ export const EstablishmentsView = ({
   error,
   nafCategories,
   isLoadingNafCategories,
+  regions,
+  isLoadingRegions,
   limit,
   page,
   query,
   nafCodes,
+  departmentCodes,
   addedFrom,
   addedTo,
   individualFilter,
@@ -68,6 +76,7 @@ export const EstablishmentsView = ({
   onPageChange,
   onQueryChange,
   onNafCodesChange,
+  onDepartmentCodesChange,
   onAddedFromChange,
   onAddedToChange,
   onApplyFilters,
@@ -106,10 +115,13 @@ export const EstablishmentsView = ({
           error={error}
           nafCategories={nafCategories}
           isLoadingNafCategories={isLoadingNafCategories}
+          regions={regions}
+          isLoadingRegions={isLoadingRegions}
           limit={limit}
           page={page}
           query={query}
           nafCodes={nafCodes}
+          departmentCodes={departmentCodes}
           addedFrom={addedFrom}
           addedTo={addedTo}
           individualFilter={individualFilter}
@@ -119,6 +131,7 @@ export const EstablishmentsView = ({
           onPageChange={onPageChange}
           onQueryChange={onQueryChange}
           onNafCodesChange={onNafCodesChange}
+          onDepartmentCodesChange={onDepartmentCodesChange}
           onAddedFromChange={onAddedFromChange}
           onAddedToChange={onAddedToChange}
           onApplyFilters={onApplyFilters}

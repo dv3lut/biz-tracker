@@ -145,6 +145,7 @@ interface ListEstablishmentsParams {
   q?: string;
   nafCode?: string;
   nafCodes?: string[];
+  departmentCodes?: string[];
   addedFrom?: string;
   addedTo?: string;
   googleCheckStatus?: string;
@@ -172,6 +173,13 @@ export const establishmentsApi = {
         .forEach((code) => {
           const trimmed = code.trim();
           query.append("naf_codes", canonicalizeNafCode(trimmed) ?? trimmed);
+        });
+    }
+    if (params.departmentCodes && params.departmentCodes.length > 0) {
+      params.departmentCodes
+        .filter((code) => Boolean(code && code.trim()))
+        .forEach((code) => {
+          query.append("department_codes", code.trim());
         });
     }
     if (params.addedFrom) {

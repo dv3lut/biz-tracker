@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from "react";
 
-import { Client, ClientSubscriptionEvent, NafCategory } from "../types";
+import { Client, ClientSubscriptionEvent, NafCategory, Region } from "../types";
 import { formatDate, formatDateTime, formatNumber } from "../utils/format";
 import { LISTING_STATUS_LABELS } from "../constants/listingStatuses";
 
@@ -8,6 +8,7 @@ type Props = {
   isOpen: boolean;
   client: Client | null;
   nafCategories?: NafCategory[];
+  regions?: Region[];
   onClose: () => void;
 };
 
@@ -108,7 +109,7 @@ const renderSubscriptionEvents = (
   );
 };
 
-export const ClientDetailModal = ({ isOpen, client, nafCategories, onClose }: Props) => {
+export const ClientDetailModal = ({ isOpen, client, nafCategories, regions, onClose }: Props) => {
   useEffect(() => {
     if (!isOpen) {
       return;
@@ -132,6 +133,24 @@ export const ClientDetailModal = ({ isOpen, client, nafCategories, onClose }: Pr
     });
     return map;
   }, [nafCategories]);
+
+  const departmentGroups = useMemo(() => {
+    if (!client) {
+      return [];
+    }
+    const regionNameById = new Map((regions ?? []).map((region) => [region.id, region.name]));
+    const grouped = new Map<string, string[]>();
+    client.departments.forEach((department) => {
+      const regionName = regionNameById.get(department.regionId) ?? "Région";
+      const list = grouped.get(regionName) ?? [];
+      list.push(`${department.code} · ${department.name}`);
+      grouped.set(regionName, list);
+    });
+    return Array.from(grouped.entries()).map(([name, entries]) => ({
+      name,
+      entries,
+    }));
+  }, [client, regions]);
 
   if (!isOpen || !client) {
     return null;
@@ -183,6 +202,8 @@ export const ClientDetailModal = ({ isOpen, client, nafCategories, onClose }: Pr
                   ? `${currentStripe.planKey ?? "—"} · ${currentStripe.status ?? "—"}`
                   : "—"}
               </dd>
+              <dt>Admins en copie</dt>
+              <dd>{client.includeAdminsInClientAlerts ? "Oui" : "Non"}</dd>
             </dl>
           </section>
 
@@ -217,15 +238,22 @@ export const ClientDetailModal = ({ isOpen, client, nafCategories, onClose }: Pr
           </section>
 
           <section>
-            <h3>Régions</h3>
-            {client.regions.length === 0 ? (
-              <p className="muted">Toutes les régions.</p>
+            <h3>Départements</h3>
+            {client.departments.length === 0 ? (
+              <p className="muted">Toute la France.</p>
             ) : (
-              <div className="chip-list chip-list--plain">
-                {client.regions.map((region) => (
-                  <span key={region.id} className="chip">
-                    {region.name}
-                  </span>
+              <div className="region-detail-grid">
+                {departmentGroups.map((group) => (
+                  <div key={group.name} className="region-detail-card">
+                    <strong>{group.name}</strong>
+                    <div className="chip-list chip-list--plain">
+                      {group.entries.map((entry) => (
+                        <span key={entry} className="chip">
+                          {entry}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
                 ))}
               </div>
             )}

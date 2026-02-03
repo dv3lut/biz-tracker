@@ -170,6 +170,7 @@
   font-size: 2.1rem;
   font-weight: 700;
   color: var(--color-text);
+  padding-top: 40px;
 }
 
 .topbar-subtitle {

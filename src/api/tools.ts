@@ -6,6 +6,7 @@ export interface SireneNewBusinessesPayload {
   endDate?: string;
   nafCodes: string[];
   limit?: number;
+  departmentCodes?: string[];
 }
 
 interface SireneNewBusinessResponse {
@@ -77,6 +78,7 @@ export const toolsApi = {
         end_date: payload.endDate ?? null,
         naf_codes: payload.nafCodes,
         limit: payload.limit ?? 100,
+        department_codes: payload.departmentCodes && payload.departmentCodes.length > 0 ? payload.departmentCodes : null,
       }),
     });
 

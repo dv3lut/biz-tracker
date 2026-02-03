@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { Client, NafCategory } from "../types";
+import { Client, NafCategory, Region } from "../types";
 import { formatDate, formatDateTime, formatNumber } from "../utils/format";
 import { LISTING_STATUS_LABELS } from "../constants/listingStatuses";
 import { ClientDetailModal } from "./ClientDetailModal";
@@ -8,6 +8,7 @@ import { ClientDetailModal } from "./ClientDetailModal";
 type Props = {
   clients?: Client[];
   nafCategories?: NafCategory[];
+  regions?: Region[];
   isLoading: boolean;
   isRefreshing: boolean;
   error: Error | null;
@@ -39,6 +40,7 @@ const isClientActive = (client: Client): boolean => {
 export const ClientsSection = ({
   clients,
   nafCategories,
+  regions,
   isLoading,
   isRefreshing,
   error,
@@ -111,7 +113,8 @@ export const ClientsSection = ({
                 <th>Période d'activation</th>
                 <th>Destinataires</th>
                 <th>Abonnements NAF</th>
-                <th>Régions</th>
+                <th>Départements</th>
+                <th>Admins en copie</th>
                 <th>Abonnements Stripe</th>
                 <th>Statuts Google</th>
                 <th>Statistiques</th>
@@ -121,6 +124,21 @@ export const ClientsSection = ({
             <tbody>
               {clients.map((client) => {
                 const active = isClientActive(client);
+                const allDepartmentCodes = regions
+                  ? regions.flatMap((region) => region.departments.map((department) => department.code))
+                  : [];
+                const selectedDepartmentCodes = client.departments.map((department) => department.code);
+                const hasAllDepartments =
+                  allDepartmentCodes.length > 0 &&
+                  allDepartmentCodes.every((code) => selectedDepartmentCodes.includes(code));
+                const showAllDepartments = client.departments.length === 0 || hasAllDepartments;
+                const regionNameById = new Map((regions ?? []).map((region) => [region.id, region.name]));
+                const grouped = new Map<string, number>();
+                client.departments.forEach((department) => {
+                  const regionName = regionNameById.get(department.regionId) ?? "Région";
+                  grouped.set(regionName, (grouped.get(regionName) ?? 0) + 1);
+                });
+                const regionSummary = Array.from(grouped.entries()).map(([name, count]) => ({ name, count }));
                 return (
                   <tr key={client.id} onClick={() => handleOpenDetail(client)}>
                     <td>
@@ -168,17 +186,26 @@ export const ClientsSection = ({
                       )}
                     </td>
                     <td>
-                      {client.regions.length === 0 ? (
-                        <span className="small muted">Toutes les régions</span>
+                      {showAllDepartments ? (
+                        <span className="small muted">Toute la France</span>
                       ) : (
                         <div className="chip-list chip-list--plain">
-                          {client.regions.map((region) => (
-                            <span key={region.id} className="chip">
-                              {region.name}
+                          {regionSummary.map((entry) => (
+                            <span key={entry.name} className="chip">
+                              {entry.name} · {entry.count}
                             </span>
                           ))}
                         </div>
                       )}
+                    </td>
+                    <td>
+                      <span
+                        className={`status-pill ${
+                          client.includeAdminsInClientAlerts ? "status-pill--success" : "status-pill--danger"
+                        }`}
+                      >
+                        {client.includeAdminsInClientAlerts ? "Oui" : "Non"}
+                      </span>
                     </td>
                     <td>
                       {client.stripeSubscriptions.length === 0 ? (
@@ -268,6 +295,7 @@ export const ClientsSection = ({
         isOpen={isDetailOpen}
         client={selectedClient}
         nafCategories={nafCategories}
+        regions={regions}
         onClose={handleCloseDetail}
       />
     </section>

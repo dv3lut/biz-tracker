@@ -1,4 +1,4 @@
-import type { Client, ListingStatus, Region } from "../types";
+import type { Client, Department, ListingStatus } from "../types";
 import { mapNafSubCategoryResponse, type NafSubCategoryResponse } from "./naf";
 import { request } from "./http";
 
@@ -14,22 +14,24 @@ type ClientResponse = {
   start_date: string;
   end_date: string | null;
   listing_statuses: string[];
+  include_admins_in_client_alerts: boolean;
   emails_sent_count: number;
   last_email_sent_at: string | null;
   created_at: string;
   updated_at: string;
   recipients: ClientRecipientResponse[];
   subscriptions: ClientSubscriptionResponse[];
-  regions: RegionResponse[];
+  departments: DepartmentResponse[];
   stripe_subscriptions: StripeSubscriptionResponse[];
   subscription_events: ClientSubscriptionEventResponse[];
 };
 
-type RegionResponse = {
+type DepartmentResponse = {
   id: string;
   code: string;
   name: string;
   order_index: number;
+  region_id: string;
 };
 
 type StripeSubscriptionResponse = {
@@ -80,9 +82,10 @@ export interface ClientCreatePayload {
   startDate: string;
   endDate?: string | null;
   listingStatuses: ListingStatus[];
+  includeAdminsInClientAlerts: boolean;
   recipients: string[];
   subscriptionIds: string[];
-  regionIds: string[];
+  departmentIds: string[];
 }
 
 export interface ClientUpdatePayload {
@@ -90,16 +93,18 @@ export interface ClientUpdatePayload {
   startDate?: string;
   endDate?: string | null;
   listingStatuses?: ListingStatus[];
+  includeAdminsInClientAlerts?: boolean;
   recipients?: string[];
   subscriptionIds?: string[];
-  regionIds?: string[];
+  departmentIds?: string[];
 }
 
-const mapRegionResponse = (region: RegionResponse): Region => ({
-  id: region.id,
-  code: region.code,
-  name: region.name,
-  orderIndex: region.order_index,
+const mapDepartmentResponse = (department: DepartmentResponse): Department => ({
+  id: department.id,
+  code: department.code,
+  name: department.name,
+  orderIndex: department.order_index,
+  regionId: department.region_id,
 });
 
 const mapClient = (client: ClientResponse): Client => {
@@ -109,6 +114,7 @@ const mapClient = (client: ClientResponse): Client => {
     startDate: client.start_date,
     endDate: client.end_date,
     listingStatuses: (client.listing_statuses ?? []) as ListingStatus[],
+    includeAdminsInClientAlerts: client.include_admins_in_client_alerts ?? false,
     emailsSentCount: client.emails_sent_count,
     lastEmailSentAt: client.last_email_sent_at,
     createdAt: client.created_at,
@@ -124,7 +130,7 @@ const mapClient = (client: ClientResponse): Client => {
       createdAt: subscription.created_at,
       subcategory: mapNafSubCategoryResponse(subscription.subcategory),
     })),
-    regions: (client.regions || []).map(mapRegionResponse),
+    departments: (client.departments || []).map(mapDepartmentResponse),
     stripeSubscriptions: (client.stripe_subscriptions || []).map((subscription) => ({
       id: subscription.id,
       clientId: subscription.client_id,
@@ -167,9 +173,10 @@ const serializeCreatePayload = (payload: ClientCreatePayload) => ({
   start_date: payload.startDate,
   end_date: payload.endDate ?? null,
   listing_statuses: payload.listingStatuses,
+  include_admins_in_client_alerts: payload.includeAdminsInClientAlerts,
   recipients: payload.recipients,
   subscription_ids: payload.subscriptionIds,
-  region_ids: payload.regionIds,
+  department_ids: payload.departmentIds,
 });
 
 const serializeUpdatePayload = (payload: ClientUpdatePayload) => {
@@ -186,14 +193,17 @@ const serializeUpdatePayload = (payload: ClientUpdatePayload) => {
   if (payload.listingStatuses !== undefined) {
     body.listing_statuses = payload.listingStatuses;
   }
+  if (payload.includeAdminsInClientAlerts !== undefined) {
+    body.include_admins_in_client_alerts = payload.includeAdminsInClientAlerts;
+  }
   if (payload.recipients !== undefined) {
     body.recipients = payload.recipients;
   }
   if (payload.subscriptionIds !== undefined) {
     body.subscription_ids = payload.subscriptionIds;
   }
-  if (payload.regionIds !== undefined) {
-    body.region_ids = payload.regionIds;
+  if (payload.departmentIds !== undefined) {
+    body.department_ids = payload.departmentIds;
   }
   return body;
 };

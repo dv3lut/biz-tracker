@@ -144,9 +144,10 @@ export const ClientsSection = ({ onUnauthorized }: Props) => {
         startDate: formPayload.startDate,
         endDate: formPayload.endDate,
         listingStatuses: formPayload.listingStatuses,
+        includeAdminsInClientAlerts: formPayload.includeAdminsInClientAlerts,
         recipients: formPayload.recipients,
         subscriptionIds: formPayload.subscriptionIds,
-        regionIds: formPayload.regionIds,
+        departmentIds: formPayload.departmentIds,
       };
       if (modalState.mode === "edit" && modalState.client) {
         updateClientMutation.mutate({ clientId: modalState.client.id, payload });
@@ -172,6 +173,7 @@ export const ClientsSection = ({ onUnauthorized }: Props) => {
       <ClientsView
         clients={clientsQuery.data}
         nafCategories={nafCategoriesQuery.data}
+        regions={regionsQuery.data}
         isLoading={clientsQuery.isLoading}
         isRefreshing={clientsIsRefreshing}
         error={clientsError}

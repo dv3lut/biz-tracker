@@ -1,9 +1,10 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 
-import type { NafCategory, SireneNewBusiness, SireneNewBusinessesResult } from "../types";
+import type { NafCategory, Region, SireneNewBusiness, SireneNewBusinessesResult } from "../types";
 import { formatDate, formatNumber } from "../utils/format";
 import { canonicalizeNafCode, normalizeNafCode } from "../utils/sync";
 import { SiretLink } from "./SiretLink";
+import { RegionDepartmentPanel } from "./RegionDepartmentPanel";
 
 type Props = {
   startDate: string;
@@ -14,12 +15,16 @@ type Props = {
   isLoading: boolean;
   nafCategories: NafCategory[] | undefined;
   isLoadingNafCategories: boolean;
+  regions: Region[] | undefined;
+  isLoadingRegions: boolean;
+  selectedDepartmentCodes: string[];
   errorMessage: string | null;
   result: SireneNewBusinessesResult | null;
   onStartDateChange: (value: string) => void;
   onEndDateChange: (value: string) => void;
   onNafCodesInputChange: (value: string) => void;
   onToggleNafCode: (value: string) => void;
+  onDepartmentCodesChange: (value: string[]) => void;
   onLimitChange: (value: number) => void;
   onSubmit: () => void;
   onReset: () => void;
@@ -72,12 +77,16 @@ export const SireneNewBusinessesPanel = ({
   isLoading,
   nafCategories,
   isLoadingNafCategories,
+  regions,
+  isLoadingRegions,
+  selectedDepartmentCodes,
   errorMessage,
   result,
   onStartDateChange,
   onEndDateChange,
   onNafCodesInputChange,
   onToggleNafCode,
+  onDepartmentCodesChange,
   onLimitChange,
   onSubmit,
   onReset,
@@ -87,6 +96,8 @@ export const SireneNewBusinessesPanel = ({
 }: Props) => {
   const nafDetailsRef = useRef<HTMLDetailsElement | null>(null);
   const [isNafOpen, setIsNafOpen] = useState(false);
+  const regionDetailsRef = useRef<HTMLDetailsElement | null>(null);
+  const [isRegionOpen, setIsRegionOpen] = useState(false);
 
   useEffect(() => {
     if (!isNafOpen) {
@@ -111,6 +122,30 @@ export const SireneNewBusinessesPanel = ({
       document.removeEventListener("pointerdown", handlePointerDown);
     };
   }, [isNafOpen]);
+
+  useEffect(() => {
+    if (!isRegionOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const details = regionDetailsRef.current;
+      if (!details) {
+        return;
+      }
+
+      if (details.contains(event.target as Node)) {
+        return;
+      }
+
+      setIsRegionOpen(false);
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [isRegionOpen]);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -150,6 +185,27 @@ export const SireneNewBusinessesPanel = ({
       return canonicalizeNafCode(selectedNafCodes[0]) ?? selectedNafCodes[0];
     }
     return `${selectedNafCodes.length} sélectionnés`;
+  };
+
+  const departmentSelectionLabel = () => {
+    if (isLoadingRegions) {
+      return "Chargement des départements…";
+    }
+    if (!regions || regions.length === 0) {
+      return "Aucun département";
+    }
+    const allCodes = regions.flatMap((region) => region.departments.map((department) => department.code));
+    if (!selectedDepartmentCodes.length || selectedDepartmentCodes.length === allCodes.length) {
+      return "Tous";
+    }
+    if (selectedDepartmentCodes.length === 1) {
+      const target = selectedDepartmentCodes[0];
+      const department = regions
+        .flatMap((region) => region.departments)
+        .find((entry) => entry.code === target);
+      return department ? `${department.code} · ${department.name}` : target;
+    }
+    return `${selectedDepartmentCodes.length} sélectionnés`;
   };
 
   return (
@@ -208,7 +264,7 @@ export const SireneNewBusinessesPanel = ({
                     }}
                   >
                     <summary className="muted small">NAF base : {nafSelectionLabel()}</summary>
-                    <div className="naf-multiselect-panel">
+                    <div className="naf-multiselect-panel region-multiselect-panel">
                       {!isLoadingNafCategories && (!nafCategories || nafCategories.length === 0) ? (
                         <p className="muted small">Aucun NAF configuré.</p>
                       ) : null}
@@ -254,6 +310,39 @@ export const SireneNewBusinessesPanel = ({
                 disabled={isLoading}
               />
               <span className="muted small">Saisie libre (virgules, points-virgules ou espaces).</span>
+            </div>
+            <div className="tools-region-select">
+              <label className="input-label">Départements</label>
+              <div className="establishments-controls">
+                <div className="establishments-control establishments-control--naf">
+                  <details
+                    ref={regionDetailsRef}
+                    className="naf-multiselect"
+                    open={isRegionOpen}
+                    onToggle={(event) => {
+                      setIsRegionOpen((event.target as HTMLDetailsElement).open);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Escape") {
+                        setIsRegionOpen(false);
+                      }
+                    }}
+                  >
+                    <summary className="muted small">Départements : {departmentSelectionLabel()}</summary>
+                    <div className="naf-multiselect-panel">
+                      <RegionDepartmentPanel
+                        regions={regions}
+                        isLoading={isLoadingRegions}
+                        selectedDepartmentCodes={selectedDepartmentCodes}
+                        onSelectionChange={onDepartmentCodesChange}
+                        compact
+                        helperText="Sélectionnez une région pour inclure tous ses départements, ou choisissez au détail."
+                      />
+                    </div>
+                  </details>
+                </div>
+              </div>
+              <span className="muted small">Sans sélection, toute la France est incluse.</span>
             </div>
           </div>
         </div>

@@ -9,9 +9,10 @@ type FormState = {
   startDate: string;
   endDate: string;
   listingStatuses: ListingStatus[];
+  includeAdminsInClientAlerts: boolean;
   recipientsText: string;
   subscriptionIds: string[];
-  regionIds: string[];
+  departmentCodes: string[];
 };
 
 type SubmitPayload = {
@@ -19,9 +20,10 @@ type SubmitPayload = {
   startDate: string;
   endDate: string | null;
   listingStatuses: ListingStatus[];
+  includeAdminsInClientAlerts: boolean;
   recipients: string[];
   subscriptionIds: string[];
-  regionIds: string[];
+  departmentIds: string[];
 };
 
 type Props = {
@@ -42,9 +44,10 @@ const EMPTY_STATE: FormState = {
   startDate: "",
   endDate: "",
   listingStatuses: DEFAULT_LISTING_STATUSES,
+  includeAdminsInClientAlerts: false,
   recipientsText: "",
   subscriptionIds: [],
-  regionIds: [],
+  departmentCodes: [],
 };
 
 const splitRecipients = (value: string): string[] => {
@@ -53,6 +56,21 @@ const splitRecipients = (value: string): string[] => {
     .map((entry) => entry.trim().toLowerCase())
     .filter((entry) => entry.length > 0);
   return Array.from(new Set(normalized));
+};
+
+const resolveDepartmentIds = (codes: string[], regions: Region[] | undefined): string[] => {
+  if (!regions || regions.length === 0) {
+    return [];
+  }
+  const map = new Map<string, string>();
+  regions.forEach((region) => {
+    region.departments.forEach((department) => {
+      map.set(department.code, department.id);
+    });
+  });
+  return codes
+    .map((code) => map.get(code))
+    .filter((value): value is string => Boolean(value));
 };
 
 export const ClientModal = ({
@@ -75,17 +93,18 @@ export const ClientModal = ({
       return;
     }
     if (client && mode === "edit") {
-      const regionIds = client.regions.length
-        ? client.regions.map((region) => region.id)
-        : regions?.map((region) => region.id) ?? [];
+      const departmentCodes = client.departments.length
+        ? client.departments.map((department) => department.code)
+        : regions?.flatMap((region) => region.departments.map((department) => department.code)) ?? [];
       setFormState({
         name: client.name,
         startDate: client.startDate,
         endDate: client.endDate ?? "",
         listingStatuses: client.listingStatuses?.length ? client.listingStatuses : DEFAULT_LISTING_STATUSES,
+        includeAdminsInClientAlerts: client.includeAdminsInClientAlerts ?? false,
         recipientsText: client.recipients.map((recipient) => recipient.email).join("\n"),
         subscriptionIds: client.subscriptions.map((subscription) => subscription.subcategoryId),
-        regionIds,
+        departmentCodes,
       });
     } else {
       setFormState(EMPTY_STATE);
@@ -103,22 +122,27 @@ export const ClientModal = ({
       return;
     }
     setFormState((current) => {
-      if (current.regionIds.length > 0) {
+      if (current.departmentCodes.length > 0) {
         return current;
       }
-      return { ...current, regionIds: regions.map((region) => region.id) };
+      return {
+        ...current,
+        departmentCodes: regions.flatMap((region) =>
+          region.departments.map((department) => department.code),
+        ),
+      };
     });
   }, [isOpen, mode, regions]);
 
   const isValid = useMemo(() => {
-    const hasRegions = regions && regions.length > 0 ? formState.regionIds.length > 0 : true;
+    const hasRegions = regions && regions.length > 0 ? formState.departmentCodes.length > 0 : true;
     return Boolean(
       formState.name.trim()
         && formState.startDate
         && formState.listingStatuses.length > 0
         && hasRegions
     );
-  }, [formState.name, formState.startDate, formState.listingStatuses.length, formState.regionIds.length, regions]);
+  }, [formState.name, formState.startDate, formState.listingStatuses.length, formState.departmentCodes.length, regions]);
 
   const handleChange = (field: keyof FormState) => (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFormState((current) => ({ ...current, [field]: event.target.value }));
@@ -129,14 +153,16 @@ export const ClientModal = ({
     if (!isValid) {
       return;
     }
+    const departmentIds = resolveDepartmentIds(formState.departmentCodes, regions);
     const payload: SubmitPayload = {
       name: formState.name.trim(),
       startDate: formState.startDate,
       endDate: formState.endDate ? formState.endDate : null,
       listingStatuses: formState.listingStatuses,
+      includeAdminsInClientAlerts: formState.includeAdminsInClientAlerts,
       recipients: splitRecipients(formState.recipientsText),
       subscriptionIds: formState.subscriptionIds,
-      regionIds: formState.regionIds,
+      departmentIds,
     };
     onSubmit(payload);
   };
@@ -169,28 +195,15 @@ export const ClientModal = ({
     setFormState((current) => ({ ...current, listingStatuses: [...DEFAULT_LISTING_STATUSES] }));
   };
 
-  const handleToggleRegion = (regionId: string) => () => {
-    setFormState((current) => {
-      const exists = current.regionIds.includes(regionId);
-      if (exists) {
-        return { ...current, regionIds: current.regionIds.filter((id) => id !== regionId) };
-      }
-      return { ...current, regionIds: [...current.regionIds, regionId] };
-    });
+  const handleToggleAdminCopy = () => {
+    setFormState((current) => ({
+      ...current,
+      includeAdminsInClientAlerts: !current.includeAdminsInClientAlerts,
+    }));
   };
 
-  const handleToggleAllRegions = () => {
-    if (!regions) {
-      return;
-    }
-    const allIds = regions.map((region) => region.id);
-    setFormState((current) => {
-      const hasAll = allIds.length > 0 && allIds.every((id) => current.regionIds.includes(id));
-      if (hasAll) {
-        return { ...current, regionIds: [] };
-      }
-      return { ...current, regionIds: allIds };
-    });
+  const handleDepartmentCodesChange = (codes: string[]) => {
+    setFormState((current) => ({ ...current, departmentCodes: codes }));
   };
 
   const handleToggleCategory = (categoryId: string) => () => {
@@ -223,26 +236,12 @@ export const ClientModal = ({
     return null;
   }
 
-  const allRegionIds = (regions ?? []).map((region) => region.id);
-  const selectedRegionsCount = formState.regionIds.length;
-  const isAllRegionsSelected = allRegionIds.length > 0 && allRegionIds.every((id) => formState.regionIds.includes(id));
-  const isRegionIndeterminate = selectedRegionsCount > 0 && !isAllRegionsSelected;
-  const regionSelectionLabel = () => {
-    if (isLoadingRegions) {
-      return "Chargement des régions…";
-    }
-    if (!regions || regions.length === 0) {
-      return "Aucune région";
-    }
-    if (isAllRegionsSelected) {
-      return "Toute la France";
-    }
-    if (selectedRegionsCount === 1) {
-      const region = regions.find((item) => formState.regionIds.includes(item.id));
-      return region ? region.name : "1 région";
-    }
-    return `${selectedRegionsCount} sélectionnées`;
-  };
+  const allDepartmentCodes = regions
+    ? regions.flatMap((region) => region.departments.map((department) => department.code))
+    : [];
+  const selectedDepartmentsCount = formState.departmentCodes.length;
+  const isAllDepartmentsSelected =
+    allDepartmentCodes.length > 0 && allDepartmentCodes.every((code) => formState.departmentCodes.includes(code));
 
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true">
@@ -292,6 +291,14 @@ export const ClientModal = ({
                 placeholder="client@example.com"
               />
             </div>
+            <label className="form-checkbox">
+              <input
+                type="checkbox"
+                checked={formState.includeAdminsInClientAlerts}
+                onChange={handleToggleAdminCopy}
+              />
+              <span>Mettre les admins en copie des alertes client</span>
+            </label>
           </section>
 
           <section>
@@ -348,37 +355,30 @@ export const ClientModal = ({
                               }
                             }}
                             checked={isCategoryChecked}
-                            disabled={activeIds.length === 0}
                             onChange={handleToggleCategory(category.id)}
                           />
-                          <span>Tout sélectionner</span>
+                          <span className="muted small">Tout sélectionner</span>
                         </label>
                       </div>
-                      {category.subcategories.length === 0 ? (
-                        <p className="small muted">Aucune sous-catégorie.</p>
-                      ) : (
-                        <ul className="naf-subscription-list">
-                          {category.subcategories.map((subcategory) => {
-                            const checked = formState.subscriptionIds.includes(subcategory.id);
-                            return (
-                              <li key={subcategory.id}>
-                                <label>
-                                  <input
-                                    type="checkbox"
-                                    checked={checked}
-                                    onChange={handleToggleSubscription(subcategory.id)}
-                                    disabled={!subcategory.isActive}
-                                  />
-                                  <span>
-                                    {subcategory.nafCode} · {subcategory.name}
-                                    {!subcategory.isActive ? " (inactif)" : ""}
-                                  </span>
-                                </label>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      )}
+                      <ul className="naf-subscription-list">
+                        {activeSubcategories.map((subcategory) => {
+                          const checked = formState.subscriptionIds.includes(subcategory.id);
+                          return (
+                            <li key={subcategory.id} className="naf-subscription-item">
+                              <label>
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={handleToggleSubscription(subcategory.id)}
+                                />
+                                <span>
+                                  {subcategory.nafCode} · {subcategory.name}
+                                </span>
+                              </label>
+                            </li>
+                          );
+                        })}
+                      </ul>
                     </article>
                   );
                 })}
@@ -387,50 +387,21 @@ export const ClientModal = ({
           </section>
 
           <section>
-            <h3>Régions surveillées</h3>
-            <p className="muted small">
-              Choisissez les régions géographiques couvertes par ce client. Par défaut, toutes les régions sont
-              sélectionnées.
-            </p>
-            <div className="region-selection">
-              <details className="region-multiselect">
-                <summary className="muted small">Régions : {regionSelectionLabel()}</summary>
-                <div className="region-multiselect-panel">
-                  {isLoadingRegions ? <p className="muted small">Chargement des régions…</p> : null}
-                  {!isLoadingRegions && (!regions || regions.length === 0) ? (
-                    <p className="muted small">Aucune région disponible.</p>
-                  ) : null}
-                  {regions && regions.length > 0 ? (
-                    <div className="region-multiselect-options">
-                      <label className="region-multiselect-option">
-                        <input
-                          type="checkbox"
-                          ref={(input) => {
-                            if (input) {
-                              input.indeterminate = isRegionIndeterminate;
-                            }
-                          }}
-                          checked={isAllRegionsSelected}
-                          onChange={handleToggleAllRegions}
-                        />
-                        <span>Toute la France</span>
-                      </label>
-                      {regions.map((region) => {
-                        const checked = formState.regionIds.includes(region.id);
-                        return (
-                          <label key={region.id} className="region-multiselect-option">
-                            <input type="checkbox" checked={checked} onChange={handleToggleRegion(region.id)} />
-                            <span>{region.name}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  ) : null}
-                </div>
-              </details>
-            </div>
-            {!isLoadingRegions && regions && regions.length > 0 && formState.regionIds.length === 0 ? (
-              <p className="small error">Sélectionnez au moins une région.</p>
+            <h3>Départements</h3>
+            <RegionDepartmentPanel
+              regions={regions}
+              isLoading={isLoadingRegions}
+              selectedDepartmentCodes={formState.departmentCodes}
+              onSelectionChange={handleDepartmentCodesChange}
+              helperText="Sélectionnez une région pour inclure tous ses départements, ou choisissez au détail."
+            />
+            {isAllDepartmentsSelected ? (
+              <p className="muted small">Toute la France est couverte.</p>
+            ) : (
+              <p className="muted small">{selectedDepartmentsCount} départements sélectionnés.</p>
+            )}
+            {!isLoadingRegions && regions && regions.length > 0 && formState.departmentCodes.length === 0 ? (
+              <p className="small error">Sélectionnez au moins un département.</p>
             ) : null}
           </section>
 
