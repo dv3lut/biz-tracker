@@ -104,8 +104,7 @@ export const EstablishmentsSection = ({
 }: EstablishmentsSectionProps) => {
   const nafDetailsRef = useRef<HTMLDetailsElement | null>(null);
   const [isNafOpen, setIsNafOpen] = useState(false);
-  const regionDetailsRef = useRef<HTMLDetailsElement | null>(null);
-  const [isRegionOpen, setIsRegionOpen] = useState(false);
+  const [isRegionModalOpen, setIsRegionModalOpen] = useState(false);
 
   useEffect(() => {
     if (!isNafOpen) {
@@ -131,29 +130,13 @@ export const EstablishmentsSection = ({
     };
   }, [isNafOpen]);
 
-  useEffect(() => {
-    if (!isRegionOpen) {
-      return;
-    }
+  const handleOpenRegionModal = () => {
+    setIsRegionModalOpen(true);
+  };
 
-    const handlePointerDown = (event: PointerEvent) => {
-      const details = regionDetailsRef.current;
-      if (!details) {
-        return;
-      }
-
-      if (details.contains(event.target as Node)) {
-        return;
-      }
-
-      setIsRegionOpen(false);
-    };
-
-    document.addEventListener("pointerdown", handlePointerDown);
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown);
-    };
-  }, [isRegionOpen]);
+  const handleCloseRegionModal = () => {
+    setIsRegionModalOpen(false);
+  };
 
   const handleSearchChange = (event: ChangeEvent<HTMLInputElement>) => {
     onQueryChange(event.target.value);
@@ -319,31 +302,14 @@ export const EstablishmentsSection = ({
           </div>
 
           <div className="establishments-control establishments-control--naf">
-            <details
-              ref={regionDetailsRef}
-              className="naf-multiselect"
-              open={isRegionOpen}
-              onToggle={(event) => {
-                setIsRegionOpen((event.target as HTMLDetailsElement).open);
-              }}
-              onKeyDown={(event) => {
-                if (event.key === "Escape") {
-                  setIsRegionOpen(false);
-                }
-              }}
+            <button
+              type="button"
+              className="filter-modal-trigger muted small"
+              onClick={handleOpenRegionModal}
+              disabled={isLoadingRegions}
             >
-              <summary className="muted small">Départements : {departmentSelectionLabel()}</summary>
-              <div className="naf-multiselect-panel">
-                <RegionDepartmentPanel
-                  regions={regions}
-                  isLoading={isLoadingRegions}
-                  selectedDepartmentCodes={departmentCodes}
-                  onSelectionChange={onDepartmentCodesChange}
-                  compact
-                  helperText="Sélectionnez une région pour inclure tous ses départements, ou choisissez au détail."
-                />
-              </div>
-            </details>
+              Départements : {departmentSelectionLabel()}
+            </button>
           </div>
 
           <div className="establishments-control establishments-control--added-from">
@@ -453,6 +419,31 @@ export const EstablishmentsSection = ({
           </div>
         </div>
       </div>
+
+      {isRegionModalOpen ? (
+        <div className="modal-overlay" role="dialog" aria-modal="true">
+          <div className="modal region-filter-modal">
+            <header className="modal-header">
+              <div>
+                <h3>Filtrer par départements</h3>
+                <p className="muted small">Sélectionnez une région pour inclure tous ses départements.</p>
+              </div>
+              <button type="button" className="ghost" onClick={handleCloseRegionModal}>
+                Fermer
+              </button>
+            </header>
+            <div className="modal-content">
+              <RegionDepartmentPanel
+                regions={regions}
+                isLoading={isLoadingRegions}
+                selectedDepartmentCodes={departmentCodes}
+                onSelectionChange={onDepartmentCodesChange}
+                helperText="Sélectionnez une région pour inclure tous ses départements, ou choisissez au détail."
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {isLoading && <p>Chargement...</p>}
       {error && <p className="error">{error.message}</p>}

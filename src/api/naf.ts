@@ -1,4 +1,4 @@
-import type { NafCategory, NafSubCategory } from "../types";
+import type { Department, NafCategory, NafSubCategory } from "../types";
 import { request } from "./http";
 
 export type NafSubCategoryResponse = {
@@ -12,6 +12,17 @@ export type NafSubCategoryResponse = {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  google_department_count?: number;
+  google_department_all?: boolean;
+  google_departments?: DepartmentResponse[];
+};
+
+type DepartmentResponse = {
+  id: string;
+  code: string;
+  name: string;
+  order_index: number;
+  region_id: string;
 };
 
 type NafCategoryResponse = {
@@ -48,6 +59,14 @@ export interface NafSubCategoryUpdatePayload {
   isActive?: boolean;
 }
 
+const mapDepartmentResponse = (department: DepartmentResponse): Department => ({
+  id: department.id,
+  code: department.code,
+  name: department.name,
+  orderIndex: department.order_index,
+  regionId: department.region_id,
+});
+
 export const mapNafSubCategoryResponse = (subcategory: NafSubCategoryResponse): NafSubCategory => ({
   id: subcategory.id,
   categoryId: subcategory.category_id,
@@ -59,6 +78,9 @@ export const mapNafSubCategoryResponse = (subcategory: NafSubCategoryResponse): 
   isActive: subcategory.is_active,
   createdAt: subcategory.created_at,
   updatedAt: subcategory.updated_at,
+  googleDepartmentCount: subcategory.google_department_count ?? 0,
+  googleDepartmentAll: subcategory.google_department_all ?? false,
+  googleDepartments: (subcategory.google_departments ?? []).map(mapDepartmentResponse),
 });
 
 const mapCategoryResponse = (category: NafCategoryResponse): NafCategory => ({

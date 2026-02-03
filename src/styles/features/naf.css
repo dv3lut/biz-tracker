@@ -66,6 +66,65 @@
   margin-top: 0.5rem;
 }
 
+.naf-subcategory-toggle {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.naf-department-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.naf-department-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.naf-department-modal {
+  width: min(760px, 96vw);
+}
+
+.naf-region-stair {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.naf-region-step {
+  display: grid;
+  gap: 0.4rem;
+  padding-left: 0.5rem;
+  border-left: 2px solid var(--color-border);
+}
+
+.naf-region-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.naf-region-departments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding-left: 0.6rem;
+}
+
 .naf-subscription-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));

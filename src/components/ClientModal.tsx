@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import { Client, ListingStatus, NafCategory, Region } from "../types";
+import { RegionDepartmentPanel } from "./RegionDepartmentPanel";
 import { formatNumber, formatDateTime } from "../utils/format";
 import { DEFAULT_LISTING_STATUSES, LISTING_STATUS_OPTIONS } from "../constants/listingStatuses";
 

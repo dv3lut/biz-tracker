@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { ApiError, nafApi, type NafCategoryPayload, type NafSubCategoryCreatePayload, type NafSubCategoryUpdatePayload } from "../../api";
-import type { NafCategory, NafSubCategory } from "../../types";
+import type { NafCategory, NafSubCategory, Region } from "../../types";
 import { useRefreshIndicator } from "../../hooks/useRefreshIndicator";
 import { NafCategoriesSection } from "../NafCategoriesSection";
 import { NafCategoryModal, type NafCategoryFormPayload } from "../NafCategoryModal";
@@ -20,6 +20,7 @@ type Props = {
   isFetching: boolean;
   error: Error | null;
   onRefresh: () => void;
+  regions: Region[] | undefined;
   isAuthenticated: boolean;
   onRequireToken: () => void;
   onUnauthorized: () => void;
@@ -31,6 +32,7 @@ export const NafConfigView = ({
   isFetching,
   error,
   onRefresh,
+  regions,
   isAuthenticated,
   onRequireToken,
   onUnauthorized,
@@ -280,6 +282,7 @@ export const NafConfigView = ({
             feedbackMessage={feedbackMessage}
             errorMessage={errorMessage}
             onRefresh={onRefresh}
+            regions={regions}
             onCreateCategory={() => handleOpenCategoryModal("create")}
             onEditCategory={(category) => handleOpenCategoryModal("edit", category)}
             onDeleteCategory={handleDeleteCategory}

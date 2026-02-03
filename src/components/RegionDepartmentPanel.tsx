@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect, useRef } from "react";
+import type { PointerEvent } from "react";
 
 import type { Region } from "../types";
 
@@ -50,18 +51,19 @@ const RegionRow = ({ region, selectedCodes, onToggleRegion, onToggleDepartment, 
 
   return (
     <details className="region-accordion">
-      <summary>
-        <label className="region-accordion-summary" onClick={(event) => event.preventDefault()}>
+      <summary className="region-accordion-summary-row">
+        <label className="region-accordion-summary">
           <input
             ref={checkboxRef}
             type="checkbox"
             checked={isAllSelected}
             onChange={() => onToggleRegion(region)}
+            onClick={(event) => event.stopPropagation()}
             disabled={isLoading}
           />
           <span>{region.name}</span>
         </label>
-        <span className="muted small">
+        <span className="muted small region-accordion-count">
           {selectedCount}/{departmentCodes.length}
         </span>
       </summary>
@@ -98,6 +100,14 @@ export const RegionDepartmentPanel = ({
   compact = false,
 }: RegionDepartmentPanelProps) => {
   const [zoom, setZoom] = useState(1);
+  const [isDragging, setIsDragging] = useState(false);
+  const mapFrameRef = useRef<HTMLDivElement | null>(null);
+  const dragState = useRef({
+    startX: 0,
+    startY: 0,
+    scrollLeft: 0,
+    scrollTop: 0,
+  });
   const allDepartmentCodes = useMemo(() => buildAllDepartmentCodes(regions), [regions]);
   const selectedCodes = useMemo(() => new Set(selectedDepartmentCodes), [selectedDepartmentCodes]);
   const hasAll = allDepartmentCodes.length > 0 && allDepartmentCodes.every((code) => selectedCodes.has(code));
@@ -139,6 +149,38 @@ export const RegionDepartmentPanel = ({
     setZoom(clamp(value, 1, 2.6));
   };
 
+  const handleMapPointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    if (!mapFrameRef.current) {
+      return;
+    }
+    mapFrameRef.current.setPointerCapture(event.pointerId);
+    dragState.current = {
+      startX: event.clientX,
+      startY: event.clientY,
+      scrollLeft: mapFrameRef.current.scrollLeft,
+      scrollTop: mapFrameRef.current.scrollTop,
+    };
+    setIsDragging(true);
+  };
+
+  const handleMapPointerMove = (event: PointerEvent<HTMLDivElement>) => {
+    if (!mapFrameRef.current || !isDragging) {
+      return;
+    }
+    const deltaX = event.clientX - dragState.current.startX;
+    const deltaY = event.clientY - dragState.current.startY;
+    mapFrameRef.current.scrollLeft = dragState.current.scrollLeft - deltaX;
+    mapFrameRef.current.scrollTop = dragState.current.scrollTop - deltaY;
+  };
+
+  const handleMapPointerUp = (event: PointerEvent<HTMLDivElement>) => {
+    if (!mapFrameRef.current) {
+      return;
+    }
+    mapFrameRef.current.releasePointerCapture(event.pointerId);
+    setIsDragging(false);
+  };
+
   return (
     <div className={`region-picker ${compact ? "region-picker--compact" : ""}`}>
       <div className="region-picker-header">
@@ -177,7 +219,14 @@ export const RegionDepartmentPanel = ({
               </button>
             </div>
           </div>
-          <div className="region-map-frame">
+          <div
+            className={`region-map-frame ${isDragging ? "is-dragging" : ""}`}
+            ref={mapFrameRef}
+            onPointerDown={handleMapPointerDown}
+            onPointerMove={handleMapPointerMove}
+            onPointerUp={handleMapPointerUp}
+            onPointerLeave={handleMapPointerUp}
+          >
             <img
               src="/carte-des-regions-de-france-metropolitaine-et-outre-mer.jpg"
               alt="Carte des régions de France métropolitaine et outre-mer"

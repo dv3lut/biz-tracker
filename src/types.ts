@@ -366,6 +366,9 @@ export interface NafSubCategory {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  googleDepartmentCount: number;
+  googleDepartmentAll: boolean;
+  googleDepartments: Department[];
 }
 
 export interface NafCategory {
