@@ -83,6 +83,7 @@ class ClientOut(BaseModel):
     updated_at: datetime
     recipients: list[ClientRecipientOut]
     subscriptions: list[ClientSubscriptionOut]
+    regions: list["RegionOut"] = Field(default_factory=list)
     stripe_subscriptions: list[ClientStripeSubscriptionOut]
     subscription_events: list[ClientSubscriptionEventOut] = Field(default_factory=list)
 
@@ -99,6 +100,10 @@ class ClientCreate(BaseModel):
     subscription_ids: list[UUID] = Field(
         default_factory=list,
         description="Identifiants des sous-catégories NAF auxquelles le client est abonné.",
+    )
+    region_ids: list[UUID] = Field(
+        default_factory=list,
+        description="Identifiants des régions auxquelles le client est abonné (vide = toute la France).",
     )
 
     @field_validator("listing_statuses")
@@ -123,6 +128,10 @@ class ClientUpdate(BaseModel):
         default=None,
         description="Remplace complètement la liste des sous-catégories souscrites lorsqu'elle est fournie.",
     )
+    region_ids: list[UUID] | None = Field(
+        default=None,
+        description="Remplace complètement la liste des régions souscrites lorsqu'elle est fournie.",
+    )
 
     @field_validator("listing_statuses")
     @classmethod
@@ -139,6 +148,7 @@ class ClientUpdate(BaseModel):
 
 
 from app.api.schemas.naf import NafSubCategoryOut  # noqa: E402  (import circular prevention)
+from app.api.schemas.regions import RegionOut  # noqa: E402
 
 ClientSubscriptionOut.model_rebuild()
 ClientStripeSubscriptionOut.model_rebuild()

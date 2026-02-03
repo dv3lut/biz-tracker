@@ -85,6 +85,36 @@ def run_schema_upgrades(engine: Engine) -> None:
         )
         """,
         """
+        CREATE TABLE IF NOT EXISTS regions (
+            id UUID PRIMARY KEY,
+            code VARCHAR(16) NOT NULL UNIQUE,
+            name VARCHAR(255) NOT NULL,
+            order_index INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS ix_regions_code
+        ON regions (code)
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS client_regions (
+            client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+            region_id UUID NOT NULL REFERENCES regions(id) ON DELETE CASCADE,
+            created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+            PRIMARY KEY (client_id, region_id)
+        )
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS ix_client_regions_client_id
+        ON client_regions (client_id)
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS ix_client_regions_region_id
+        ON client_regions (region_id)
+        """,
+        """
         ALTER TABLE clients
         ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR(255)
         """,

@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.api.schemas import ClientCreate, ClientOut, ClientUpdate
 from app.db import models
+from app.services.regions_service import list_regions
 
 from .common import normalize_emails
 
@@ -38,6 +39,7 @@ def _client_eager_load() -> tuple[selectinload, ...]:
         selectinload(models.Client.recipients),
         selectinload(models.Client.subscriptions).selectinload(models.ClientSubscription.subcategory),
         selectinload(models.Client.stripe_subscriptions),
+        selectinload(models.Client.regions),
         selectinload(models.Client.subscription_events),
     )
 
@@ -108,6 +110,48 @@ def _apply_subscriptions(session: Session, client: models.Client, subscription_i
     client.subscriptions = updated
 
 
+def _resolve_region_ids(session: Session, region_ids: list[UUID]) -> list[UUID]:
+    if region_ids:
+        return region_ids
+    regions = list_regions(session)
+    return [region.id for region in regions]
+
+
+def _apply_regions(session: Session, client: models.Client, region_ids: list[UUID]) -> None:
+    unique_ids: list[UUID] = []
+    seen: set[UUID] = set()
+    for region_id in region_ids:
+        if region_id in seen:
+            continue
+        seen.add(region_id)
+        unique_ids.append(region_id)
+
+    if not unique_ids:
+        client.region_links = []
+        return
+
+    stmt = select(models.Region).where(models.Region.id.in_(unique_ids))
+    regions = session.execute(stmt).scalars().all()
+    found_ids = {region.id for region in regions}
+    missing = set(unique_ids) - found_ids
+    if missing:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Région introuvable.")
+
+    ordering = {identifier: index for index, identifier in enumerate(unique_ids)}
+    regions.sort(key=lambda region: ordering[region.id])
+
+    current = {link.region_id: link for link in client.region_links}
+    updated: list[models.ClientRegion] = []
+    for region in regions:
+        existing = current.get(region.id)
+        if existing is not None:
+            updated.append(existing)
+            continue
+        updated.append(models.ClientRegion(region_id=region.id, region=region))
+
+    client.region_links = updated
+
+
 def list_clients_action(session: Session) -> list[ClientOut]:
     stmt = select(models.Client).options(*_client_eager_load()).order_by(models.Client.name)
     clients = session.execute(stmt).scalars().all()
@@ -132,6 +176,7 @@ def create_client_action(payload: ClientCreate, session: Session) -> ClientOut:
     session.add(client)
     _apply_recipients(client, payload.recipients)
     _apply_subscriptions(session, client, payload.subscription_ids)
+    _apply_regions(session, client, _resolve_region_ids(session, payload.region_ids))
 
     try:
         session.flush()
@@ -162,6 +207,10 @@ def update_client_action(client_id: UUID, payload: ClientUpdate, session: Sessio
 
     if payload.subscription_ids is not None:
         _apply_subscriptions(session, client, payload.subscription_ids)
+
+    if payload.region_ids is not None:
+        resolved_region_ids = _resolve_region_ids(session, payload.region_ids)
+        _apply_regions(session, client, resolved_region_ids)
 
     try:
         session.flush()

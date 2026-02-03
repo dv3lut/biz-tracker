@@ -20,6 +20,7 @@ from app.utils.google_listing import (
     normalize_listing_status_filters,
 )
 from app.utils.naf import normalize_naf_code
+from app.utils.regions import ALL_REGION_CODES, resolve_region_code
 
 
 def get_active_clients(session: Session) -> list[models.Client]:
@@ -32,6 +33,7 @@ def get_active_clients(session: Session) -> list[models.Client]:
             selectinload(models.Client.recipients),
             selectinload(models.Client.subscriptions).selectinload(models.ClientSubscription.subcategory),
             selectinload(models.Client.stripe_subscriptions),
+            selectinload(models.Client.regions),
         )
         .where(
             models.Client.start_date <= today,
@@ -71,6 +73,7 @@ def get_all_clients(session: Session) -> list[models.Client]:
             selectinload(models.Client.recipients),
             selectinload(models.Client.subscriptions).selectinload(models.ClientSubscription.subcategory),
             selectinload(models.Client.stripe_subscriptions),
+            selectinload(models.Client.regions),
         )
         .order_by(models.Client.name)
     )
@@ -212,13 +215,28 @@ def assign_establishments_to_clients(
     subscription_map, code_index = build_subscription_index(clients)
     status_map: dict[UUID, set[str]] = {}
     status_filtering_enabled = False
+    region_map: dict[UUID, set[str] | None] = {}
+    region_filtering_enabled = False
+    all_regions = set(ALL_REGION_CODES)
     for client in clients:
         statuses = set(resolve_client_listing_statuses(client))
         status_map[client.id] = statuses
         if len(statuses) < len(FILTERABLE_LISTING_STATUSES):
             status_filtering_enabled = True
+        region_codes = {
+            region.code
+            for region in getattr(client, "regions", [])
+            if getattr(region, "code", None)
+        }
+        if region_codes:
+            region_codes = region_codes & all_regions
+        if not region_codes or region_codes == all_regions:
+            region_map[client.id] = None
+        else:
+            region_filtering_enabled = True
+            region_map[client.id] = region_codes
 
-    filters_configured = bool(subscription_map) or status_filtering_enabled
+    filters_configured = bool(subscription_map) or status_filtering_enabled or region_filtering_enabled
 
     if not establishments:
         return {}, filters_configured
@@ -227,10 +245,12 @@ def assign_establishments_to_clients(
         assignments: dict[UUID, list[models.Establishment]] = {}
         for client in clients:
             allowed_statuses = status_map.get(client.id, set())
+            allowed_regions = region_map.get(client.id)
             matches = [
                 establishment
                 for establishment in establishments
                 if _establishment_matches_listing_status(establishment, allowed_statuses)
+                and _establishment_matches_region(establishment, allowed_regions)
             ]
             if matches:
                 assignments[client.id] = matches
@@ -242,9 +262,16 @@ def assign_establishments_to_clients(
         code = normalize_naf_code(establishment.naf_code)
         if not code:
             continue
+        region_code = resolve_region_code(
+            getattr(establishment, "code_commune", None),
+            getattr(establishment, "code_postal", None),
+        )
         for client in code_index.get(code, []):
             allowed_statuses = status_map.get(client.id, set())
             if not _establishment_matches_listing_status(establishment, allowed_statuses):
+                continue
+            allowed_regions = region_map.get(client.id)
+            if not _region_allows_establishment(region_code, allowed_regions):
                 continue
             if establishment.siret in seen_sirets[client.id]:
                 continue
@@ -283,6 +310,28 @@ def _establishment_matches_listing_status(
             return True
     
     return False
+
+
+def _establishment_matches_region(
+    establishment: models.Establishment,
+    allowed_regions: set[str] | None,
+) -> bool:
+    region_code = resolve_region_code(
+        getattr(establishment, "code_commune", None),
+        getattr(establishment, "code_postal", None),
+    )
+    return _region_allows_establishment(region_code, allowed_regions)
+
+
+def _region_allows_establishment(
+    region_code: str | None,
+    allowed_regions: set[str] | None,
+) -> bool:
+    if allowed_regions is None:
+        return True
+    if not region_code:
+        return False
+    return region_code in allowed_regions
 
 
 def dispatch_email_to_clients(
