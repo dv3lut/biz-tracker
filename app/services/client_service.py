@@ -224,6 +224,48 @@ def build_subscription_index(
     return subscription_map, code_index
 
 
+def build_subcategory_department_index(
+    clients: Sequence[models.Client],
+    *,
+    include_inactive_subcategories: bool = False,
+) -> tuple[dict[UUID, set[UUID]], set[UUID]]:
+    """Return department coverage per subcategory for the provided clients.
+
+    Returns:
+        - a mapping subcategory_id -> set of department_ids
+        - a set of subcategory_ids that target all departments
+    """
+
+    subcategory_departments: dict[UUID, set[UUID]] = {}
+    subcategory_all_departments: set[UUID] = set()
+
+    for client in clients:
+        client_departments = [
+            department
+            for department in getattr(client, "departments", [])
+            if getattr(department, "id", None) is not None
+        ]
+        has_all_departments = len(client_departments) == 0
+        department_ids = {department.id for department in client_departments}
+
+        for subscription in getattr(client, "subscriptions", []) or []:
+            subcategory = getattr(subscription, "subcategory", None)
+            if not subcategory:
+                continue
+            if not include_inactive_subcategories and not getattr(subcategory, "is_active", True):
+                continue
+            subcategory_id = subcategory.id
+            if has_all_departments:
+                subcategory_all_departments.add(subcategory_id)
+                subcategory_departments.pop(subcategory_id, None)
+                continue
+            if subcategory_id in subcategory_all_departments:
+                continue
+            subcategory_departments.setdefault(subcategory_id, set()).update(department_ids)
+
+    return subcategory_departments, subcategory_all_departments
+
+
 def filter_clients_for_naf_code(
     clients: Sequence[models.Client],
     naf_code: str | None,

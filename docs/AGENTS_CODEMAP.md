@@ -39,7 +39,7 @@ Le router admin est dans `app/api/routers/admin/admin_router.py` (préfixe `/adm
   - `GET /admin/sync-state` checkpoints.
   - `DELETE /admin/sync-runs/{run_id}` purge un run + données associées.
 - **Établissements** : `app/api/routers/admin/establishments_router.py`
-  - `GET /admin/establishments` (filtres `q`, `is_individual`).
+  - `GET /admin/establishments` (filtres `q`, `is_individual`, `department_codes`; `region_codes` est accepté pour compatibilité et converti en départements).
   - `GET /admin/establishments/{siret}` détail.
   - `DELETE /admin/establishments/{siret}` suppression.
 - **Alertes** : `app/api/routers/admin/alerts_router.py`
@@ -118,6 +118,7 @@ Définitions : `app/db/models.py`.
 - `sync_state` (PK = `scope_key`) : checkpoints (curseur, last_creation_date, last_treated_max…).
 - `alerts` : alertes attachées à un `run_id` et à un `siret`.
 - `clients`, `client_recipients`, `client_subscriptions` : configuration par client.
+- `regions`, `departments`, `client_departments` : référentiel géographique et périmètres clients (sélection par départements).
 - `naf_categories`, `naf_subcategories` : catalogue pilotant le périmètre métier.
 - `admin_recipients` : destinataires des résumés admin.
 - `google_retry_config` : stratégie de relances Google.
