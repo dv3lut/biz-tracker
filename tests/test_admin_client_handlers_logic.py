@@ -110,6 +110,8 @@ def test_create_client_action_success(monkeypatch):
     subscriptions_called = []
     monkeypatch.setattr(handlers, "_apply_recipients", lambda client, emails: recipients_called.append((client, emails)))
     monkeypatch.setattr(handlers, "_apply_subscriptions", lambda sess, client, ids: subscriptions_called.append(ids))
+    monkeypatch.setattr(handlers, "_apply_departments", lambda sess, client, ids: None)
+    monkeypatch.setattr(handlers, "_resolve_department_ids", lambda sess, ids: ids)
 
     payload = ClientCreate(
         name=" Test Client ",
@@ -146,6 +148,8 @@ def test_create_client_action_converts_integrity_error(monkeypatch):
     session = _Session()
     monkeypatch.setattr(handlers, "_apply_recipients", lambda client, emails: None)
     monkeypatch.setattr(handlers, "_apply_subscriptions", lambda sess, client, ids: None)
+    monkeypatch.setattr(handlers, "_apply_departments", lambda sess, client, ids: None)
+    monkeypatch.setattr(handlers, "_resolve_department_ids", lambda sess, ids: ids)
 
     payload = ClientCreate(
         name="Client",
@@ -168,6 +172,7 @@ def test_update_client_action_applies_optional_sections(monkeypatch):
         start_date=date(2023, 1, 1),
         end_date=None,
         listing_statuses=["recent_creation"],
+            include_admins_in_client_alerts=False,
         emails_sent_count=0,
         last_email_sent_at=None,
     created_at=utcnow(),
@@ -182,6 +187,7 @@ def test_update_client_action_applies_optional_sections(monkeypatch):
     subscriptions_called = []
     monkeypatch.setattr(handlers, "_apply_recipients", lambda client_obj, emails: recipients_called.append(emails))
     monkeypatch.setattr(handlers, "_apply_subscriptions", lambda sess, client_obj, ids: subscriptions_called.append(ids))
+    monkeypatch.setattr(handlers, "_apply_departments", lambda sess, client_obj, ids: None)
 
     payload = ClientUpdate(
         name=" Updated ",

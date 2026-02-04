@@ -39,6 +39,7 @@ from .public_stripe import (
     PublicStripeUpdatePreviewResponse,
     StripePlanKey,
 )
+from .regions import DepartmentOut, RegionOut
 from .naf import (
     NafCategoryCreate,
     NafCategoryOut,
@@ -101,6 +102,7 @@ __all__ = [
     "DailyRunOutcomePoint",
     "DashboardMetrics",
     "DashboardRunBreakdown",
+    "DepartmentOut",
     "DeleteRunResult",
     "EmailTestRequest",
     "EmailTestResponse",
@@ -153,6 +155,7 @@ __all__ = [
     "PublicStripeUpdatePreviewRequest",
     "PublicStripeUpdatePreviewResponse",
     "StripePlanKey",
+    "RegionOut",
     "SireneNewBusinessOut",
     "SireneNewBusinessesRequest",
     "SireneNewBusinessesResponse",

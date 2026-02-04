@@ -9,6 +9,7 @@ from app.observability import log_event
 from app.services.establishment_mapper import extract_fields
 from app.services.sync_service import SyncService
 from app.utils.business_types import is_individual_company
+from app.utils.regions import normalize_department_codes, resolve_department_code
 
 router = APIRouter(tags=["admin"])
 
@@ -66,6 +67,8 @@ def fetch_sirene_new_establishments(payload: SireneNewBusinessesRequest) -> Sire
     if not isinstance(establishments_payload, list):
         establishments_payload = []
 
+    region_filter = {code.strip().upper() for code in (payload.department_codes or []) if code}
+    department_filter = set(normalize_department_codes(region_filter))
     establishments: list[SireneNewBusinessOut] = []
     for item in establishments_payload:
         if not isinstance(item, dict):
@@ -74,6 +77,14 @@ def fetch_sirene_new_establishments(payload: SireneNewBusinessesRequest) -> Sire
         siret = fields.get("siret")
         if not siret:
             continue
+        if department_filter:
+            department_code = resolve_department_code(fields.get("code_commune"), fields.get("code_postal"))
+            if not department_code:
+                continue
+            if department_code == "20" and ("2A" in department_filter or "2B" in department_filter):
+                pass
+            elif department_code not in department_filter:
+                continue
         is_individual = is_individual_company(fields.get("categorie_juridique"))
         leader_name = _build_leader_name(fields)
         establishments.append(
@@ -113,6 +124,8 @@ def fetch_sirene_new_establishments(payload: SireneNewBusinessesRequest) -> Sire
         start_date=payload.start_date.isoformat(),
         end_date=end_date.isoformat(),
         naf_codes=payload.naf_codes,
+        region_codes=None,
+        department_codes=sorted(department_filter) if department_filter else None,
         total=total,
         returned=returned,
         limit=payload.limit,

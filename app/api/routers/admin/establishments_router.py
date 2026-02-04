@@ -4,12 +4,14 @@ from __future__ import annotations
 from datetime import date, datetime, time, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.params import Query as QueryParam
 from sqlalchemy import func, not_, or_
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db_session
 from app.api.schemas import EstablishmentDetailOut, EstablishmentOut
 from app.db import models
+from app.utils.regions import get_department_codes_for_region_codes, normalize_department_codes
 
 router = APIRouter(tags=["admin"])
 
@@ -27,6 +29,14 @@ def list_establishments(
     naf_codes: list[str] | None = Query(
         None,
         description="Filtrer sur plusieurs codes NAF (répéter le paramètre, ex: naf_codes=56.10A&naf_codes=47.11D).",
+    ),
+    department_codes: list[str] | None = Query(
+        None,
+        description="Filtrer sur des départements (ex: department_codes=75&department_codes=33).",
+    ),
+    region_codes: list[str] | None = Query(
+        None,
+        description="Filtrer sur des régions (ex: region_codes=IDF&region_codes=NAQ).",
     ),
     added_from: date | None = Query(
         None,
@@ -54,6 +64,10 @@ def list_establishments(
     is_individual: bool | None = Query(None, description="Filtrer par entreprise individuelle (true/false)."),
     session: Session = Depends(get_db_session),
 ) -> list[EstablishmentOut]:
+    if isinstance(region_codes, QueryParam):
+        region_codes = None
+    if isinstance(department_codes, QueryParam):
+        department_codes = None
     query = session.query(models.Establishment).filter(models.Establishment.etat_administratif == "A")
     if search:
         pattern = f"%{search.strip()}%"
@@ -81,6 +95,28 @@ def list_establishments(
             "",
         )
         query = query.filter(normalized_db_naf.in_(cleaned_naf_codes))
+    cleaned_departments: list[str] = []
+    if region_codes:
+        cleaned_departments.extend(get_department_codes_for_region_codes(region_codes))
+    if department_codes:
+        cleaned_departments.extend(department_codes)
+    if cleaned_departments:
+        region_filters = []
+        for dept in normalize_department_codes(cleaned_departments):
+            token = dept.strip().upper()
+            if not token:
+                continue
+            if token in {"2A", "2B"}:
+                region_filters.append(models.Establishment.code_commune.ilike(f"{token}%"))
+                region_filters.append(models.Establishment.code_postal.ilike("20%"))
+            elif len(token) == 3 and token.isdigit():
+                region_filters.append(models.Establishment.code_commune.ilike(f"{token}%"))
+                region_filters.append(models.Establishment.code_postal.ilike(f"{token}%"))
+            elif len(token) == 2 and token.isdigit():
+                region_filters.append(models.Establishment.code_commune.ilike(f"{token}%"))
+                region_filters.append(models.Establishment.code_postal.ilike(f"{token}%"))
+        if region_filters:
+            query = query.filter(or_(*region_filters))
     if added_from is not None:
         start = datetime.combine(added_from, time.min)
         query = query.filter(models.Establishment.first_seen_at >= start)

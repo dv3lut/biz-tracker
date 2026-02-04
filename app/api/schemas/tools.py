@@ -24,6 +24,10 @@ class SireneNewBusinessesRequest(BaseModel):
         le=200,
         description="Nombre maximum d'établissements à retourner.",
     )
+    department_codes: list[str] | None = Field(
+        default=None,
+        description="Codes départements à filtrer (ex: 75, 33).",
+    )
 
     @field_validator("naf_codes")
     @classmethod

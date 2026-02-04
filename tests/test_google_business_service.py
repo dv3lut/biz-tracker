@@ -373,5 +373,52 @@ class ManualGoogleRecheckPersistenceTests(unittest.TestCase):
         self.assertIsNone(establishment.google_place_id)
         self.assertEqual(establishment.google_check_status, "not_found")
 
+
+class GoogleDepartmentFilteringTests(unittest.TestCase):
+    def _establishment(self, code_postal: str | None, code_commune: str | None = None):
+        return SimpleNamespace(
+            code_postal=code_postal,
+            code_commune=code_commune,
+        )
+
+    def test_filter_establishments_for_departments_keeps_all_when_none(self) -> None:
+        est_a = self._establishment("75001")
+        est_b = self._establishment("33000")
+
+        result = GoogleBusinessService._filter_establishments_for_departments(
+            [est_a, est_b],
+            None,
+        )
+
+        self.assertEqual(result, [est_a, est_b])
+
+    def test_filter_establishments_for_departments_handles_empty_set(self) -> None:
+        est = self._establishment("75001")
+
+        result = GoogleBusinessService._filter_establishments_for_departments([est], set())
+
+        self.assertEqual(result, [])
+
+    def test_filter_establishments_for_departments_filters_by_code(self) -> None:
+        est_idf = self._establishment("75001")
+        est_naq = self._establishment("33000")
+
+        result = GoogleBusinessService._filter_establishments_for_departments(
+            [est_idf, est_naq],
+            {"75"},
+        )
+
+        self.assertEqual(result, [est_idf])
+
+    def test_filter_establishments_for_departments_handles_corsica_alias(self) -> None:
+        est_corse = self._establishment("20000")
+
+        result = GoogleBusinessService._filter_establishments_for_departments(
+            [est_corse],
+            {"2A"},
+        )
+
+        self.assertEqual(result, [est_corse])
+
 if __name__ == "__main__":
     unittest.main()

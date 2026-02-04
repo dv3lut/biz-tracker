@@ -77,12 +77,14 @@ class ClientOut(BaseModel):
     start_date: Date
     end_date: Date | None
     listing_statuses: list[ListingStatus]
+    include_admins_in_client_alerts: bool
     emails_sent_count: int
     last_email_sent_at: datetime | None
     created_at: datetime
     updated_at: datetime
     recipients: list[ClientRecipientOut]
     subscriptions: list[ClientSubscriptionOut]
+    departments: list["DepartmentOut"] = Field(default_factory=list)
     stripe_subscriptions: list[ClientStripeSubscriptionOut]
     subscription_events: list[ClientSubscriptionEventOut] = Field(default_factory=list)
 
@@ -95,10 +97,18 @@ class ClientCreate(BaseModel):
         default_factory=default_listing_statuses,
         description="Statuts des fiches Google à inclure dans les alertes et exports clients.",
     )
+    include_admins_in_client_alerts: bool = Field(
+        default=False,
+        description="Ajoute les admins en copie des alertes client quand activé.",
+    )
     recipients: list[str] = Field(default_factory=list, description="Liste d'adresses e-mail associées au client.")
     subscription_ids: list[UUID] = Field(
         default_factory=list,
         description="Identifiants des sous-catégories NAF auxquelles le client est abonné.",
+    )
+    department_ids: list[UUID] = Field(
+        default_factory=list,
+        description="Identifiants des départements auxquels le client est abonné (vide = toute la France).",
     )
 
     @field_validator("listing_statuses")
@@ -118,10 +128,18 @@ class ClientUpdate(BaseModel):
         default=None,
         description="Remplace la liste complète des statuts lorsqu'elle est fournie.",
     )
+    include_admins_in_client_alerts: bool | None = Field(
+        default=None,
+        description="Active l'envoi en copie aux admins quand fourni.",
+    )
     recipients: list[str] | None = Field(default=None, description="Remplace la liste complète des destinataires lorsqu'elle est fournie.")
     subscription_ids: list[UUID] | None = Field(
         default=None,
         description="Remplace complètement la liste des sous-catégories souscrites lorsqu'elle est fournie.",
+    )
+    department_ids: list[UUID] | None = Field(
+        default=None,
+        description="Remplace complètement la liste des départements souscrits lorsqu'elle est fournie.",
     )
 
     @field_validator("listing_statuses")
@@ -139,6 +157,7 @@ class ClientUpdate(BaseModel):
 
 
 from app.api.schemas.naf import NafSubCategoryOut  # noqa: E402  (import circular prevention)
+from app.api.schemas.regions import DepartmentOut  # noqa: E402
 
 ClientSubscriptionOut.model_rebuild()
 ClientStripeSubscriptionOut.model_rebuild()

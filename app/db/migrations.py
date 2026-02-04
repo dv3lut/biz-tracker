@@ -85,6 +85,55 @@ def run_schema_upgrades(engine: Engine) -> None:
         )
         """,
         """
+        CREATE TABLE IF NOT EXISTS regions (
+            id UUID PRIMARY KEY,
+            code VARCHAR(16) NOT NULL UNIQUE,
+            name VARCHAR(255) NOT NULL,
+            order_index INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS ix_regions_code
+        ON regions (code)
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS departments (
+            id UUID PRIMARY KEY,
+            region_id UUID NOT NULL REFERENCES regions(id) ON DELETE CASCADE,
+            code VARCHAR(8) NOT NULL UNIQUE,
+            name VARCHAR(255) NOT NULL,
+            order_index INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS ix_departments_code
+        ON departments (code)
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS ix_departments_region_id
+        ON departments (region_id)
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS client_departments (
+            client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+            department_id UUID NOT NULL REFERENCES departments(id) ON DELETE CASCADE,
+            created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+            PRIMARY KEY (client_id, department_id)
+        )
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS ix_client_departments_client_id
+        ON client_departments (client_id)
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS ix_client_departments_department_id
+        ON client_departments (department_id)
+        """,
+        """
         ALTER TABLE clients
         ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR(255)
         """,
@@ -190,6 +239,10 @@ def run_schema_upgrades(engine: Engine) -> None:
     """
     ALTER TABLE clients
     ADD COLUMN IF NOT EXISTS listing_statuses JSONB NOT NULL DEFAULT '["recent_creation","recent_creation_missing_contact","not_recent_creation"]'::jsonb
+    """,
+    """
+    ALTER TABLE clients
+    ADD COLUMN IF NOT EXISTS include_admins_in_client_alerts BOOLEAN NOT NULL DEFAULT FALSE
     """,
         """
         ALTER TABLE sync_runs

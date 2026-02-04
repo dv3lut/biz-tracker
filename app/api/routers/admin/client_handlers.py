@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.api.schemas import ClientCreate, ClientOut, ClientUpdate
 from app.db import models
+from app.services.regions_service import list_departments
 
 from .common import normalize_emails
 
@@ -38,6 +39,7 @@ def _client_eager_load() -> tuple[selectinload, ...]:
         selectinload(models.Client.recipients),
         selectinload(models.Client.subscriptions).selectinload(models.ClientSubscription.subcategory),
         selectinload(models.Client.stripe_subscriptions),
+        selectinload(models.Client.departments),
         selectinload(models.Client.subscription_events),
     )
 
@@ -108,6 +110,48 @@ def _apply_subscriptions(session: Session, client: models.Client, subscription_i
     client.subscriptions = updated
 
 
+def _resolve_department_ids(session: Session, department_ids: list[UUID]) -> list[UUID]:
+    if department_ids:
+        return department_ids
+    departments = list_departments(session)
+    return [department.id for department in departments]
+
+
+def _apply_departments(session: Session, client: models.Client, department_ids: list[UUID]) -> None:
+    unique_ids: list[UUID] = []
+    seen: set[UUID] = set()
+    for department_id in department_ids:
+        if department_id in seen:
+            continue
+        seen.add(department_id)
+        unique_ids.append(department_id)
+
+    if not unique_ids:
+        client.department_links = []
+        return
+
+    stmt = select(models.Department).where(models.Department.id.in_(unique_ids))
+    departments = session.execute(stmt).scalars().all()
+    found_ids = {department.id for department in departments}
+    missing = set(unique_ids) - found_ids
+    if missing:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Département introuvable.")
+
+    ordering = {identifier: index for index, identifier in enumerate(unique_ids)}
+    departments.sort(key=lambda department: ordering[department.id])
+
+    current = {link.department_id: link for link in client.department_links}
+    updated: list[models.ClientDepartment] = []
+    for department in departments:
+        existing = current.get(department.id)
+        if existing is not None:
+            updated.append(existing)
+            continue
+        updated.append(models.ClientDepartment(department_id=department.id, department=department))
+
+    client.department_links = updated
+
+
 def list_clients_action(session: Session) -> list[ClientOut]:
     stmt = select(models.Client).options(*_client_eager_load()).order_by(models.Client.name)
     clients = session.execute(stmt).scalars().all()
@@ -128,10 +172,12 @@ def create_client_action(payload: ClientCreate, session: Session) -> ClientOut:
         start_date=payload.start_date,
         end_date=payload.end_date,
         listing_statuses=list(payload.listing_statuses),
+        include_admins_in_client_alerts=payload.include_admins_in_client_alerts,
     )
     session.add(client)
     _apply_recipients(client, payload.recipients)
     _apply_subscriptions(session, client, payload.subscription_ids)
+    _apply_departments(session, client, _resolve_department_ids(session, payload.department_ids))
 
     try:
         session.flush()
@@ -156,12 +202,18 @@ def update_client_action(client_id: UUID, payload: ClientUpdate, session: Sessio
     client.end_date = end_date
     if payload.listing_statuses is not None:
         client.listing_statuses = list(payload.listing_statuses)
+    if payload.include_admins_in_client_alerts is not None:
+        client.include_admins_in_client_alerts = payload.include_admins_in_client_alerts
 
     if payload.recipients is not None:
         _apply_recipients(client, payload.recipients)
 
     if payload.subscription_ids is not None:
         _apply_subscriptions(session, client, payload.subscription_ids)
+
+    if payload.department_ids is not None:
+        resolved_department_ids = _resolve_department_ids(session, payload.department_ids)
+        _apply_departments(session, client, resolved_department_ids)
 
     try:
         session.flush()

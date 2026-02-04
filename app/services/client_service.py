@@ -20,6 +20,7 @@ from app.utils.google_listing import (
     normalize_listing_status_filters,
 )
 from app.utils.naf import normalize_naf_code
+from app.utils.regions import ALL_DEPARTMENT_CODES, resolve_department_code
 
 
 def get_active_clients(session: Session) -> list[models.Client]:
@@ -32,6 +33,7 @@ def get_active_clients(session: Session) -> list[models.Client]:
             selectinload(models.Client.recipients),
             selectinload(models.Client.subscriptions).selectinload(models.ClientSubscription.subcategory),
             selectinload(models.Client.stripe_subscriptions),
+            selectinload(models.Client.departments),
         )
         .where(
             models.Client.start_date <= today,
@@ -71,6 +73,7 @@ def get_all_clients(session: Session) -> list[models.Client]:
             selectinload(models.Client.recipients),
             selectinload(models.Client.subscriptions).selectinload(models.ClientSubscription.subcategory),
             selectinload(models.Client.stripe_subscriptions),
+            selectinload(models.Client.departments),
         )
         .order_by(models.Client.name)
     )
@@ -111,6 +114,37 @@ class ClientEmailPayload:
     establishments: Sequence[models.Establishment] | None = None
     filters: ClientFilterSummary | None = None
     attachments: Sequence[tuple[str, bytes, str]] | None = None
+    extra_recipients: Sequence[str] | None = None
+
+
+def resolve_enabled_department_codes(
+    session: Session,
+    *,
+    on_date: date | None = None,
+) -> set[str] | None:
+    """Return the set of enabled department codes across active clients.
+
+    Returns None when at least one active client targets all departments.
+    Returns an empty set when no active client is configured.
+    """
+
+    clients = get_all_clients(session)
+    if not clients:
+        return set()
+    reference_date = on_date or date.today()
+    department_codes: set[str] = set()
+    for client in clients:
+        if not is_client_active(client, on_date=reference_date):
+            continue
+        client_departments = {
+            department.code
+            for department in getattr(client, "departments", [])
+            if getattr(department, "code", None)
+        }
+        if not client_departments:
+            return None
+        department_codes.update(client_departments)
+    return department_codes
 
 
 def summarize_client_filters(client: models.Client) -> ClientFilterSummary:
@@ -190,6 +224,48 @@ def build_subscription_index(
     return subscription_map, code_index
 
 
+def build_subcategory_department_index(
+    clients: Sequence[models.Client],
+    *,
+    include_inactive_subcategories: bool = False,
+) -> tuple[dict[UUID, set[UUID]], set[UUID]]:
+    """Return department coverage per subcategory for the provided clients.
+
+    Returns:
+        - a mapping subcategory_id -> set of department_ids
+        - a set of subcategory_ids that target all departments
+    """
+
+    subcategory_departments: dict[UUID, set[UUID]] = {}
+    subcategory_all_departments: set[UUID] = set()
+
+    for client in clients:
+        client_departments = [
+            department
+            for department in getattr(client, "departments", [])
+            if getattr(department, "id", None) is not None
+        ]
+        has_all_departments = len(client_departments) == 0
+        department_ids = {department.id for department in client_departments}
+
+        for subscription in getattr(client, "subscriptions", []) or []:
+            subcategory = getattr(subscription, "subcategory", None)
+            if not subcategory:
+                continue
+            if not include_inactive_subcategories and not getattr(subcategory, "is_active", True):
+                continue
+            subcategory_id = subcategory.id
+            if has_all_departments:
+                subcategory_all_departments.add(subcategory_id)
+                subcategory_departments.pop(subcategory_id, None)
+                continue
+            if subcategory_id in subcategory_all_departments:
+                continue
+            subcategory_departments.setdefault(subcategory_id, set()).update(department_ids)
+
+    return subcategory_departments, subcategory_all_departments
+
+
 def filter_clients_for_naf_code(
     clients: Sequence[models.Client],
     naf_code: str | None,
@@ -212,13 +288,28 @@ def assign_establishments_to_clients(
     subscription_map, code_index = build_subscription_index(clients)
     status_map: dict[UUID, set[str]] = {}
     status_filtering_enabled = False
+    department_map: dict[UUID, set[str] | None] = {}
+    department_filtering_enabled = False
+    all_departments = set(ALL_DEPARTMENT_CODES)
     for client in clients:
         statuses = set(resolve_client_listing_statuses(client))
         status_map[client.id] = statuses
         if len(statuses) < len(FILTERABLE_LISTING_STATUSES):
             status_filtering_enabled = True
+        department_codes = {
+            department.code
+            for department in getattr(client, "departments", [])
+            if getattr(department, "code", None)
+        }
+        if department_codes:
+            department_codes = department_codes & all_departments
+        if not department_codes or department_codes == all_departments:
+            department_map[client.id] = None
+        else:
+            department_filtering_enabled = True
+            department_map[client.id] = department_codes
 
-    filters_configured = bool(subscription_map) or status_filtering_enabled
+    filters_configured = bool(subscription_map) or status_filtering_enabled or department_filtering_enabled
 
     if not establishments:
         return {}, filters_configured
@@ -227,10 +318,12 @@ def assign_establishments_to_clients(
         assignments: dict[UUID, list[models.Establishment]] = {}
         for client in clients:
             allowed_statuses = status_map.get(client.id, set())
+            allowed_departments = department_map.get(client.id)
             matches = [
                 establishment
                 for establishment in establishments
                 if _establishment_matches_listing_status(establishment, allowed_statuses)
+                and _establishment_matches_department(establishment, allowed_departments)
             ]
             if matches:
                 assignments[client.id] = matches
@@ -242,9 +335,16 @@ def assign_establishments_to_clients(
         code = normalize_naf_code(establishment.naf_code)
         if not code:
             continue
+        department_code = resolve_department_code(
+            getattr(establishment, "code_commune", None),
+            getattr(establishment, "code_postal", None),
+        )
         for client in code_index.get(code, []):
             allowed_statuses = status_map.get(client.id, set())
             if not _establishment_matches_listing_status(establishment, allowed_statuses):
+                continue
+            allowed_departments = department_map.get(client.id)
+            if not _department_allows_establishment(department_code, allowed_departments):
                 continue
             if establishment.siret in seen_sirets[client.id]:
                 continue
@@ -285,6 +385,30 @@ def _establishment_matches_listing_status(
     return False
 
 
+def _establishment_matches_department(
+    establishment: models.Establishment,
+    allowed_departments: set[str] | None,
+) -> bool:
+    department_code = resolve_department_code(
+        getattr(establishment, "code_commune", None),
+        getattr(establishment, "code_postal", None),
+    )
+    return _department_allows_establishment(department_code, allowed_departments)
+
+
+def _department_allows_establishment(
+    department_code: str | None,
+    allowed_departments: set[str] | None,
+) -> bool:
+    if allowed_departments is None:
+        return True
+    if not department_code:
+        return False
+    if department_code == "20" and ("2A" in allowed_departments or "2B" in allowed_departments):
+        return True
+    return department_code in allowed_departments
+
+
 def dispatch_email_to_clients(
     email_service: EmailService,
     payloads: Sequence[ClientEmailPayload],
@@ -302,6 +426,8 @@ def dispatch_email_to_clients(
         if not is_client_active(client, on_date=today):
             continue
         recipients = [recipient.email for recipient in client.recipients if recipient.email]
+        extra_recipients = [email for email in (payload.extra_recipients or []) if email]
+        recipients = sorted({*recipients, *extra_recipients})
         if not recipients:
             continue
         if timestamp is None:

@@ -153,3 +153,217 @@ class SireneToolsRouteTests(TestCase):
         self.assertEqual(response.returned, 1)
         self.assertFalse(response.establishments[0].is_individual)
         self.assertEqual(response.establishments[0].leader_name, "Paul Martin")
+
+    @patch("app.api.routers.admin.tools_router.log_event")
+    @patch("app.api.routers.admin.tools_router.extract_fields")
+    @patch("app.api.routers.admin.tools_router.SireneClient")
+    @patch("app.api.routers.admin.tools_router.SyncService")
+    def test_fetch_new_establishments_filters_by_department(
+        self,
+        mock_sync_service,
+        mock_sirene_client,
+        mock_extract_fields,
+        mock_log_event,
+    ) -> None:
+        mock_service = mock_sync_service.return_value
+        mock_service._build_restaurant_query.return_value = "QUERY"
+
+        mock_client = mock_sirene_client.return_value
+        mock_client.search_establishments.return_value = {
+            "header": {"total": "2"},
+            "etablissements": [{"dummy": True}, {"dummy": True}],
+        }
+
+        mock_extract_fields.side_effect = [
+            {
+                "siret": "11111111100011",
+                "siren": "111111111",
+                "nic": "00011",
+                "name": "Paris Cafe",
+                "naf_code": "5610A",
+                "naf_libelle": "Restauration traditionnelle",
+                "date_creation": date(2025, 1, 10),
+                "categorie_juridique": "1000",
+                "code_postal": "75001",
+                "libelle_commune": "Paris",
+            },
+            {
+                "siret": "22222222200022",
+                "siren": "222222222",
+                "nic": "00022",
+                "name": "Bordeaux Bar",
+                "naf_code": "5610A",
+                "naf_libelle": "Restauration traditionnelle",
+                "date_creation": date(2025, 1, 10),
+                "categorie_juridique": "1000",
+                "code_postal": "33000",
+                "libelle_commune": "Bordeaux",
+            },
+        ]
+
+        payload = SireneNewBusinessesRequest(
+            start_date=date(2025, 1, 10),
+            end_date=None,
+            naf_codes=["56.10A"],
+            limit=10,
+            department_codes=["75"],
+        )
+
+        response = fetch_sirene_new_establishments(payload)
+
+        self.assertEqual(response.returned, 1)
+        self.assertEqual(response.establishments[0].siret, "11111111100011")
+        mock_log_event.assert_called_once()
+
+    @patch("app.api.routers.admin.tools_router.log_event")
+    @patch("app.api.routers.admin.tools_router.SireneClient")
+    @patch("app.api.routers.admin.tools_router.SyncService")
+    def test_fetch_new_establishments_handles_invalid_response(
+        self,
+        mock_sync_service,
+        mock_sirene_client,
+        mock_log_event,
+    ) -> None:
+        mock_service = mock_sync_service.return_value
+        mock_service._build_restaurant_query.return_value = "QUERY"
+
+        mock_client = mock_sirene_client.return_value
+        mock_client.search_establishments.return_value = "invalid"
+
+        payload = SireneNewBusinessesRequest(
+            start_date=date(2025, 1, 10),
+            end_date=None,
+            naf_codes=["56.10A"],
+            limit=10,
+        )
+
+        response = fetch_sirene_new_establishments(payload)
+
+        self.assertEqual(response.total, 0)
+        self.assertEqual(response.returned, 0)
+        self.assertEqual(response.establishments, [])
+        mock_log_event.assert_called_once()
+
+    @patch("app.api.routers.admin.tools_router.log_event")
+    @patch("app.api.routers.admin.tools_router.SireneClient")
+    @patch("app.api.routers.admin.tools_router.SyncService")
+    def test_fetch_new_establishments_handles_non_list_payload(
+        self,
+        mock_sync_service,
+        mock_sirene_client,
+        mock_log_event,
+    ) -> None:
+        mock_service = mock_sync_service.return_value
+        mock_service._build_restaurant_query.return_value = "QUERY"
+
+        mock_client = mock_sirene_client.return_value
+        mock_client.search_establishments.return_value = {
+            "header": {"total": "1"},
+            "etablissements": "invalid",
+        }
+
+        payload = SireneNewBusinessesRequest(
+            start_date=date(2025, 1, 10),
+            end_date=None,
+            naf_codes=["56.10A"],
+            limit=10,
+        )
+
+        response = fetch_sirene_new_establishments(payload)
+
+        self.assertEqual(response.total, 1)
+        self.assertEqual(response.returned, 0)
+        self.assertEqual(response.establishments, [])
+        mock_log_event.assert_called_once()
+
+    @patch("app.api.routers.admin.tools_router.log_event")
+    @patch("app.api.routers.admin.tools_router.extract_fields")
+    @patch("app.api.routers.admin.tools_router.SireneClient")
+    @patch("app.api.routers.admin.tools_router.SyncService")
+    def test_fetch_new_establishments_skips_invalid_items(
+        self,
+        mock_sync_service,
+        mock_sirene_client,
+        mock_extract_fields,
+        mock_log_event,
+    ) -> None:
+        mock_service = mock_sync_service.return_value
+        mock_service._build_restaurant_query.return_value = "QUERY"
+
+        mock_client = mock_sirene_client.return_value
+        mock_client.search_establishments.return_value = {
+            "header": {"total": "2"},
+            "etablissements": ["invalid", {"dummy": True}, {"dummy": True}],
+        }
+
+        mock_extract_fields.side_effect = [
+            {
+                "siret": None,
+                "categorie_juridique": "1000",
+            },
+            {
+                "siret": "33333333300033",
+                "categorie_juridique": "1000",
+            },
+        ]
+
+        payload = SireneNewBusinessesRequest(
+            start_date=date(2025, 1, 10),
+            end_date=None,
+            naf_codes=["56.10A"],
+            limit=10,
+            department_codes=["75"],
+        )
+
+        response = fetch_sirene_new_establishments(payload)
+
+        self.assertEqual(response.returned, 0)
+        self.assertEqual(response.establishments, [])
+        mock_log_event.assert_called_once()
+
+    @patch("app.api.routers.admin.tools_router.log_event")
+    @patch("app.api.routers.admin.tools_router.extract_fields")
+    @patch("app.api.routers.admin.tools_router.SireneClient")
+    @patch("app.api.routers.admin.tools_router.SyncService")
+    def test_fetch_new_establishments_accepts_corsica_alias(
+        self,
+        mock_sync_service,
+        mock_sirene_client,
+        mock_extract_fields,
+        mock_log_event,
+    ) -> None:
+        mock_service = mock_sync_service.return_value
+        mock_service._build_restaurant_query.return_value = "QUERY"
+
+        mock_client = mock_sirene_client.return_value
+        mock_client.search_establishments.return_value = {
+            "header": {"total": "1"},
+            "etablissements": [{"dummy": True}],
+        }
+
+        mock_extract_fields.return_value = {
+            "siret": "44444444400044",
+            "siren": "444444444",
+            "nic": "00044",
+            "name": "Ajaccio",
+            "naf_code": "5610A",
+            "naf_libelle": "Restauration traditionnelle",
+            "date_creation": date(2025, 1, 10),
+            "categorie_juridique": "1000",
+            "code_postal": "20000",
+            "libelle_commune": "Ajaccio",
+        }
+
+        payload = SireneNewBusinessesRequest(
+            start_date=date(2025, 1, 10),
+            end_date=None,
+            naf_codes=["56.10A"],
+            limit=10,
+            department_codes=["2A"],
+        )
+
+        response = fetch_sirene_new_establishments(payload)
+
+        self.assertEqual(response.returned, 1)
+        self.assertEqual(response.establishments[0].siret, "44444444400044")
+        mock_log_event.assert_called_once()

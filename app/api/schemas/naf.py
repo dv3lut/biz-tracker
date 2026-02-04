@@ -6,6 +6,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
+from app.api.schemas.regions import DepartmentOut
+
 
 class NafSubCategoryStats(BaseModel):
     subcategory_id: UUID = Field(description="Identifiant de la sous-catégorie NAF.")
@@ -48,6 +50,18 @@ class NafSubCategoryOut(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+    google_department_count: int = Field(
+        default=0,
+        description="Nombre de départements activés pour les synchros Google.",
+    )
+    google_department_all: bool = Field(
+        default=False,
+        description="Indique si tous les départements sont activés via au moins un client.",
+    )
+    google_departments: list[DepartmentOut] = Field(
+        default_factory=list,
+        description="Liste des départements activés pour les synchros Google.",
+    )
 
     @computed_field
     @property

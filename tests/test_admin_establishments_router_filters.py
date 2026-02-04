@@ -62,6 +62,8 @@ def test_list_establishments_applies_naf_filter():
         search=None,
         naf_code="56.10a",
         naf_codes=None,
+        department_codes=None,
+        region_codes=None,
         added_from=None,
         added_to=None,
         google_check_status=None,
@@ -86,6 +88,8 @@ def test_list_establishments_applies_added_date_range():
         search=None,
         naf_code=None,
         naf_codes=None,
+        department_codes=None,
+        region_codes=None,
         added_from=date(2024, 1, 10),
         added_to=date(2024, 1, 12),
         google_check_status=None,
@@ -110,6 +114,8 @@ def test_list_establishments_ignores_blank_naf_code():
         search=None,
         naf_code="   ",
         naf_codes=None,
+        department_codes=None,
+        region_codes=None,
         added_from=None,
         added_to=None,
         google_check_status=None,
@@ -130,6 +136,8 @@ def test_list_establishments_applies_multi_naf_filter():
         search=None,
         naf_code=None,
         naf_codes=["56.10A", "47 11d"],
+        department_codes=None,
+        region_codes=None,
         added_from=None,
         added_to=None,
         google_check_status=None,
@@ -156,6 +164,8 @@ def test_list_establishments_applies_google_check_status_filter():
         search=None,
         naf_code=None,
         naf_codes=None,
+        department_codes=None,
+        region_codes=None,
         added_from=None,
         added_to=None,
         google_check_status="not_found",
@@ -176,6 +186,8 @@ def test_list_establishments_applies_google_check_status_other_filter():
         search=None,
         naf_code=None,
         naf_codes=None,
+        department_codes=None,
+        region_codes=None,
         added_from=None,
         added_to=None,
         google_check_status="other",
@@ -186,3 +198,25 @@ def test_list_establishments_applies_google_check_status_other_filter():
     rendered = "\n".join(str(item) for item in session.query_obj.filters)
     assert "google_check_status" in rendered
     assert "not in" in rendered.lower()
+
+
+def test_list_establishments_applies_department_filter():
+    session = _FakeSession()
+
+    list_establishments(
+        limit=10,
+        offset=0,
+        search=None,
+        naf_code=None,
+        naf_codes=None,
+        department_codes=["75"],
+        region_codes=None,
+        added_from=None,
+        added_to=None,
+        google_check_status=None,
+        is_individual=None,
+        session=session,  # type: ignore[arg-type]
+    )
+
+    rendered = "\n".join(str(item) for item in session.query_obj.filters)
+    assert "code_commune" in rendered or "code_postal" in rendered

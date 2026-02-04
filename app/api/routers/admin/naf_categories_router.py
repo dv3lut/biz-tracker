@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.api.dependencies import get_db_session
 from app.api.schemas import (
+    DepartmentOut,
     NafCategoryCreate,
     NafCategoryOut,
     NafCategoryUpdate,
@@ -18,6 +19,7 @@ from app.api.schemas import (
     NafSubCategoryUpdate,
 )
 from app.db import models
+from app.services.client_service import build_subcategory_department_index, get_active_clients
 from app.utils.naf import ensure_valid_naf_code, euros_to_cents
 
 router = APIRouter(tags=["admin"])
@@ -79,7 +81,46 @@ def list_naf_categories(session: Session = Depends(get_db_session)) -> list[NafC
         .order_by(models.NafCategory.name)
     )
     categories = session.execute(stmt).scalars().all()
-    return [NafCategoryOut.model_validate(category) for category in categories]
+
+    departments = session.execute(
+        select(models.Department).order_by(models.Department.order_index)
+    ).scalars().all()
+    department_by_id = {department.id: department for department in departments}
+    active_clients = get_active_clients(session)
+    subcategory_departments, subcategory_all_departments = build_subcategory_department_index(active_clients)
+
+    output: list[NafCategoryOut] = []
+    for category in categories:
+        subcategories: list[NafSubCategoryOut] = []
+        for subcategory in category.subcategories:
+            if subcategory.id in subcategory_all_departments:
+                dept_count = len(departments)
+                dept_all = True
+                dept_items: list[models.Department] = []
+            else:
+                dept_ids = subcategory_departments.get(subcategory.id, set())
+                dept_items = [department_by_id[dept_id] for dept_id in dept_ids if dept_id in department_by_id]
+                dept_items.sort(key=lambda department: department.order_index)
+                dept_count = len(dept_items)
+                dept_all = False
+
+            subcategory_out = NafSubCategoryOut.model_validate(subcategory).model_copy(
+                update={
+                    "google_department_count": dept_count,
+                    "google_department_all": dept_all,
+                    "google_departments": [
+                        DepartmentOut.model_validate(department) for department in dept_items
+                    ],
+                }
+            )
+            subcategories.append(subcategory_out)
+
+        category_out = NafCategoryOut.model_validate(category).model_copy(
+            update={"subcategories": subcategories}
+        )
+        output.append(category_out)
+
+    return output
 
 
 @router.post(
