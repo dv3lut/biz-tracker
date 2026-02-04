@@ -16,6 +16,7 @@ def run_schema_upgrades(engine: Engine) -> None:
             start_date DATE NOT NULL,
             end_date DATE,
             listing_statuses JSONB NOT NULL DEFAULT '["recent_creation","recent_creation_missing_contact","not_recent_creation"]'::jsonb,
+            use_subcategory_label_in_client_alerts BOOLEAN NOT NULL DEFAULT FALSE,
             emails_sent_count INTEGER NOT NULL DEFAULT 0,
             last_email_sent_at TIMESTAMP,
             created_at TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -244,6 +245,10 @@ def run_schema_upgrades(engine: Engine) -> None:
     ALTER TABLE clients
     ADD COLUMN IF NOT EXISTS include_admins_in_client_alerts BOOLEAN NOT NULL DEFAULT FALSE
     """,
+        """
+        ALTER TABLE clients
+        ADD COLUMN IF NOT EXISTS use_subcategory_label_in_client_alerts BOOLEAN NOT NULL DEFAULT FALSE
+        """,
         """
         ALTER TABLE sync_runs
         ADD COLUMN IF NOT EXISTS google_queue_count INTEGER DEFAULT 0

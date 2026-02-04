@@ -217,6 +217,11 @@ class Client(Base):
         default=False,
         nullable=False,
     )
+    use_subcategory_label_in_client_alerts: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+    )
     emails_sent_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     last_email_sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)

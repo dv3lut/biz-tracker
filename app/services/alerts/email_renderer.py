@@ -130,6 +130,7 @@ def render_client_email(
     formatter: EstablishmentFormatter,
     establishments: Sequence[models.Establishment],
     *,
+    client: models.Client,
     filters: ClientFilterSummary | None = None,
     previous_month_day_establishments: Sequence[models.Establishment] | None = None,
     previous_month_day_date: date | None = None,
@@ -176,6 +177,13 @@ def render_client_email(
         category_name, subcategory_name = formatter.resolve_category_and_subcategory(establishment.naf_code)
         if not category_name:
             category_name = establishment.naf_libelle
+        use_subcategory = getattr(client, "use_subcategory_label_in_client_alerts", False)
+        naf_code_label = establishment.naf_code or ""
+        if use_subcategory:
+            if subcategory_name:
+                category_name = f"{subcategory_name} ({naf_code_label})" if naf_code_label else subcategory_name
+            elif category_name:
+                category_name = f"{category_name} ({naf_code_label})" if naf_code_label else category_name
         normalized_status = normalize_listing_age_status(establishment.google_listing_age_status)
         border_color = STATUS_COLORS.get(normalized_status, STATUS_COLORS["unknown"])["border"]
         item_bg = theme["item_bg"]

@@ -173,6 +173,7 @@ def create_client_action(payload: ClientCreate, session: Session) -> ClientOut:
         end_date=payload.end_date,
         listing_statuses=list(payload.listing_statuses),
         include_admins_in_client_alerts=payload.include_admins_in_client_alerts,
+        use_subcategory_label_in_client_alerts=payload.use_subcategory_label_in_client_alerts,
     )
     session.add(client)
     _apply_recipients(client, payload.recipients)
@@ -204,6 +205,8 @@ def update_client_action(client_id: UUID, payload: ClientUpdate, session: Sessio
         client.listing_statuses = list(payload.listing_statuses)
     if payload.include_admins_in_client_alerts is not None:
         client.include_admins_in_client_alerts = payload.include_admins_in_client_alerts
+    if payload.use_subcategory_label_in_client_alerts is not None:
+        client.use_subcategory_label_in_client_alerts = payload.use_subcategory_label_in_client_alerts
 
     if payload.recipients is not None:
         _apply_recipients(client, payload.recipients)

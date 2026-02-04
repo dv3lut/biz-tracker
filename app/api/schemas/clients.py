@@ -78,6 +78,10 @@ class ClientOut(BaseModel):
     end_date: Date | None
     listing_statuses: list[ListingStatus]
     include_admins_in_client_alerts: bool
+    use_subcategory_label_in_client_alerts: bool = Field(
+        default=False,
+        description="Affiche la sous-catégorie (code NAF) au lieu de la catégorie dans les alertes client.",
+    )
     emails_sent_count: int
     last_email_sent_at: datetime | None
     created_at: datetime
@@ -100,6 +104,12 @@ class ClientCreate(BaseModel):
     include_admins_in_client_alerts: bool = Field(
         default=False,
         description="Ajoute les admins en copie des alertes client quand activé.",
+    )
+    use_subcategory_label_in_client_alerts: bool = Field(
+        default=False,
+        description=(
+            "Affiche la sous-catégorie (code NAF) au lieu de la catégorie dans les alertes client."
+        ),
     )
     recipients: list[str] = Field(default_factory=list, description="Liste d'adresses e-mail associées au client.")
     subscription_ids: list[UUID] = Field(
@@ -131,6 +141,12 @@ class ClientUpdate(BaseModel):
     include_admins_in_client_alerts: bool | None = Field(
         default=None,
         description="Active l'envoi en copie aux admins quand fourni.",
+    )
+    use_subcategory_label_in_client_alerts: bool | None = Field(
+        default=None,
+        description=(
+            "Affiche la sous-catégorie (code NAF) au lieu de la catégorie dans les alertes client."
+        ),
     )
     recipients: list[str] | None = Field(default=None, description="Remplace la liste complète des destinataires lorsqu'elle est fournie.")
     subscription_ids: list[UUID] | None = Field(

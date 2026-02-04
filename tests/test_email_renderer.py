@@ -54,6 +54,9 @@ class EmailRendererTests(unittest.TestCase):
             date_dernier_traitement_etablissement=None,
         )
 
+    def _make_client(self, *, use_subcategory_label: bool = False):
+        return SimpleNamespace(use_subcategory_label_in_client_alerts=use_subcategory_label)
+
     def test_client_email_groups_by_status_and_hides_origin(self) -> None:
         establishments = [
             self._make_establishment(
@@ -68,7 +71,11 @@ class EmailRendererTests(unittest.TestCase):
             ),
         ]
 
-        text_body, html_body = render_client_email(self.formatter, establishments)
+        text_body, html_body = render_client_email(
+            self.formatter,
+            establishments,
+            client=self._make_client(),
+        )
 
         self.assertIn("Création récente", text_body)
         self.assertIn("- Boulangerie Nova", text_body)
@@ -102,7 +109,12 @@ class EmailRendererTests(unittest.TestCase):
         establishment = self._make_establishment(name="Sans URL", status="recent_creation_missing_contact", google_url=None)
         filters = ClientFilterSummary(listing_statuses=["recent_creation"], naf_codes=["5610A"])
 
-        text_body, html_body = render_client_email(self.formatter, [establishment], filters=filters)
+        text_body, html_body = render_client_email(
+            self.formatter,
+            [establishment],
+            client=self._make_client(),
+            filters=filters,
+        )
 
         self.assertNotIn("Statuts Google surveillés", text_body)
         self.assertNotIn("Codes NAF ciblés", text_body)
@@ -114,7 +126,7 @@ class EmailRendererTests(unittest.TestCase):
         self.assertNotIn("Statuts Google surveillés", html_body)
 
     def test_client_email_zero_matches_prompts_future_notification(self) -> None:
-        text_body, html_body = render_client_email(self.formatter, [])
+        text_body, html_body = render_client_email(self.formatter, [], client=self._make_client())
 
         self.assertIn("0 nouvel établissement détecté", text_body)
         self.assertIn("Nous vous notifierons", text_body)
@@ -136,6 +148,7 @@ class EmailRendererTests(unittest.TestCase):
         text_body, html_body = render_client_email(
             self.formatter,
             [],
+            client=self._make_client(),
             previous_month_day_establishments=[establishment_second, establishment],
             previous_month_day_date=previous_date,
         )
@@ -152,6 +165,7 @@ class EmailRendererTests(unittest.TestCase):
         text_body, html_body = render_client_email(
             self.formatter,
             [],
+            client=self._make_client(),
             previous_month_day_establishments=[],
             previous_month_day_date=previous_date,
         )
@@ -166,6 +180,28 @@ class EmailRendererTests(unittest.TestCase):
         self.assertEqual(labels[1], "Non déterminé")
         self.assertEqual(_section_title_for_status("recent_creation_missing_contact"), "Création récente sans contact")
         self.assertEqual(get_client_listing_status_label(None), "Non déterminé")
+
+    def test_client_email_uses_subcategory_label_when_enabled(self) -> None:
+        session = MagicMock()
+        session.execute.return_value.all.return_value = [
+            ("56.10A", "Restauration rapide", "Restauration")
+        ]
+        formatter = EstablishmentFormatter(session)
+        establishment = self._make_establishment(
+            name="Food Express",
+            status="recent_creation",
+            google_url="https://maps.google.com/?cid=3",
+        )
+        establishment.naf_code = "56.10A"
+
+        text_body, html_body = render_client_email(
+            formatter,
+            [establishment],
+            client=self._make_client(use_subcategory_label=True),
+        )
+
+        self.assertIn("Catégorie : Restauration rapide (56.10A)", text_body)
+        self.assertIn("Catégorie :</span> Restauration rapide (56.10A)", html_body)
 
 
 if __name__ == "__main__":

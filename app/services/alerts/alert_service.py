@@ -337,6 +337,7 @@ class AlertService:
             text_body, html_body = render_client_email(
                 self._formatter,
                 client_establishments,
+                client=client,
                 filters=filters,
                 previous_month_day_establishments=previous_month_day_establishments,
                 previous_month_day_date=previous_month_day_date,
