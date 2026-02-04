@@ -11,6 +11,7 @@ type FormState = {
   endDate: string;
   listingStatuses: ListingStatus[];
   includeAdminsInClientAlerts: boolean;
+  useSubcategoryLabelInClientAlerts: boolean;
   recipientsText: string;
   subscriptionIds: string[];
   departmentCodes: string[];
@@ -22,6 +23,7 @@ type SubmitPayload = {
   endDate: string | null;
   listingStatuses: ListingStatus[];
   includeAdminsInClientAlerts: boolean;
+  useSubcategoryLabelInClientAlerts: boolean;
   recipients: string[];
   subscriptionIds: string[];
   departmentIds: string[];
@@ -46,6 +48,7 @@ const EMPTY_STATE: FormState = {
   endDate: "",
   listingStatuses: DEFAULT_LISTING_STATUSES,
   includeAdminsInClientAlerts: false,
+  useSubcategoryLabelInClientAlerts: false,
   recipientsText: "",
   subscriptionIds: [],
   departmentCodes: [],
@@ -103,6 +106,7 @@ export const ClientModal = ({
         endDate: client.endDate ?? "",
         listingStatuses: client.listingStatuses?.length ? client.listingStatuses : DEFAULT_LISTING_STATUSES,
         includeAdminsInClientAlerts: client.includeAdminsInClientAlerts ?? false,
+        useSubcategoryLabelInClientAlerts: client.useSubcategoryLabelInClientAlerts ?? false,
         recipientsText: client.recipients.map((recipient) => recipient.email).join("\n"),
         subscriptionIds: client.subscriptions.map((subscription) => subscription.subcategoryId),
         departmentCodes,
@@ -161,6 +165,7 @@ export const ClientModal = ({
       endDate: formState.endDate ? formState.endDate : null,
       listingStatuses: formState.listingStatuses,
       includeAdminsInClientAlerts: formState.includeAdminsInClientAlerts,
+      useSubcategoryLabelInClientAlerts: formState.useSubcategoryLabelInClientAlerts,
       recipients: splitRecipients(formState.recipientsText),
       subscriptionIds: formState.subscriptionIds,
       departmentIds,
@@ -200,6 +205,13 @@ export const ClientModal = ({
     setFormState((current) => ({
       ...current,
       includeAdminsInClientAlerts: !current.includeAdminsInClientAlerts,
+    }));
+  };
+
+  const handleToggleSubcategoryLabel = () => {
+    setFormState((current) => ({
+      ...current,
+      useSubcategoryLabelInClientAlerts: !current.useSubcategoryLabelInClientAlerts,
     }));
   };
 
@@ -299,6 +311,14 @@ export const ClientModal = ({
                 onChange={handleToggleAdminCopy}
               />
               <span>Mettre les admins en copie des alertes client</span>
+            </label>
+            <label className="form-checkbox">
+              <input
+                type="checkbox"
+                checked={formState.useSubcategoryLabelInClientAlerts}
+                onChange={handleToggleSubcategoryLabel}
+              />
+              <span>Afficher la sous-catégorie (code NAF) dans les alertes client</span>
             </label>
           </section>
 

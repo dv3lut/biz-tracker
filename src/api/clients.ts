@@ -15,6 +15,7 @@ type ClientResponse = {
   end_date: string | null;
   listing_statuses: string[];
   include_admins_in_client_alerts: boolean;
+  use_subcategory_label_in_client_alerts: boolean;
   emails_sent_count: number;
   last_email_sent_at: string | null;
   created_at: string;
@@ -83,6 +84,7 @@ export interface ClientCreatePayload {
   endDate?: string | null;
   listingStatuses: ListingStatus[];
   includeAdminsInClientAlerts: boolean;
+  useSubcategoryLabelInClientAlerts: boolean;
   recipients: string[];
   subscriptionIds: string[];
   departmentIds: string[];
@@ -94,6 +96,7 @@ export interface ClientUpdatePayload {
   endDate?: string | null;
   listingStatuses?: ListingStatus[];
   includeAdminsInClientAlerts?: boolean;
+  useSubcategoryLabelInClientAlerts?: boolean;
   recipients?: string[];
   subscriptionIds?: string[];
   departmentIds?: string[];
@@ -115,6 +118,7 @@ const mapClient = (client: ClientResponse): Client => {
     endDate: client.end_date,
     listingStatuses: (client.listing_statuses ?? []) as ListingStatus[],
     includeAdminsInClientAlerts: client.include_admins_in_client_alerts ?? false,
+    useSubcategoryLabelInClientAlerts: client.use_subcategory_label_in_client_alerts ?? false,
     emailsSentCount: client.emails_sent_count,
     lastEmailSentAt: client.last_email_sent_at,
     createdAt: client.created_at,
@@ -174,6 +178,7 @@ const serializeCreatePayload = (payload: ClientCreatePayload) => ({
   end_date: payload.endDate ?? null,
   listing_statuses: payload.listingStatuses,
   include_admins_in_client_alerts: payload.includeAdminsInClientAlerts,
+  use_subcategory_label_in_client_alerts: payload.useSubcategoryLabelInClientAlerts,
   recipients: payload.recipients,
   subscription_ids: payload.subscriptionIds,
   department_ids: payload.departmentIds,
@@ -195,6 +200,9 @@ const serializeUpdatePayload = (payload: ClientUpdatePayload) => {
   }
   if (payload.includeAdminsInClientAlerts !== undefined) {
     body.include_admins_in_client_alerts = payload.includeAdminsInClientAlerts;
+  }
+  if (payload.useSubcategoryLabelInClientAlerts !== undefined) {
+    body.use_subcategory_label_in_client_alerts = payload.useSubcategoryLabelInClientAlerts;
   }
   if (payload.recipients !== undefined) {
     body.recipients = payload.recipients;

@@ -447,6 +447,7 @@ export interface Client {
   endDate: string | null;
   listingStatuses: ListingStatus[];
   includeAdminsInClientAlerts: boolean;
+  useSubcategoryLabelInClientAlerts: boolean;
   emailsSentCount: number;
   lastEmailSentAt: string | null;
   createdAt: string;

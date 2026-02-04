@@ -145,6 +145,7 @@ export const ClientsSection = ({ onUnauthorized }: Props) => {
         endDate: formPayload.endDate,
         listingStatuses: formPayload.listingStatuses,
         includeAdminsInClientAlerts: formPayload.includeAdminsInClientAlerts,
+        useSubcategoryLabelInClientAlerts: formPayload.useSubcategoryLabelInClientAlerts,
         recipients: formPayload.recipients,
         subscriptionIds: formPayload.subscriptionIds,
         departmentIds: formPayload.departmentIds,

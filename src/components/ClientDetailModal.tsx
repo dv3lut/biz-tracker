@@ -204,6 +204,12 @@ export const ClientDetailModal = ({ isOpen, client, nafCategories, regions, onCl
               </dd>
               <dt>Admins en copie</dt>
               <dd>{client.includeAdminsInClientAlerts ? "Oui" : "Non"}</dd>
+              <dt>Catégorie dans les alertes</dt>
+              <dd>
+                {client.useSubcategoryLabelInClientAlerts
+                  ? "Sous-catégorie (code NAF)"
+                  : "Catégorie"}
+              </dd>
             </dl>
           </section>
 
