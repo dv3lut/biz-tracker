@@ -1,12 +1,13 @@
 import { ChangeEvent, useEffect, useRef, useState } from "react";
 
-import { Establishment, EstablishmentIndividualFilter, NafCategory } from "../types";
+import { Establishment, EstablishmentIndividualFilter, NafCategory, Region } from "../types";
 import { formatDateTime } from "../utils/format";
 import { canonicalizeNafCode, normalizeNafCode } from "../utils/sync";
 import { openGoogleSearchForEstablishment } from "../utils/googleSearch";
 import toast from "react-hot-toast";
 import { SiretLink } from "./SiretLink";
 import { GoogleFindPlaceDebugModal } from "./GoogleFindPlaceDebugModal";
+import { RegionDepartmentPanel } from "./RegionDepartmentPanel";
 
 interface EstablishmentsSectionProps {
   establishments?: Establishment[];
@@ -14,10 +15,13 @@ interface EstablishmentsSectionProps {
   error: Error | null;
   nafCategories: NafCategory[] | undefined;
   isLoadingNafCategories: boolean;
+  regions: Region[] | undefined;
+  isLoadingRegions: boolean;
   limit: number;
   page: number;
   query: string;
   nafCodes: string[];
+  departmentCodes: string[];
   addedFrom: string;
   addedTo: string;
   individualFilter: EstablishmentIndividualFilter;
@@ -27,6 +31,7 @@ interface EstablishmentsSectionProps {
   onPageChange: (page: number) => void;
   onQueryChange: (query: string) => void;
   onNafCodesChange: (value: string[]) => void;
+  onDepartmentCodesChange: (value: string[]) => void;
   onAddedFromChange: (value: string) => void;
   onAddedToChange: (value: string) => void;
   onApplyFilters: () => void;
@@ -57,10 +62,13 @@ export const EstablishmentsSection = ({
   error,
   nafCategories,
   isLoadingNafCategories,
+  regions,
+  isLoadingRegions,
   limit,
   page,
   query,
   nafCodes,
+  departmentCodes,
   addedFrom,
   addedTo,
   individualFilter,
@@ -70,6 +78,7 @@ export const EstablishmentsSection = ({
   onPageChange,
   onQueryChange,
   onNafCodesChange,
+  onDepartmentCodesChange,
   onAddedFromChange,
   onAddedToChange,
   onApplyFilters,
@@ -95,6 +104,7 @@ export const EstablishmentsSection = ({
 }: EstablishmentsSectionProps) => {
   const nafDetailsRef = useRef<HTMLDetailsElement | null>(null);
   const [isNafOpen, setIsNafOpen] = useState(false);
+  const [isRegionModalOpen, setIsRegionModalOpen] = useState(false);
 
   useEffect(() => {
     if (!isNafOpen) {
@@ -119,6 +129,14 @@ export const EstablishmentsSection = ({
       document.removeEventListener("pointerdown", handlePointerDown);
     };
   }, [isNafOpen]);
+
+  const handleOpenRegionModal = () => {
+    setIsRegionModalOpen(true);
+  };
+
+  const handleCloseRegionModal = () => {
+    setIsRegionModalOpen(false);
+  };
 
   const handleSearchChange = (event: ChangeEvent<HTMLInputElement>) => {
     onQueryChange(event.target.value);
@@ -183,6 +201,27 @@ export const EstablishmentsSection = ({
     return `${nafCodes.length} sélectionnés`;
   };
 
+  const departmentSelectionLabel = () => {
+    if (isLoadingRegions) {
+      return "Chargement des départements…";
+    }
+    if (!regions || regions.length === 0) {
+      return "Aucun département";
+    }
+    const allCodes = regions.flatMap((region) => region.departments.map((department) => department.code));
+    if (!departmentCodes.length || departmentCodes.length === allCodes.length) {
+      return "Tous";
+    }
+    if (departmentCodes.length === 1) {
+      const target = departmentCodes[0];
+      const department = regions
+        .flatMap((region) => region.departments)
+        .find((entry) => entry.code === target);
+      return department ? `${department.code} · ${department.name}` : target;
+    }
+    return `${departmentCodes.length} sélectionnés`;
+  };
+
   return (
     <section className="card">
       <header className="card-header">
@@ -226,7 +265,7 @@ export const EstablishmentsSection = ({
               }}
             >
               <summary className="muted small">NAF : {nafSelectionLabel()}</summary>
-              <div className="naf-multiselect-panel">
+              <div className="naf-multiselect-panel region-multiselect-panel">
                 {!isLoadingNafCategories && (!nafCategories || nafCategories.length === 0) ? (
                   <p className="muted small">Aucun NAF configuré.</p>
                 ) : null}
@@ -260,6 +299,17 @@ export const EstablishmentsSection = ({
                 ))}
               </div>
             </details>
+          </div>
+
+          <div className="establishments-control establishments-control--naf">
+            <button
+              type="button"
+              className="filter-modal-trigger muted small"
+              onClick={handleOpenRegionModal}
+              disabled={isLoadingRegions}
+            >
+              Départements : {departmentSelectionLabel()}
+            </button>
           </div>
 
           <div className="establishments-control establishments-control--added-from">
@@ -369,6 +419,31 @@ export const EstablishmentsSection = ({
           </div>
         </div>
       </div>
+
+      {isRegionModalOpen ? (
+        <div className="modal-overlay" role="dialog" aria-modal="true">
+          <div className="modal region-filter-modal">
+            <header className="modal-header">
+              <div>
+                <h3>Filtrer par départements</h3>
+                <p className="muted small">Sélectionnez une région pour inclure tous ses départements.</p>
+              </div>
+              <button type="button" className="ghost" onClick={handleCloseRegionModal}>
+                Fermer
+              </button>
+            </header>
+            <div className="modal-content">
+              <RegionDepartmentPanel
+                regions={regions}
+                isLoading={isLoadingRegions}
+                selectedDepartmentCodes={departmentCodes}
+                onSelectionChange={onDepartmentCodesChange}
+                helperText="Sélectionnez une région pour inclure tous ses départements, ou choisissez au détail."
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {isLoading && <p>Chargement...</p>}
       {error && <p className="error">{error.message}</p>}

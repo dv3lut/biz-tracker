@@ -1,9 +1,10 @@
-import type { Client, NafCategory } from "../../types";
+import type { Client, NafCategory, Region } from "../../types";
 import { ClientsSection } from "../ClientsSection";
 
 type Props = {
   clients: Client[] | undefined;
   nafCategories?: NafCategory[];
+  regions?: Region[];
   isLoading: boolean;
   isRefreshing: boolean;
   error: Error | null;
@@ -19,6 +20,7 @@ type Props = {
 export const ClientsView = ({
   clients,
   nafCategories,
+  regions,
   isLoading,
   isRefreshing,
   error,
@@ -42,6 +44,7 @@ export const ClientsView = ({
         <ClientsSection
           clients={clients}
           nafCategories={nafCategories}
+          regions={regions}
           isLoading={isLoading}
           isRefreshing={isRefreshing}
           error={error}

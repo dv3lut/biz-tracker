@@ -2,8 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 
-import { ApiError, googleApi, nafApi, toolsApi } from "../../api";
-import type { GoogleFindPlaceDebugResult, NafCategory, SireneNewBusinessesResult } from "../../types";
+import { ApiError, googleApi, nafApi, regionsApi, toolsApi } from "../../api";
+import type { GoogleFindPlaceDebugResult, NafCategory, Region, SireneNewBusinessesResult } from "../../types";
 import { openGoogleSearchForEstablishment } from "../../utils/googleSearch";
 import { parseNafInput, sanitizeNafCodes } from "../../utils/sync";
 import { GoogleFindPlaceDebugModal } from "../../components/GoogleFindPlaceDebugModal";
@@ -25,6 +25,7 @@ export const ToolsSection = ({ onUnauthorized }: Props) => {
   const [endDate, setEndDate] = useState("");
   const [nafCodesInput, setNafCodesInput] = useState("");
   const [selectedNafCodes, setSelectedNafCodes] = useState<string[]>([]);
+  const [selectedDepartmentCodes, setSelectedDepartmentCodes] = useState<string[]>([]);
   const [limit, setLimit] = useState(DEFAULT_LIMIT);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [result, setResult] = useState<SireneNewBusinessesResult | null>(null);
@@ -35,6 +36,12 @@ export const ToolsSection = ({ onUnauthorized }: Props) => {
   const nafCategoriesQuery = useQuery<NafCategory[]>({
     queryKey: ["naf-categories"],
     queryFn: () => nafApi.listCategories(),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const regionsQuery = useQuery<Region[]>({
+    queryKey: ["regions"],
+    queryFn: () => regionsApi.list(),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -85,6 +92,20 @@ export const ToolsSection = ({ onUnauthorized }: Props) => {
     toast.error(message, { id: message });
   }, [nafCategoriesQuery.error, onUnauthorized]);
 
+  useEffect(() => {
+    if (!regionsQuery.error) {
+      return;
+    }
+    const error = regionsQuery.error;
+    if (error instanceof ApiError && error.status === 403) {
+      onUnauthorized();
+      return;
+    }
+    const message = error instanceof ApiError ? error.message : "Une erreur est survenue.";
+    setErrorMessage(message);
+    toast.error(message, { id: message });
+  }, [regionsQuery.error, onUnauthorized]);
+
   const handleSubmit = useCallback(() => {
     if (!startDate) {
       setErrorMessage("La date de début est requise.");
@@ -104,14 +125,16 @@ export const ToolsSection = ({ onUnauthorized }: Props) => {
       endDate: endDate || undefined,
       nafCodes: parsedCodes,
       limit,
+      departmentCodes: selectedDepartmentCodes.length > 0 ? selectedDepartmentCodes : undefined,
     });
-  }, [startDate, selectedNafCodes, nafCodesInput, endDate, limit, mutation]);
+  }, [startDate, selectedNafCodes, nafCodesInput, endDate, limit, mutation, selectedDepartmentCodes]);
 
   const handleReset = useCallback(() => {
     setStartDate(buildDefaultStartDate());
     setEndDate("");
     setNafCodesInput("");
     setSelectedNafCodes([]);
+    setSelectedDepartmentCodes([]);
     setLimit(DEFAULT_LIMIT);
     setErrorMessage(null);
     setResult(null);
@@ -124,6 +147,10 @@ export const ToolsSection = ({ onUnauthorized }: Props) => {
       }
       return [...current, code];
     });
+  }, []);
+
+  const handleDepartmentCodesChange = useCallback((codes: string[]) => {
+    setSelectedDepartmentCodes(codes);
   }, []);
 
   const handleGoogleSearch = useCallback(
@@ -165,12 +192,16 @@ export const ToolsSection = ({ onUnauthorized }: Props) => {
         isLoading={mutation.isPending}
         nafCategories={nafCategoriesQuery.data}
         isLoadingNafCategories={nafCategoriesQuery.isLoading}
+        regions={regionsQuery.data}
+        isLoadingRegions={regionsQuery.isLoading}
+        selectedDepartmentCodes={selectedDepartmentCodes}
         errorMessage={errorMessage}
         result={result}
         onStartDateChange={setStartDate}
         onEndDateChange={setEndDate}
         onNafCodesInputChange={setNafCodesInput}
         onToggleNafCode={handleToggleNafCode}
+        onDepartmentCodesChange={handleDepartmentCodesChange}
         onLimitChange={setLimit}
         onSubmit={handleSubmit}
         onReset={handleReset}

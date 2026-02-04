@@ -11,6 +11,8 @@
 @import "./features/dashboard.css";
 @import "./features/naf.css";
 @import "./features/google.css";
+@import "./features/regions.css";
+@import "./features/clients.css";
 @import "./features/sync.css";
 @import "./features/emails.css";
 @import "./features/establishments.css";

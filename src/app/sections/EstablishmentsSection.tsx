@@ -2,12 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 
-import { ApiError, establishmentsApi, googleApi, nafApi } from "../../api";
+import { ApiError, establishmentsApi, googleApi, nafApi, regionsApi } from "../../api";
 import type {
   Establishment,
   EstablishmentIndividualFilter,
   GoogleFindPlaceDebugResult,
   NafCategory,
+  Region,
 } from "../../types";
 import { EstablishmentsView } from "../../components/views/EstablishmentsView";
 import { useGoogleCheckMutation } from "../hooks/useGoogleCheckMutation";
@@ -30,6 +31,7 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
   const [page, setPage] = useState(0);
   const [draftQuery, setDraftQuery] = useState("");
   const [draftNafCodes, setDraftNafCodes] = useState<string[]>([]);
+  const [draftDepartmentCodes, setDraftDepartmentCodes] = useState<string[]>([]);
   const [draftAddedFrom, setDraftAddedFrom] = useState("");
   const [draftAddedTo, setDraftAddedTo] = useState("");
   const [draftIndividualFilter, setDraftIndividualFilter] = useState<EstablishmentIndividualFilter>("all");
@@ -37,6 +39,7 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
 
   const [query, setQuery] = useState("");
   const [nafCodes, setNafCodes] = useState<string[]>([]);
+  const [departmentCodes, setDepartmentCodes] = useState<string[]>([]);
   const [addedFrom, setAddedFrom] = useState("");
   const [addedTo, setAddedTo] = useState("");
   const [individualFilter, setIndividualFilter] = useState<EstablishmentIndividualFilter>("all");
@@ -54,14 +57,32 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     staleTime: 5 * 60 * 1000,
   });
 
+  const regionsQuery = useQuery<Region[]>({
+    queryKey: ["regions"],
+    queryFn: () => regionsApi.list(),
+    staleTime: 5 * 60 * 1000,
+  });
+
   const establishmentsQuery = useQuery<Establishment[]>({
-    queryKey: ["establishments", limit, page, query, nafCodes, addedFrom, addedTo, individualFilter, googleCheckStatus],
+    queryKey: [
+      "establishments",
+      limit,
+      page,
+      query,
+      nafCodes,
+      departmentCodes,
+      addedFrom,
+      addedTo,
+      individualFilter,
+      googleCheckStatus,
+    ],
     queryFn: () =>
       establishmentsApi.fetchMany({
         limit,
         offset: page * limit,
         q: query ? query : undefined,
         nafCodes: nafCodes.length > 0 ? nafCodes : undefined,
+        departmentCodes: departmentCodes.length > 0 ? departmentCodes : undefined,
         addedFrom: addedFrom ? addedFrom : undefined,
         addedTo: addedTo ? addedTo : undefined,
         googleCheckStatus: googleCheckStatus ? googleCheckStatus : undefined,
@@ -108,6 +129,13 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     }
     showError(nafCategoriesQuery.error);
   }, [nafCategoriesQuery.error, showError]);
+
+  useEffect(() => {
+    if (!regionsQuery.error) {
+      return;
+    }
+    showError(regionsQuery.error);
+  }, [regionsQuery.error, showError]);
 
   const invalidateEstablishments = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ["establishments"] });
@@ -202,6 +230,10 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     setDraftNafCodes(value);
   }, []);
 
+  const handleDepartmentCodesChange = useCallback((value: string[]) => {
+    setDraftDepartmentCodes(value);
+  }, []);
+
   const handleAddedFromChange = useCallback((value: string) => {
     setDraftAddedFrom(value);
   }, []);
@@ -221,16 +253,26 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
   const handleApplyFilters = useCallback(() => {
     setQuery(draftQuery);
     setNafCodes(draftNafCodes);
+    setDepartmentCodes(draftDepartmentCodes);
     setAddedFrom(draftAddedFrom);
     setAddedTo(draftAddedTo);
     setIndividualFilter(draftIndividualFilter);
     setGoogleCheckStatus(draftGoogleCheckStatus);
     setPage(0);
-  }, [draftAddedFrom, draftAddedTo, draftGoogleCheckStatus, draftIndividualFilter, draftNafCodes, draftQuery]);
+  }, [
+    draftAddedFrom,
+    draftAddedTo,
+    draftGoogleCheckStatus,
+    draftIndividualFilter,
+    draftNafCodes,
+    draftQuery,
+    draftDepartmentCodes,
+  ]);
 
   const handleResetFilters = useCallback(() => {
     setDraftQuery("");
     setDraftNafCodes([]);
+    setDraftDepartmentCodes([]);
     setDraftAddedFrom("");
     setDraftAddedTo("");
     setDraftIndividualFilter("all");
@@ -238,6 +280,7 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
 
     setQuery("");
     setNafCodes([]);
+    setDepartmentCodes([]);
     setAddedFrom("");
     setAddedTo("");
     setIndividualFilter("all");
@@ -264,10 +307,33 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     if (draftNafCodes.length !== nafCodes.length) {
       return true;
     }
+    if (draftDepartmentCodes.length !== departmentCodes.length) {
+      return true;
+    }
     const a = [...draftNafCodes].sort().join(",");
     const b = [...nafCodes].sort().join(",");
-    return a !== b;
-  }, [addedFrom, addedTo, draftAddedFrom, draftAddedTo, draftGoogleCheckStatus, draftIndividualFilter, draftNafCodes, draftQuery, googleCheckStatus, individualFilter, nafCodes, query]);
+    if (a !== b) {
+      return true;
+    }
+    const departmentA = [...draftDepartmentCodes].sort().join(",");
+    const departmentB = [...departmentCodes].sort().join(",");
+    return departmentA !== departmentB;
+  }, [
+    addedFrom,
+    addedTo,
+    draftAddedFrom,
+    draftAddedTo,
+    draftGoogleCheckStatus,
+    draftIndividualFilter,
+    draftNafCodes,
+    draftQuery,
+    googleCheckStatus,
+    individualFilter,
+    nafCodes,
+    query,
+    draftDepartmentCodes,
+    departmentCodes,
+  ]);
 
   const deletingSiret = useMemo(() => {
     if (!deleteEstablishmentMutation.isPending) {
@@ -287,10 +353,13 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
       error={establishmentsError}
       nafCategories={nafCategoriesQuery.data}
       isLoadingNafCategories={nafCategoriesQuery.isLoading}
+      regions={regionsQuery.data}
+      isLoadingRegions={regionsQuery.isLoading}
       limit={limit}
       page={page}
       query={draftQuery}
       nafCodes={draftNafCodes}
+      departmentCodes={draftDepartmentCodes}
       addedFrom={draftAddedFrom}
       addedTo={draftAddedTo}
       individualFilter={draftIndividualFilter}
@@ -300,6 +369,7 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
       onPageChange={handlePageChange}
       onQueryChange={handleQueryChange}
       onNafCodesChange={handleNafCodesChange}
+      onDepartmentCodesChange={handleDepartmentCodesChange}
       onAddedFromChange={handleAddedFromChange}
       onAddedToChange={handleAddedToChange}
       onApplyFilters={handleApplyFilters}

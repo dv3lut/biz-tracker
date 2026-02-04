@@ -366,6 +366,9 @@ export interface NafSubCategory {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  googleDepartmentCount: number;
+  googleDepartmentAll: boolean;
+  googleDepartments: Department[];
 }
 
 export interface NafCategory {
@@ -376,6 +379,22 @@ export interface NafCategory {
   createdAt: string;
   updatedAt: string;
   subcategories: NafSubCategory[];
+}
+
+export interface Department {
+  id: string;
+  code: string;
+  name: string;
+  orderIndex: number;
+  regionId: string;
+}
+
+export interface Region {
+  id: string;
+  code: string;
+  name: string;
+  orderIndex: number;
+  departments: Department[];
 }
 
 export interface ClientSubscription {
@@ -427,12 +446,14 @@ export interface Client {
   startDate: string;
   endDate: string | null;
   listingStatuses: ListingStatus[];
+  includeAdminsInClientAlerts: boolean;
   emailsSentCount: number;
   lastEmailSentAt: string | null;
   createdAt: string;
   updatedAt: string;
   recipients: ClientRecipient[];
   subscriptions: ClientSubscription[];
+  departments: Department[];
   stripeSubscriptions: StripeSubscriptionHistory[];
   subscriptionEvents: ClientSubscriptionEvent[];
 }

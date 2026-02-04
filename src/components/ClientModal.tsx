@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
-import { Client, ListingStatus, NafCategory } from "../types";
+import { Client, ListingStatus, NafCategory, Region } from "../types";
+import { RegionDepartmentPanel } from "./RegionDepartmentPanel";
 import { formatNumber, formatDateTime } from "../utils/format";
 import { DEFAULT_LISTING_STATUSES, LISTING_STATUS_OPTIONS } from "../constants/listingStatuses";
 
@@ -9,8 +10,10 @@ type FormState = {
   startDate: string;
   endDate: string;
   listingStatuses: ListingStatus[];
+  includeAdminsInClientAlerts: boolean;
   recipientsText: string;
   subscriptionIds: string[];
+  departmentCodes: string[];
 };
 
 type SubmitPayload = {
@@ -18,8 +21,10 @@ type SubmitPayload = {
   startDate: string;
   endDate: string | null;
   listingStatuses: ListingStatus[];
+  includeAdminsInClientAlerts: boolean;
   recipients: string[];
   subscriptionIds: string[];
+  departmentIds: string[];
 };
 
 type Props = {
@@ -28,6 +33,8 @@ type Props = {
   client: Client | null;
   nafCategories: NafCategory[] | undefined;
   isLoadingNafCategories: boolean;
+  regions: Region[] | undefined;
+  isLoadingRegions: boolean;
   onSubmit: (payload: SubmitPayload) => void;
   onCancel: () => void;
   isProcessing: boolean;
@@ -38,8 +45,10 @@ const EMPTY_STATE: FormState = {
   startDate: "",
   endDate: "",
   listingStatuses: DEFAULT_LISTING_STATUSES,
+  includeAdminsInClientAlerts: false,
   recipientsText: "",
   subscriptionIds: [],
+  departmentCodes: [],
 };
 
 const splitRecipients = (value: string): string[] => {
@@ -50,12 +59,29 @@ const splitRecipients = (value: string): string[] => {
   return Array.from(new Set(normalized));
 };
 
+const resolveDepartmentIds = (codes: string[], regions: Region[] | undefined): string[] => {
+  if (!regions || regions.length === 0) {
+    return [];
+  }
+  const map = new Map<string, string>();
+  regions.forEach((region) => {
+    region.departments.forEach((department) => {
+      map.set(department.code, department.id);
+    });
+  });
+  return codes
+    .map((code) => map.get(code))
+    .filter((value): value is string => Boolean(value));
+};
+
 export const ClientModal = ({
   isOpen,
   mode,
   client,
   nafCategories,
   isLoadingNafCategories,
+  regions,
+  isLoadingRegions,
   onSubmit,
   onCancel,
   isProcessing,
@@ -68,22 +94,56 @@ export const ClientModal = ({
       return;
     }
     if (client && mode === "edit") {
+      const departmentCodes = client.departments.length
+        ? client.departments.map((department) => department.code)
+        : regions?.flatMap((region) => region.departments.map((department) => department.code)) ?? [];
       setFormState({
         name: client.name,
         startDate: client.startDate,
         endDate: client.endDate ?? "",
         listingStatuses: client.listingStatuses?.length ? client.listingStatuses : DEFAULT_LISTING_STATUSES,
+        includeAdminsInClientAlerts: client.includeAdminsInClientAlerts ?? false,
         recipientsText: client.recipients.map((recipient) => recipient.email).join("\n"),
         subscriptionIds: client.subscriptions.map((subscription) => subscription.subcategoryId),
+        departmentCodes,
       });
     } else {
       setFormState(EMPTY_STATE);
     }
-  }, [client, isOpen, mode]);
+  }, [client, isOpen, mode, regions]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+    if (mode !== "create") {
+      return;
+    }
+    if (!regions || regions.length === 0) {
+      return;
+    }
+    setFormState((current) => {
+      if (current.departmentCodes.length > 0) {
+        return current;
+      }
+      return {
+        ...current,
+        departmentCodes: regions.flatMap((region) =>
+          region.departments.map((department) => department.code),
+        ),
+      };
+    });
+  }, [isOpen, mode, regions]);
 
   const isValid = useMemo(() => {
-    return Boolean(formState.name.trim() && formState.startDate && formState.listingStatuses.length > 0);
-  }, [formState.name, formState.startDate, formState.listingStatuses.length]);
+    const hasRegions = regions && regions.length > 0 ? formState.departmentCodes.length > 0 : true;
+    return Boolean(
+      formState.name.trim()
+        && formState.startDate
+        && formState.listingStatuses.length > 0
+        && hasRegions
+    );
+  }, [formState.name, formState.startDate, formState.listingStatuses.length, formState.departmentCodes.length, regions]);
 
   const handleChange = (field: keyof FormState) => (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFormState((current) => ({ ...current, [field]: event.target.value }));
@@ -94,13 +154,16 @@ export const ClientModal = ({
     if (!isValid) {
       return;
     }
+    const departmentIds = resolveDepartmentIds(formState.departmentCodes, regions);
     const payload: SubmitPayload = {
       name: formState.name.trim(),
       startDate: formState.startDate,
       endDate: formState.endDate ? formState.endDate : null,
       listingStatuses: formState.listingStatuses,
+      includeAdminsInClientAlerts: formState.includeAdminsInClientAlerts,
       recipients: splitRecipients(formState.recipientsText),
       subscriptionIds: formState.subscriptionIds,
+      departmentIds,
     };
     onSubmit(payload);
   };
@@ -133,6 +196,17 @@ export const ClientModal = ({
     setFormState((current) => ({ ...current, listingStatuses: [...DEFAULT_LISTING_STATUSES] }));
   };
 
+  const handleToggleAdminCopy = () => {
+    setFormState((current) => ({
+      ...current,
+      includeAdminsInClientAlerts: !current.includeAdminsInClientAlerts,
+    }));
+  };
+
+  const handleDepartmentCodesChange = (codes: string[]) => {
+    setFormState((current) => ({ ...current, departmentCodes: codes }));
+  };
+
   const handleToggleCategory = (categoryId: string) => () => {
     if (!nafCategories) {
       return;
@@ -162,6 +236,13 @@ export const ClientModal = ({
   if (!isOpen) {
     return null;
   }
+
+  const allDepartmentCodes = regions
+    ? regions.flatMap((region) => region.departments.map((department) => department.code))
+    : [];
+  const selectedDepartmentsCount = formState.departmentCodes.length;
+  const isAllDepartmentsSelected =
+    allDepartmentCodes.length > 0 && allDepartmentCodes.every((code) => formState.departmentCodes.includes(code));
 
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true">
@@ -211,6 +292,14 @@ export const ClientModal = ({
                 placeholder="client@example.com"
               />
             </div>
+            <label className="form-checkbox">
+              <input
+                type="checkbox"
+                checked={formState.includeAdminsInClientAlerts}
+                onChange={handleToggleAdminCopy}
+              />
+              <span>Mettre les admins en copie des alertes client</span>
+            </label>
           </section>
 
           <section>
@@ -267,41 +356,53 @@ export const ClientModal = ({
                               }
                             }}
                             checked={isCategoryChecked}
-                            disabled={activeIds.length === 0}
                             onChange={handleToggleCategory(category.id)}
                           />
-                          <span>Tout sélectionner</span>
+                          <span className="muted small">Tout sélectionner</span>
                         </label>
                       </div>
-                      {category.subcategories.length === 0 ? (
-                        <p className="small muted">Aucune sous-catégorie.</p>
-                      ) : (
-                        <ul className="naf-subscription-list">
-                          {category.subcategories.map((subcategory) => {
-                            const checked = formState.subscriptionIds.includes(subcategory.id);
-                            return (
-                              <li key={subcategory.id}>
-                                <label>
-                                  <input
-                                    type="checkbox"
-                                    checked={checked}
-                                    onChange={handleToggleSubscription(subcategory.id)}
-                                    disabled={!subcategory.isActive}
-                                  />
-                                  <span>
-                                    {subcategory.nafCode} · {subcategory.name}
-                                    {!subcategory.isActive ? " (inactif)" : ""}
-                                  </span>
-                                </label>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      )}
+                      <ul className="naf-subscription-list">
+                        {activeSubcategories.map((subcategory) => {
+                          const checked = formState.subscriptionIds.includes(subcategory.id);
+                          return (
+                            <li key={subcategory.id} className="naf-subscription-item">
+                              <label>
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={handleToggleSubscription(subcategory.id)}
+                                />
+                                <span>
+                                  {subcategory.nafCode} · {subcategory.name}
+                                </span>
+                              </label>
+                            </li>
+                          );
+                        })}
+                      </ul>
                     </article>
                   );
                 })}
               </div>
+            ) : null}
+          </section>
+
+          <section>
+            <h3>Départements</h3>
+            <RegionDepartmentPanel
+              regions={regions}
+              isLoading={isLoadingRegions}
+              selectedDepartmentCodes={formState.departmentCodes}
+              onSelectionChange={handleDepartmentCodesChange}
+              helperText="Sélectionnez une région pour inclure tous ses départements, ou choisissez au détail."
+            />
+            {isAllDepartmentsSelected ? (
+              <p className="muted small">Toute la France est couverte.</p>
+            ) : (
+              <p className="muted small">{selectedDepartmentsCount} départements sélectionnés.</p>
+            )}
+            {!isLoadingRegions && regions && regions.length > 0 && formState.departmentCodes.length === 0 ? (
+              <p className="small error">Sélectionnez au moins un département.</p>
             ) : null}
           </section>
 

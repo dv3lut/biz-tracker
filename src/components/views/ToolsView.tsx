@@ -1,4 +1,4 @@
-import type { NafCategory, SireneNewBusinessesResult } from "../../types";
+import type { NafCategory, Region, SireneNewBusinessesResult } from "../../types";
 import { SireneNewBusinessesPanel } from "../SireneNewBusinessesPanel";
 
 type Props = {
@@ -10,12 +10,16 @@ type Props = {
   isLoading: boolean;
   nafCategories: NafCategory[] | undefined;
   isLoadingNafCategories: boolean;
+  regions: Region[] | undefined;
+  isLoadingRegions: boolean;
+  selectedDepartmentCodes: string[];
   errorMessage: string | null;
   result: SireneNewBusinessesResult | null;
   onStartDateChange: (value: string) => void;
   onEndDateChange: (value: string) => void;
   onNafCodesInputChange: (value: string) => void;
   onToggleNafCode: (value: string) => void;
+  onDepartmentCodesChange: (value: string[]) => void;
   onLimitChange: (value: number) => void;
   onSubmit: () => void;
   onReset: () => void;
@@ -33,12 +37,16 @@ export const ToolsView = ({
   isLoading,
   nafCategories,
   isLoadingNafCategories,
+  regions,
+  isLoadingRegions,
+  selectedDepartmentCodes,
   errorMessage,
   result,
   onStartDateChange,
   onEndDateChange,
   onNafCodesInputChange,
   onToggleNafCode,
+  onDepartmentCodesChange,
   onLimitChange,
   onSubmit,
   onReset,
@@ -64,12 +72,16 @@ export const ToolsView = ({
           isLoading={isLoading}
           nafCategories={nafCategories}
           isLoadingNafCategories={isLoadingNafCategories}
+          regions={regions}
+          isLoadingRegions={isLoadingRegions}
+          selectedDepartmentCodes={selectedDepartmentCodes}
           errorMessage={errorMessage}
           result={result}
           onStartDateChange={onStartDateChange}
           onEndDateChange={onEndDateChange}
           onNafCodesInputChange={onNafCodesInputChange}
           onToggleNafCode={onToggleNafCode}
+          onDepartmentCodesChange={onDepartmentCodesChange}
           onLimitChange={onLimitChange}
           onSubmit={onSubmit}
           onReset={onReset}

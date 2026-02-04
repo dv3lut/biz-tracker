@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { ApiError, clientsApi, nafApi, type ClientCreatePayload, type ClientUpdatePayload } from "../../api";
-import type { Client, NafCategory } from "../../types";
+import { ApiError, clientsApi, nafApi, regionsApi, type ClientCreatePayload, type ClientUpdatePayload } from "../../api";
+import type { Client, NafCategory, Region } from "../../types";
 import { ClientsView } from "../../components/views/ClientsView";
 import { ClientModal, type ClientFormSubmitPayload } from "../../components/ClientModal";
 import { useRefreshIndicator } from "../../hooks/useRefreshIndicator";
@@ -34,6 +34,11 @@ export const ClientsSection = ({ onUnauthorized }: Props) => {
   const nafCategoriesQuery = useQuery<NafCategory[]>({
     queryKey: ["naf-categories"],
     queryFn: () => nafApi.listCategories(),
+  });
+
+  const regionsQuery = useQuery<Region[]>({
+    queryKey: ["regions"],
+    queryFn: () => regionsApi.list(),
   });
 
   const clientsIsRefreshing = useRefreshIndicator(
@@ -139,8 +144,10 @@ export const ClientsSection = ({ onUnauthorized }: Props) => {
         startDate: formPayload.startDate,
         endDate: formPayload.endDate,
         listingStatuses: formPayload.listingStatuses,
+        includeAdminsInClientAlerts: formPayload.includeAdminsInClientAlerts,
         recipients: formPayload.recipients,
         subscriptionIds: formPayload.subscriptionIds,
+        departmentIds: formPayload.departmentIds,
       };
       if (modalState.mode === "edit" && modalState.client) {
         updateClientMutation.mutate({ clientId: modalState.client.id, payload });
@@ -166,6 +173,7 @@ export const ClientsSection = ({ onUnauthorized }: Props) => {
       <ClientsView
         clients={clientsQuery.data}
         nafCategories={nafCategoriesQuery.data}
+        regions={regionsQuery.data}
         isLoading={clientsQuery.isLoading}
         isRefreshing={clientsIsRefreshing}
         error={clientsError}
@@ -184,6 +192,8 @@ export const ClientsSection = ({ onUnauthorized }: Props) => {
         client={modalState?.client ?? null}
         nafCategories={nafCategoriesQuery.data}
         isLoadingNafCategories={nafCategoriesQuery.isLoading}
+        regions={regionsQuery.data}
+        isLoadingRegions={regionsQuery.isLoading}
         onSubmit={handleSubmitModal}
         onCancel={closeModal}
         isProcessing={isModalProcessing}
