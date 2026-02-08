@@ -1,10 +1,10 @@
 """Admin endpoints for development tools."""
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 
 from app.api.schemas import SireneNewBusinessesRequest, SireneNewBusinessesResponse, SireneNewBusinessOut
-from app.api.schemas.tools import SireneNewBusinessDirectorOut
+from app.api.schemas.tools import AnnuaireDebugResponse, SireneNewBusinessDirectorOut
 from app.clients.annuaire_entreprises_client import AnnuaireEntreprisesClient
 from app.clients.sirene_client import SireneClient
 from app.observability import log_event
@@ -143,6 +143,42 @@ def fetch_sirene_new_establishments(payload: SireneNewBusinessesRequest) -> Sire
         returned=returned,
         establishments=establishments,
     )
+
+
+@router.get(
+    "/tools/annuaire/debug",
+    response_model=AnnuaireDebugResponse,
+    summary="Debug annuaire (dirigeants + unité légale) via SIRET/SIREN",
+)
+def debug_annuaire_api(
+    siret: str = Query(..., min_length=9, max_length=14, description="SIRET (14) ou SIREN (9)"),
+) -> AnnuaireDebugResponse:
+    normalized = siret.replace(" ", "")
+    siren = normalized[:9]
+    client = AnnuaireEntreprisesClient()
+    try:
+        if not client.enabled:
+            return AnnuaireDebugResponse(
+                siret=normalized,
+                siren=siren,
+                success=False,
+                status_code=None,
+                error="annuaire disabled",
+                payload=None,
+            )
+        result = client.fetch_debug(siren)
+        result["siret"] = normalized
+        result["siren"] = siren
+        log_event(
+            "tools.annuaire.debug",
+            siret=normalized,
+            siren=siren,
+            success=result.get("success"),
+            status_code=result.get("status_code"),
+        )
+        return AnnuaireDebugResponse(**result)
+    finally:
+        client.close()
 
 
 def _enrich_tools_results_from_annuaire(

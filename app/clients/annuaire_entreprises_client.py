@@ -263,6 +263,119 @@ class AnnuaireEntreprisesClient:
 
         return results
 
+    def fetch_debug(self, siren: str, *, run_id: str | None = None) -> dict[str, object | None]:
+        """Fetch raw annuaire payload for debugging purposes."""
+        url = f"{self._base_url}/search"
+        params = {"q": siren, "page": 1, "per_page": 1}
+        backoff = self._backoff_factor
+
+        for attempt in range(1, self._max_retries + 1):
+            start = time.perf_counter()
+            try:
+                self._rate_limiter.acquire()
+                response = self._session.get(url, params=params, timeout=self._timeout)
+            except requests.RequestException as exc:
+                duration_ms = (time.perf_counter() - start) * 1000
+                self._record_call(
+                    siren=siren,
+                    status_code=0,
+                    duration_ms=duration_ms,
+                    attempt=attempt,
+                    outcome="error",
+                    run_id=run_id,
+                    error=str(exc),
+                )
+                if attempt < self._max_retries:
+                    time.sleep(backoff)
+                    backoff *= 2
+                    continue
+                return {
+                    "siret": siren,
+                    "siren": siren,
+                    "success": False,
+                    "status_code": 0,
+                    "duration_ms": round(duration_ms, 2),
+                    "error": str(exc),
+                    "payload": None,
+                }
+
+            duration_ms = (time.perf_counter() - start) * 1000
+            status = response.status_code
+
+            if status < 300:
+                self._record_call(
+                    siren=siren,
+                    status_code=status,
+                    duration_ms=duration_ms,
+                    attempt=attempt,
+                    outcome="success",
+                    run_id=run_id,
+                )
+                try:
+                    payload = response.json()
+                except ValueError:
+                    payload = None
+                    return {
+                        "siret": siren,
+                        "siren": siren,
+                        "success": False,
+                        "status_code": status,
+                        "duration_ms": round(duration_ms, 2),
+                        "error": "invalid JSON",
+                        "payload": None,
+                    }
+                return {
+                    "siret": siren,
+                    "siren": siren,
+                    "success": True,
+                    "status_code": status,
+                    "duration_ms": round(duration_ms, 2),
+                    "error": None,
+                    "payload": payload,
+                }
+
+            if status in _RETRYABLE_STATUS and attempt < self._max_retries:
+                self._record_call(
+                    siren=siren,
+                    status_code=status,
+                    duration_ms=duration_ms,
+                    attempt=attempt,
+                    outcome="retry",
+                    run_id=run_id,
+                )
+                retry_after = self._get_retry_after(response, backoff)
+                time.sleep(retry_after)
+                backoff *= 2
+                continue
+
+            self._record_call(
+                siren=siren,
+                status_code=status,
+                duration_ms=duration_ms,
+                attempt=attempt,
+                outcome="failure",
+                run_id=run_id,
+            )
+            return {
+                "siret": siren,
+                "siren": siren,
+                "success": False,
+                "status_code": status,
+                "duration_ms": round(duration_ms, 2),
+                "error": f"HTTP {status}",
+                "payload": None,
+            }
+
+        return {
+            "siret": siren,
+            "siren": siren,
+            "success": False,
+            "status_code": None,
+            "duration_ms": None,
+            "error": "max retries exceeded",
+            "payload": None,
+        }
+
     def _parse_response(self, siren: str, response: requests.Response) -> AnnuaireResult:
         """Parse the API JSON response into an AnnuaireResult."""
         try:

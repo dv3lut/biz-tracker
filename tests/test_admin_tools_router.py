@@ -5,6 +5,7 @@ from unittest import TestCase
 from unittest.mock import patch
 
 from app.api.routers.admin.tools_router import (
+    debug_annuaire_api,
     fetch_sirene_new_establishments,
     _build_leader_name,
     _enrich_tools_results_from_annuaire,
@@ -462,3 +463,38 @@ class EnrichToolsResultsTests(TestCase):
 
         self.assertIsNone(est.legal_unit_name)
         self.assertEqual(est.directors, [])
+
+
+class AnnuaireDebugRouteTests(TestCase):
+    @patch("app.api.routers.admin.tools_router.AnnuaireEntreprisesClient")
+    def test_debug_annuaire_returns_payload(self, MockClient) -> None:
+        instance = MockClient.return_value
+        instance.enabled = True
+        instance.fetch_debug.return_value = {
+            "siret": "12345678901234",
+            "siren": "123456789",
+            "success": True,
+            "status_code": 200,
+            "duration_ms": 12.5,
+            "error": None,
+            "payload": {"results": []},
+        }
+
+        response = debug_annuaire_api("12345678901234")
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.siret, "12345678901234")
+        self.assertEqual(response.siren, "123456789")
+        self.assertEqual(response.status_code, 200)
+        instance.close.assert_called_once()
+
+    @patch("app.api.routers.admin.tools_router.AnnuaireEntreprisesClient")
+    def test_debug_annuaire_disabled(self, MockClient) -> None:
+        instance = MockClient.return_value
+        instance.enabled = False
+
+        response = debug_annuaire_api("12345678901234")
+
+        self.assertFalse(response.success)
+        self.assertEqual(response.error, "annuaire disabled")
+        instance.close.assert_called_once()

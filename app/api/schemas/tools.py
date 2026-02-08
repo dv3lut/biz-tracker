@@ -100,6 +100,16 @@ class SireneNewBusinessOut(BaseModel):
     directors: list[SireneNewBusinessDirectorOut] = []
 
 
+class AnnuaireDebugResponse(BaseModel):
+    siret: str
+    siren: str
+    success: bool
+    status_code: int | None = None
+    duration_ms: float | None = None
+    error: str | None = None
+    payload: dict[str, object] | None = None
+
+
 class SireneNewBusinessesResponse(BaseModel):
     total: int
     returned: int
@@ -111,4 +121,5 @@ __all__ = [
     "SireneNewBusinessesRequest",
     "SireneNewBusinessesResponse",
     "SireneNewBusinessOut",
+    "AnnuaireDebugResponse",
 ]
