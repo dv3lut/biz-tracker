@@ -1,4 +1,4 @@
-export type SyncMode = "full" | "sirene_only" | "google_pending" | "google_refresh" | "day_replay";
+export type SyncMode = "full" | "sirene_only" | "google_pending" | "google_refresh" | "linkedin_pending" | "linkedin_refresh" | "day_replay";
 export type DayReplayReference = "creation_date" | "insertion_date";
 
 export type ListingStatus = "recent_creation" | "recent_creation_missing_contact" | "not_recent_creation";
@@ -280,6 +280,11 @@ export interface Director {
   siren: string | null;
   denomination: string | null;
   nationality: string | null;
+  // LinkedIn fields
+  linkedinProfileUrl: string | null;
+  linkedinProfileData: Record<string, unknown> | null;
+  linkedinLastCheckedAt: string | null;
+  linkedinCheckStatus: string;
 }
 
 export interface Establishment {
@@ -586,4 +591,35 @@ export interface SireneNewBusinessesResult {
   total: number;
   returned: number;
   establishments: SireneNewBusiness[];
+}
+
+// LinkedIn types
+export interface LinkedInCheckResponse {
+  directorId: string;
+  firstNames: string | null;
+  lastName: string | null;
+  quality: string | null;
+  companyName: string | null;
+  linkedinProfileUrl: string | null;
+  linkedinProfileData: Record<string, unknown> | null;
+  linkedinCheckStatus: string;
+  linkedinLastCheckedAt: string | null;
+  message: string;
+}
+
+export interface LinkedInDebugResponse {
+  directorId: string;
+  directorName: string;
+  companyName: string;
+  searchInput: {
+    firstName: string;
+    lastName: string;
+    company: string;
+  };
+  apifyResponse: Record<string, unknown> | null;
+  profileUrl: string | null;
+  profileData: Record<string, unknown> | null;
+  status: string;
+  error: string | null;
+  retriedWithLegalUnit: boolean;
 }

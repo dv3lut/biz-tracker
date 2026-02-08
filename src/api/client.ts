@@ -301,6 +301,11 @@ interface DirectorResponse {
   siren: string | null;
   denomination: string | null;
   nationality: string | null;
+  // LinkedIn fields
+  linkedin_profile_url?: string | null;
+  linkedin_profile_data?: Record<string, unknown> | null;
+  linkedin_last_checked_at?: string | null;
+  linkedin_check_status?: string;
 }
 
 interface EstablishmentResponse {
@@ -714,6 +719,10 @@ const toEstablishment = (payload: EstablishmentResponse): Establishment => ({
     siren: d.siren,
     denomination: d.denomination,
     nationality: d.nationality,
+    linkedinProfileUrl: d.linkedin_profile_url ?? null,
+    linkedinProfileData: d.linkedin_profile_data ?? null,
+    linkedinLastCheckedAt: d.linkedin_last_checked_at ?? null,
+    linkedinCheckStatus: d.linkedin_check_status ?? "pending",
   })),
 });
 

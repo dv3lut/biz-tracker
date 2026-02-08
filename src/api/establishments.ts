@@ -13,6 +13,11 @@ export interface DirectorResponse {
   siren: string | null;
   denomination: string | null;
   nationality: string | null;
+  // LinkedIn fields
+  linkedin_profile_url?: string | null;
+  linkedin_profile_data?: Record<string, unknown> | null;
+  linkedin_last_checked_at?: string | null;
+  linkedin_check_status?: string;
 }
 
 export interface EstablishmentResponse {
@@ -96,6 +101,10 @@ const mapDirector = (payload: DirectorResponse): Director => ({
   siren: payload.siren,
   denomination: payload.denomination,
   nationality: payload.nationality,
+  linkedinProfileUrl: payload.linkedin_profile_url ?? null,
+  linkedinProfileData: payload.linkedin_profile_data ?? null,
+  linkedinLastCheckedAt: payload.linkedin_last_checked_at ?? null,
+  linkedinCheckStatus: payload.linkedin_check_status ?? "pending",
 });
 
 export const mapEstablishment = (payload: EstablishmentResponse): Establishment => ({

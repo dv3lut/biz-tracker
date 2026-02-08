@@ -26,13 +26,13 @@ const MODE_OPTIONS: Array<{
   {
     value: "full",
     title: "Mode complet",
-    description: "Télécharge les mises à jour Sirene puis déclenche les enrichissements Google Places.",
-    impact: "Plus long mais garantit des fiches Google actualisées.",
+    description: "Télécharge les mises à jour Sirene puis déclenche les enrichissements Google Places et LinkedIn.",
+    impact: "Plus long mais garantit des fiches Google et LinkedIn actualisées.",
   },
   {
     value: "sirene_only",
     title: "Mode Sirene uniquement",
-    description: "Capture uniquement les évolutions Sirene. Les appels Google sont ignorés.",
+    description: "Capture uniquement les évolutions Sirene. Les appels Google et LinkedIn sont ignorés.",
     impact: "Recommandé pour analyser rapidement une base ou en cas d'incident Google.",
   },
   {
@@ -46,6 +46,18 @@ const MODE_OPTIONS: Array<{
     title: "Google — relancer sur tous",
     description: "Ne touche pas à Sirene et relance une détection Google sur tous les établissements.",
     impact: "Optionnel: remettre à zéro les données Google avant de recalculer (plus sûr mais plus intrusif).",
+  },
+  {
+    value: "linkedin_pending",
+    title: "LinkedIn — nouveaux uniquement",
+    description: "Recherche les profils LinkedIn des dirigeants physiques jamais enrichis.",
+    impact: "Permet de rattraper les profils LinkedIn manquants.",
+  },
+  {
+    value: "linkedin_refresh",
+    title: "LinkedIn — relancer sur tous",
+    description: "Relance une recherche LinkedIn sur tous les dirigeants physiques.",
+    impact: "Permet de mettre à jour les profils LinkedIn même déjà recherchés.",
   },
   {
     value: "day_replay",
