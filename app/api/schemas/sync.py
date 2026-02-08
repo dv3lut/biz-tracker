@@ -44,10 +44,6 @@ class SyncRunOut(BaseModel):
         default=None,
         description="Liste optionnelle des codes NAF ciblés par ce run.",
     )
-    initial_backfill: bool = Field(
-        default=False,
-        description="Indique si ce run a été lancé en mode d'initialisation NAF (backfill months_back sans alertes).",
-    )
     target_client_ids: list[UUID] | None = Field(
         default=None,
         description="Clients explicitement ciblés lors de ce run (mode 'day_replay' uniquement).",
@@ -63,6 +59,10 @@ class SyncRunOut(BaseModel):
     day_replay_reference: DayReplayReference = Field(
         default=DEFAULT_DAY_REPLAY_REFERENCE,
         description="Source de vérité utilisée pour rejouer une journée (date de création ou d'insertion).",
+    )
+    months_back: int | None = Field(
+        default=None,
+        description="Nombre de mois dans le passé à inclure dans la collecte (None = jour courant uniquement).",
     )
     total_expected_records: int | None = None
     progress: float | None = None
@@ -167,13 +167,6 @@ class SyncRequest(BaseModel):
         default=None,
         description="Filtre optionnel de codes NAF (ex: 5610A) à rejouer quel que soit le mode.",
     )
-    initial_backfill: bool = Field(
-        default=False,
-        description=(
-            "Mode d'initialisation NAF: force une collecte sur la fenêtre months_back pour les codes NAF ciblés, "
-            "sans générer d'alertes (utile après ajout de nouveaux NAF)."
-        ),
-    )
     target_client_ids: list[UUID] | None = Field(
         default=None,
         description="Limiter l'envoi des alertes à une liste précise de clients (mode 'day_replay').",
@@ -191,6 +184,15 @@ class SyncRequest(BaseModel):
         description=(
             "Contrôle le critère de rejeu: 'creation_date' récupère les établissements par date de création, "
             "'insertion_date' par date d'insertion en base (mode 'day_replay')."
+        ),
+    )
+    months_back: int | None = Field(
+        default=None,
+        ge=1,
+        le=24,
+        description=(
+            "Nombre de mois dans le passé à inclure dans la collecte Sirene. "
+            "Si non spécifié, seul le jour courant est synchronisé (synchro incrémentale standard)."
         ),
     )
 
@@ -253,11 +255,6 @@ class SyncRequest(BaseModel):
             raise ValueError("Le forçage des appels Google est disponible uniquement en mode 'day_replay'.")
         if self.replay_reference is not DEFAULT_DAY_REPLAY_REFERENCE and self.mode is not SyncMode.DAY_REPLAY:
             raise ValueError("Le choix de la référence de rejeu est réservé au mode 'day_replay'.")
-        if self.initial_backfill:
-            if not self.naf_codes:
-                raise ValueError("Le mode initial_backfill requiert une liste de codes NAF (naf_codes).")
-            if self.mode in {SyncMode.DAY_REPLAY, SyncMode.GOOGLE_PENDING, SyncMode.GOOGLE_REFRESH}:
-                raise ValueError("Le mode initial_backfill n'est disponible que pour les modes Sirene (full/sirene_only).")
         return self
 
 

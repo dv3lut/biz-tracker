@@ -892,7 +892,7 @@ def test_update_subscription_charges_immediately(monkeypatch):
 
     payload = PublicStripeUpdateRequest(
         plan_key="business",
-        category_ids=[category_id, uuid4(), uuid4()],
+        category_ids=[category_id, uuid4(), uuid4(), uuid4(), uuid4()],
         access_token="token_123456",
     )
 
@@ -1006,7 +1006,7 @@ def test_update_subscription_handles_cancel_at_period_end(monkeypatch):
 
     payload = PublicStripeUpdateRequest(
         plan_key="business",
-        category_ids=[category_id, uuid4(), uuid4()],
+        category_ids=[category_id, uuid4(), uuid4(), uuid4(), uuid4()],
         access_token="token_123456",
     )
 
@@ -1088,7 +1088,7 @@ def test_preview_upgrade_amount(monkeypatch):
 
     payload = PublicStripeUpdateRequest(
         plan_key="business",
-        category_ids=[category_id, uuid4(), uuid4()],
+        category_ids=[category_id, uuid4(), uuid4(), uuid4(), uuid4()],
         access_token="token_123456",
     )
 
@@ -1162,7 +1162,7 @@ def test_preview_cancel_pending_downgrade_returns_zero(monkeypatch):
 
     payload = PublicStripeUpdateRequest(
         plan_key="business",
-        category_ids=[category_id, uuid4(), uuid4()],
+        category_ids=[category_id, uuid4(), uuid4(), uuid4(), uuid4()],
         access_token="token_123456",
     )
 
@@ -1221,7 +1221,7 @@ def test_preview_upgrade_during_trial_returns_zero(monkeypatch):
 
     payload = PublicStripeUpdateRequest(
         plan_key="business",
-        category_ids=[category_id, uuid4(), uuid4()],
+        category_ids=[category_id, uuid4(), uuid4(), uuid4(), uuid4()],
         access_token="token_123456",
     )
 
@@ -1430,7 +1430,7 @@ def test_update_subscription_charge_fails(monkeypatch):
 
     payload = PublicStripeUpdateRequest(
         plan_key="business",
-        category_ids=[category_id, uuid4(), uuid4()],
+        category_ids=[category_id, uuid4(), uuid4(), uuid4(), uuid4()],
         access_token="token_123456",
     )
 
@@ -1516,7 +1516,7 @@ def test_update_subscription_charge_stripe_error(monkeypatch):
 
     payload = PublicStripeUpdateRequest(
         plan_key="business",
-        category_ids=[category_id, uuid4(), uuid4()],
+        category_ids=[category_id, uuid4(), uuid4(), uuid4(), uuid4()],
         access_token="token_123456",
     )
 
@@ -1602,7 +1602,7 @@ def test_update_subscription_charge_unconfirmed(monkeypatch):
 
     payload = PublicStripeUpdateRequest(
         plan_key="business",
-        category_ids=[category_id, uuid4(), uuid4()],
+        category_ids=[category_id, uuid4(), uuid4(), uuid4(), uuid4()],
         access_token="token_123456",
     )
 
@@ -1882,7 +1882,7 @@ def test_update_subscription_cancel_pending_downgrade_keeps_no_proration(monkeyp
 
     payload = PublicStripeUpdateRequest(
         plan_key="business",
-        category_ids=[category_id, uuid4(), uuid4()],
+        category_ids=[category_id, uuid4(), uuid4(), uuid4(), uuid4()],
         access_token="token_123456",
     )
 
@@ -2211,7 +2211,7 @@ def test_update_subscription_upgrade_does_not_return_payment_url_during_trial(mo
 
     payload = PublicStripeUpdateRequest(
         plan_key="business",
-        category_ids=[category_id, uuid4(), uuid4()],
+        category_ids=[category_id, uuid4(), uuid4(), uuid4(), uuid4()],
         access_token="token_123456",
     )
 
@@ -2306,7 +2306,7 @@ def test_update_subscription_upgrade_returns_payment_url_when_no_payment_method(
 
     payload = PublicStripeUpdateRequest(
         plan_key="business",
-        category_ids=[category_id, uuid4(), uuid4()],
+        category_ids=[category_id, uuid4(), uuid4(), uuid4(), uuid4()],
         access_token="token_123456",
     )
 

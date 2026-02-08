@@ -178,12 +178,12 @@ class SyncRun(Base):
     reset_state: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     truncate_before_run: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     target_naf_codes: Mapped[list[str] | None] = mapped_column(JSONB, default=None)
-    initial_backfill: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     target_client_ids: Mapped[list[str] | None] = mapped_column(JSONB, default=None)
     notify_admins: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     google_reset_state: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     day_replay_force_google: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     day_replay_reference: Mapped[str] = mapped_column(String(32), default="creation_date", nullable=False)
+    months_back: Mapped[int | None] = mapped_column(Integer, default=None, nullable=True)
 
     previous_run: Mapped[SyncRun | None] = relationship(remote_side=[id], backref="resumed_runs")
     alerts: Mapped[list["Alert"]] = relationship("Alert", back_populates="run")

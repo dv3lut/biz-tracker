@@ -33,11 +33,11 @@ class SyncRunPreparationMixin:
         replay_for_date: date | None = None,
         replay_reference: DayReplayReference = DEFAULT_DAY_REPLAY_REFERENCE,
         target_naf_codes: list[str] | None = None,
-        initial_backfill: bool = False,
         target_client_ids: list[UUID] | None = None,
         notify_admins: bool = True,
         force_google_replay: bool = False,
         google_reset_state: bool = False,
+        months_back: int | None = None,
     ) -> Optional[models.SyncRun]:
         scope_key = self._settings.sync.scope_key
         state = self._get_or_create_state(session, scope_key)
@@ -66,6 +66,7 @@ class SyncRunPreparationMixin:
             run.target_naf_codes = naf_filter
             run.target_client_ids = client_targets
             run.notify_admins = admin_notifications
+            run.months_back = months_back
             if naf_filter:
                 append_run_note(run, format_target_naf_note(naf_filter))
             log_event(
@@ -81,6 +82,7 @@ class SyncRunPreparationMixin:
                 target_client_ids=client_targets,
                 notify_admins=run.notify_admins,
                 force_google_replay=run.day_replay_force_google,
+                months_back=months_back,
                 run=serialize_sync_run(run),
             )
             return run
@@ -116,7 +118,7 @@ class SyncRunPreparationMixin:
                 mode=mode,
             )
             run.google_reset_state = bool(google_reset_state) if mode == SyncMode.GOOGLE_REFRESH else False
-        run.initial_backfill = bool(initial_backfill)
+        run.months_back = months_back
         if latest_treated:
             append_run_note(run, f"dateDernierTraitementMaximum: {latest_treated.isoformat()}")
         run.target_naf_codes = naf_filter
@@ -132,8 +134,8 @@ class SyncRunPreparationMixin:
             check_informations=check_informations,
             mode=mode.value,
             target_naf_codes=naf_filter,
-            initial_backfill=run.initial_backfill,
             notify_admins=run.notify_admins,
+            months_back=months_back,
             run=serialize_sync_run(run),
         )
         return run
@@ -287,7 +289,6 @@ class SyncRunPreparationMixin:
         except ValueError:
             replay_reference = DEFAULT_DAY_REPLAY_REFERENCE
         target_naf_codes = list(run.target_naf_codes or [])
-        initial_backfill = bool(getattr(run, "initial_backfill", False))
         persist_state = mode.updates_state and not target_naf_codes
         raw_client_targets = list(run.target_client_ids or [])
         target_client_ids: list[UUID] = []
@@ -296,8 +297,11 @@ class SyncRunPreparationMixin:
                 target_client_ids.append(UUID(str(raw)))
             except (TypeError, ValueError):
                 continue
+        months_back = getattr(run, "months_back", None)
+        # Désactiver les notifications admin si months_back est fourni (rattrapage)
+        is_backfill = months_back is not None
         admin_notifications_enabled = bool(run.notify_admins) if mode == SyncMode.DAY_REPLAY else True
-        if initial_backfill:
+        if is_backfill:
             admin_notifications_enabled = False
         return SyncContext(
             session=session,
@@ -308,12 +312,12 @@ class SyncRunPreparationMixin:
             mode=mode,
             replay_for_date=replay_for_date,
             persist_state=persist_state,
-            client_notifications_enabled=(False if initial_backfill else (mode.client_notifications_enabled or bool(target_client_ids))),
+            client_notifications_enabled=(False if is_backfill else (mode.client_notifications_enabled or bool(target_client_ids))),
             admin_notifications_enabled=admin_notifications_enabled,
             target_naf_codes=target_naf_codes or None,
-            initial_backfill=initial_backfill,
             target_client_ids=target_client_ids or None,
             force_google_replay=bool(getattr(run, "day_replay_force_google", False)),
             google_reset_state=bool(getattr(run, "google_reset_state", False)),
             replay_reference=replay_reference,
+            months_back=months_back,
         )

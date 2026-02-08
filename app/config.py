@@ -161,12 +161,6 @@ class SyncSettings(BaseModel):
         default=1440,
         description="Default minimum delay between sync runs when no guidance is provided by the informations service.",
     )
-    months_back: int = Field(
-        default=6,
-        ge=1,
-        validation_alias=AliasChoices("months_back", "full_sync_months_back"),
-        description="Number of months to look back when issuing a synchronisation run.",
-    )
     auto_enabled: bool = Field(
         default=True,
         validation_alias=AliasChoices("auto_enabled", "auto_incremental_enabled"),
