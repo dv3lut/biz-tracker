@@ -28,6 +28,8 @@ type Props = {
   onGoogleSearch: (siret: string) => void;
   onDebugGoogleFindPlace: (siret: string) => void;
   debuggingGoogleFindPlaceSiret: string | null;
+  onDebugAnnuaire: (siret: string) => void;
+  debuggingAnnuaireSiret: string | null;
 };
 
 export const ToolsView = ({
@@ -57,6 +59,8 @@ export const ToolsView = ({
   onGoogleSearch,
   onDebugGoogleFindPlace,
   debuggingGoogleFindPlaceSiret,
+  onDebugAnnuaire,
+  debuggingAnnuaireSiret,
 }: Props) => {
   return (
     <section className="dashboard-section">
@@ -94,6 +98,8 @@ export const ToolsView = ({
           onGoogleSearch={onGoogleSearch}
           onDebugGoogleFindPlace={onDebugGoogleFindPlace}
           debuggingGoogleFindPlaceSiret={debuggingGoogleFindPlaceSiret}
+          onDebugAnnuaire={onDebugAnnuaire}
+          debuggingAnnuaireSiret={debuggingAnnuaireSiret}
         />
       </div>
     </section>

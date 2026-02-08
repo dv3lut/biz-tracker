@@ -1,5 +1,10 @@
 import { request } from "./http";
-import type { SireneNewBusiness, SireneNewBusinessDirector, SireneNewBusinessesResult } from "../types";
+import type {
+  AnnuaireDebugResult,
+  SireneNewBusiness,
+  SireneNewBusinessDirector,
+  SireneNewBusinessesResult,
+} from "../types";
 
 export interface SireneNewBusinessesPayload {
   startDate: string;
@@ -54,6 +59,16 @@ interface SireneNewBusinessesResponse {
   total: number;
   returned: number;
   establishments: SireneNewBusinessResponse[];
+}
+
+interface AnnuaireDebugResponse {
+  siret: string;
+  siren: string;
+  success: boolean;
+  status_code: number | null;
+  duration_ms: number | null;
+  error: string | null;
+  payload: Record<string, unknown> | null;
 }
 
 const mapSireneDirector = (payload: SireneNewBusinessDirectorResponse): SireneNewBusinessDirector => ({
@@ -116,6 +131,21 @@ export const toolsApi = {
       total: response.data.total,
       returned: response.data.returned,
       establishments: response.data.establishments.map(mapSireneNewBusiness),
+    };
+  },
+  fetchAnnuaireDebug: async (siret: string): Promise<AnnuaireDebugResult> => {
+    const response = await request<AnnuaireDebugResponse>(
+      `/admin/tools/annuaire/debug?siret=${encodeURIComponent(siret)}`,
+    );
+
+    return {
+      siret: response.data.siret,
+      siren: response.data.siren,
+      success: response.data.success,
+      statusCode: response.data.status_code,
+      durationMs: response.data.duration_ms,
+      error: response.data.error ?? null,
+      payload: response.data.payload ?? null,
     };
   },
 };

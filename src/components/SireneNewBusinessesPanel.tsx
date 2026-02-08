@@ -33,6 +33,8 @@ type Props = {
   onGoogleSearch: (siret: string) => void;
   onDebugGoogleFindPlace: (siret: string) => void;
   debuggingGoogleFindPlaceSiret: string | null;
+  onDebugAnnuaire: (siret: string) => void;
+  debuggingAnnuaireSiret: string | null;
 };
 
 const buildDisplayName = (item: SireneNewBusiness): string => {
@@ -97,6 +99,8 @@ export const SireneNewBusinessesPanel = ({
   onGoogleSearch,
   onDebugGoogleFindPlace,
   debuggingGoogleFindPlaceSiret,
+  onDebugAnnuaire,
+  debuggingAnnuaireSiret,
 }: Props) => {
   const nafDetailsRef = useRef<HTMLDetailsElement | null>(null);
   const [isNafOpen, setIsNafOpen] = useState(false);
@@ -481,6 +485,16 @@ export const SireneNewBusinessesPanel = ({
                                   {debuggingGoogleFindPlaceSiret === item.siret
                                     ? "Debug…"
                                     : "Debug API Google"}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="ghost"
+                                  onClick={() => onDebugAnnuaire(item.siret)}
+                                  disabled={debuggingAnnuaireSiret === item.siret}
+                                >
+                                  {debuggingAnnuaireSiret === item.siret
+                                    ? "Debug…"
+                                    : "Debug API Annuaire"}
                                 </button>
                               </div>
                             </td>

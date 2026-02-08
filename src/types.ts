@@ -572,6 +572,16 @@ export interface SireneNewBusiness {
   directors: SireneNewBusinessDirector[];
 }
 
+export interface AnnuaireDebugResult {
+  siret: string;
+  siren: string;
+  success: boolean;
+  statusCode: number | null;
+  durationMs: number | null;
+  error: string | null;
+  payload: Record<string, unknown> | null;
+}
+
 export interface SireneNewBusinessesResult {
   total: number;
   returned: number;
