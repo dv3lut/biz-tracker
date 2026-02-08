@@ -196,6 +196,12 @@ class SyncRun(Base):
     google_pending_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     google_immediate_matched_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     google_late_matched_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # LinkedIn enrichment progress
+    linkedin_queue_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    linkedin_searched_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    linkedin_found_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    linkedin_not_found_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    linkedin_error_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     updated_records: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     summary: Mapped[dict[str, object] | None] = mapped_column(JSONB, default=None)
     resumed_from_run_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("sync_runs.id"), nullable=True)

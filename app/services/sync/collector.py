@@ -487,12 +487,35 @@ class SyncCollectorMixin(SyncPersistenceMixin):
             )
             return {}
 
+        # Create progress callback to update run counters
+        def linkedin_progress_callback(
+            total: int,
+            searched: int,
+            found: int,
+            not_found: int,
+            error: int,
+        ) -> None:
+            context.run.linkedin_queue_count = total
+            context.run.linkedin_searched_count = searched
+            context.run.linkedin_found_count = found
+            context.run.linkedin_not_found_count = not_found
+            context.run.linkedin_error_count = error
+            context.session.flush()
+
         try:
             result = linkedin_service.enrich_batch(
                 establishments,
                 run_id=context.run.id,
                 force_refresh=False,
+                progress_callback=linkedin_progress_callback,
             )
+
+            # Final update of run counters
+            context.run.linkedin_queue_count = result.total_directors
+            context.run.linkedin_searched_count = result.searched_count
+            context.run.linkedin_found_count = result.found_count
+            context.run.linkedin_not_found_count = result.not_found_count
+            context.run.linkedin_error_count = result.error_count
 
             summary = {
                 "total_directors": result.total_directors,
@@ -501,6 +524,7 @@ class SyncCollectorMixin(SyncPersistenceMixin):
                 "found_count": result.found_count,
                 "not_found_count": result.not_found_count,
                 "error_count": result.error_count,
+                "skipped_nd_count": result.skipped_nd_count,
                 "api_call_count": result.api_call_count,
             }
 

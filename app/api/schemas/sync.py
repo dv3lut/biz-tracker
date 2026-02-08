@@ -34,6 +34,12 @@ class SyncRunOut(BaseModel):
     google_pending_count: int
     google_immediate_matched_count: int
     google_late_matched_count: int
+    # LinkedIn enrichment progress
+    linkedin_queue_count: int = 0
+    linkedin_searched_count: int = 0
+    linkedin_found_count: int = 0
+    linkedin_not_found_count: int = 0
+    linkedin_error_count: int = 0
     updated_records: int
     summary: dict[str, Any] | None = None
     last_cursor: str | None
@@ -73,6 +79,11 @@ class SyncRunOut(BaseModel):
     @property
     def google_enabled(self) -> bool:
         return self.mode != SyncMode.SIRENE_ONLY
+
+    @computed_field
+    @property
+    def linkedin_enabled(self) -> bool:
+        return self.mode in {SyncMode.FULL, SyncMode.LINKEDIN_PENDING, SyncMode.LINKEDIN_REFRESH}
 
 
 class SyncStateOut(BaseModel):

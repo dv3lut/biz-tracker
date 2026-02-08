@@ -121,11 +121,27 @@ def collect_linkedin_only(
     linkedin_service = LinkedInLookupService(session)
     force_refresh = mode == SyncMode.LINKEDIN_REFRESH
 
+    # Create progress callback to update run counters
+    def linkedin_progress_callback(
+        total: int,
+        searched: int,
+        found: int,
+        not_found: int,
+        error: int,
+    ) -> None:
+        run.linkedin_queue_count = total
+        run.linkedin_searched_count = searched
+        run.linkedin_found_count = found
+        run.linkedin_not_found_count = not_found
+        run.linkedin_error_count = error
+        session.flush()
+
     try:
         enrichment_result = linkedin_service.enrich_batch(
             targets,
             run_id=run.id,
             force_refresh=force_refresh,
+            progress_callback=linkedin_progress_callback,
         )
 
         linkedin_searched_count = enrichment_result.searched_count
@@ -133,6 +149,13 @@ def collect_linkedin_only(
         linkedin_not_found_count = enrichment_result.not_found_count
         linkedin_error_count = enrichment_result.error_count
         linkedin_api_call_count = enrichment_result.api_call_count
+
+        # Final update of run counters
+        run.linkedin_queue_count = enrichment_result.total_directors
+        run.linkedin_searched_count = linkedin_searched_count
+        run.linkedin_found_count = linkedin_found_count
+        run.linkedin_not_found_count = linkedin_not_found_count
+        run.linkedin_error_count = linkedin_error_count
 
         session.commit()
 

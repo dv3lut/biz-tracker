@@ -85,7 +85,7 @@ def check_director_linkedin(
             message="Données insuffisantes pour la recherche (nom ou prénom manquant)",
         )
 
-    client = ApifyClient(settings.apify)
+    client = ApifyClient()
     search_input = LinkedInSearchInput(
         first_name=first_name,
         last_name=last_name,
