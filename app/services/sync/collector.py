@@ -26,6 +26,7 @@ from .pages import collect_pages
 from .persistence import SyncPersistenceMixin
 from .utils import append_run_note, format_target_naf_note, tag_google_error_rate
 from .annuaire_enrichment import enrich_establishments_from_annuaire
+from .linkedin_only import collect_linkedin_only, load_linkedin_resync_targets
 
 
 class SyncCollectorMixin(SyncPersistenceMixin):
@@ -63,6 +64,8 @@ class SyncCollectorMixin(SyncPersistenceMixin):
             )
 
         if not context.mode.requires_sirene_fetch:
+            if context.mode.is_linkedin_only:
+                return self._collect_linkedin_only(context)
             return self._collect_google_only(context)
 
         state = context.state
@@ -314,6 +317,12 @@ class SyncCollectorMixin(SyncPersistenceMixin):
             context.run.google_late_matched_count = 0
             alerts_payload = []
 
+        # --- LinkedIn enrichment (for physical person directors) ---
+        linkedin_summary = self._run_linkedin_enrichment(
+            context,
+            new_entities_total,
+        )
+
         context.session.commit()
 
         alerts_payload = self._log_alerts_created(context.run, alerts_created)
@@ -434,6 +443,79 @@ class SyncCollectorMixin(SyncPersistenceMixin):
             )
         return alerts_payload
 
+    def _run_linkedin_enrichment(
+        self,
+        context: SyncContext,
+        establishments: Sequence[models.Establishment],
+    ) -> dict[str, object]:
+        """Run LinkedIn enrichment for directors of new establishments.
+
+        Args:
+            context: Sync context.
+            establishments: Establishments to enrich (typically new ones).
+
+        Returns:
+            Summary dict with enrichment statistics.
+        """
+        from app.services.linkedin import LinkedInLookupService
+
+        if not context.mode.linkedin_enabled:
+            log_event(
+                "sync.linkedin.skipped",
+                run_id=str(context.run.id),
+                scope_key=context.run.scope_key,
+                reason="mode_linkedin_disabled",
+            )
+            return {}
+
+        if not establishments:
+            log_event(
+                "sync.linkedin.skipped",
+                run_id=str(context.run.id),
+                scope_key=context.run.scope_key,
+                reason="no_establishments",
+            )
+            return {}
+
+        linkedin_service = LinkedInLookupService(context.session)
+        if not linkedin_service.enabled:
+            log_event(
+                "sync.linkedin.skipped",
+                run_id=str(context.run.id),
+                scope_key=context.run.scope_key,
+                reason="apify_not_configured",
+            )
+            return {}
+
+        try:
+            result = linkedin_service.enrich_batch(
+                establishments,
+                run_id=context.run.id,
+                force_refresh=False,
+            )
+
+            summary = {
+                "total_directors": result.total_directors,
+                "eligible_directors": result.eligible_directors,
+                "searched_count": result.searched_count,
+                "found_count": result.found_count,
+                "not_found_count": result.not_found_count,
+                "error_count": result.error_count,
+                "api_call_count": result.api_call_count,
+            }
+
+            log_event(
+                "sync.linkedin.summary",
+                run_id=str(context.run.id),
+                scope_key=context.run.scope_key,
+                **summary,
+            )
+
+            return summary
+
+        finally:
+            linkedin_service.close()
+
     def _compute_since_creation(self, state: models.SyncState, *, months_back: int) -> date:
         baseline = subtract_months(self._current_date(), months_back)
         last_creation = state.last_creation_date
@@ -488,6 +570,31 @@ class SyncCollectorMixin(SyncPersistenceMixin):
             run.notes = f"{run.notes + ' | ' if run.notes else ''}{note_prefix}: {target_count}"
 
         return collect_google_only(
+            context=context,
+            targets=targets,
+            log_alerts=self._log_alerts_created,
+        )
+
+    def _collect_linkedin_only(self, context: SyncContext) -> SyncResult:
+        """Collect LinkedIn profiles for directors (LinkedIn-only mode)."""
+        run = context.run
+        mode = context.mode
+        if context.target_naf_codes:
+            append_run_note(run, format_target_naf_note(context.target_naf_codes))
+            log_event(
+                "sync.collection.naf_filter_applied",
+                run_id=str(run.id),
+                scope_key=run.scope_key,
+                target_naf_codes=context.target_naf_codes,
+            )
+
+        targets = load_linkedin_resync_targets(context.session, mode, context.target_naf_codes)
+        target_count = len(targets)
+        note_prefix = "linkedin_refresh_targets" if mode == SyncMode.LINKEDIN_REFRESH else "linkedin_pending_targets"
+        if target_count:
+            run.notes = f"{run.notes + ' | ' if run.notes else ''}{note_prefix}: {target_count}"
+
+        return collect_linkedin_only(
             context=context,
             targets=targets,
             log_alerts=self._log_alerts_created,

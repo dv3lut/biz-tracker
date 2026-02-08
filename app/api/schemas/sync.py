@@ -146,9 +146,11 @@ class SyncRequest(BaseModel):
     mode: SyncMode = Field(
         default=SyncMode.FULL,
         description=(
-            "Mode d'exécution: 'full' exécute l'enrichissement Google, 'sirene_only' le désactive, "
-            "'google_pending' relance uniquement les établissements jamais enrichis et déclenche les alertes, "
+            "Mode d'exécution: 'full' exécute l'enrichissement Google et LinkedIn, 'sirene_only' le désactive, "
+            "'google_pending' relance uniquement les établissements jamais enrichis par Google et déclenche les alertes, "
             "'google_refresh' relance une détection Google sur tous les établissements (sans alertes), "
+            "'linkedin_pending' relance uniquement les dirigeants jamais enrichis par LinkedIn, "
+            "'linkedin_refresh' relance une détection LinkedIn sur tous les dirigeants, "
             "'day_replay' rejoue une journée complète en limitant les alertes aux administrateurs."
         ),
     )

@@ -11,6 +11,7 @@ from . import (
     email_router,
     establishments_router,
     google_router,
+    linkedin_router,
     naf_categories_router,
     regions_router,
     stats_router,
@@ -24,6 +25,7 @@ router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(requir
 for subrouter in (
     stats_router.router,
     google_router.router,
+    linkedin_router.router,
     alerts_router.router,
     establishments_router.router,
     naf_categories_router.router,

@@ -11,6 +11,65 @@ from app.utils.google_listing import LISTING_AGE_STATUS_LABELS, normalize_listin
 from .formatter import EstablishmentFormatter
 
 
+def _get_linkedin_title_for_director(director: models.Director) -> str:
+    """Get the title/poste to display for LinkedIn button.
+
+    Priority: profileData.title > director.quality > "Dirigeant"
+    """
+    if director.linkedin_profile_data:
+        title = director.linkedin_profile_data.get("title")
+        if title and isinstance(title, str) and title.strip():
+            return title.strip()
+    if director.quality and director.quality.strip():
+        return director.quality.strip()
+    return "Dirigeant"
+
+
+def _build_linkedin_buttons_html(
+    establishment: models.Establishment,
+    theme: dict[str, str],
+) -> tuple[list[str], str]:
+    """Build LinkedIn button(s) for directors with profiles.
+
+    Returns:
+        Tuple of (text_lines, html_block) for the LinkedIn section.
+    """
+    text_lines: list[str] = []
+    html_parts: list[str] = []
+
+    directors = getattr(establishment, "directors", None) or []
+    directors_with_linkedin = [
+        d for d in directors
+        if getattr(d, "is_physical_person", False) and getattr(d, "linkedin_profile_url", None)
+    ]
+
+    if not directors_with_linkedin:
+        return text_lines, ""
+
+    for director in directors_with_linkedin:
+        title = _get_linkedin_title_for_director(director)
+        url = director.linkedin_profile_url
+        button_text = f"Contacter le {title} sur LinkedIn"
+
+        text_lines.append(f"  LinkedIn : {url}")
+
+        html_parts.append(
+            f"<a href=\"{escape(url)}\" style=\"display:inline-block;margin-right:8px;margin-top:4px;"
+            f"padding:6px 12px;background:#0077B5;color:#ffffff;text-decoration:none;"
+            f"border-radius:6px;font-weight:600;font-size:12px;\">{escape(button_text)}</a>"
+        )
+
+    if html_parts:
+        html_block = (
+            f"<div style=\"margin-top:10px;display:flex;flex-wrap:wrap;gap:4px;\">"
+            + "".join(html_parts)
+            + "</div>"
+        )
+        return text_lines, html_block
+
+    return text_lines, ""
+
+
 STATUS_SECTION_ORDER: Final[tuple[str, ...]] = (
     "recent_creation",
     "recent_creation_missing_contact",
@@ -250,6 +309,14 @@ def render_client_email(
             client_label = CLIENT_STATUS_LABELS.get(normalized_status, status_label)
             badge = _get_status_badge_html(normalized_status, client_label)
             item_html_parts.append(f"<div style=\"margin-top:10px;\">Statut : {badge}</div>")
+
+        # Add LinkedIn buttons for directors with profiles
+        linkedin_text_lines, linkedin_html = _build_linkedin_buttons_html(establishment, theme)
+        if linkedin_text_lines:
+            item_lines.extend(linkedin_text_lines)
+        if linkedin_html:
+            item_html_parts.append(linkedin_html)
+
         item_html = (
             f"<li style=\"margin-bottom:20px;padding:14px;background:{item_bg};border-radius:8px;"
             f"border-left:4px solid {border_color};\">"

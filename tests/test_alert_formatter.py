@@ -152,6 +152,38 @@ def test_resolve_client_category_labels_respects_client_categories():
     assert subcategories == ["Restauration rapide"]
 
 
+def test_resolve_client_category_labels_skips_inactive_subcategory():
+    formatter = EstablishmentFormatter(_make_session([]))
+    subcategory = SimpleNamespace(
+        name="Inactive",
+        naf_code="56.10A",
+        is_active=False,
+        categories=[SimpleNamespace(name="Cat")],
+    )
+    client = SimpleNamespace(subscriptions=[SimpleNamespace(subcategory=subcategory)])
+
+    categories, subcategories = formatter.resolve_client_category_labels(client, "56.10A")
+
+    assert categories == []
+    assert subcategories == []
+
+
+def test_resolve_client_category_labels_skips_mismatched_naf():
+    formatter = EstablishmentFormatter(_make_session([]))
+    subcategory = SimpleNamespace(
+        name="Mismatch",
+        naf_code="47.11A",
+        is_active=True,
+        categories=[SimpleNamespace(name="Cat")],
+    )
+    client = SimpleNamespace(subscriptions=[SimpleNamespace(subcategory=subcategory)])
+
+    categories, subcategories = formatter.resolve_client_category_labels(client, "56.10A")
+
+    assert categories == []
+    assert subcategories == []
+
+
 def test_format_lines_includes_google_details():
     session = _make_session([])
     formatter = EstablishmentFormatter(session)
@@ -183,6 +215,56 @@ def test_format_address_lines_handles_missing_segments():
 
     assert street is None
     assert commune == "75000 Paris"
+
+
+def test_format_full_address_returns_none_when_empty():
+    session = _make_session([])
+    formatter = EstablishmentFormatter(session)
+    establishment = _make_establishment(
+        numero_voie=None,
+        type_voie=None,
+        libelle_voie=None,
+        code_postal=None,
+        libelle_commune=None,
+        libelle_commune_etranger=None,
+    )
+
+    assert formatter.format_full_address(establishment) is None
+
+
+def test_format_subcategory_label_with_subcategory_only():
+    session = _make_session([("56.10A", "SubName", None)])
+    formatter = EstablishmentFormatter(session)
+
+    label = formatter.format_subcategory_label("56.10A")
+
+    assert label == "SubName"
+
+
+def test_resolve_category_and_subcategory_returns_none_when_missing():
+    formatter = EstablishmentFormatter(_make_session([]))
+
+    category, subcategory = formatter.resolve_category_and_subcategory(None)
+
+    assert category is None
+    assert subcategory is None
+
+
+def test_get_subcategory_lookup_skips_missing_codes():
+    session = _make_session([(None, "Sub", "Cat"), ("56.10A", "Sub", "Cat")])
+    formatter = EstablishmentFormatter(session)
+
+    label = formatter.format_subcategory_label("56.10A")
+
+    assert label == "Sub (Cat)"
+
+
+def test_format_subcategory_label_returns_none_for_blank_code():
+    formatter = EstablishmentFormatter(_make_session([]))
+
+    label = formatter.format_subcategory_label("   ")
+
+    assert label is None
 
 
 def test_get_siret_display_handles_missing_value():

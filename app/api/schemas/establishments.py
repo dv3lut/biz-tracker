@@ -20,6 +20,11 @@ class DirectorOut(BaseModel):
     siren: str | None
     denomination: str | None
     nationality: str | None
+    # LinkedIn fields
+    linkedin_profile_url: str | None = None
+    linkedin_profile_data: dict | None = None
+    linkedin_last_checked_at: datetime | None = None
+    linkedin_check_status: str = "pending"
 
 
 class EstablishmentOut(BaseModel):

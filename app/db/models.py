@@ -142,7 +142,33 @@ class Director(Base):
     nationality: Mapped[str | None] = mapped_column(String(128))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
 
+    # LinkedIn enrichment fields
+    linkedin_profile_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    linkedin_profile_data: Mapped[dict[str, object] | None] = mapped_column(JSONB, default=None, nullable=True)
+    linkedin_last_checked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    linkedin_check_status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False)
+
     establishment: Mapped[Establishment] = relationship("Establishment", back_populates="directors")
+
+    @property
+    def is_physical_person(self) -> bool:
+        """Return True when this director is a physical person (personne physique)."""
+        return self.type_dirigeant == "personne physique"
+
+    @property
+    def first_name_for_search(self) -> str | None:
+        """Return the first name only (for LinkedIn search)."""
+        if not self.first_names:
+            return None
+        parts = self.first_names.strip().split()
+        return parts[0] if parts else None
+
+    @property
+    def linkedin_title(self) -> str | None:
+        """Return the LinkedIn profile title if available."""
+        if not self.linkedin_profile_data:
+            return None
+        return self.linkedin_profile_data.get("title")
 
 
 class SyncRun(Base):

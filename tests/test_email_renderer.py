@@ -105,6 +105,19 @@ class EmailRendererTests(unittest.TestCase):
         self.assertNotIn("origine", text_body)
         self.assertNotIn("origine", html_body)
 
+    def test_admin_email_handles_missing_google_link(self) -> None:
+        establishment = self._make_establishment(
+            name="Sans Google",
+            status="recent_creation",
+            google_url=None,
+        )
+        establishment.google_place_id = None
+
+        _, html_body = render_admin_email(self.formatter, [establishment])
+
+        self.assertIn("Lien indisponible", html_body)
+        self.assertIn("Statut", html_body)
+
     def test_client_email_summary_with_filters_and_missing_links(self) -> None:
         establishment = self._make_establishment(name="Sans URL", status="recent_creation_missing_contact", google_url=None)
         filters = ClientFilterSummary(listing_statuses=["recent_creation"], naf_codes=["5610A"])
@@ -124,6 +137,83 @@ class EmailRendererTests(unittest.TestCase):
         self.assertNotIn("<h3", html_body)
         self.assertNotIn("5610A", text_body)
         self.assertNotIn("Statuts Google surveillés", html_body)
+
+    def test_client_email_handles_empty_listing_statuses_filter(self) -> None:
+        establishment = self._make_establishment(
+            name="Sans filtre",
+            status="recent_creation",
+            google_url="https://maps.google.com/?cid=5",
+        )
+        filters = ClientFilterSummary(listing_statuses=[], naf_codes=[])
+
+        text_body, html_body = render_client_email(
+            self.formatter,
+            [establishment],
+            client=self._make_client(),
+            filters=filters,
+        )
+
+        self.assertIn("Création récente", text_body)
+        self.assertIn("Statut :", html_body)
+
+    def test_client_email_includes_linkedin_buttons(self) -> None:
+        establishment = self._make_establishment(
+            name="LinkedIn Bistro",
+            status="recent_creation",
+            google_url="https://maps.google.com/?cid=7",
+        )
+        establishment.directors = [
+            SimpleNamespace(
+                is_physical_person=True,
+                linkedin_profile_url="https://linkedin.com/in/jane",
+                linkedin_profile_data={"title": "CEO"},
+                quality=None,
+            )
+        ]
+
+        text_body, html_body = render_client_email(
+            self.formatter,
+            [establishment],
+            client=self._make_client(),
+        )
+
+        self.assertIn("LinkedIn : https://linkedin.com/in/jane", text_body)
+        self.assertIn("Contacter le CEO sur LinkedIn", html_body)
+
+    def test_client_email_fallbacks_when_filter_has_unknown_status(self) -> None:
+        establishment = self._make_establishment(
+            name="Filtre inconnu",
+            status="recent_creation",
+            google_url="https://maps.google.com/?cid=8",
+        )
+        filters = ClientFilterSummary(listing_statuses=["unknown_status"], naf_codes=[])
+
+        text_body, html_body = render_client_email(
+            self.formatter,
+            [establishment],
+            client=self._make_client(),
+            filters=filters,
+        )
+
+        self.assertIn("Création récente", text_body)
+        self.assertIn("Statut :", html_body)
+
+    def test_client_email_use_subcategory_label_without_label(self) -> None:
+        establishment = self._make_establishment(
+            name="Sans catégorie",
+            status="recent_creation",
+            google_url="https://maps.google.com/?cid=9",
+        )
+        establishment.naf_code = None
+        establishment.naf_libelle = None
+
+        text_body, _ = render_client_email(
+            self.formatter,
+            [establishment],
+            client=self._make_client(use_subcategory_label=True),
+        )
+
+        self.assertIn("- Sans catégorie", text_body)
 
     def test_client_email_zero_matches_prompts_future_notification(self) -> None:
         text_body, html_body = render_client_email(self.formatter, [], client=self._make_client())
