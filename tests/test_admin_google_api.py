@@ -88,6 +88,8 @@ class ManualGoogleCheckRouteTests(TestCase):
         establishment.google_contact_phone = None
         establishment.google_contact_email = None
         establishment.google_contact_website = None
+        establishment.legal_unit_name = None
+        establishment.directors = []
         
         session = MagicMock()
         session.get.return_value = establishment

@@ -43,7 +43,7 @@ Ce document décrit **comment tester de bout en bout** l’essai gratuit, le pas
 
 1. Landing → Section “Tarifs”.
 2. Choisir “Starter” ou “Business”.
-3. Sélectionner 1 ou 3 catégories.
+3. Sélectionner 1 ou 5 catégories.
 4. Remplir email + nom + entreprise.
 5. Checkout Stripe → utiliser une carte de test (ex: 4242 4242 4242 4242).
 

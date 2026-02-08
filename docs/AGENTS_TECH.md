@@ -9,7 +9,7 @@
   - Les objets sont créés via `app/db/models.py`; exécution des migrations simplifiée via `Base.metadata.create_all`.
 - **Transformation** : `app/services/establishment_mapper.extract_fields` applique les règles métiers (fallbacks de nom, parsing dates/ISO).
 - **Synchronisation** : `SyncService`
-  - Collecte unifiée utilisant le curseur Sirene (`nombre=1000`) et limitée aux établissements créés dans les `sync.months_back` derniers mois, bornée par `SyncState.last_creation_date` (chevauchement configurable via `sync.creation_overlap_days`, tri `dateCreationEtablissement desc`).
+  - Collecte unifiée utilisant le curseur Sirene (`nombre=1000`), avec une fenêtre de création configurable par run via le paramètre `months_back` (nombre de mois dans le passé). Si non fourni, la synchro est incrémentale (basée sur `SyncState.last_creation_date` + chevauchement `sync.creation_overlap_days`, tri `dateCreationEtablissement desc`).
   - Déclenchements API exécutés en tâche de fond (FastAPI `BackgroundTasks`) avec un statut `pending` renvoyé immédiatement au front.
   - Possibilité de vérifier le `service informations` avant de lancer (`check_for_updates`) afin d’éviter un run s’il n’y a pas de nouveautés.
   - Scheduler interne (`SyncScheduler`) démarré avec l’API : scrute périodiquement les mises à jour (`sync.auto_poll_minutes`) et respecte un délai minimum `sync.minimum_delay_minutes` avant de relancer.

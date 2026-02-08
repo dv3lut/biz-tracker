@@ -16,6 +16,9 @@ class _FakeQuery:
         self.filters.extend(criteria)
         return self
 
+    def options(self, *args, **kwargs):
+        return self
+
     def order_by(self, *args, **kwargs):
         self._ordered = True
         return self

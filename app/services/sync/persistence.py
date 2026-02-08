@@ -100,9 +100,15 @@ class SyncPersistenceMixin:
         session: Session,
         etablissements: Sequence[dict[str, object]],
         run_id: UUID,
-    ) -> tuple[list[models.Establishment], list[UpdatedEstablishmentInfo]]:
+    ) -> tuple[
+        list[models.Establishment],
+        list[UpdatedEstablishmentInfo],
+        list[models.Establishment],
+    ]:
         new_entities: list[models.Establishment] = []
         updated_entities: list[UpdatedEstablishmentInfo] = []
+        annuaire_candidates: list[models.Establishment] = []
+        annuaire_candidate_sirets: set[str] = set()
         now = utcnow()
         for payload in etablissements:
             fields = extract_fields(payload)
@@ -126,6 +132,9 @@ class SyncPersistenceMixin:
                 entity.last_run_id = run_id
                 if changed_fields:
                     updated_entities.append(UpdatedEstablishmentInfo(entity, changed_fields))
+                elif self._needs_annuaire_enrichment(session, entity) and siret not in annuaire_candidate_sirets:
+                    annuaire_candidates.append(entity)
+                    annuaire_candidate_sirets.add(siret)
             else:
                 fields["created_run_id"] = run_id
                 fields["last_run_id"] = run_id
@@ -135,4 +144,22 @@ class SyncPersistenceMixin:
                 session.add(entity)
                 new_entities.append(entity)
         session.flush()
-        return new_entities, updated_entities
+        return new_entities, updated_entities, annuaire_candidates
+
+    def _needs_annuaire_enrichment(
+        self,
+        session: Session,
+        establishment: models.Establishment,
+    ) -> bool:
+        if establishment.legal_unit_name is None:
+            return True
+        director_id = (
+            session.execute(
+                select(models.Director.id)
+                .where(models.Director.establishment_siret == establishment.siret)
+                .limit(1)
+            )
+            .scalars()
+            .first()
+        )
+        return director_id is None

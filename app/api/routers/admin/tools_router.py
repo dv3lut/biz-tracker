@@ -1,9 +1,11 @@
 """Admin endpoints for development tools."""
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 
 from app.api.schemas import SireneNewBusinessesRequest, SireneNewBusinessesResponse, SireneNewBusinessOut
+from app.api.schemas.tools import AnnuaireDebugResponse, SireneNewBusinessDirectorOut
+from app.clients.annuaire_entreprises_client import AnnuaireEntreprisesClient
 from app.clients.sirene_client import SireneClient
 from app.observability import log_event
 from app.services.establishment_mapper import extract_fields
@@ -119,6 +121,10 @@ def fetch_sirene_new_establishments(payload: SireneNewBusinessesRequest) -> Sire
     if total == 0 and returned > 0:
         total = returned
 
+    # Optionally enrich with annuaire data (directors + legal unit name)
+    if payload.enrich_annuaire and establishments:
+        _enrich_tools_results_from_annuaire(establishments)
+
     log_event(
         "tools.sirene.new_businesses",
         start_date=payload.start_date.isoformat(),
@@ -129,6 +135,7 @@ def fetch_sirene_new_establishments(payload: SireneNewBusinessesRequest) -> Sire
         total=total,
         returned=returned,
         limit=payload.limit,
+        enrich_annuaire=payload.enrich_annuaire,
     )
 
     return SireneNewBusinessesResponse(
@@ -136,6 +143,83 @@ def fetch_sirene_new_establishments(payload: SireneNewBusinessesRequest) -> Sire
         returned=returned,
         establishments=establishments,
     )
+
+
+@router.get(
+    "/tools/annuaire/debug",
+    response_model=AnnuaireDebugResponse,
+    summary="Debug annuaire (dirigeants + unité légale) via SIRET/SIREN",
+)
+def debug_annuaire_api(
+    siret: str = Query(..., min_length=9, max_length=14, description="SIRET (14) ou SIREN (9)"),
+) -> AnnuaireDebugResponse:
+    normalized = siret.replace(" ", "")
+    siren = normalized[:9]
+    client = AnnuaireEntreprisesClient()
+    try:
+        if not client.enabled:
+            return AnnuaireDebugResponse(
+                siret=normalized,
+                siren=siren,
+                success=False,
+                status_code=None,
+                error="annuaire disabled",
+                payload=None,
+            )
+        result = client.fetch_debug(siren)
+        result["siret"] = normalized
+        result["siren"] = siren
+        log_event(
+            "tools.annuaire.debug",
+            siret=normalized,
+            siren=siren,
+            success=result.get("success"),
+            status_code=result.get("status_code"),
+        )
+        return AnnuaireDebugResponse(**result)
+    finally:
+        client.close()
+
+
+def _enrich_tools_results_from_annuaire(
+    establishments: list[SireneNewBusinessOut],
+) -> None:
+    """Enrich tools results with directors & legal unit name from the annuaire API."""
+    siren_map: dict[str, list[SireneNewBusinessOut]] = {}
+    for est in establishments:
+        if est.siren:
+            siren_map.setdefault(est.siren, []).append(est)
+
+    if not siren_map:
+        return
+
+    client = AnnuaireEntreprisesClient()
+    try:
+        if not client.enabled:
+            return
+        results = client.fetch_batch(list(siren_map.keys()))
+        for siren, annuaire_result in results.items():
+            if not annuaire_result.success:
+                continue
+            for est in siren_map.get(siren, []):
+                if annuaire_result.legal_unit_name:
+                    est.legal_unit_name = annuaire_result.legal_unit_name
+                est.directors = [
+                    SireneNewBusinessDirectorOut(
+                        type_dirigeant=d.type_dirigeant,
+                        first_names=d.first_names,
+                        last_name=d.last_name,
+                        quality=d.quality,
+                        birth_month=d.birth_month,
+                        birth_year=d.birth_year,
+                        siren=d.siren,
+                        denomination=d.denomination,
+                        nationality=d.nationality,
+                    )
+                    for d in annuaire_result.directors
+                ]
+    finally:
+        client.close()
 
 
 __all__ = ["router"]

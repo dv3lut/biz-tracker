@@ -114,19 +114,6 @@ class SyncRequestSchemaTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             SyncRequest(mode=SyncMode.FULL, reset_google_state=True)
 
-    def test_initial_backfill_requires_naf_codes(self) -> None:
-        with self.assertRaises(ValidationError):
-            SyncRequest(mode=SyncMode.FULL, initial_backfill=True)
-
-    def test_initial_backfill_forbidden_for_google_only_modes(self) -> None:
-        with self.assertRaises(ValidationError):
-            SyncRequest(mode=SyncMode.GOOGLE_REFRESH, naf_codes=["5610A"], initial_backfill=True)
-
-    def test_initial_backfill_allowed_for_full_mode_with_naf_codes(self) -> None:
-        payload = SyncRequest(mode=SyncMode.FULL, naf_codes=["5610A"], initial_backfill=True)
-        self.assertTrue(payload.initial_backfill)
-        self.assertEqual(payload.naf_codes, ["56.10A"])
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -41,7 +41,7 @@ from app.services.stripe.stripe_upgrade_tokens import build_upgrade_url, parse_u
 
 PLAN_CATEGORY_LIMITS: dict[StripePlanKey, int] = {
     "starter": 1,
-    "business": 3,
+    "business": 5,
 }
 PLAN_RANKS: dict[StripePlanKey, int] = {
     "starter": 0,

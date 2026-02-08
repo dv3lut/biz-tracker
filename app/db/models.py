@@ -102,13 +102,47 @@ class Establishment(Base):
     google_contact_email: Mapped[str | None] = mapped_column(String(255))
     google_contact_website: Mapped[str | None] = mapped_column(String(512))
 
+    legal_unit_name: Mapped[str | None] = mapped_column(String(512))
+
     alerts: Mapped[list["Alert"]] = relationship("Alert", back_populates="establishment")
+    directors: Mapped[list["Director"]] = relationship(
+        "Director",
+        back_populates="establishment",
+        cascade="all, delete-orphan",
+        order_by="Director.created_at",
+    )
 
     @property
     def is_sole_proprietorship(self) -> bool:
         """Return True when the establishment is classified as an entreprise individuelle."""
 
         return is_individual_company(self.categorie_juridique)
+
+
+class Director(Base):
+    """Director (dirigeant) associated with an establishment."""
+
+    __tablename__ = "directors"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    establishment_siret: Mapped[str] = mapped_column(
+        String(14),
+        ForeignKey("establishments.siret", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    type_dirigeant: Mapped[str] = mapped_column(String(32), nullable=False)
+    first_names: Mapped[str | None] = mapped_column(String(512))
+    last_name: Mapped[str | None] = mapped_column(String(255))
+    quality: Mapped[str | None] = mapped_column(String(255))
+    birth_month: Mapped[int | None] = mapped_column(Integer)
+    birth_year: Mapped[int | None] = mapped_column(Integer)
+    siren: Mapped[str | None] = mapped_column(String(9))
+    denomination: Mapped[str | None] = mapped_column(String(512))
+    nationality: Mapped[str | None] = mapped_column(String(128))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+
+    establishment: Mapped[Establishment] = relationship("Establishment", back_populates="directors")
 
 
 class SyncRun(Base):
@@ -144,12 +178,12 @@ class SyncRun(Base):
     reset_state: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     truncate_before_run: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     target_naf_codes: Mapped[list[str] | None] = mapped_column(JSONB, default=None)
-    initial_backfill: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     target_client_ids: Mapped[list[str] | None] = mapped_column(JSONB, default=None)
     notify_admins: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     google_reset_state: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     day_replay_force_google: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     day_replay_reference: Mapped[str] = mapped_column(String(32), default="creation_date", nullable=False)
+    months_back: Mapped[int | None] = mapped_column(Integer, default=None, nullable=True)
 
     previous_run: Mapped[SyncRun | None] = relationship(remote_side=[id], backref="resumed_runs")
     alerts: Mapped[list["Alert"]] = relationship("Alert", back_populates="run")

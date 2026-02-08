@@ -7,6 +7,21 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict
 
 
+class DirectorOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    type_dirigeant: str
+    first_names: str | None
+    last_name: str | None
+    quality: str | None
+    birth_month: int | None
+    birth_year: int | None
+    siren: str | None
+    denomination: str | None
+    nationality: str | None
+
+
 class EstablishmentOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -39,6 +54,8 @@ class EstablishmentOut(BaseModel):
     google_contact_email: str | None
     google_contact_website: str | None
     is_sole_proprietorship: bool
+    legal_unit_name: str | None = None
+    directors: list[DirectorOut] = []
 
 
 class EstablishmentDetailOut(EstablishmentOut):
@@ -78,4 +95,4 @@ class EstablishmentDetailOut(EstablishmentOut):
     libelle_pays: str | None
 
 
-__all__ = ["EstablishmentDetailOut", "EstablishmentOut"]
+__all__ = ["DirectorOut", "EstablishmentDetailOut", "EstablishmentOut"]

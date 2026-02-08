@@ -25,6 +25,7 @@ from .context import SyncContext, SyncResult, UpdatedEstablishmentInfo
 from .pages import collect_pages
 from .persistence import SyncPersistenceMixin
 from .utils import append_run_note, format_target_naf_note, tag_google_error_rate
+from .annuaire_enrichment import enrich_establishments_from_annuaire
 
 
 class SyncCollectorMixin(SyncPersistenceMixin):
@@ -67,16 +68,19 @@ class SyncCollectorMixin(SyncPersistenceMixin):
         state = context.state
         should_persist_state = context.persist_state
         replay_for_date = context.replay_for_date
-        months_back = max(self._settings.sync.months_back, 1)
+        # months_back: provient du contexte (fourni par l'utilisateur) ou None pour synchro incrémentale
+        months_back = context.months_back
         creation_range: tuple[date, date] | None = None
         if replay_for_date:
             creation_range = (replay_for_date, replay_for_date)
         since_creation: date | None = None
         if creation_range is None:
-            if context.initial_backfill:
+            if months_back:
+                # Synchro avec mois dans le passé explicites
                 since_creation = subtract_months(self._current_date(), months_back)
             else:
-                since_creation = self._compute_since_creation(state, months_back=months_back)
+                # Synchro incrémentale standard: utilise le checkpoint existant
+                since_creation = self._compute_since_creation_incremental(state)
         if context.target_naf_codes:
             naf_codes = context.target_naf_codes
             append_run_note(context.run, format_target_naf_note(context.target_naf_codes))
@@ -136,7 +140,7 @@ class SyncCollectorMixin(SyncPersistenceMixin):
             champs=champs,
             cursor_value=cursor_value,
             tri=tri,
-            months_back=months_back,
+            months_back=months_back or 0,
             since_creation=effective_since,
             creation_range=creation_range,
             persist_state=should_persist_state,
@@ -145,6 +149,25 @@ class SyncCollectorMixin(SyncPersistenceMixin):
         new_entities_payload = page_result.new_payloads
         updated_entities = page_result.updated_entities
         updated_payloads = page_result.updated_payloads
+        annuaire_candidates = page_result.annuaire_candidates
+
+        # --- Annuaire enrichment (director & legal unit name) ---
+        annuaire_targets = (
+            list(new_entities_total)
+            + [info.establishment for info in updated_entities]
+            + list(annuaire_candidates)
+        )
+        unique_targets: dict[str, models.Establishment] = {}
+        for establishment in annuaire_targets:
+            if establishment.siret:
+                unique_targets[establishment.siret] = establishment
+        all_touched = list(unique_targets.values())
+        annuaire_summary = enrich_establishments_from_annuaire(
+            context.session,
+            all_touched,
+            run_id=str(context.run.id),
+        )
+
         google_immediate_matches: list[models.Establishment] = []
         google_late_matches: list[models.Establishment] = []
         google_matches_payload: list[dict[str, object]] = []
@@ -165,7 +188,9 @@ class SyncCollectorMixin(SyncPersistenceMixin):
         )
 
         if context.mode.google_enabled:
-            alerts_enabled = context.mode.dispatch_alerts and not context.initial_backfill
+            # Désactiver les alertes si months_back est fourni (rattrapage historique)
+            is_backfill = context.months_back is not None
+            alerts_enabled = context.mode.dispatch_alerts and not is_backfill
             alert_service = (
                 AlertService(
                     context.session,
@@ -422,6 +447,23 @@ class SyncCollectorMixin(SyncPersistenceMixin):
             candidate = today
         if candidate < baseline:
             candidate = baseline
+        return candidate
+
+    def _compute_since_creation_incremental(self, state: models.SyncState) -> date:
+        """Compute since_creation for incremental sync (no months_back).
+
+        Returns the last known creation date with overlap, or today if no checkpoint exists.
+        """
+        last_creation = state.last_creation_date
+        if not last_creation:
+            # Première synchro incrémentale : on prend le jour courant
+            return self._current_date()
+
+        overlap_days = max(self._settings.sync.creation_overlap_days, 0)
+        candidate = last_creation - timedelta(days=overlap_days)
+        today = self._current_date()
+        if candidate > today:
+            candidate = today
         return candidate
 
     def _current_date(self) -> date:
