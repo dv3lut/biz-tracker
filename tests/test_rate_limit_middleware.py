@@ -97,3 +97,34 @@ def test_rate_limit_skips_docs_and_openapi_paths() -> None:
         asyncio.run(middleware.dispatch(request, _ok_call_next))
         asyncio.run(middleware.dispatch(request, _ok_call_next))
         asyncio.run(middleware.dispatch(request, _ok_call_next))
+
+
+def test_rate_limit_skips_root_and_health_paths() -> None:
+    public_policy = RateLimitPolicy(max_per_second=1, max_per_minute=1)
+    default_policy = RateLimitPolicy(max_per_second=1, max_per_minute=1)
+
+    middleware = RateLimitMiddleware(
+        app=_dummy_app,
+        public_policy=public_policy,
+        default_policy=default_policy,
+    )
+
+    for path in ("/", "/health", "/health/live", "/health/ready"):
+        request = _make_request(path)
+        asyncio.run(middleware.dispatch(request, _ok_call_next))
+        asyncio.run(middleware.dispatch(request, _ok_call_next))
+
+
+def test_rate_limit_skips_public_stripe_webhook() -> None:
+    public_policy = RateLimitPolicy(max_per_second=1, max_per_minute=1)
+    default_policy = RateLimitPolicy(max_per_second=1, max_per_minute=1)
+
+    middleware = RateLimitMiddleware(
+        app=_dummy_app,
+        public_policy=public_policy,
+        default_policy=default_policy,
+    )
+
+    request = _make_request("/public/stripe/webhook")
+    asyncio.run(middleware.dispatch(request, _ok_call_next))
+    asyncio.run(middleware.dispatch(request, _ok_call_next))

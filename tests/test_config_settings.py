@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+from typing import Annotated
+
+import pytest
+from pydantic import BaseModel
+from pydantic_settings.sources.types import ForceDecode, NoDecode
 from sqlalchemy.engine import URL
 
 from app import config
@@ -63,6 +68,10 @@ def test_email_settings_apply_provider_defaults_and_normalize():
     assert mailjet.smtp_port == 587
     assert mailjet.use_tls is True
 
+    mailjet.smtp_host = None
+    mailjet._apply_provider_defaults()
+    assert mailjet.smtp_host == "in-v3.mailjet.com"
+
 
 def test_google_settings_enabled_flag():
     settings = config.GoogleSettings(api_key="  abc123  ")
@@ -70,6 +79,8 @@ def test_google_settings_enabled_flag():
     assert settings.enabled is True
     assert config.GoogleSettings(api_key=" none ").enabled is False
     assert config.GoogleSettings(api_key="  NONE  ").api_key is None
+    assert config.GoogleSettings._normalize_api_key(None) is None
+    assert config.GoogleSettings._normalize_api_key(123) == 123
 
 
 def test_settings_instance_reports_local_environment():
@@ -113,6 +124,7 @@ def test_logging_settings_bool_normalization():
 
     assert settings.elasticsearch.enabled is True
     assert settings.elasticsearch.verify_certs is False
+    assert config.ElasticsearchLoggingSettings._normalize_bool(123) == 123
 
 
 def test_api_settings_split_allowed_origins_string():
@@ -135,3 +147,81 @@ def test_api_settings_normalizes_allowed_origins_list():
 
 def test_email_settings_nullable_validator_preserves_non_strings():
     assert config.EmailSettings._normalize_nullable_field(123) == 123
+
+
+def test_api_settings_allows_none_and_empty_values():
+    assert config.ApiSettings._split_allowed_origins(None) is None
+    assert config.ApiSettings._split_allowed_origins(" ") == []
+    assert config.ApiSettings._split_allowed_origins([" ", "https://ok.test/"]) == ["https://ok.test"]
+    assert config.ApiSettings._split_allowed_origins(123) == 123
+
+
+def test_apify_settings_normalizes_token_and_enabled_flag():
+    settings = config.ApifySettings(api_token="  token ")
+    assert settings.api_token == "token"
+    assert settings.enabled is True
+
+    disabled = config.ApifySettings(api_token=" none ")
+    assert disabled.api_token is None
+    assert disabled.enabled is False
+    assert config.ApifySettings._normalize_api_token(None) is None
+    assert config.ApifySettings._normalize_api_token(123) == 123
+
+
+def test_decode_complex_value_respects_no_decode_metadata():
+    class DummyModel(BaseModel):
+        value: Annotated[str, NoDecode]
+
+    field = DummyModel.model_fields["value"]
+
+    class DummySource:
+        def __init__(self, enable_decoding: bool) -> None:
+            self.config = {"enable_decoding": enable_decoding}
+
+    source = DummySource(enable_decoding=True)
+    raw = '"hello"'
+    assert config._decode_complex_value_with_permissive_json(source, "value", field, raw) == raw
+
+
+def test_decode_complex_value_force_decode_overrides_disabled_config():
+    class DummyModel(BaseModel):
+        value: Annotated[str, ForceDecode]
+
+    field = DummyModel.model_fields["value"]
+
+    class DummySource:
+        def __init__(self, enable_decoding: bool) -> None:
+            self.config = {"enable_decoding": enable_decoding}
+
+    source = DummySource(enable_decoding=False)
+    assert config._decode_complex_value_with_permissive_json(source, "value", field, b'"foo"') == "foo"
+
+
+def test_decode_complex_value_skips_decoding_when_disabled():
+    class DummyModel(BaseModel):
+        value: str
+
+    field = DummyModel.model_fields["value"]
+
+    class DummySource:
+        def __init__(self, enable_decoding: bool) -> None:
+            self.config = {"enable_decoding": enable_decoding}
+
+    source = DummySource(enable_decoding=False)
+    raw = "[1, 2, 3]"
+    assert config._decode_complex_value_with_permissive_json(source, "value", field, raw) == raw
+
+
+def test_decode_complex_value_raises_on_non_string_payload():
+    class DummyModel(BaseModel):
+        value: str
+
+    field = DummyModel.model_fields["value"]
+
+    class DummySource:
+        def __init__(self, enable_decoding: bool) -> None:
+            self.config = {"enable_decoding": enable_decoding}
+
+    source = DummySource(enable_decoding=True)
+    with pytest.raises(TypeError):
+        config._decode_complex_value_with_permissive_json(source, "value", field, {"a": 1})

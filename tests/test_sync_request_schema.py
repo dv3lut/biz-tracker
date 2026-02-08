@@ -6,13 +6,68 @@ from uuid import uuid4
 import unittest
 from pydantic import ValidationError
 
-from app.api.schemas import SyncRequest
+from app.api.schemas import SyncRequest, SyncRunOut
 from app.services.sync.mode import SyncMode
-from app.services.sync.replay_reference import DayReplayReference
+from app.services.sync.replay_reference import DayReplayReference, DEFAULT_DAY_REPLAY_REFERENCE
 from app.utils.dates import utcnow
 
 
 class SyncRequestSchemaTests(unittest.TestCase):
+    def _build_sync_run_out(self, *, mode: SyncMode) -> SyncRunOut:
+        return SyncRunOut(
+            id=uuid4(),
+            scope_key="default",
+            run_type="sync",
+            status="completed",
+            mode=mode,
+            replay_for_date=None,
+            started_at=utcnow(),
+            finished_at=None,
+            api_call_count=0,
+            google_api_call_count=0,
+            fetched_records=0,
+            created_records=0,
+            google_queue_count=0,
+            google_eligible_count=0,
+            google_matched_count=0,
+            google_pending_count=0,
+            google_immediate_matched_count=0,
+            google_late_matched_count=0,
+            updated_records=0,
+            summary=None,
+            last_cursor=None,
+            query_checksum=None,
+            resumed_from_run_id=None,
+            notes=None,
+            target_naf_codes=None,
+            target_client_ids=None,
+            notify_admins=True,
+            day_replay_force_google=False,
+            day_replay_reference=DEFAULT_DAY_REPLAY_REFERENCE,
+            months_back=None,
+            total_expected_records=None,
+            progress=None,
+            estimated_remaining_seconds=None,
+            estimated_completion_at=None,
+            linkedin_queue_count=0,
+            linkedin_searched_count=0,
+            linkedin_found_count=0,
+            linkedin_not_found_count=0,
+            linkedin_error_count=0,
+        )
+
+    def test_sync_run_out_computed_flags(self) -> None:
+        sirene_only = self._build_sync_run_out(mode=SyncMode.SIRENE_ONLY)
+        self.assertFalse(sirene_only.google_enabled)
+        self.assertFalse(sirene_only.linkedin_enabled)
+
+        full_run = self._build_sync_run_out(mode=SyncMode.FULL)
+        self.assertTrue(full_run.google_enabled)
+        self.assertTrue(full_run.linkedin_enabled)
+
+        linkedin_run = self._build_sync_run_out(mode=SyncMode.LINKEDIN_PENDING)
+        self.assertTrue(linkedin_run.linkedin_enabled)
+
     def test_day_replay_requires_date(self) -> None:
         with self.assertRaises(ValidationError):
             SyncRequest(mode=SyncMode.DAY_REPLAY)
@@ -36,6 +91,14 @@ class SyncRequestSchemaTests(unittest.TestCase):
         payload = SyncRequest(mode=SyncMode.FULL, naf_codes=["5610A", "56.10b", "  5610C  "])
         self.assertEqual(payload.naf_codes, ["56.10A", "56.10B", "56.10C"])
 
+    def test_accepts_empty_naf_codes_list(self) -> None:
+        payload = SyncRequest(mode=SyncMode.FULL, naf_codes=[])
+        self.assertIsNone(payload.naf_codes)
+
+    def test_deduplicates_naf_codes(self) -> None:
+        payload = SyncRequest(mode=SyncMode.FULL, naf_codes=["56.10A", "5610a", "56.10A"])
+        self.assertEqual(payload.naf_codes, ["56.10A"])
+
     def test_rejects_invalid_naf_code_format(self) -> None:
         with self.assertRaises(ValidationError):
             SyncRequest(mode=SyncMode.FULL, naf_codes=["INVALID"])
@@ -56,6 +119,14 @@ class SyncRequestSchemaTests(unittest.TestCase):
             target_client_ids=[client_id, client_id],
         )
         self.assertEqual(payload.target_client_ids, [client_id])
+
+    def test_target_clients_invalid_uuid_rejected(self) -> None:
+        with self.assertRaises(ValidationError):
+            SyncRequest(
+                mode=SyncMode.DAY_REPLAY,
+                replay_for_date=utcnow().date(),
+                target_client_ids=["not-a-uuid"],
+            )
 
     def test_target_clients_limit_enforced(self) -> None:
         with self.assertRaises(ValidationError):

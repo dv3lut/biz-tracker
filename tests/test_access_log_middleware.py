@@ -5,7 +5,7 @@ from fastapi import HTTPException
 from starlette.requests import Request
 from starlette.responses import Response
 
-from app.api.middlewares.access_log_middleware import AccessLogMiddleware
+from app.api.middlewares.access_log_middleware import AccessLogMiddleware, _classify_outcome, _extract_client_ip
 
 
 def _make_request(
@@ -115,6 +115,23 @@ def test_access_log_uses_x_forwarded_for_first_ip(monkeypatch) -> None:
     assert kwargs["client"]["ip"] == "203.0.113.42"
     assert "user_agent" not in kwargs
     assert "request_id" not in kwargs
+
+
+def test_access_log_falls_back_to_client_ip_when_xff_empty() -> None:
+    request = _make_request("/admin/health", client_ip="10.1.1.1", x_forwarded_for=" ")
+    assert _extract_client_ip(request) == "10.1.1.1"
+
+
+def test_access_log_returns_unknown_when_no_client() -> None:
+    request = _make_request("/admin/health", client_ip="127.0.0.1")
+    request.scope["client"] = None
+    assert _extract_client_ip(request) == "unknown"
+
+
+def test_access_log_classifies_outcomes() -> None:
+    assert _classify_outcome(200) == "success"
+    assert _classify_outcome(404) == "client_error"
+    assert _classify_outcome(500) == "server_error"
 
 
 def test_access_log_logs_and_reraises_http_exception(monkeypatch) -> None:
