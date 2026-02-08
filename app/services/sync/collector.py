@@ -146,9 +146,19 @@ class SyncCollectorMixin(SyncPersistenceMixin):
         new_entities_payload = page_result.new_payloads
         updated_entities = page_result.updated_entities
         updated_payloads = page_result.updated_payloads
+        annuaire_candidates = page_result.annuaire_candidates
 
         # --- Annuaire enrichment (director & legal unit name) ---
-        all_touched = list(new_entities_total) + [info.establishment for info in updated_entities]
+        annuaire_targets = (
+            list(new_entities_total)
+            + [info.establishment for info in updated_entities]
+            + list(annuaire_candidates)
+        )
+        unique_targets: dict[str, models.Establishment] = {}
+        for establishment in annuaire_targets:
+            if establishment.siret:
+                unique_targets[establishment.siret] = establishment
+        all_touched = list(unique_targets.values())
         annuaire_summary = enrich_establishments_from_annuaire(
             context.session,
             all_touched,

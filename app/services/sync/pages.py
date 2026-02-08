@@ -23,6 +23,7 @@ class PageCollectionResult:
     new_payloads: list[dict[str, object]]
     updated_entities: list[UpdatedEstablishmentInfo]
     updated_payloads: list[dict[str, object]]
+    annuaire_candidates: list[models.Establishment]
     page_count: int
     duration_seconds: float
     max_creation_date: date | None
@@ -66,6 +67,7 @@ def collect_pages(
     new_entities_payload: list[dict[str, object]] = []
     updated_entities: list[UpdatedEstablishmentInfo] = []
     updated_payloads: list[dict[str, object]] = []
+    annuaire_candidates: list[models.Establishment] = []
     max_creation_date: date | None = state.last_creation_date if persist_state else None
 
     while True:
@@ -86,11 +88,16 @@ def collect_pages(
         context.run.api_call_count += 1
         context.run.fetched_records += len(etablissements)
 
-        new_entities, updated_batch = collector._upsert_establishments(context.session, etablissements, context.run.id)
+        new_entities, updated_batch, annuaire_batch = collector._upsert_establishments(
+            context.session,
+            etablissements,
+            context.run.id,
+        )
         context.run.created_records += len(new_entities)
         context.run.updated_records += len(updated_batch)
         new_entities_total.extend(new_entities)
         updated_entities.extend(updated_batch)
+        annuaire_candidates.extend(annuaire_batch)
 
         if new_entities:
             for entity in new_entities:
@@ -182,4 +189,5 @@ def collect_pages(
         page_count=page_count,
         duration_seconds=duration,
         max_creation_date=max_creation_date,
+        annuaire_candidates=annuaire_candidates,
     )
