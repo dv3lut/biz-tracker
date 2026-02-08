@@ -4,6 +4,8 @@ import type { NafCategory, NafSubCategory } from "../types";
 
 export type NafSubCategoryFormPayload = {
   categoryId: string;
+  mode: "create" | "attach";
+  existingSubcategoryId?: string;
   name: string;
   description: string | null;
   nafCode: string;
@@ -13,6 +15,8 @@ export type NafSubCategoryFormPayload = {
 
 type FormState = {
   categoryId: string;
+  mode: "create" | "attach";
+  existingSubcategoryId: string;
   name: string;
   description: string;
   nafCode: string;
@@ -24,6 +28,7 @@ type Props = {
   isOpen: boolean;
   mode: "create" | "edit";
   categories: NafCategory[];
+  existingSubcategories: NafSubCategory[];
   subcategory: NafSubCategory | null;
   initialCategoryId?: string;
   onSubmit: (payload: NafSubCategoryFormPayload) => void;
@@ -35,6 +40,8 @@ type TextField = Exclude<keyof FormState, "isActive">;
 
 const EMPTY_STATE: FormState = {
   categoryId: "",
+  mode: "create",
+  existingSubcategoryId: "",
   name: "",
   description: "",
   nafCode: "",
@@ -46,6 +53,7 @@ export const NafSubCategoryModal = ({
   isOpen,
   mode,
   categories,
+  existingSubcategories,
   subcategory,
   initialCategoryId,
   onSubmit,
@@ -61,7 +69,9 @@ export const NafSubCategoryModal = ({
     }
     if (mode === "edit" && subcategory) {
       setFormState({
-        categoryId: subcategory.categoryId,
+        categoryId: "",
+        mode: "create",
+        existingSubcategoryId: "",
         name: subcategory.name,
         description: subcategory.description ?? "",
         nafCode: subcategory.nafCode,
@@ -77,9 +87,33 @@ export const NafSubCategoryModal = ({
     }
   }, [isOpen, mode, subcategory, categories, initialCategoryId]);
 
+  useEffect(() => {
+    if (mode !== "create" || formState.mode !== "attach") {
+      return;
+    }
+    const selected = existingSubcategories.find((item) => item.id === formState.existingSubcategoryId);
+    if (!selected) {
+      return;
+    }
+    setFormState((current) => ({
+      ...current,
+      name: selected.name,
+      description: selected.description ?? "",
+      nafCode: selected.nafCode,
+      priceEur: selected.priceEur.toString(),
+      isActive: selected.isActive,
+    }));
+  }, [mode, formState.mode, formState.existingSubcategoryId, existingSubcategories]);
+
   const isValid = useMemo(() => {
+    if (mode === "edit") {
+      return Boolean(formState.name.trim() && formState.nafCode.trim());
+    }
+    if (formState.mode === "attach") {
+      return Boolean(formState.categoryId && formState.existingSubcategoryId);
+    }
     return Boolean(formState.categoryId && formState.name.trim() && formState.nafCode.trim());
-  }, [formState]);
+  }, [formState, mode]);
 
   const handleChange = (field: TextField) =>
     (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -93,6 +127,8 @@ export const NafSubCategoryModal = ({
     }
     const payload: NafSubCategoryFormPayload = {
       categoryId: formState.categoryId,
+      mode: formState.mode,
+      existingSubcategoryId: formState.existingSubcategoryId || undefined,
       name: formState.name.trim(),
       description: formState.description.trim() ? formState.description.trim() : null,
       nafCode: formState.nafCode.trim(),
@@ -102,11 +138,22 @@ export const NafSubCategoryModal = ({
     onSubmit(payload);
   };
 
+  const hasCategories = categories.length > 0;
+  const attachedSubcategoryIds = useMemo(() => {
+    if (mode !== "create") {
+      return new Set<string>();
+    }
+    const selected = categories.find((category) => category.id === formState.categoryId);
+    return new Set((selected?.subcategories ?? []).map((item) => item.id));
+  }, [categories, formState.categoryId, mode]);
+  const selectableExisting = useMemo(
+    () => existingSubcategories.filter((item) => !attachedSubcategoryIds.has(item.id)),
+    [existingSubcategories, attachedSubcategoryIds],
+  );
+
   if (!isOpen) {
     return null;
   }
-
-  const hasCategories = categories.length > 0;
 
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true">
@@ -125,19 +172,49 @@ export const NafSubCategoryModal = ({
           <section>
             <h3>Informations principales</h3>
             <div className="form-grid">
-              <div className="form-field">
-                <span className="input-label">Catégorie</span>
-                <select value={formState.categoryId} onChange={handleChange("categoryId")} disabled={!hasCategories}>
-                  <option value="" disabled>
-                    Sélectionner une catégorie
-                  </option>
-                  {categories.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
+              {mode === "create" ? (
+                <div className="form-field">
+                  <span className="input-label">Catégorie</span>
+                  <select value={formState.categoryId} onChange={handleChange("categoryId")} disabled={!hasCategories}>
+                    <option value="" disabled>
+                      Sélectionner une catégorie
                     </option>
-                  ))}
-                </select>
-              </div>
+                    {categories.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
+              {mode === "create" ? (
+                <div className="form-field">
+                  <span className="input-label">Mode</span>
+                  <select value={formState.mode} onChange={handleChange("mode")}>
+                    <option value="create">Créer une nouvelle sous-catégorie</option>
+                    <option value="attach">Associer une sous-catégorie existante</option>
+                  </select>
+                </div>
+              ) : null}
+              {mode === "create" && formState.mode === "attach" ? (
+                <div className="form-field">
+                  <span className="input-label">Sous-catégorie existante</span>
+                  <select
+                    value={formState.existingSubcategoryId}
+                    onChange={handleChange("existingSubcategoryId")}
+                    disabled={!selectableExisting.length}
+                  >
+                    <option value="" disabled>
+                      Sélectionner une sous-catégorie
+                    </option>
+                    {selectableExisting.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name} · {item.nafCode}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
               <div className="form-field">
                 <span className="input-label">Nom</span>
                 <input
@@ -146,6 +223,7 @@ export const NafSubCategoryModal = ({
                   onChange={handleChange("name")}
                   placeholder="Ex : Nouvelles ouvertures Paris"
                   required
+                  disabled={mode === "create" && formState.mode === "attach"}
                 />
               </div>
               <div className="form-field">
@@ -155,6 +233,7 @@ export const NafSubCategoryModal = ({
                   onChange={handleChange("description")}
                   placeholder="Note interne pour mieux identifier cette sous-catégorie"
                   rows={3}
+                  disabled={mode === "create" && formState.mode === "attach"}
                 />
               </div>
               <div className="form-field">
@@ -165,6 +244,7 @@ export const NafSubCategoryModal = ({
                   onChange={handleChange("nafCode")}
                   placeholder="56.10A"
                   required
+                  disabled={mode === "create" && formState.mode === "attach"}
                 />
               </div>
             </div>
@@ -182,6 +262,7 @@ export const NafSubCategoryModal = ({
                   value={formState.priceEur}
                   onChange={handleChange("priceEur")}
                   placeholder="Optionnel"
+                  disabled={mode === "create" && formState.mode === "attach"}
                 />
               </div>
               <label className="form-checkbox">
@@ -191,6 +272,7 @@ export const NafSubCategoryModal = ({
                   onChange={(event) =>
                     setFormState((current) => ({ ...current, isActive: event.target.checked }))
                   }
+                  disabled={mode === "create" && formState.mode === "attach"}
                 />
                 <span>Activer la sous-catégorie</span>
               </label>
@@ -201,7 +283,11 @@ export const NafSubCategoryModal = ({
             <button type="button" className="ghost" onClick={onCancel} disabled={isProcessing}>
               Annuler
             </button>
-            <button type="submit" className="primary" disabled={!isValid || !hasCategories || isProcessing}>
+            <button
+              type="submit"
+              className="primary"
+              disabled={!isValid || (mode === "create" && !hasCategories) || isProcessing}
+            >
               {isProcessing ? "Enregistrement…" : "Enregistrer"}
             </button>
           </section>

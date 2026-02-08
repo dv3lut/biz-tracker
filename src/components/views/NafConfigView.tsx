@@ -8,7 +8,7 @@ import { NafCategoriesSection } from "../NafCategoriesSection";
 import { NafCategoryModal, type NafCategoryFormPayload } from "../NafCategoryModal";
 import { NafSubCategoryModal, type NafSubCategoryFormPayload } from "../NafSubCategoryModal";
 
- type CategoryModalState = { mode: "create" | "edit"; category: NafCategory | null } | null;
+type CategoryModalState = { mode: "create" | "edit"; category: NafCategory | null } | null;
 type SubCategoryModalState =
   | { mode: "create"; subcategory: null; initialCategoryId?: string }
   | { mode: "edit"; subcategory: NafSubCategory }
@@ -46,6 +46,19 @@ export const NafConfigView = ({
   const [deletingSubCategoryId, setDeletingSubCategoryId] = useState<string | null>(null);
 
   const isRefreshing = useRefreshIndicator(isFetching && !isLoading, { delay: 300, minVisible: 250 });
+
+  const existingSubcategories = useMemo(() => {
+    if (!categories) {
+      return [];
+    }
+    const map = new Map<string, NafSubCategory>();
+    categories.forEach((category) => {
+      category.subcategories.forEach((subcategory) => {
+        map.set(subcategory.id, subcategory);
+      });
+    });
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [categories]);
 
   useEffect(() => {
     if (!feedbackMessage) {
@@ -146,15 +159,27 @@ export const NafConfigView = ({
     onError: handleMutationError,
   });
 
-  const deleteSubCategoryMutation = useMutation<
+  const attachSubCategoryMutation = useMutation({
+    mutationFn: ({ categoryId, subcategoryId }: { categoryId: string; subcategoryId: string }) =>
+      nafApi.attachSubCategory(categoryId, subcategoryId),
+    onSuccess: (subcategory) => {
+      setFeedbackMessage(`Sous-catégorie ${subcategory.name} associée.`);
+      setErrorMessage(null);
+      invalidateCategories();
+      setSubCategoryModalState(null);
+    },
+    onError: handleMutationError,
+  });
+
+  const detachSubCategoryMutation = useMutation<
     void,
     unknown,
-    { subcategoryId: string; subcategoryName: string }
+    { categoryId: string; subcategoryId: string; subcategoryName: string }
   >({
-    mutationFn: ({ subcategoryId }) => nafApi.deleteSubCategory(subcategoryId),
+    mutationFn: ({ categoryId, subcategoryId }) => nafApi.detachSubCategory(categoryId, subcategoryId),
     onMutate: ({ subcategoryId }) => setDeletingSubCategoryId(subcategoryId),
     onSuccess: (_, { subcategoryName }) => {
-      setFeedbackMessage(`Sous-catégorie ${subcategoryName} supprimée.`);
+      setFeedbackMessage(`Sous-catégorie ${subcategoryName} retirée.`);
       setErrorMessage(null);
       invalidateCategories();
     },
@@ -168,8 +193,11 @@ export const NafConfigView = ({
   );
 
   const isSubCategoryModalProcessing = useMemo(
-    () => createSubCategoryMutation.isPending || updateSubCategoryMutation.isPending,
-    [createSubCategoryMutation.isPending, updateSubCategoryMutation.isPending],
+    () =>
+      createSubCategoryMutation.isPending
+      || updateSubCategoryMutation.isPending
+      || attachSubCategoryMutation.isPending,
+    [createSubCategoryMutation.isPending, updateSubCategoryMutation.isPending, attachSubCategoryMutation.isPending],
   );
 
   const handleOpenCategoryModal = useCallback((mode: "create" | "edit", category: NafCategory | null = null) => {
@@ -213,6 +241,13 @@ export const NafConfigView = ({
       if (!ensureAuthenticated()) {
         return;
       }
+      if (payload.mode === "attach" && payload.existingSubcategoryId) {
+        attachSubCategoryMutation.mutate({
+          categoryId: payload.categoryId,
+          subcategoryId: payload.existingSubcategoryId,
+        });
+        return;
+      }
       const basePayload: NafSubCategoryCreatePayload = {
         categoryId: payload.categoryId,
         name: payload.name,
@@ -226,7 +261,6 @@ export const NafConfigView = ({
       }
       if (subcategoryModalState?.mode === "edit" && subcategoryModalState.subcategory) {
         const updatePayload: NafSubCategoryUpdatePayload = {
-          categoryId: basePayload.categoryId,
           name: basePayload.name,
           description: basePayload.description,
           nafCode: basePayload.nafCode,
@@ -238,7 +272,13 @@ export const NafConfigView = ({
         createSubCategoryMutation.mutate(basePayload);
       }
     },
-    [ensureAuthenticated, subcategoryModalState, updateSubCategoryMutation, createSubCategoryMutation],
+    [
+      ensureAuthenticated,
+      subcategoryModalState,
+      updateSubCategoryMutation,
+      createSubCategoryMutation,
+      attachSubCategoryMutation,
+    ],
   );
 
   const handleDeleteCategory = useCallback(
@@ -251,17 +291,18 @@ export const NafConfigView = ({
     [ensureAuthenticated, deleteCategoryMutation],
   );
 
-  const handleDeleteSubCategory = useCallback(
-    (subcategory: NafSubCategory) => {
+  const handleDetachSubCategory = useCallback(
+    (subcategory: NafSubCategory, categoryId: string) => {
       if (!ensureAuthenticated()) {
         return;
       }
-      deleteSubCategoryMutation.mutate({
+      detachSubCategoryMutation.mutate({
+        categoryId,
         subcategoryId: subcategory.id,
         subcategoryName: subcategory.name,
       });
     },
-    [ensureAuthenticated, deleteSubCategoryMutation],
+    [ensureAuthenticated, detachSubCategoryMutation],
   );
 
   return (
@@ -288,7 +329,7 @@ export const NafConfigView = ({
             onDeleteCategory={handleDeleteCategory}
             onCreateSubCategory={(categoryId) => handleOpenSubCategoryModal("create", { categoryId })}
             onEditSubCategory={(subcategory) => handleOpenSubCategoryModal("edit", { subcategory })}
-            onDeleteSubCategory={handleDeleteSubCategory}
+            onDetachSubCategory={handleDetachSubCategory}
             deletingCategoryId={deletingCategoryId}
             deletingSubCategoryId={deletingSubCategoryId}
           />
@@ -308,6 +349,7 @@ export const NafConfigView = ({
         isOpen={Boolean(subcategoryModalState)}
         mode={subcategoryModalState?.mode ?? "create"}
         categories={categories ?? []}
+        existingSubcategories={existingSubcategories}
         subcategory={
           subcategoryModalState && subcategoryModalState.mode === "edit"
             ? subcategoryModalState.subcategory

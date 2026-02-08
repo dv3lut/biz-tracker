@@ -3,7 +3,6 @@ import { request } from "./http";
 
 export type NafSubCategoryResponse = {
   id: string;
-  category_id: string;
   name: string;
   description: string | null;
   naf_code: string;
@@ -51,7 +50,6 @@ export interface NafSubCategoryCreatePayload {
 }
 
 export interface NafSubCategoryUpdatePayload {
-  categoryId?: string;
   name?: string;
   nafCode?: string;
   description?: string | null;
@@ -69,7 +67,6 @@ const mapDepartmentResponse = (department: DepartmentResponse): Department => ({
 
 export const mapNafSubCategoryResponse = (subcategory: NafSubCategoryResponse): NafSubCategory => ({
   id: subcategory.id,
-  categoryId: subcategory.category_id,
   name: subcategory.name,
   description: subcategory.description,
   nafCode: subcategory.naf_code,
@@ -115,9 +112,6 @@ const serializeSubCategoryCreatePayload = (payload: NafSubCategoryCreatePayload)
 
 const serializeSubCategoryUpdatePayload = (payload: NafSubCategoryUpdatePayload) => {
   const body: Record<string, unknown> = {};
-  if (payload.categoryId !== undefined) {
-    body.category_id = payload.categoryId;
-  }
   if (payload.name !== undefined) {
     body.name = payload.name;
   }
@@ -171,6 +165,18 @@ export const nafApi = {
       body: JSON.stringify(serializeSubCategoryUpdatePayload(payload)),
     });
     return mapNafSubCategoryResponse(response.data);
+  },
+  attachSubCategory: async (categoryId: string, subcategoryId: string): Promise<NafSubCategory> => {
+    const response = await request<NafSubCategoryResponse>(`/admin/naf-categories/${categoryId}/subcategories`, {
+      method: "POST",
+      body: JSON.stringify({ subcategory_id: subcategoryId }),
+    });
+    return mapNafSubCategoryResponse(response.data);
+  },
+  detachSubCategory: async (categoryId: string, subcategoryId: string): Promise<void> => {
+    await request<void>(`/admin/naf-categories/${categoryId}/subcategories/${subcategoryId}`, {
+      method: "DELETE",
+    });
   },
   deleteSubCategory: async (subcategoryId: string): Promise<void> => {
     await request<void>(`/admin/naf-subcategories/${subcategoryId}`, { method: "DELETE" });

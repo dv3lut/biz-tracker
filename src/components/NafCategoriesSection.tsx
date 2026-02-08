@@ -21,7 +21,7 @@ type Props = {
   onDeleteCategory: (category: NafCategory) => void;
   onCreateSubCategory: (categoryId?: string) => void;
   onEditSubCategory: (subcategory: NafSubCategory) => void;
-  onDeleteSubCategory: (subcategory: NafSubCategory) => void;
+  onDetachSubCategory: (subcategory: NafSubCategory, categoryId: string) => void;
   deletingCategoryId: string | null;
   deletingSubCategoryId: string | null;
 };
@@ -40,7 +40,7 @@ export const NafCategoriesSection = ({
   onDeleteCategory,
   onCreateSubCategory,
   onEditSubCategory,
-  onDeleteSubCategory,
+  onDetachSubCategory,
   deletingCategoryId,
   deletingSubCategoryId,
 }: Props) => {
@@ -64,13 +64,13 @@ export const NafCategoriesSection = ({
     }
   };
 
-  const handleDeleteSubCategory = (subcategory: NafSubCategory) => {
+  const handleDetachSubCategory = (subcategory: NafSubCategory, categoryId: string) => {
     if (
       window.confirm(
-        `Supprimer la sous-catégorie "${subcategory.name}" (${subcategory.nafCode}) ?`,
+        `Retirer la sous-catégorie "${subcategory.name}" (${subcategory.nafCode}) de la catégorie ?`,
       )
     ) {
-      onDeleteSubCategory(subcategory);
+      onDetachSubCategory(subcategory, categoryId);
     }
   };
 
@@ -234,10 +234,10 @@ export const NafCategoriesSection = ({
                                 <button
                                   type="button"
                                   className="danger"
-                                  onClick={() => handleDeleteSubCategory(subcategory)}
+                                  onClick={() => handleDetachSubCategory(subcategory, category.id)}
                                   disabled={deletingSubCategoryId === subcategory.id}
                                 >
-                                  {deletingSubCategoryId === subcategory.id ? "Suppression…" : "Supprimer"}
+                                  {deletingSubCategoryId === subcategory.id ? "Suppression…" : "Retirer"}
                                 </button>
                               </div>
                             </td>

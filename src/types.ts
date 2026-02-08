@@ -373,7 +373,6 @@ export interface ClientRecipient {
 
 export interface NafSubCategory {
   id: string;
-  categoryId: string;
   name: string;
   description: string | null;
   nafCode: string;
