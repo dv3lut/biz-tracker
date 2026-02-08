@@ -159,11 +159,11 @@ type Props = {
     resetGoogleState?: boolean;
     replayForDate?: string;
     nafCodes?: string[];
-    initialBackfill?: boolean;
     targetClientIds?: string[];
     notifyAdmins?: boolean;
     forceGoogleReplay?: boolean;
     replayReference?: DayReplayReference;
+    monthsBack?: number;
   }) => void;
   onCancel: () => void;
   isSubmitting: boolean;
@@ -244,7 +244,7 @@ export const SyncModeModal = ({
   const [notifyAdmins, setNotifyAdmins] = useState<boolean>(initialNotifyAdmins ?? true);
   const [forceGoogleReplay, setForceGoogleReplay] = useState<boolean>(initialForceGoogleReplay ?? false);
   const [replayReference, setReplayReference] = useState<DayReplayReference>(initialReplayReference ?? DEFAULT_REPLAY_REFERENCE);
-  const [initialBackfill, setInitialBackfill] = useState<boolean>(false);
+  const [monthsBack, setMonthsBack] = useState<number | null>(null);
   const [clientSearch, setClientSearch] = useState<string>("");
   const [recipientError, setRecipientError] = useState<string | null>(null);
 
@@ -264,7 +264,7 @@ export const SyncModeModal = ({
       setNotifyAdmins(initialNotifyAdmins ?? true);
       setForceGoogleReplay(initialForceGoogleReplay ?? false);
       setReplayReference(initialReplayReference ?? DEFAULT_REPLAY_REFERENCE);
-      setInitialBackfill(false);
+      setMonthsBack(null);
       setClientSearch("");
       setRecipientError(null);
     }
@@ -287,13 +287,13 @@ export const SyncModeModal = ({
     if (mode !== "day_replay") {
       setRecipientError(null);
     }
+    // Reset monthsBack si on passe sur un mode non-Sirene
+    if (mode !== "full" && mode !== "sirene_only") {
+      setMonthsBack(null);
+    }
   }, [mode]);
 
-  useEffect(() => {
-    if (mode !== "full" || selectedNafCodes.length === 0) {
-      setInitialBackfill(false);
-    }
-  }, [mode, selectedNafCodes.length]);
+
 
   useEffect(() => {
     if (mode === "day_replay" && (notifyAdmins || selectedClientIds.length > 0)) {
@@ -517,8 +517,9 @@ export const SyncModeModal = ({
       nafCodes: nafCodesPayload,
     };
 
-    if (initialBackfill) {
-      payload.initialBackfill = true;
+    // Ajouter monthsBack pour les modes Sirene (full ou sirene_only)
+    if ((mode === "full" || mode === "sirene_only") && monthsBack !== null && monthsBack > 0) {
+      payload.monthsBack = monthsBack;
     }
 
     if (mode === "google_refresh") {
@@ -665,20 +666,35 @@ export const SyncModeModal = ({
                   ? `${selectedCount} code(s) NAF ciblés · ${remainingSlots} emplacement(s) disponible(s)`
                   : "Aucun filtrage NAF — run global"}
               </p>
-              {mode === "full" && selectedCount > 0 ? (
-                <div className="form-control">
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={initialBackfill}
-                      onChange={(event) => setInitialBackfill(event.target.checked)}
-                      disabled={isSubmitting}
-                    />
-                    <span>Synchro initiale (backfill months_back · sans alertes)</span>
+              {(mode === "full" || mode === "sirene_only") ? (
+                <div className="form-control months-back-control">
+                  <label htmlFor="months-back" className="muted small">
+                    Nombre de mois dans le passé (optionnel) :
                   </label>
+                  <input
+                    id="months-back"
+                    type="number"
+                    min={1}
+                    max={24}
+                    placeholder="Synchro incrémentale"
+                    value={monthsBack ?? ""}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      if (value === "") {
+                        setMonthsBack(null);
+                      } else {
+                        const parsed = parseInt(value, 10);
+                        if (!isNaN(parsed) && parsed >= 1 && parsed <= 24) {
+                          setMonthsBack(parsed);
+                        }
+                      }
+                    }}
+                    disabled={isSubmitting}
+                  />
                   <p className="muted small">
-                    À utiliser après ajout de nouveaux codes NAF : rejoue la fenêtre months_back pour ces NAF uniquement, et n'envoie
-                    aucune alerte.
+                    {monthsBack
+                      ? `Récupère les établissements créés dans les ${monthsBack} dernier(s) mois.`
+                      : "Sans valeur, seules les nouvelles créations du jour seront synchronisées (synchro incrémentale)."}
                   </p>
                 </div>
               ) : null}

@@ -26,11 +26,15 @@ type Props = {
   onToggleNafCode: (value: string) => void;
   onDepartmentCodesChange: (value: string[]) => void;
   onLimitChange: (value: number) => void;
+  enrichAnnuaire: boolean;
+  onEnrichAnnuaireChange: (value: boolean) => void;
   onSubmit: () => void;
   onReset: () => void;
   onGoogleSearch: (siret: string) => void;
   onDebugGoogleFindPlace: (siret: string) => void;
   debuggingGoogleFindPlaceSiret: string | null;
+  onDebugAnnuaire: (siret: string) => void;
+  debuggingAnnuaireSiret: string | null;
 };
 
 const buildDisplayName = (item: SireneNewBusiness): string => {
@@ -88,11 +92,15 @@ export const SireneNewBusinessesPanel = ({
   onToggleNafCode,
   onDepartmentCodesChange,
   onLimitChange,
+  enrichAnnuaire,
+  onEnrichAnnuaireChange,
   onSubmit,
   onReset,
   onGoogleSearch,
   onDebugGoogleFindPlace,
   debuggingGoogleFindPlaceSiret,
+  onDebugAnnuaire,
+  debuggingAnnuaireSiret,
 }: Props) => {
   const nafDetailsRef = useRef<HTMLDetailsElement | null>(null);
   const [isNafOpen, setIsNafOpen] = useState(false);
@@ -329,6 +337,17 @@ export const SireneNewBusinessesPanel = ({
             ))}
           </select>
         </div>
+        <div className="form-field" style={{ gridColumn: "1 / -1" }}>
+          <label className="naf-multiselect-option muted small">
+            <input
+              type="checkbox"
+              checked={enrichAnnuaire}
+              onChange={(event) => onEnrichAnnuaireChange(event.target.checked)}
+              disabled={isLoading}
+            />
+            <span>Enrichir avec les dirigeants et l'unité légale (API Recherche Entreprises)</span>
+          </label>
+        </div>
         <div className="card-actions" style={{ gridColumn: "1 / -1" }}>
           <button type="submit" className="primary" disabled={isLoading}>
             {isLoading ? "Recherche…" : "Rechercher"}
@@ -409,7 +428,8 @@ export const SireneNewBusinessesPanel = ({
                           <th>Créé le</th>
                           <th>Adresse</th>
                           <th>EI</th>
-                          <th>Dirigeant</th>
+                          <th>Unité légale</th>
+                          <th>Dirigeants</th>
                           <th>Actions</th>
                         </tr>
                       </thead>
@@ -434,7 +454,19 @@ export const SireneNewBusinessesPanel = ({
                             <td>{formatDate(item.dateCreation)}</td>
                             <td>{buildAddress(item)}</td>
                             <td>{item.isIndividual ? "Oui" : "Non"}</td>
-                            <td>{item.leaderName ?? "—"}</td>
+                            <td>{item.legalUnitName ?? "—"}</td>
+                            <td>
+                              {item.directors && item.directors.length > 0
+                                ? item.directors.map((d, i) => (
+                                    <div key={i} className="muted small">
+                                      {d.typeDirigeant === "personne physique"
+                                        ? [d.firstNames, d.lastName].filter(Boolean).join(" ") || "—"
+                                        : d.denomination || "—"}
+                                      {d.quality ? ` (${d.quality})` : ""}
+                                    </div>
+                                  ))
+                                : (item.leaderName ?? "—")}
+                            </td>
                             <td>
                               <div className="card-actions">
                                 <button
@@ -453,6 +485,16 @@ export const SireneNewBusinessesPanel = ({
                                   {debuggingGoogleFindPlaceSiret === item.siret
                                     ? "Debug…"
                                     : "Debug API Google"}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="ghost"
+                                  onClick={() => onDebugAnnuaire(item.siret)}
+                                  disabled={debuggingAnnuaireSiret === item.siret}
+                                >
+                                  {debuggingAnnuaireSiret === item.siret
+                                    ? "Debug…"
+                                    : "Debug API Annuaire"}
                                 </button>
                               </div>
                             </td>

@@ -3,9 +3,16 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 
 import { ApiError, googleApi, nafApi, regionsApi, toolsApi } from "../../api";
-import type { GoogleFindPlaceDebugResult, NafCategory, Region, SireneNewBusinessesResult } from "../../types";
+import type {
+  AnnuaireDebugResult,
+  GoogleFindPlaceDebugResult,
+  NafCategory,
+  Region,
+  SireneNewBusinessesResult,
+} from "../../types";
 import { openGoogleSearchForEstablishment } from "../../utils/googleSearch";
 import { parseNafInput, sanitizeNafCodes } from "../../utils/sync";
+import { AnnuaireDebugModal } from "../../components/AnnuaireDebugModal";
 import { GoogleFindPlaceDebugModal } from "../../components/GoogleFindPlaceDebugModal";
 import { ToolsView } from "../../components/views/ToolsView";
 
@@ -27,10 +34,14 @@ export const ToolsSection = ({ onUnauthorized }: Props) => {
   const [selectedNafCodes, setSelectedNafCodes] = useState<string[]>([]);
   const [selectedDepartmentCodes, setSelectedDepartmentCodes] = useState<string[]>([]);
   const [limit, setLimit] = useState(DEFAULT_LIMIT);
+  const [enrichAnnuaire, setEnrichAnnuaire] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [result, setResult] = useState<SireneNewBusinessesResult | null>(null);
   const [googleFindPlaceDebugModal, setGoogleFindPlaceDebugModal] = useState<
     { siret: string; result: GoogleFindPlaceDebugResult } | null
+  >(null);
+  const [annuaireDebugModal, setAnnuaireDebugModal] = useState<
+    { siret: string; result: AnnuaireDebugResult } | null
   >(null);
 
   const nafCategoriesQuery = useQuery<NafCategory[]>({
@@ -65,6 +76,23 @@ export const ToolsSection = ({ onUnauthorized }: Props) => {
     mutationFn: (siret) => googleApi.debugFindPlace(siret),
     onSuccess: (debugResult, siret) => {
       setGoogleFindPlaceDebugModal({ siret, result: debugResult });
+      setErrorMessage(null);
+    },
+    onError: (error: unknown) => {
+      if (error instanceof ApiError && error.status === 403) {
+        onUnauthorized();
+        return;
+      }
+      const message = error instanceof ApiError ? error.message : "Une erreur est survenue.";
+      setErrorMessage(message);
+      toast.error(message, { id: message });
+    },
+  });
+
+  const annuaireDebugMutation = useMutation<AnnuaireDebugResult, unknown, string>({
+    mutationFn: (siret) => toolsApi.fetchAnnuaireDebug(siret),
+    onSuccess: (debugResult, siret) => {
+      setAnnuaireDebugModal({ siret, result: debugResult });
       setErrorMessage(null);
     },
     onError: (error: unknown) => {
@@ -126,8 +154,9 @@ export const ToolsSection = ({ onUnauthorized }: Props) => {
       nafCodes: parsedCodes,
       limit,
       departmentCodes: selectedDepartmentCodes.length > 0 ? selectedDepartmentCodes : undefined,
+      enrichAnnuaire,
     });
-  }, [startDate, selectedNafCodes, nafCodesInput, endDate, limit, mutation, selectedDepartmentCodes]);
+  }, [startDate, selectedNafCodes, nafCodesInput, endDate, limit, mutation, selectedDepartmentCodes, enrichAnnuaire]);
 
   const handleReset = useCallback(() => {
     setStartDate(buildDefaultStartDate());
@@ -136,6 +165,7 @@ export const ToolsSection = ({ onUnauthorized }: Props) => {
     setSelectedNafCodes([]);
     setSelectedDepartmentCodes([]);
     setLimit(DEFAULT_LIMIT);
+    setEnrichAnnuaire(false);
     setErrorMessage(null);
     setResult(null);
   }, []);
@@ -181,6 +211,13 @@ export const ToolsSection = ({ onUnauthorized }: Props) => {
     [googleFindPlaceDebugMutation],
   );
 
+  const handleDebugAnnuaire = useCallback(
+    (siret: string) => {
+      annuaireDebugMutation.mutate(siret);
+    },
+    [annuaireDebugMutation],
+  );
+
   return (
     <>
       <ToolsView
@@ -203,6 +240,8 @@ export const ToolsSection = ({ onUnauthorized }: Props) => {
         onToggleNafCode={handleToggleNafCode}
         onDepartmentCodesChange={handleDepartmentCodesChange}
         onLimitChange={setLimit}
+        enrichAnnuaire={enrichAnnuaire}
+        onEnrichAnnuaireChange={setEnrichAnnuaire}
         onSubmit={handleSubmit}
         onReset={handleReset}
         onGoogleSearch={handleGoogleSearch}
@@ -212,7 +251,21 @@ export const ToolsSection = ({ onUnauthorized }: Props) => {
             ? ((googleFindPlaceDebugMutation.variables as string | undefined) ?? null)
             : null
         }
+        onDebugAnnuaire={handleDebugAnnuaire}
+        debuggingAnnuaireSiret={
+          annuaireDebugMutation.isPending
+            ? ((annuaireDebugMutation.variables as string | undefined) ?? null)
+            : null
+        }
       />
+
+      {annuaireDebugModal ? (
+        <AnnuaireDebugModal
+          siret={annuaireDebugModal.siret}
+          result={annuaireDebugModal.result}
+          onClose={() => setAnnuaireDebugModal(null)}
+        />
+      ) : null}
 
       {googleFindPlaceDebugModal ? (
         <GoogleFindPlaceDebugModal

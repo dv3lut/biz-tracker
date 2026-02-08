@@ -37,6 +37,7 @@ export interface SyncRun {
   notifyAdmins: boolean;
   dayReplayForceGoogle: boolean;
   dayReplayReference: DayReplayReference;
+  monthsBack: number | null;
   summary: RunSummary | null;
 }
 
@@ -260,13 +261,26 @@ export interface SyncRequestPayload {
   replayForDate?: string;
   replayReference?: DayReplayReference;
   nafCodes?: string[];
-  initialBackfill?: boolean;
   targetClientIds?: string[];
   notifyAdmins?: boolean;
   forceGoogleReplay?: boolean;
+  monthsBack?: number;
 }
 
 export type EstablishmentIndividualFilter = "all" | "individual" | "non_individual";
+
+export interface Director {
+  id: string;
+  typeDirigeant: string;
+  firstNames: string | null;
+  lastName: string | null;
+  quality: string | null;
+  birthMonth: number | null;
+  birthYear: number | null;
+  siren: string | null;
+  denomination: string | null;
+  nationality: string | null;
+}
 
 export interface Establishment {
   siret: string;
@@ -297,6 +311,8 @@ export interface Establishment {
   googleContactEmail: string | null;
   googleContactWebsite: string | null;
   isSoleProprietorship: boolean;
+  legalUnitName: string | null;
+  directors: Director[];
 }
 
 export interface EstablishmentDetail extends Establishment {
@@ -517,6 +533,18 @@ export interface GoogleRetryConfig {
   microRules: GoogleRetryRule[];
 }
 
+export interface SireneNewBusinessDirector {
+  typeDirigeant: string;
+  firstNames: string | null;
+  lastName: string | null;
+  quality: string | null;
+  birthMonth: number | null;
+  birthYear: number | null;
+  siren: string | null;
+  denomination: string | null;
+  nationality: string | null;
+}
+
 export interface SireneNewBusiness {
   siret: string;
   siren: string | null;
@@ -541,6 +569,18 @@ export interface SireneNewBusiness {
   codePostal: string | null;
   libelleCommune: string | null;
   libelleCommuneEtranger: string | null;
+  legalUnitName: string | null;
+  directors: SireneNewBusinessDirector[];
+}
+
+export interface AnnuaireDebugResult {
+  siret: string;
+  siren: string;
+  success: boolean;
+  statusCode: number | null;
+  durationMs: number | null;
+  error: string | null;
+  payload: Record<string, unknown> | null;
 }
 
 export interface SireneNewBusinessesResult {

@@ -7,6 +7,7 @@ import {
   StatsSummary,
   Establishment,
   EstablishmentDetail,
+  Director,
   EmailTestPayload,
   EmailTestResult,
   GoogleCheckResult,
@@ -73,6 +74,7 @@ interface SyncRunResponse {
   estimated_completion_at: string | null;
   summary: RunSummaryResponse | null;
   google_enabled: boolean;
+  months_back: number | null;
 }
 
 interface RunSummaryResponse {
@@ -288,6 +290,19 @@ interface NafCategoryStatResponse {
   subcategories: NafSubCategoryStatResponse[];
 }
 
+interface DirectorResponse {
+  id: string;
+  type_dirigeant: string;
+  first_names: string | null;
+  last_name: string | null;
+  quality: string | null;
+  birth_month: number | null;
+  birth_year: number | null;
+  siren: string | null;
+  denomination: string | null;
+  nationality: string | null;
+}
+
 interface EstablishmentResponse {
   siret: string;
   siren: string;
@@ -317,6 +332,8 @@ interface EstablishmentResponse {
   google_listing_age_status: string | null;
   google_check_status: string;
   is_sole_proprietorship: boolean;
+  legal_unit_name: string | null;
+  directors: DirectorResponse[];
 }
 
 interface EstablishmentDetailResponse extends EstablishmentResponse {
@@ -512,6 +529,7 @@ const toSyncRun = (payload: SyncRunResponse): SyncRun => ({
   notifyAdmins: payload.notify_admins,
   dayReplayForceGoogle: payload.day_replay_force_google,
   dayReplayReference: payload.day_replay_reference,
+  monthsBack: payload.months_back ?? null,
   summary: payload.summary ? toRunSummary(payload.summary) : null,
 });
 
@@ -684,6 +702,19 @@ const toEstablishment = (payload: EstablishmentResponse): Establishment => ({
   googleContactEmail: payload.google_contact_email,
   googleContactWebsite: payload.google_contact_website,
   isSoleProprietorship: payload.is_sole_proprietorship,
+  legalUnitName: payload.legal_unit_name ?? null,
+  directors: (payload.directors ?? []).map((d): Director => ({
+    id: d.id,
+    typeDirigeant: d.type_dirigeant,
+    firstNames: d.first_names,
+    lastName: d.last_name,
+    quality: d.quality,
+    birthMonth: d.birth_month,
+    birthYear: d.birth_year,
+    siren: d.siren,
+    denomination: d.denomination,
+    nationality: d.nationality,
+  })),
 });
 
 const toEstablishmentDetail = (payload: EstablishmentDetailResponse): EstablishmentDetail => ({
