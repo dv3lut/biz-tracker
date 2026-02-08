@@ -1,6 +1,19 @@
-import { Establishment, EstablishmentDetail } from "../types";
+import { Director, Establishment, EstablishmentDetail } from "../types";
 import { canonicalizeNafCode } from "../utils/sync";
 import { request } from "./http";
+
+export interface DirectorResponse {
+  id: string;
+  type_dirigeant: string;
+  first_names: string | null;
+  last_name: string | null;
+  quality: string | null;
+  birth_month: number | null;
+  birth_year: number | null;
+  siren: string | null;
+  denomination: string | null;
+  nationality: string | null;
+}
 
 export interface EstablishmentResponse {
   siret: string;
@@ -31,6 +44,8 @@ export interface EstablishmentResponse {
   google_contact_email: string | null;
   google_contact_website: string | null;
   is_sole_proprietorship: boolean;
+  legal_unit_name: string | null;
+  directors: DirectorResponse[];
 }
 
 export interface EstablishmentDetailResponse extends EstablishmentResponse {
@@ -70,6 +85,19 @@ export interface EstablishmentDetailResponse extends EstablishmentResponse {
   libelle_pays: string | null;
 }
 
+const mapDirector = (payload: DirectorResponse): Director => ({
+  id: payload.id,
+  typeDirigeant: payload.type_dirigeant,
+  firstNames: payload.first_names,
+  lastName: payload.last_name,
+  quality: payload.quality,
+  birthMonth: payload.birth_month,
+  birthYear: payload.birth_year,
+  siren: payload.siren,
+  denomination: payload.denomination,
+  nationality: payload.nationality,
+});
+
 export const mapEstablishment = (payload: EstablishmentResponse): Establishment => ({
   siret: payload.siret,
   siren: payload.siren,
@@ -99,6 +127,8 @@ export const mapEstablishment = (payload: EstablishmentResponse): Establishment 
   googleContactEmail: payload.google_contact_email,
   googleContactWebsite: payload.google_contact_website,
   isSoleProprietorship: payload.is_sole_proprietorship,
+  legalUnitName: payload.legal_unit_name ?? null,
+  directors: (payload.directors ?? []).map(mapDirector),
 });
 
 export const mapEstablishmentDetail = (payload: EstablishmentDetailResponse): EstablishmentDetail => ({

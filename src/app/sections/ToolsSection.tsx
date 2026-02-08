@@ -27,6 +27,7 @@ export const ToolsSection = ({ onUnauthorized }: Props) => {
   const [selectedNafCodes, setSelectedNafCodes] = useState<string[]>([]);
   const [selectedDepartmentCodes, setSelectedDepartmentCodes] = useState<string[]>([]);
   const [limit, setLimit] = useState(DEFAULT_LIMIT);
+  const [enrichAnnuaire, setEnrichAnnuaire] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [result, setResult] = useState<SireneNewBusinessesResult | null>(null);
   const [googleFindPlaceDebugModal, setGoogleFindPlaceDebugModal] = useState<
@@ -126,8 +127,9 @@ export const ToolsSection = ({ onUnauthorized }: Props) => {
       nafCodes: parsedCodes,
       limit,
       departmentCodes: selectedDepartmentCodes.length > 0 ? selectedDepartmentCodes : undefined,
+      enrichAnnuaire,
     });
-  }, [startDate, selectedNafCodes, nafCodesInput, endDate, limit, mutation, selectedDepartmentCodes]);
+  }, [startDate, selectedNafCodes, nafCodesInput, endDate, limit, mutation, selectedDepartmentCodes, enrichAnnuaire]);
 
   const handleReset = useCallback(() => {
     setStartDate(buildDefaultStartDate());
@@ -136,6 +138,7 @@ export const ToolsSection = ({ onUnauthorized }: Props) => {
     setSelectedNafCodes([]);
     setSelectedDepartmentCodes([]);
     setLimit(DEFAULT_LIMIT);
+    setEnrichAnnuaire(false);
     setErrorMessage(null);
     setResult(null);
   }, []);
@@ -203,6 +206,8 @@ export const ToolsSection = ({ onUnauthorized }: Props) => {
         onToggleNafCode={handleToggleNafCode}
         onDepartmentCodesChange={handleDepartmentCodesChange}
         onLimitChange={setLimit}
+        enrichAnnuaire={enrichAnnuaire}
+        onEnrichAnnuaireChange={setEnrichAnnuaire}
         onSubmit={handleSubmit}
         onReset={handleReset}
         onGoogleSearch={handleGoogleSearch}

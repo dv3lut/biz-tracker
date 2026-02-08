@@ -21,6 +21,8 @@ type Props = {
   onToggleNafCode: (value: string) => void;
   onDepartmentCodesChange: (value: string[]) => void;
   onLimitChange: (value: number) => void;
+  enrichAnnuaire: boolean;
+  onEnrichAnnuaireChange: (value: boolean) => void;
   onSubmit: () => void;
   onReset: () => void;
   onGoogleSearch: (siret: string) => void;
@@ -48,6 +50,8 @@ export const ToolsView = ({
   onToggleNafCode,
   onDepartmentCodesChange,
   onLimitChange,
+  enrichAnnuaire,
+  onEnrichAnnuaireChange,
   onSubmit,
   onReset,
   onGoogleSearch,
@@ -83,6 +87,8 @@ export const ToolsView = ({
           onToggleNafCode={onToggleNafCode}
           onDepartmentCodesChange={onDepartmentCodesChange}
           onLimitChange={onLimitChange}
+          enrichAnnuaire={enrichAnnuaire}
+          onEnrichAnnuaireChange={onEnrichAnnuaireChange}
           onSubmit={onSubmit}
           onReset={onReset}
           onGoogleSearch={onGoogleSearch}

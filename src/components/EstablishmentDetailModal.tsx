@@ -146,8 +146,48 @@ export const EstablishmentDetailModal = ({
                 <dd>{formatValue(establishment.trancheEffectifs)}</dd>
                 <dt>Année effectifs</dt>
                 <dd>{formatValue(establishment.anneeEffectifs)}</dd>
+                <dt>Unité légale</dt>
+                <dd>{formatValue(establishment.legalUnitName)}</dd>
               </dl>
             </section>
+
+            {establishment.directors.length > 0 && (
+              <section>
+                <h3>Dirigeants ({establishment.directors.length})</h3>
+                <div className="table-wrapper">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Type</th>
+                        <th>Nom</th>
+                        <th>Qualité</th>
+                        <th>Naissance</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {establishment.directors.map((d) => (
+                        <tr key={d.id}>
+                          <td>{d.typeDirigeant === "personne physique" ? "Physique" : "Morale"}</td>
+                          <td>
+                            {d.typeDirigeant === "personne physique"
+                              ? [d.firstNames, d.lastName].filter(Boolean).join(" ") || "—"
+                              : d.denomination || "—"}
+                          </td>
+                          <td>{formatValue(d.quality)}</td>
+                          <td>
+                            {d.birthMonth && d.birthYear
+                              ? `${String(d.birthMonth).padStart(2, "0")}/${d.birthYear}`
+                              : d.birthYear
+                                ? String(d.birthYear)
+                                : "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            )}
 
             <section>
               <h3>Localisation</h3>
