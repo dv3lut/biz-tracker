@@ -29,7 +29,7 @@ LINKEDIN_STATUS_INSUFFICIENT = "insufficient"
 LINKEDIN_STATUS_SKIPPED_ND = "skipped_nd"
 
 # Maximum number of concurrent LinkedIn runs
-MAX_CONCURRENT_LINKEDIN_RUNS = 10
+MAX_CONCURRENT_LINKEDIN_RUNS = 30
 
 # Progress callback type: (total, searched, found, not_found, error)
 ProgressCallback = Callable[[int, int, int, int, int], None]
