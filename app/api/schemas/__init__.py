@@ -62,6 +62,9 @@ from .stats import (
     DashboardRunBreakdown,
     GoogleListingAgeBreakdown,
     GoogleStatusBreakdown,
+    NafAnalyticsItem,
+    NafAnalyticsResponse,
+    NafAnalyticsTimePoint,
     StatsSummary,
 )
 from .sync import (
@@ -122,6 +125,9 @@ __all__ = [
     "LinkedInDebugResponse",
     "ListingStatus",
     "ManualGoogleCheckResponse",
+    "NafAnalyticsItem",
+    "NafAnalyticsResponse",
+    "NafAnalyticsTimePoint",
     "NafCategoryCreate",
     "NafCategoryOut",
     "NafCategoryStats",

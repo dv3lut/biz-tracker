@@ -109,6 +109,48 @@ class DashboardMetrics(BaseModel):
     )
 
 
+class NafAnalyticsTimePoint(BaseModel):
+    """Point de données temporel pour une granularité donnée (jour/semaine/mois)."""
+
+    period: str = Field(description="Période de référence (ex: 2026-02-08, 2026-W06, 2026-02).")
+    total_fetched: int = Field(default=0, description="Établissements récupérés de l'API SIRENE.")
+    non_diffusible: int = Field(default=0, description="Établissements non diffusibles (non cherchables).")
+    insufficient_info: int = Field(default=0, description="Établissements sans identité exploitable.")
+    google_found: int = Field(default=0, description="Fiches Google trouvées.")
+    google_not_found: int = Field(default=0, description="Recherche Google sans succès.")
+    google_pending: int = Field(default=0, description="En attente de recherche Google.")
+    listing_recent: int = Field(default=0, description="Fiches Google récentes.")
+    listing_recent_missing_contact: int = Field(default=0, description="Fiches récentes sans contact.")
+    listing_not_recent: int = Field(default=0, description="Fiches anciennes / reprise.")
+    linkedin_found: int = Field(default=0, description="Profils LinkedIn trouvés.")
+    linkedin_not_found: int = Field(default=0, description="Profils LinkedIn non trouvés.")
+    linkedin_pending: int = Field(default=0, description="En attente de recherche LinkedIn.")
+    alerts_created: int = Field(default=0, description="Alertes générées.")
+
+
+class NafAnalyticsItem(BaseModel):
+    """Statistiques d'un code NAF ou d'une catégorie avec séries temporelles."""
+
+    id: str = Field(description="Identifiant du NAF ou de la catégorie.")
+    code: str | None = Field(default=None, description="Code NAF (null si catégorie agrégée).")
+    name: str = Field(description="Libellé du NAF ou de la catégorie.")
+    totals: NafAnalyticsTimePoint = Field(description="Totaux cumulés sur la période.")
+    time_series: list[NafAnalyticsTimePoint] = Field(
+        default_factory=list, description="Séries temporelles par période."
+    )
+
+
+class NafAnalyticsResponse(BaseModel):
+    """Réponse complète de l'endpoint d'analytics NAF."""
+
+    granularity: str = Field(description="Granularité appliquée: day, week, month.")
+    start_date: Date = Field(description="Date de début de la fenêtre.")
+    end_date: Date = Field(description="Date de fin de la fenêtre.")
+    aggregation: str = Field(description="Mode d'agrégation: naf, category, subcategory.")
+    items: list[NafAnalyticsItem] = Field(default_factory=list, description="Données par NAF/catégorie.")
+    global_totals: NafAnalyticsTimePoint = Field(description="Totaux globaux tous NAF confondus.")
+
+
 __all__ = [
     "DailyAlertMetricPoint",
     "DailyApiMetricPoint",
@@ -119,5 +161,8 @@ __all__ = [
     "DashboardRunBreakdown",
     "GoogleListingAgeBreakdown",
     "GoogleStatusBreakdown",
+    "NafAnalyticsItem",
+    "NafAnalyticsResponse",
+    "NafAnalyticsTimePoint",
     "StatsSummary",
 ]
