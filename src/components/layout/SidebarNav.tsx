@@ -2,6 +2,7 @@ import { SectionDefinition, SectionKey } from "../../constants/sections";
 
 const SECTION_BADGES: Record<SectionKey, string> = {
   dashboard: "DB",
+  analytics: "AN",
   sync: "SY",
   alerts: "AL",
   emails: "EM",

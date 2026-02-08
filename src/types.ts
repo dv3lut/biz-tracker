@@ -630,3 +630,41 @@ export interface LinkedInDebugResponse {
   error: string | null;
   retriedWithLegalUnit: boolean;
 }
+
+// NAF Analytics types
+export type NafAnalyticsGranularity = "day" | "week" | "month";
+export type NafAnalyticsAggregation = "naf" | "category" | "subcategory";
+
+export interface NafAnalyticsTimePoint {
+  period: string;
+  totalFetched: number;
+  nonDiffusible: number;
+  insufficientInfo: number;
+  googleFound: number;
+  googleNotFound: number;
+  googlePending: number;
+  listingRecent: number;
+  listingRecentMissingContact: number;
+  listingNotRecent: number;
+  linkedinFound: number;
+  linkedinNotFound: number;
+  linkedinPending: number;
+  alertsCreated: number;
+}
+
+export interface NafAnalyticsItem {
+  id: string;
+  code: string | null;
+  name: string;
+  totals: NafAnalyticsTimePoint;
+  timeSeries: NafAnalyticsTimePoint[];
+}
+
+export interface NafAnalyticsResponse {
+  granularity: NafAnalyticsGranularity;
+  startDate: string;
+  endDate: string;
+  aggregation: NafAnalyticsAggregation;
+  items: NafAnalyticsItem[];
+  globalTotals: NafAnalyticsTimePoint;
+}

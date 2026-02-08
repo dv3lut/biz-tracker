@@ -20,3 +20,4 @@ export {
 	type NafSubCategoryCreatePayload,
 	type NafSubCategoryUpdatePayload,
 } from "./naf";
+export { analyticsApi, type NafAnalyticsParams } from "./analytics";

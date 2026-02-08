@@ -268,7 +268,7 @@ export const mapSyncRun = (payload: SyncRunResponse): SyncRun => ({
   linkedinFoundCount: payload.linkedin_found_count ?? 0,
   linkedinNotFoundCount: payload.linkedin_not_found_count ?? 0,
   linkedinErrorCount: payload.linkedin_error_count ?? 0,
-  summary: payload.summary ? mapRunSummary(payload.summary) : null,
+  summary: payload.summary && payload.summary.run ? mapRunSummary(payload.summary) : null,
 });
 
 export const mapSyncState = (payload: SyncStateResponse): SyncState => ({
