@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
-from typing import Iterable
+from typing import Iterable, Literal
+from uuid import UUID
 
-from sqlalchemy import case, func, select
+from sqlalchemy import String as SqlString, case, func, select
 from sqlalchemy.orm import Session
 
 from app.api.schemas import (
@@ -12,6 +13,9 @@ from app.api.schemas import (
     DashboardRunBreakdown,
     GoogleListingAgeBreakdown,
     GoogleStatusBreakdown,
+    NafAnalyticsItem,
+    NafAnalyticsResponse,
+    NafAnalyticsTimePoint,
     StatsSummary,
 )
 from app.db import models
@@ -539,3 +543,292 @@ def _empty_google_statuses() -> dict[str, int]:
 def _iter_days(start_date: date, days: int) -> Iterable[date]:
     for index in range(days):
         yield start_date + timedelta(days=index)
+
+
+# ---------------------------------------------------------------------------
+# NAF Analytics builder
+# ---------------------------------------------------------------------------
+
+
+def build_naf_analytics(
+    session: Session,
+    *,
+    start_date: date | None,
+    end_date: date | None,
+    granularity: Literal["day", "week", "month"],
+    aggregation: Literal["naf", "category", "subcategory"],
+    category_id: str | None,
+    naf_code: str | None,
+) -> NafAnalyticsResponse:
+    """Build NAF analytics with time series for proportions dashboard."""
+    now = utcnow()
+    if end_date is None:
+        end_date = now.date()
+    if start_date is None:
+        start_date = end_date - timedelta(days=30)
+
+    since_dt = datetime.combine(start_date, datetime.min.time())
+    until_dt = datetime.combine(end_date + timedelta(days=1), datetime.min.time())
+
+    # Determine period format based on granularity
+    if granularity == "day":
+        period_format = "YYYY-MM-DD"
+    elif granularity == "week":
+        period_format = "IYYY-\"W\"IW"
+    else:  # month
+        period_format = "YYYY-MM"
+
+    # Build base query with period grouping
+    period_expr = func.to_char(models.Establishment.first_seen_at, period_format).label("period")
+
+    # Build group by key based on aggregation
+    if aggregation == "naf":
+        group_key = func.upper(models.Establishment.naf_code).label("group_key")
+        group_name = models.Establishment.naf_libelle.label("group_name")
+        group_naf_code = models.Establishment.naf_code.label("group_naf_code")
+    elif aggregation == "category":
+        group_key = func.cast(models.NafCategory.id, SqlString).label("group_key")
+        group_name = models.NafCategory.name.label("group_name")
+        group_naf_code = func.cast(None, SqlString).label("group_naf_code")
+    else:  # subcategory
+        group_key = func.cast(models.NafSubCategory.id, SqlString).label("group_key")
+        group_name = models.NafSubCategory.name.label("group_name")
+        group_naf_code = models.NafSubCategory.naf_code.label("group_naf_code")
+
+    # Common aggregation columns
+    total_fetched = func.count(models.Establishment.siret).label("total_fetched")
+    non_diffusible = func.sum(
+        case((models.Establishment.google_check_status == "non_diffusible", 1), else_=0)
+    ).label("non_diffusible")
+    insufficient_info = func.sum(
+        case((models.Establishment.google_check_status == "insufficient", 1), else_=0)
+    ).label("insufficient_info")
+    google_found = func.sum(
+        case((models.Establishment.google_check_status == "found", 1), else_=0)
+    ).label("google_found")
+    google_not_found = func.sum(
+        case((models.Establishment.google_check_status == "not_found", 1), else_=0)
+    ).label("google_not_found")
+    google_pending = func.sum(
+        case((models.Establishment.google_check_status == "pending", 1), else_=0)
+    ).label("google_pending")
+    listing_recent = func.sum(
+        case(
+            (
+                (models.Establishment.google_check_status == "found")
+                & (models.Establishment.google_listing_age_status == "recent_creation"),
+                1,
+            ),
+            else_=0,
+        )
+    ).label("listing_recent")
+    listing_recent_missing_contact = func.sum(
+        case(
+            (
+                (models.Establishment.google_check_status == "found")
+                & (models.Establishment.google_listing_age_status == "recent_creation_missing_contact"),
+                1,
+            ),
+            else_=0,
+        )
+    ).label("listing_recent_missing_contact")
+    listing_not_recent = func.sum(
+        case(
+            (
+                (models.Establishment.google_check_status == "found")
+                & (
+                    models.Establishment.google_listing_age_status.in_(
+                        ["not_recent_creation", "buyback_suspected"]
+                    )
+                ),
+                1,
+            ),
+            else_=0,
+        )
+    ).label("listing_not_recent")
+
+    # LinkedIn stats via directors
+    linkedin_subq = (
+        select(
+            models.Director.establishment_siret,
+            func.count(models.Director.id).label("total_directors"),
+            func.sum(case((models.Director.linkedin_check_status == "found", 1), else_=0)).label("li_found"),
+            func.sum(case((models.Director.linkedin_check_status == "not_found", 1), else_=0)).label("li_not_found"),
+            func.sum(case((models.Director.linkedin_check_status == "pending", 1), else_=0)).label("li_pending"),
+        )
+        .group_by(models.Director.establishment_siret)
+        .subquery()
+    )
+
+    linkedin_found_expr = func.coalesce(func.sum(linkedin_subq.c.li_found), 0).label("linkedin_found")
+    linkedin_not_found_expr = func.coalesce(func.sum(linkedin_subq.c.li_not_found), 0).label("linkedin_not_found")
+    linkedin_pending_expr = func.coalesce(func.sum(linkedin_subq.c.li_pending), 0).label("linkedin_pending")
+
+    # Alerts count per establishment
+    alerts_subq = (
+        select(
+            models.Alert.siret,
+            func.count(models.Alert.id).label("alert_count"),
+        )
+        .where(models.Alert.created_at >= since_dt, models.Alert.created_at < until_dt)
+        .group_by(models.Alert.siret)
+        .subquery()
+    )
+    alerts_created_expr = func.coalesce(func.sum(alerts_subq.c.alert_count), 0).label("alerts_created")
+
+    # Build main query
+    base_query = select(
+        period_expr,
+        group_key,
+        group_name,
+        group_naf_code,
+        total_fetched,
+        non_diffusible,
+        insufficient_info,
+        google_found,
+        google_not_found,
+        google_pending,
+        listing_recent,
+        listing_recent_missing_contact,
+        listing_not_recent,
+        linkedin_found_expr,
+        linkedin_not_found_expr,
+        linkedin_pending_expr,
+        alerts_created_expr,
+    ).where(
+        models.Establishment.first_seen_at >= since_dt,
+        models.Establishment.first_seen_at < until_dt,
+    )
+
+    # Join with NAF tables if aggregating by category or subcategory
+    if aggregation in ("category", "subcategory"):
+        base_query = base_query.outerjoin(
+            models.NafSubCategory,
+            func.upper(models.Establishment.naf_code) == func.upper(models.NafSubCategory.naf_code),
+        ).outerjoin(
+            models.NafCategorySubCategory,
+            models.NafSubCategory.id == models.NafCategorySubCategory.subcategory_id,
+        ).outerjoin(
+            models.NafCategory,
+            models.NafCategorySubCategory.category_id == models.NafCategory.id,
+        )
+
+    # Join with linkedin subquery
+    base_query = base_query.outerjoin(
+        linkedin_subq, linkedin_subq.c.establishment_siret == models.Establishment.siret
+    )
+
+    # Join with alerts subquery
+    base_query = base_query.outerjoin(
+        alerts_subq, alerts_subq.c.siret == models.Establishment.siret
+    )
+
+    # Apply filters
+    if category_id:
+        try:
+            cat_uuid = UUID(category_id)
+            base_query = base_query.where(models.NafCategory.id == cat_uuid)
+        except ValueError:
+            pass
+
+    if naf_code:
+        base_query = base_query.where(
+            func.upper(models.Establishment.naf_code) == naf_code.upper().replace(".", "")
+        )
+
+    # Group by period and aggregation key
+    base_query = base_query.group_by(
+        period_expr, group_key, group_name, group_naf_code
+    ).order_by(period_expr, group_name)
+
+    rows = session.execute(base_query).all()
+
+    # Build result structure
+    items_map: dict[str, NafAnalyticsItem] = {}
+    global_totals = _empty_analytics_point("")
+    periods_set: set[str] = set()
+
+    for row in rows:
+        period = row.period or "unknown"
+        key = row.group_key or "unknown"
+        periods_set.add(period)
+
+        if key not in items_map:
+            items_map[key] = NafAnalyticsItem(
+                id=key,
+                code=row.group_naf_code,
+                name=row.group_name or "Inconnu",
+                totals=_empty_analytics_point("total"),
+                time_series=[],
+            )
+
+        item = items_map[key]
+        point = NafAnalyticsTimePoint(
+            period=period,
+            total_fetched=int(row.total_fetched or 0),
+            non_diffusible=int(row.non_diffusible or 0),
+            insufficient_info=int(row.insufficient_info or 0),
+            google_found=int(row.google_found or 0),
+            google_not_found=int(row.google_not_found or 0),
+            google_pending=int(row.google_pending or 0),
+            listing_recent=int(row.listing_recent or 0),
+            listing_recent_missing_contact=int(row.listing_recent_missing_contact or 0),
+            listing_not_recent=int(row.listing_not_recent or 0),
+            linkedin_found=int(row.linkedin_found or 0),
+            linkedin_not_found=int(row.linkedin_not_found or 0),
+            linkedin_pending=int(row.linkedin_pending or 0),
+            alerts_created=int(row.alerts_created or 0),
+        )
+        item.time_series.append(point)
+
+        # Accumulate totals
+        _accumulate_point(item.totals, point)
+        _accumulate_point(global_totals, point)
+
+    # Sort time series within each item
+    for item in items_map.values():
+        item.time_series.sort(key=lambda p: p.period)
+
+    return NafAnalyticsResponse(
+        granularity=granularity,
+        start_date=start_date,
+        end_date=end_date,
+        aggregation=aggregation,
+        items=list(items_map.values()),
+        global_totals=global_totals,
+    )
+
+
+def _empty_analytics_point(period: str) -> NafAnalyticsTimePoint:
+    return NafAnalyticsTimePoint(
+        period=period,
+        total_fetched=0,
+        non_diffusible=0,
+        insufficient_info=0,
+        google_found=0,
+        google_not_found=0,
+        google_pending=0,
+        listing_recent=0,
+        listing_recent_missing_contact=0,
+        listing_not_recent=0,
+        linkedin_found=0,
+        linkedin_not_found=0,
+        linkedin_pending=0,
+        alerts_created=0,
+    )
+
+
+def _accumulate_point(target: NafAnalyticsTimePoint, source: NafAnalyticsTimePoint) -> None:
+    target.total_fetched += source.total_fetched
+    target.non_diffusible += source.non_diffusible
+    target.insufficient_info += source.insufficient_info
+    target.google_found += source.google_found
+    target.google_not_found += source.google_not_found
+    target.google_pending += source.google_pending
+    target.listing_recent += source.listing_recent
+    target.listing_recent_missing_contact += source.listing_recent_missing_contact
+    target.listing_not_recent += source.listing_not_recent
+    target.linkedin_found += source.linkedin_found
+    target.linkedin_not_found += source.linkedin_not_found
+    target.linkedin_pending += source.linkedin_pending
+    target.alerts_created += source.alerts_created

@@ -28,6 +28,7 @@ omit =
     app/api/routers/admin/stats_builder.py
     app/api/routers/admin/sync_runs.py
     app/api/routers/admin/sync_runs_router.py
+    app/api/routers/admin/linkedin_router.py
     app/api/routers/admin/stripe.py
     app/api/routers/health.py
     app/api/routers/health_router.py

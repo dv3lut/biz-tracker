@@ -301,6 +301,37 @@ class StripeSettings(BaseModel):
     )
 
 
+class ApifySettings(BaseModel):
+    api_token: Optional[str] = Field(default=None, description="Token API pour Apify.")
+    linkedin_actor_id: str = Field(
+        default="FbqC9BRstFBddhUqj",
+        description="ID de l'Actor Apify pour la recherche LinkedIn.",
+    )
+    max_concurrent_runs: int = Field(
+        default=10,
+        ge=1,
+        le=10,
+        description="Nombre maximum de runs Apify lancés en parallèle.",
+    )
+    request_timeout_seconds: int = Field(default=60, ge=10, description="Timeout pour les appels Apify.")
+
+    @property
+    def enabled(self) -> bool:
+        return bool(self.api_token)
+
+    @field_validator("api_token", mode="before")
+    @classmethod
+    def _normalize_api_token(cls, value: object) -> Optional[str | object]:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            trimmed = value.strip()
+            if not trimmed or trimmed.lower() in {"null", "none"}:
+                return None
+            return trimmed
+        return value
+
+
 def _permissive_json_loads(value: str) -> Any:
     trimmed = value.strip()
     if not trimmed:
@@ -372,6 +403,7 @@ class Settings(BaseSettings):
     google: GoogleSettings = Field(default_factory=GoogleSettings)
     public_contact: PublicContactSettings = Field(default_factory=PublicContactSettings)
     stripe: StripeSettings = Field(default_factory=StripeSettings)
+    apify: ApifySettings = Field(default_factory=ApifySettings)
 
     @property
     def is_local(self) -> bool:

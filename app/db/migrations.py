@@ -558,6 +558,22 @@ def run_schema_upgrades(engine: Engine) -> None:
         ON directors (establishment_siret)
         """,
         """
+        ALTER TABLE IF EXISTS directors
+        ADD COLUMN IF NOT EXISTS linkedin_profile_url VARCHAR(1024)
+        """,
+        """
+        ALTER TABLE IF EXISTS directors
+        ADD COLUMN IF NOT EXISTS linkedin_profile_data JSONB
+        """,
+        """
+        ALTER TABLE IF EXISTS directors
+        ADD COLUMN IF NOT EXISTS linkedin_last_checked_at TIMESTAMP
+        """,
+        """
+        ALTER TABLE IF EXISTS directors
+        ADD COLUMN IF NOT EXISTS linkedin_check_status VARCHAR(32) NOT NULL DEFAULT 'pending'
+        """,
+        """
         ALTER TABLE establishments
         DROP COLUMN IF EXISTS director_first_names
         """,
@@ -572,6 +588,27 @@ def run_schema_upgrades(engine: Engine) -> None:
         """
         ALTER TABLE establishments
         DROP COLUMN IF EXISTS director_birth_year
+        """,
+        # LinkedIn progress columns on sync_runs
+        """
+        ALTER TABLE sync_runs
+        ADD COLUMN IF NOT EXISTS linkedin_queue_count INTEGER NOT NULL DEFAULT 0
+        """,
+        """
+        ALTER TABLE sync_runs
+        ADD COLUMN IF NOT EXISTS linkedin_searched_count INTEGER NOT NULL DEFAULT 0
+        """,
+        """
+        ALTER TABLE sync_runs
+        ADD COLUMN IF NOT EXISTS linkedin_found_count INTEGER NOT NULL DEFAULT 0
+        """,
+        """
+        ALTER TABLE sync_runs
+        ADD COLUMN IF NOT EXISTS linkedin_not_found_count INTEGER NOT NULL DEFAULT 0
+        """,
+        """
+        ALTER TABLE sync_runs
+        ADD COLUMN IF NOT EXISTS linkedin_error_count INTEGER NOT NULL DEFAULT 0
         """,
     ]
 

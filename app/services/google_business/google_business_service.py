@@ -27,12 +27,12 @@ from app.services.client_service import resolve_enabled_department_codes
 from app.services.rate_limiter import RateLimiter
 from app.utils.business_types import is_micro_company
 from app.utils.dates import utcnow
+from app.utils.diffusible import any_name_non_diffusible
 from app.utils.google_listing import normalize_listing_age_status
 from app.utils.regions import resolve_department_code
 
 ProgressCallback = Callable[[int, int, int, int, int], None]
 AgeBuckets = dict[str, int]
-
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -260,6 +260,14 @@ class GoogleBusinessService:
     ) -> Iterable[models.Establishment]:
         for establishment in establishments:
             if not establishment.siret:
+                continue
+            # Skip non-diffusible establishments (contains [ND] or NON DIFFUSIBLE)
+            if any_name_non_diffusible(
+                establishment.name,
+                establishment.enseigne1,
+                establishment.legal_unit_name,
+                establishment.denomination_unite_legale,
+            ):
                 continue
             if reset_google_state:
                 yield establishment

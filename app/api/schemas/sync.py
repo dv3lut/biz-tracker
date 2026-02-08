@@ -34,6 +34,12 @@ class SyncRunOut(BaseModel):
     google_pending_count: int
     google_immediate_matched_count: int
     google_late_matched_count: int
+    # LinkedIn enrichment progress
+    linkedin_queue_count: int = 0
+    linkedin_searched_count: int = 0
+    linkedin_found_count: int = 0
+    linkedin_not_found_count: int = 0
+    linkedin_error_count: int = 0
     updated_records: int
     summary: dict[str, Any] | None = None
     last_cursor: str | None
@@ -73,6 +79,11 @@ class SyncRunOut(BaseModel):
     @property
     def google_enabled(self) -> bool:
         return self.mode != SyncMode.SIRENE_ONLY
+
+    @computed_field
+    @property
+    def linkedin_enabled(self) -> bool:
+        return self.mode in {SyncMode.FULL, SyncMode.LINKEDIN_PENDING, SyncMode.LINKEDIN_REFRESH}
 
 
 class SyncStateOut(BaseModel):
@@ -146,9 +157,11 @@ class SyncRequest(BaseModel):
     mode: SyncMode = Field(
         default=SyncMode.FULL,
         description=(
-            "Mode d'exécution: 'full' exécute l'enrichissement Google, 'sirene_only' le désactive, "
-            "'google_pending' relance uniquement les établissements jamais enrichis et déclenche les alertes, "
+            "Mode d'exécution: 'full' exécute l'enrichissement Google et LinkedIn, 'sirene_only' le désactive, "
+            "'google_pending' relance uniquement les établissements jamais enrichis par Google et déclenche les alertes, "
             "'google_refresh' relance une détection Google sur tous les établissements (sans alertes), "
+            "'linkedin_pending' relance uniquement les dirigeants jamais enrichis par LinkedIn, "
+            "'linkedin_refresh' relance une détection LinkedIn sur tous les dirigeants, "
             "'day_replay' rejoue une journée complète en limitant les alertes aux administrateurs."
         ),
     )

@@ -59,15 +59,36 @@ class AlertService:
         self._target_client_ids = tuple(str(value) for value in (target_client_ids or []))
 
     def create_google_alerts(self, establishments: Sequence[models.Establishment]) -> list[models.Alert]:
-        filtered_establishments = [
+        # Include establishments with Google found OR with LinkedIn profiles
+        def _has_linkedin_profile(est: models.Establishment) -> bool:
+            directors = getattr(est, "directors", None) or []
+            return any(
+                getattr(d, "is_physical_person", False) and getattr(d, "linkedin_profile_url", None)
+                for d in directors
+            )
+
+        google_found_establishments = [
             item for item in establishments if (item.google_check_status or "").lower() == "found"
         ]
+        linkedin_only_establishments = [
+            item for item in establishments
+            if (item.google_check_status or "").lower() != "found"
+            and _has_linkedin_profile(item)
+        ]
+
+        # Combine both lists (Google found + LinkedIn only)
+        filtered_establishments = google_found_establishments + linkedin_only_establishments
+
         alerts: list[models.Alert] = []
         if filtered_establishments:
             for establishment in filtered_establishments:
                 payload = self._formatter.build_payload(establishment)
                 payload["google_place_url"] = establishment.google_place_url
                 payload["google_place_id"] = establishment.google_place_id
+                # Mark if this alert is LinkedIn-only (no Google)
+                has_google = (establishment.google_check_status or "").lower() == "found"
+                payload["has_google"] = has_google
+                payload["has_linkedin"] = _has_linkedin_profile(establishment)
                 alert = models.Alert(
                     run_id=self._run.id,
                     siret=establishment.siret,
@@ -81,13 +102,13 @@ class AlertService:
 
             alerts_by_siret: dict[str, models.Alert] = {alert.siret: alert for alert in alerts}
 
-            message_lines = ["Pages Google My Business associées détectées:", ""]
+            message_lines = ["Pages Google My Business / LinkedIn associées détectées:", ""]
             for establishment in filtered_establishments:
                 message_lines.extend(self._formatter.format_lines(establishment, include_google=True))
                 message_lines.append("")
             _ALERT_LOGGER.info("\n".join(message_lines).strip())
         else:
-            _ALERT_LOGGER.info("Aucune fiche Google détectée pour le run %s", self._run.id)
+            _ALERT_LOGGER.info("Aucune fiche Google ou LinkedIn détectée pour le run %s", self._run.id)
             alerts_by_siret = {}
 
         email_enabled = self._email_service.is_enabled()

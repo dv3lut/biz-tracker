@@ -203,5 +203,6 @@ def collect_google_only(
         google_matched_count=google_matched_count,
         google_pending_count=google_pending_count,
         google_api_call_count=google_api_call_count,
+        google_api_error_count=google_api_error_count,
         alerts_sent_count=alerts_sent_count,
     )

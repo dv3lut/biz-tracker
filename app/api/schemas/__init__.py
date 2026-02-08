@@ -21,6 +21,7 @@ from .google import (
     GoogleRetryRule,
     ManualGoogleCheckResponse,
 )
+from .linkedin import LinkedInCheckResponse, LinkedInDebugResponse
 from .public_contact import PublicContactRequest, PublicContactResponse
 from .public_catalog import PublicNafCategoryOut
 from .public_stripe import (
@@ -61,6 +62,9 @@ from .stats import (
     DashboardRunBreakdown,
     GoogleListingAgeBreakdown,
     GoogleStatusBreakdown,
+    NafAnalyticsItem,
+    NafAnalyticsResponse,
+    NafAnalyticsTimePoint,
     StatsSummary,
 )
 from .sync import (
@@ -117,8 +121,13 @@ __all__ = [
     "GoogleRetryConfigUpdate",
     "GoogleRetryRule",
     "GoogleStatusBreakdown",
+    "LinkedInCheckResponse",
+    "LinkedInDebugResponse",
     "ListingStatus",
     "ManualGoogleCheckResponse",
+    "NafAnalyticsItem",
+    "NafAnalyticsResponse",
+    "NafAnalyticsTimePoint",
     "NafCategoryCreate",
     "NafCategoryOut",
     "NafCategoryStats",

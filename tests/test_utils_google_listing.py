@@ -18,6 +18,12 @@ def test_normalize_listing_status_filters_invalid_value():
         google_listing.normalize_listing_status_filters(["invalid"])
 
 
+def test_normalize_listing_status_filters_defaults_when_none():
+    result = google_listing.normalize_listing_status_filters(None)
+
+    assert result == list(google_listing.FILTERABLE_LISTING_STATUSES)
+
+
 def test_normalize_listing_age_status_handles_aliases():
     assert google_listing.normalize_listing_age_status("buyback_suspected") == "not_recent_creation"
     assert google_listing.normalize_listing_age_status(None) == "unknown"

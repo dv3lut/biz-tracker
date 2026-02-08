@@ -68,6 +68,7 @@ class SyncResult:
     google_matched_count: int
     google_pending_count: int
     google_api_call_count: int
+    google_api_error_count: int
     alerts_sent_count: int
 
 
