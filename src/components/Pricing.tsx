@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Link } from "react-router-dom";
 import {
   Dialog,
   DialogContent,
@@ -25,7 +24,7 @@ type PublicNafCategory = {
 
 const PLAN_CATEGORY_LIMITS: Record<PlanKey, number> = {
   starter: 1,
-  business: 5,
+  business: 3,
 };
 
 type Props = {
@@ -39,10 +38,13 @@ const Pricing = ({ trialPeriodDays = 14 }: Props) => {
   const [categoriesError, setCategoriesError] = useState<string | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<PlanKey | null>(null);
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
+  const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
+  const categoryDropdownRef = useRef<HTMLDivElement | null>(null);
   const [checkoutForm, setCheckoutForm] = useState({
     contactName: "",
     companyName: "",
     email: "",
+    referrerName: "",
   });
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
@@ -51,7 +53,9 @@ const Pricing = ({ trialPeriodDays = 14 }: Props) => {
   const [isPortalOpen, setIsPortalOpen] = useState(false);
   const [portalEmail, setPortalEmail] = useState("");
   const [portalError, setPortalError] = useState<string | null>(null);
+  const [portalSuccess, setPortalSuccess] = useState<string | null>(null);
   const [isPortalLoading, setIsPortalLoading] = useState(false);
+
 
   const plans = [
     {
@@ -66,7 +70,7 @@ const Pricing = ({ trialPeriodDays = 14 }: Props) => {
         "1 secteur sélectionné (sur le catalogue complet)",
         "Nouvelles entreprises détectées en France",
       ],
-      cta: "Commencer",
+      cta: "Démarrer maintenant",
       highlighted: false,
     },
     {
@@ -78,7 +82,7 @@ const Pricing = ({ trialPeriodDays = 14 }: Props) => {
       description: "Le plus populaire",
       features: [
         "Alertes quotidiennes par email",
-        "5 secteurs sélectionnés (sur le catalogue complet)",
+        "3 secteurs sélectionnés (sur le catalogue complet)",
         "Historique 2 mois (sur vos secteurs)",
       ],
       cta: "Démarrer maintenant",
@@ -139,19 +143,55 @@ const Pricing = ({ trialPeriodDays = 14 }: Props) => {
     };
   }, [apiBaseUrl]);
 
+  useEffect(() => {
+    if (!isCategoryDropdownOpen) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!categoryDropdownRef.current) return;
+      if (!categoryDropdownRef.current.contains(event.target as Node)) {
+        setIsCategoryDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isCategoryDropdownOpen]);
+
   const requiredCategoryCount = useMemo(() => {
     if (!selectedPlan) return 0;
     return PLAN_CATEGORY_LIMITS[selectedPlan];
   }, [selectedPlan]);
 
+  const selectedCategoryNames = useMemo(() => {
+    if (!selectedCategoryIds.length) return [];
+    const categoryMap = new Map(categories.map((category) => [category.id, category.name]));
+    return selectedCategoryIds
+      .map((id) => categoryMap.get(id))
+      .filter((name): name is string => Boolean(name));
+  }, [categories, selectedCategoryIds]);
+
   const scrollToContact = () => {
     document.getElementById("contact")?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  const handleMissingCategories = () => {
+    const message =
+      "Bonjour, j'aimerais souscrire au service Business Tracker mais je ne trouve pas la/les catégorie(s) :";
+    sessionStorage.setItem("bt_contact_prefill_message", message);
+    window.dispatchEvent(
+      new CustomEvent("bt:prefill-contact", {
+        detail: { message },
+      })
+    );
+    setIsCheckoutOpen(false);
+    scrollToContact();
   };
 
   const handleOpenCheckout = (planKey: PlanKey) => {
     setSelectedPlan(planKey);
     setSelectedCategoryIds([]);
-    setCheckoutForm({ contactName: "", companyName: "", email: "" });
+    setIsCategoryDropdownOpen(false);
+    setCheckoutForm({ contactName: "", companyName: "", email: "", referrerName: "" });
     setCheckoutError(null);
     setIsCheckoutOpen(true);
   };
@@ -164,7 +204,11 @@ const Pricing = ({ trialPeriodDays = 14 }: Props) => {
       if (current.length >= requiredCategoryCount) {
         return current;
       }
-      return [...current, categoryId];
+      const next = [...current, categoryId];
+      if (next.length >= requiredCategoryCount) {
+        setIsCategoryDropdownOpen(false);
+      }
+      return next;
     });
   };
 
@@ -194,6 +238,7 @@ const Pricing = ({ trialPeriodDays = 14 }: Props) => {
           contact_name: checkoutForm.contactName,
           company_name: checkoutForm.companyName,
           email: checkoutForm.email,
+          referrer_name: checkoutForm.referrerName.trim() || null,
         }),
       });
 
@@ -229,6 +274,7 @@ const Pricing = ({ trialPeriodDays = 14 }: Props) => {
     }
 
     setPortalError(null);
+    setPortalSuccess(null);
     setIsPortalLoading(true);
 
     try {
@@ -241,7 +287,7 @@ const Pricing = ({ trialPeriodDays = 14 }: Props) => {
       });
 
       if (!response.ok) {
-        let detail = "Impossible d'ouvrir le portail.";
+        let detail = "Impossible d'envoyer le lien.";
         try {
           const payload = await response.json();
           if (typeof payload?.detail === "string") {
@@ -254,11 +300,11 @@ const Pricing = ({ trialPeriodDays = 14 }: Props) => {
         return;
       }
 
-      const payload = (await response.json()) as { url: string };
-      if (payload.url) {
-        window.location.href = payload.url;
+      const payload = (await response.json()) as { sent?: boolean };
+      if (payload.sent) {
+        setPortalSuccess("Si l'adresse est reconnue, un email vient d'être envoyé.");
       } else {
-        setPortalError("URL Stripe invalide.");
+        setPortalError("Envoi non confirmé.");
       }
     } finally {
       setIsPortalLoading(false);
@@ -348,17 +394,11 @@ const Pricing = ({ trialPeriodDays = 14 }: Props) => {
 
         <div className="mt-12 text-center">
           <p className="text-muted-foreground">
-            Toutes les offres incluent {trialPeriodDays} jours d’essai (activation après souscription, paiement requis)
+            Toutes les offres incluent {trialPeriodDays} jours d’essai (activation après souscription)
           </p>
-          <p className="text-sm text-muted-foreground mt-2">
-            Résiliation possible à la fin de chaque mois. Changement de plan avec proratisation immédiate.
-          </p>
-          <div className="mt-6">
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
             <Button variant="outline" onClick={() => setIsPortalOpen(true)}>
-              Gérer mon abonnement
-            </Button>
-            <Button variant="outline" className="ml-3" asChild>
-              <Link to="/upgrade">Changer de plan</Link>
+              Portail client
             </Button>
           </div>
         </div>
@@ -379,36 +419,72 @@ const Pricing = ({ trialPeriodDays = 14 }: Props) => {
             ) : categoriesError ? (
               <p className="text-sm text-destructive">{categoriesError}</p>
             ) : (
-              <div className="grid gap-3">
-                {categories.map((category) => {
-                  const isSelected = selectedCategoryIds.includes(category.id);
-                  const isDisabled =
-                    !isSelected && selectedCategoryIds.length >= requiredCategoryCount;
-                  return (
-                    <label
-                      key={category.id}
-                      className={`flex items-start gap-3 rounded-md border p-3 ${
-                        isDisabled ? "opacity-60" : "cursor-pointer"
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        className="mt-1"
-                        checked={isSelected}
-                        disabled={isDisabled}
-                        onChange={() => handleToggleCategory(category.id)}
-                      />
-                      <div>
-                        <p className="font-medium">{category.name}</p>
-                        {category.description ? (
-                          <p className="text-sm text-muted-foreground">{category.description}</p>
-                        ) : null}
+              <div className="grid gap-2">
+                <Label>Catégories</Label>
+                <div className="relative" ref={categoryDropdownRef}>
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-between gap-3 rounded-md border px-3 py-2 text-left text-sm"
+                    onClick={() => setIsCategoryDropdownOpen((current) => !current)}
+                  >
+                    <span className="flex-1 truncate">
+                      {selectedCategoryNames.length
+                        ? selectedCategoryNames.join(", ")
+                        : `Sélectionner ${requiredCategoryCount} catégorie(s)`}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {selectedCategoryIds.length}/{requiredCategoryCount}
+                    </span>
+                  </button>
+                  {isCategoryDropdownOpen ? (
+                    <div className="absolute z-20 mt-2 w-full rounded-md border bg-background shadow-lg">
+                      <div className="max-h-64 space-y-2 overflow-y-auto p-2">
+                        {categories.map((category) => {
+                          const isSelected = selectedCategoryIds.includes(category.id);
+                          const isDisabled =
+                            !isSelected && selectedCategoryIds.length >= requiredCategoryCount;
+                          return (
+                            <label
+                              key={category.id}
+                              className={`flex items-start gap-3 rounded-md border p-3 ${
+                                isDisabled ? "opacity-60" : "cursor-pointer"
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                className="mt-1"
+                                checked={isSelected}
+                                disabled={isDisabled}
+                                onChange={() => handleToggleCategory(category.id)}
+                              />
+                              <div>
+                                <p className="font-medium">{category.name}</p>
+                                {category.description ? (
+                                  <p className="text-sm text-muted-foreground">
+                                    {category.description}
+                                  </p>
+                                ) : null}
+                              </div>
+                            </label>
+                          );
+                        })}
                       </div>
-                    </label>
-                  );
-                })}
+                    </div>
+                  ) : null}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {selectedCategoryIds.length}/{requiredCategoryCount} sélectionnée(s)
+                </p>
               </div>
             )}
+
+            <button
+              type="button"
+              onClick={handleMissingCategories}
+              className="text-sm text-secondary hover:text-secondary/80 underline underline-offset-4"
+            >
+              Je ne trouve pas la/les catégories que je veux
+            </button>
 
             <div className="grid gap-3">
               <div>
@@ -445,6 +521,20 @@ const Pricing = ({ trialPeriodDays = 14 }: Props) => {
                   placeholder="vous@entreprise.fr"
                 />
               </div>
+              <div>
+                <Label htmlFor="checkout-referrer">Parrain (optionnel)</Label>
+                <Input
+                  id="checkout-referrer"
+                  placeholder="Nom / prénom de la personne qui vous a conseillé Business Tracker"
+                  value={checkoutForm.referrerName}
+                  onChange={(event) =>
+                    setCheckoutForm((current) => ({
+                      ...current,
+                      referrerName: event.target.value,
+                    }))
+                  }
+                />
+              </div>
             </div>
 
             {checkoutError ? <p className="text-sm text-destructive">{checkoutError}</p> : null}
@@ -466,7 +556,7 @@ const Pricing = ({ trialPeriodDays = 14 }: Props) => {
           <DialogHeader>
             <DialogTitle>Accéder au portail client</DialogTitle>
             <DialogDescription>
-              Renseignez votre email pour gérer votre abonnement Stripe.
+              Nous envoyons un lien sécurisé par email pour gérer votre abonnement.
             </DialogDescription>
           </DialogHeader>
 
@@ -482,6 +572,7 @@ const Pricing = ({ trialPeriodDays = 14 }: Props) => {
               />
             </div>
             {portalError ? <p className="text-sm text-destructive">{portalError}</p> : null}
+            {portalSuccess ? <p className="text-sm text-emerald-600">{portalSuccess}</p> : null}
           </div>
 
           <DialogFooter className="gap-2">
@@ -489,7 +580,7 @@ const Pricing = ({ trialPeriodDays = 14 }: Props) => {
               Fermer
             </Button>
             <Button onClick={handlePortalSubmit} disabled={isPortalLoading}>
-              {isPortalLoading ? "Ouverture…" : "Ouvrir le portail"}
+              {isPortalLoading ? "Envoi…" : "Envoyer le lien"}
             </Button>
           </DialogFooter>
         </DialogContent>
