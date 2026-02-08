@@ -74,6 +74,7 @@ interface SyncRunResponse {
   estimated_completion_at: string | null;
   summary: RunSummaryResponse | null;
   google_enabled: boolean;
+  months_back: number | null;
 }
 
 interface RunSummaryResponse {
@@ -528,6 +529,7 @@ const toSyncRun = (payload: SyncRunResponse): SyncRun => ({
   notifyAdmins: payload.notify_admins,
   dayReplayForceGoogle: payload.day_replay_force_google,
   dayReplayReference: payload.day_replay_reference,
+  monthsBack: payload.months_back ?? null,
   summary: payload.summary ? toRunSummary(payload.summary) : null,
 });
 

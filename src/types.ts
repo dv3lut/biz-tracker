@@ -37,6 +37,7 @@ export interface SyncRun {
   notifyAdmins: boolean;
   dayReplayForceGoogle: boolean;
   dayReplayReference: DayReplayReference;
+  monthsBack: number | null;
   summary: RunSummary | null;
 }
 
@@ -260,10 +261,10 @@ export interface SyncRequestPayload {
   replayForDate?: string;
   replayReference?: DayReplayReference;
   nafCodes?: string[];
-  initialBackfill?: boolean;
   targetClientIds?: string[];
   notifyAdmins?: boolean;
   forceGoogleReplay?: boolean;
+  monthsBack?: number;
 }
 
 export type EstablishmentIndividualFilter = "all" | "individual" | "non_individual";
