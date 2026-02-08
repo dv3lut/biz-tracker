@@ -55,10 +55,9 @@ def run_schema_upgrades(engine: Engine) -> None:
         """
         CREATE TABLE IF NOT EXISTS naf_subcategories (
             id UUID PRIMARY KEY,
-            category_id UUID NOT NULL REFERENCES naf_categories(id) ON DELETE CASCADE,
             name VARCHAR(255) NOT NULL,
             description TEXT,
-            naf_code VARCHAR(10) NOT NULL UNIQUE,
+            naf_code VARCHAR(10) NOT NULL,
             price_cents INTEGER NOT NULL DEFAULT 0,
             is_active BOOLEAN NOT NULL DEFAULT TRUE,
             created_at TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -66,16 +65,98 @@ def run_schema_upgrades(engine: Engine) -> None:
         )
         """,
         """
+        CREATE TABLE IF NOT EXISTS naf_category_subcategories (
+            category_id UUID NOT NULL REFERENCES naf_categories(id) ON DELETE CASCADE,
+            subcategory_id UUID NOT NULL REFERENCES naf_subcategories(id) ON DELETE CASCADE,
+            created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+            PRIMARY KEY (category_id, subcategory_id)
+        )
+        """,
+        """
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1
+                FROM pg_constraint
+                WHERE conname = 'naf_subcategories_naf_code_key'
+            ) THEN
+                ALTER TABLE naf_subcategories DROP CONSTRAINT naf_subcategories_naf_code_key;
+            END IF;
+        END $$;
+        """,
+        """
+        DO $$
+        DECLARE
+            idx_name text;
+        BEGIN
+            SELECT i.relname
+            INTO idx_name
+            FROM pg_class t
+            JOIN pg_index ix ON t.oid = ix.indrelid
+            JOIN pg_class i ON i.oid = ix.indexrelid
+            JOIN pg_attribute a ON a.attrelid = t.oid
+            WHERE t.relname = 'naf_subcategories'
+              AND ix.indisunique
+              AND a.attname = 'naf_code'
+              AND a.attnum = ANY(ix.indkey)
+              AND array_length(ix.indkey, 1) = 1
+            LIMIT 1;
+
+            IF idx_name IS NOT NULL THEN
+                EXECUTE format('DROP INDEX IF EXISTS %I', idx_name);
+            END IF;
+        END $$;
+        """,
+        """
         ALTER TABLE IF EXISTS naf_subcategories
         ADD COLUMN IF NOT EXISTS description TEXT
         """,
         """
-        CREATE INDEX IF NOT EXISTS ix_naf_subcategories_category_id
-        ON naf_subcategories (category_id)
-        """,
-        """
         CREATE INDEX IF NOT EXISTS ix_naf_subcategories_naf_code
         ON naf_subcategories (naf_code)
+        """,
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_naf_subcategories_naf_code
+        ON naf_subcategories (naf_code)
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS ix_naf_category_subcategories_category_id
+        ON naf_category_subcategories (category_id)
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS ix_naf_category_subcategories_subcategory_id
+        ON naf_category_subcategories (subcategory_id)
+        """,
+        """
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_name = 'naf_subcategories'
+                  AND column_name = 'category_id'
+            ) THEN
+                INSERT INTO naf_category_subcategories (category_id, subcategory_id, created_at)
+                SELECT category_id, id, created_at
+                FROM naf_subcategories
+                WHERE category_id IS NOT NULL
+                ON CONFLICT DO NOTHING;
+            END IF;
+        END $$;
+        """,
+        """
+        ALTER TABLE IF EXISTS naf_subcategories
+        DROP CONSTRAINT IF EXISTS naf_subcategories_category_id_fkey
+        """,
+        """
+        DROP INDEX IF EXISTS uq_naf_subcategories_category_code
+        """,
+        """
+        DROP INDEX IF EXISTS ix_naf_subcategories_category_id
+        """,
+        """
+        ALTER TABLE IF EXISTS naf_subcategories
+        DROP COLUMN IF EXISTS category_id
         """,
         """
         CREATE TABLE IF NOT EXISTS client_subscriptions (
@@ -240,6 +321,10 @@ def run_schema_upgrades(engine: Engine) -> None:
     """
     ALTER TABLE clients
     ADD COLUMN IF NOT EXISTS listing_statuses JSONB NOT NULL DEFAULT '["recent_creation","recent_creation_missing_contact","not_recent_creation"]'::jsonb
+    """,
+    """
+    ALTER TABLE clients
+    ADD COLUMN IF NOT EXISTS category_ids JSONB NOT NULL DEFAULT '[]'::jsonb
     """,
     """
     ALTER TABLE clients

@@ -174,16 +174,22 @@ def render_client_email(
     ) -> tuple[list[str], str]:
         name = establishment.name or "(nom indisponible)"
         full_address = formatter.format_full_address(establishment)
-        category_name, subcategory_name = formatter.resolve_category_and_subcategory(establishment.naf_code)
+        client_categories, client_subcategories = formatter.resolve_client_category_labels(
+            client,
+            establishment.naf_code,
+        )
+        category_name = ", ".join(client_categories) if client_categories else None
+        subcategory_name = ", ".join(client_subcategories) if client_subcategories else None
+        if not category_name and not subcategory_name:
+            category_name, subcategory_name = formatter.resolve_category_and_subcategory(establishment.naf_code)
         if not category_name:
             category_name = establishment.naf_libelle
         use_subcategory = getattr(client, "use_subcategory_label_in_client_alerts", False)
         naf_code_label = establishment.naf_code or ""
         if use_subcategory:
-            if subcategory_name:
-                category_name = f"{subcategory_name} ({naf_code_label})" if naf_code_label else subcategory_name
-            elif category_name:
-                category_name = f"{category_name} ({naf_code_label})" if naf_code_label else category_name
+            label = subcategory_name or category_name
+            if label:
+                category_name = f"{label} ({naf_code_label})" if naf_code_label else label
         normalized_status = normalize_listing_age_status(establishment.google_listing_age_status)
         border_color = STATUS_COLORS.get(normalized_status, STATUS_COLORS["unknown"])["border"]
         item_bg = theme["item_bg"]

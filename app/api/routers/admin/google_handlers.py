@@ -441,16 +441,28 @@ def _load_subcategory_lookup(session: Session) -> dict[str, tuple[str | None, st
                 models.NafSubCategory.name,
                 models.NafCategory.name,
             )
-            .join(models.NafCategory, models.NafCategory.id == models.NafSubCategory.category_id)
+            .join(
+                models.NafCategorySubCategory,
+                models.NafCategorySubCategory.subcategory_id == models.NafSubCategory.id,
+            )
+            .join(models.NafCategory, models.NafCategory.id == models.NafCategorySubCategory.category_id)
             .where(models.NafSubCategory.is_active.is_(True))
         ).all()
     )
     lookup: dict[str, tuple[str | None, str | None]] = {}
+    category_map: dict[str, set[str]] = {}
+    subcategory_map: dict[str, str | None] = {}
     for naf_code, sub_name, category_name in rows:
         if not naf_code:
             continue
         token = naf_code.strip().upper()
         if not token:
             continue
-        lookup[token] = (category_name, sub_name)
+        if category_name:
+            category_map.setdefault(token, set()).add(category_name)
+        if token not in subcategory_map:
+            subcategory_map[token] = sub_name
+    for token, categories in category_map.items():
+        category_label = ", ".join(sorted(categories)) if categories else None
+        lookup[token] = (category_label, subcategory_map.get(token))
     return lookup

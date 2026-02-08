@@ -14,6 +14,7 @@ from app.api.schemas import (
     NafCategoryCreate,
     NafCategoryOut,
     NafCategoryUpdate,
+    NafCategorySubCategoryLink,
     NafSubCategoryCreate,
     NafSubCategoryOut,
     NafSubCategoryUpdate,
@@ -71,6 +72,19 @@ def _get_subcategory_or_404(session: Session, subcategory_id: UUID) -> models.Na
     if subcategory is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sous-catégorie introuvable.")
     return subcategory
+
+
+def _get_category_link(
+    session: Session,
+    *,
+    category_id: UUID,
+    subcategory_id: UUID,
+) -> models.NafCategorySubCategory | None:
+    stmt = select(models.NafCategorySubCategory).where(
+        models.NafCategorySubCategory.category_id == category_id,
+        models.NafCategorySubCategory.subcategory_id == subcategory_id,
+    )
+    return session.execute(stmt).scalar_one_or_none()
 
 
 @router.get("/naf-categories", response_model=list[NafCategoryOut], summary="Lister les catégories NAF")
@@ -193,7 +207,6 @@ def create_naf_subcategory(payload: NafSubCategoryCreate, session: Session = Dep
     price_cents = euros_to_cents(payload.price_eur or 0)
     description = (payload.description.strip() or None) if payload.description is not None else None
     subcategory = models.NafSubCategory(
-        category_id=category.id,
         name=name,
         description=description,
         naf_code=naf_code,
@@ -201,12 +214,21 @@ def create_naf_subcategory(payload: NafSubCategoryCreate, session: Session = Dep
         is_active=payload.is_active,
     )
     session.add(subcategory)
+    session.add(
+        models.NafCategorySubCategory(
+            category_id=category.id,
+            subcategory=subcategory,
+        )
+    )
 
     try:
         session.flush()
     except IntegrityError as exc:  # noqa: BLE001
         session.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Une sous-catégorie avec ce code existe déjà.") from exc
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Une sous-catégorie avec ce code existe déjà.",
+        ) from exc
 
     session.refresh(subcategory)
     return NafSubCategoryOut.model_validate(subcategory)
@@ -223,9 +245,6 @@ def update_naf_subcategory(
     session: Session = Depends(get_db_session),
 ) -> NafSubCategoryOut:
     subcategory = _get_subcategory_or_404(session, subcategory_id)
-    if payload.category_id is not None and payload.category_id != subcategory.category_id:
-        _get_category_or_404(session, payload.category_id)
-        subcategory.category_id = payload.category_id
     if payload.name is not None:
         subcategory.name = _normalize_name(payload.name, field="nom")
     if payload.naf_code is not None:
@@ -244,10 +263,74 @@ def update_naf_subcategory(
         session.flush()
     except IntegrityError as exc:  # noqa: BLE001
         session.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Une sous-catégorie avec ce code existe déjà.") from exc
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Une sous-catégorie avec ce code existe déjà.",
+        ) from exc
 
     session.refresh(subcategory)
     return NafSubCategoryOut.model_validate(subcategory)
+
+
+@router.post(
+    "/naf-categories/{category_id}/subcategories",
+    response_model=NafSubCategoryOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Associer une sous-catégorie existante à une catégorie",
+)
+def attach_naf_subcategory(
+    category_id: UUID,
+    payload: NafCategorySubCategoryLink,
+    session: Session = Depends(get_db_session),
+) -> NafSubCategoryOut:
+    _get_category_or_404(session, category_id)
+    subcategory = _get_subcategory_or_404(session, payload.subcategory_id)
+    existing = _get_category_link(
+        session,
+        category_id=category_id,
+        subcategory_id=subcategory.id,
+    )
+    if existing is not None:
+        return NafSubCategoryOut.model_validate(subcategory)
+    session.add(
+        models.NafCategorySubCategory(
+            category_id=category_id,
+            subcategory_id=subcategory.id,
+        )
+    )
+    try:
+        session.flush()
+    except IntegrityError as exc:  # noqa: BLE001
+        session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cette sous-catégorie est déjà associée à la catégorie.",
+        ) from exc
+    session.refresh(subcategory)
+    return NafSubCategoryOut.model_validate(subcategory)
+
+
+@router.delete(
+    "/naf-categories/{category_id}/subcategories/{subcategory_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Retirer une sous-catégorie d'une catégorie",
+)
+def detach_naf_subcategory(
+    category_id: UUID,
+    subcategory_id: UUID,
+    session: Session = Depends(get_db_session),
+) -> None:
+    _get_category_or_404(session, category_id)
+    _get_subcategory_or_404(session, subcategory_id)
+    link = _get_category_link(
+        session,
+        category_id=category_id,
+        subcategory_id=subcategory_id,
+    )
+    if link is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Association introuvable.")
+    session.delete(link)
+    session.flush()
 
 
 @router.delete(

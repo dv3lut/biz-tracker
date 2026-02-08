@@ -54,6 +54,104 @@ def test_get_subcategory_lookup_caches_results():
     assert second == label
 
 
+def test_format_subcategory_label_with_multiple_categories():
+    session = _make_session(
+        [
+            ("56.10A", "Restauration rapide", "Restauration"),
+            ("56.10A", "Restauration rapide", "Traiteur"),
+        ]
+    )
+    formatter = EstablishmentFormatter(session)
+
+    label = formatter.format_subcategory_label("56.10A")
+
+    assert label == "Restauration rapide (Restauration, Traiteur)"
+
+
+def test_format_subcategory_label_with_category_only():
+    session = _make_session([("56.10A", None, "Traiteur")])
+    formatter = EstablishmentFormatter(session)
+
+    label = formatter.format_subcategory_label("56.10A")
+
+    assert label == "Traiteur"
+
+
+def test_resolve_category_and_subcategory_returns_first_entry():
+    session = _make_session(
+        [
+            ("56.10A", "Sub1", "Cat1"),
+            ("56.10A", "Sub2", "Cat2"),
+        ]
+    )
+    formatter = EstablishmentFormatter(session)
+
+    category, subcategory = formatter.resolve_category_and_subcategory("56.10A")
+
+    assert category == "Cat1"
+    assert subcategory == "Sub1"
+
+
+def test_resolve_client_category_labels_from_subscriptions():
+    session = _make_session([])
+    formatter = EstablishmentFormatter(session)
+    category_one = SimpleNamespace(name="Restauration")
+    category_two = SimpleNamespace(name="Traiteur")
+    subcategory_one = SimpleNamespace(
+        name="Restauration rapide",
+        naf_code="56.10A",
+        is_active=True,
+        categories=[category_one],
+    )
+    subcategory_two = SimpleNamespace(
+        name="Restauration rapide",
+        naf_code="56.10A",
+        is_active=True,
+        categories=[category_two],
+    )
+    client = SimpleNamespace(
+        subscriptions=[
+            SimpleNamespace(subcategory=subcategory_one),
+            SimpleNamespace(subcategory=subcategory_two),
+        ]
+    )
+
+    categories, subcategories = formatter.resolve_client_category_labels(client, "56.10A")
+
+    assert categories == ["Restauration", "Traiteur"]
+    assert subcategories == ["Restauration rapide"]
+
+
+def test_resolve_client_category_labels_returns_empty_on_invalid_code():
+    formatter = EstablishmentFormatter(_make_session([]))
+
+    categories, subcategories = formatter.resolve_client_category_labels(SimpleNamespace(subscriptions=[]), None)
+
+    assert categories == []
+    assert subcategories == []
+
+
+def test_resolve_client_category_labels_respects_client_categories():
+    formatter = EstablishmentFormatter(_make_session([]))
+    category_one = SimpleNamespace(id="cat-1", name="Restauration")
+    category_two = SimpleNamespace(id="cat-2", name="Traiteur")
+    subcategory = SimpleNamespace(
+        name="Restauration rapide",
+        naf_code="56.10A",
+        is_active=True,
+        categories=[category_one, category_two],
+    )
+    client = SimpleNamespace(
+        category_ids=["cat-2"],
+        subscriptions=[SimpleNamespace(subcategory=subcategory)],
+    )
+
+    categories, subcategories = formatter.resolve_client_category_labels(client, "56.10A")
+
+    assert categories == ["Traiteur"]
+    assert subcategories == ["Restauration rapide"]
+
+
 def test_format_lines_includes_google_details():
     session = _make_session([])
     formatter = EstablishmentFormatter(session)

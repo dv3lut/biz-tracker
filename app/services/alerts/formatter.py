@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.db import models
 from app.utils.google_listing import describe_listing_age_status
+from app.utils.naf import normalize_naf_code
 from app.utils.urls import build_annuaire_etablissement_url
 
 
@@ -13,7 +14,7 @@ class EstablishmentFormatter:
 
     def __init__(self, session: Session) -> None:
         self._session = session
-        self._subcategory_lookup: dict[str, tuple[str | None, str | None]] | None = None
+        self._subcategory_lookup: dict[str, list[tuple[str | None, str | None]]] | None = None
 
     def build_payload(self, establishment: models.Establishment) -> dict[str, object]:
         return {
@@ -133,24 +134,72 @@ class EstablishmentFormatter:
         return label, origin
 
     def format_subcategory_label(self, naf_code: str | None) -> str | None:
-        category_name, subcategory_name = self._resolve_subcategory_info(naf_code)
-        if subcategory_name and category_name and category_name != subcategory_name:
-            return f"{subcategory_name} ({category_name})"
-        return subcategory_name or category_name
+        entries = self._resolve_subcategory_entries(naf_code)
+        if not entries:
+            return None
+        labels: list[str] = []
+        categories_without_sub = set()
+        grouped: dict[str, set[str]] = {}
+        for category_name, subcategory_name in entries:
+            if subcategory_name:
+                grouped.setdefault(subcategory_name, set())
+                if category_name and category_name != subcategory_name:
+                    grouped[subcategory_name].add(category_name)
+            elif category_name:
+                categories_without_sub.add(category_name)
+        for subcategory_name, categories in grouped.items():
+            if categories:
+                labels.append(f"{subcategory_name} ({', '.join(sorted(categories))})")
+            else:
+                labels.append(subcategory_name)
+        labels.extend(sorted(categories_without_sub))
+        return ", ".join(labels) if labels else None
 
     def resolve_category_and_subcategory(self, naf_code: str | None) -> tuple[str | None, str | None]:
-        return self._resolve_subcategory_info(naf_code)
-
-    def _resolve_subcategory_info(self, naf_code: str | None) -> tuple[str | None, str | None]:
-        if not naf_code:
+        entries = self._resolve_subcategory_entries(naf_code)
+        if not entries:
             return None, None
+        category_name, subcategory_name = entries[0]
+        return category_name, subcategory_name
+
+    def resolve_client_category_labels(
+        self,
+        client: models.Client,
+        naf_code: str | None,
+    ) -> tuple[list[str], list[str]]:
+        normalized = normalize_naf_code(naf_code)
+        if not normalized:
+            return [], []
+        client_category_ids = {str(value) for value in getattr(client, "category_ids", []) or []}
+        categories: set[str] = set()
+        subcategories: set[str] = set()
+        for subscription in getattr(client, "subscriptions", []) or []:
+            subcategory = getattr(subscription, "subcategory", None)
+            if not subcategory or not getattr(subcategory, "is_active", True):
+                continue
+            if normalize_naf_code(getattr(subcategory, "naf_code", None)) != normalized:
+                continue
+            if subcategory.name:
+                subcategories.add(subcategory.name)
+            for category in getattr(subcategory, "categories", []) or []:
+                category_id = getattr(category, "id", None)
+                if client_category_ids and category_id is not None and str(category_id) not in client_category_ids:
+                    continue
+                category_name = getattr(category, "name", None)
+                if category_name:
+                    categories.add(category_name)
+        return sorted(categories), sorted(subcategories)
+
+    def _resolve_subcategory_entries(self, naf_code: str | None) -> list[tuple[str | None, str | None]]:
+        if not naf_code:
+            return []
         key = naf_code.strip().upper()
         if not key:
-            return None, None
+            return []
         lookup = self._get_subcategory_lookup()
-        return lookup.get(key, (None, None))
+        return lookup.get(key, [])
 
-    def _get_subcategory_lookup(self) -> dict[str, tuple[str | None, str | None]]:
+    def _get_subcategory_lookup(self) -> dict[str, list[tuple[str | None, str | None]]]:
         if self._subcategory_lookup is not None:
             return self._subcategory_lookup
 
@@ -161,14 +210,18 @@ class EstablishmentFormatter:
                     models.NafSubCategory.name,
                     models.NafCategory.name,
                 )
-                .join(models.NafCategory, models.NafCategory.id == models.NafSubCategory.category_id)
+                .join(
+                    models.NafCategorySubCategory,
+                    models.NafCategorySubCategory.subcategory_id == models.NafSubCategory.id,
+                )
+                .join(models.NafCategory, models.NafCategory.id == models.NafCategorySubCategory.category_id)
                 .where(models.NafSubCategory.is_active.is_(True))
             ).all()
         )
-        lookup: dict[str, tuple[str | None, str | None]] = {}
+        lookup: dict[str, list[tuple[str | None, str | None]]] = {}
         for naf_code, sub_name, category_name in rows:
             if not naf_code:
                 continue
-            lookup[naf_code.strip().upper()] = (category_name, sub_name)
+            lookup.setdefault(naf_code.strip().upper(), []).append((category_name, sub_name))
         self._subcategory_lookup = lookup
         return lookup

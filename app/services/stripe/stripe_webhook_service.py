@@ -91,6 +91,8 @@ def _handle_checkout_completed(session: Session, settings: Settings, payload: di
 
     if category_ids:
         apply_subscriptions_from_categories(session, client, category_ids)
+    if category_ids:
+        client.category_ids = [str(identifier) for identifier in category_ids]
 
     apply_stripe_fields(client, settings, subscription, customer_id, subscription_id, plan_key)
     upsert_subscription_history(
@@ -250,6 +252,7 @@ def _handle_invoice_payment_succeeded(session: Session, settings: Settings, payl
         if should_apply_pending:
             if pending_category_ids:
                 apply_subscriptions_from_categories(session, client, pending_category_ids)
+                client.category_ids = [str(identifier) for identifier in pending_category_ids]
             apply_stripe_fields(client, settings, subscription, customer_id, subscription_id, actual_plan_key)
             upsert_subscription_history(session, client=client, subscription=subscription, settings=settings)
             stripe.api_key = settings.stripe.secret_key
@@ -414,6 +417,7 @@ def _handle_subscription_updated(session: Session, settings: Settings, payload: 
 
         if category_ids:
             apply_subscriptions_from_categories(session, client, category_ids)
+            client.category_ids = [str(identifier) for identifier in category_ids]
 
         apply_stripe_fields(client, settings, payload, customer_id, subscription_id, plan_key)
         _logger.info(

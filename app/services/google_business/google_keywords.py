@@ -21,7 +21,8 @@ def build_naf_keyword_map(session: Session) -> dict[str, set[str]]:
             models.NafCategory.name,
             models.NafCategory.keywords,
         )
-        .join(models.NafCategory, models.NafCategory.id == models.NafSubCategory.category_id)
+        .join(models.NafCategorySubCategory, models.NafCategorySubCategory.subcategory_id == models.NafSubCategory.id)
+        .join(models.NafCategory, models.NafCategory.id == models.NafCategorySubCategory.category_id)
         .where(models.NafSubCategory.is_active.is_(True))
     )
     mapping: dict[str, set[str]] = {}
@@ -35,7 +36,7 @@ def build_naf_keyword_map(session: Session) -> dict[str, set[str]]:
             for keyword in category_keywords:
                 keywords |= tokenize_text(keyword)
         if keywords:
-            mapping[normalized_code] = keywords
+            mapping.setdefault(normalized_code, set()).update(keywords)
     return mapping
 
 

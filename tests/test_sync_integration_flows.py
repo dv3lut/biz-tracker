@@ -162,7 +162,6 @@ def _seed_naf(session):
     session.add(category)
     session.flush()
     subcategory = models.NafSubCategory(
-        category_id=category.id,
         name="Restaurants",
         description=None,
         naf_code="56.10A",
@@ -170,6 +169,13 @@ def _seed_naf(session):
         is_active=True,
     )
     session.add(subcategory)
+    session.flush()
+    session.add(
+        models.NafCategorySubCategory(
+            category_id=category.id,
+            subcategory_id=subcategory.id,
+        )
+    )
     session.flush()
     return subcategory
 

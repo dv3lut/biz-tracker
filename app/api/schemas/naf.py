@@ -42,7 +42,6 @@ class NafSubCategoryOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    category_id: UUID
     name: str
     description: str | None
     naf_code: str
@@ -103,7 +102,6 @@ class NafSubCategoryCreate(BaseModel):
 
 
 class NafSubCategoryUpdate(BaseModel):
-    category_id: UUID | None = None
     name: str | None = None
     naf_code: str | None = None
     description: str | None = None
@@ -111,11 +109,16 @@ class NafSubCategoryUpdate(BaseModel):
     is_active: bool | None = None
 
 
+class NafCategorySubCategoryLink(BaseModel):
+    subcategory_id: UUID
+
+
 __all__ = [
     "NafCategoryCreate",
     "NafCategoryOut",
     "NafCategoryStats",
     "NafCategoryUpdate",
+    "NafCategorySubCategoryLink",
     "NafSubCategoryCreate",
     "NafSubCategoryOut",
     "NafSubCategoryStats",

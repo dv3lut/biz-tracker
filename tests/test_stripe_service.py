@@ -2527,12 +2527,13 @@ def test_ensure_recipient_adds_new_email():
 
 
 def test_apply_subscriptions_from_categories_updates_client(monkeypatch):
-    subcategory = models.NafSubCategory(category_id=uuid4(), name="Cat", naf_code="5610A")
+    category_id = uuid4()
+    subcategory = models.NafSubCategory(name="Cat", naf_code="5610A")
     session = SimpleNamespace(execute=lambda stmt: _FakeResult([subcategory]))
     existing = models.ClientSubscription(subcategory_id=subcategory.id, subcategory=subcategory)
     client = SimpleNamespace(subscriptions=[existing])
 
-    stripe_subscription_utils.apply_subscriptions_from_categories(session, client, [subcategory.category_id])
+    stripe_subscription_utils.apply_subscriptions_from_categories(session, client, [category_id])
 
     assert client.subscriptions
 

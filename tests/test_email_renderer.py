@@ -203,6 +203,47 @@ class EmailRendererTests(unittest.TestCase):
         self.assertIn("Catégorie : Restauration rapide (56.10A)", text_body)
         self.assertIn("Catégorie :</span> Restauration rapide (56.10A)", html_body)
 
+    def test_client_email_lists_multiple_categories_for_same_naf(self) -> None:
+        formatter = EstablishmentFormatter(MagicMock())
+        establishment = self._make_establishment(
+            name="Food Express",
+            status="recent_creation",
+            google_url="https://maps.google.com/?cid=3",
+        )
+        establishment.naf_code = "56.10A"
+
+        category_one = SimpleNamespace(id="cat-1", name="Restauration")
+        category_two = SimpleNamespace(id="cat-2", name="Traiteur")
+        subcategory_one = SimpleNamespace(
+            name="Restauration rapide",
+            naf_code="56.10A",
+            is_active=True,
+            categories=[category_one],
+        )
+        subcategory_two = SimpleNamespace(
+            name="Restauration rapide",
+            naf_code="56.10A",
+            is_active=True,
+            categories=[category_two],
+        )
+        client = SimpleNamespace(
+            use_subcategory_label_in_client_alerts=False,
+            category_ids=["cat-1", "cat-2"],
+            subscriptions=[
+                SimpleNamespace(subcategory=subcategory_one),
+                SimpleNamespace(subcategory=subcategory_two),
+            ],
+        )
+
+        text_body, html_body = render_client_email(
+            formatter,
+            [establishment],
+            client=client,
+        )
+
+        self.assertIn("Catégorie : Restauration, Traiteur", text_body)
+        self.assertIn("Catégorie :</span> Restauration, Traiteur", html_body)
+
 
 if __name__ == "__main__":
     unittest.main()

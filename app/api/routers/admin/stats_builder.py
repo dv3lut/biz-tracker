@@ -457,7 +457,11 @@ def _build_naf_category_breakdown(session: Session) -> list[dict[str, object]]:
                     )
                 ).label("listing_not_recent_count"),
             )
-            .join(models.NafSubCategory, models.NafSubCategory.category_id == models.NafCategory.id)
+            .join(models.NafCategorySubCategory, models.NafCategorySubCategory.category_id == models.NafCategory.id)
+            .join(
+                models.NafSubCategory,
+                models.NafSubCategory.id == models.NafCategorySubCategory.subcategory_id,
+            )
             .outerjoin(
                 models.Establishment,
                 func.upper(models.Establishment.naf_code) == func.upper(models.NafSubCategory.naf_code),

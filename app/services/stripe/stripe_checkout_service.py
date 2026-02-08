@@ -88,9 +88,13 @@ def list_public_categories(session: Session) -> list[PublicNafCategoryOut]:
     stmt = (
         select(
             models.NafCategory,
-            func.count(models.NafSubCategory.id).label("active_subcategory_count"),
+            func.count(func.distinct(models.NafCategorySubCategory.subcategory_id)).label("active_subcategory_count"),
         )
-        .join(models.NafSubCategory)
+        .join(models.NafCategorySubCategory, models.NafCategorySubCategory.category_id == models.NafCategory.id)
+        .join(
+            models.NafSubCategory,
+            models.NafSubCategory.id == models.NafCategorySubCategory.subcategory_id,
+        )
         .where(models.NafSubCategory.is_active.is_(True))
         .group_by(models.NafCategory.id)
         .order_by(models.NafCategory.name)

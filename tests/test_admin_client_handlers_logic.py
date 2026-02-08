@@ -59,7 +59,7 @@ def test_apply_recipients_deduplicates_and_reuses_existing():
 
 
 def _make_subcategory(label: str):
-    return models.NafSubCategory(category_id=uuid4(), name=label, naf_code=label)
+    return models.NafSubCategory(name=label, naf_code=label)
 
 
 def _mock_session_with_subcategories(subcategories):

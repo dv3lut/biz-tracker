@@ -31,7 +31,9 @@ def get_active_clients(session: Session) -> list[models.Client]:
         select(models.Client)
         .options(
             selectinload(models.Client.recipients),
-            selectinload(models.Client.subscriptions).selectinload(models.ClientSubscription.subcategory),
+            selectinload(models.Client.subscriptions)
+            .selectinload(models.ClientSubscription.subcategory)
+            .selectinload(models.NafSubCategory.categories),
             selectinload(models.Client.stripe_subscriptions),
             selectinload(models.Client.departments),
         )
@@ -71,7 +73,9 @@ def get_all_clients(session: Session) -> list[models.Client]:
         select(models.Client)
         .options(
             selectinload(models.Client.recipients),
-            selectinload(models.Client.subscriptions).selectinload(models.ClientSubscription.subcategory),
+            selectinload(models.Client.subscriptions)
+            .selectinload(models.ClientSubscription.subcategory)
+            .selectinload(models.NafSubCategory.categories),
             selectinload(models.Client.stripe_subscriptions),
             selectinload(models.Client.departments),
         )
@@ -207,7 +211,7 @@ def build_subscription_index(
     """Return mapping client->codes and code->clients for active subscriptions."""
 
     subscription_map: dict[UUID, set[str]] = {}
-    code_index: dict[str, list[models.Client]] = {}
+    code_index: dict[str, dict[UUID, models.Client]] = {}
     for client in clients:
         codes: set[str] = set()
         for subscription in getattr(client, "subscriptions", []) or []:
@@ -218,10 +222,10 @@ def build_subscription_index(
             if not code:
                 continue
             codes.add(code)
-            code_index.setdefault(code, []).append(client)
+            code_index.setdefault(code, {})[client.id] = client
         if codes:
             subscription_map[client.id] = codes
-    return subscription_map, code_index
+    return subscription_map, {code: list(clients_map.values()) for code, clients_map in code_index.items()}
 
 
 def build_subcategory_department_index(

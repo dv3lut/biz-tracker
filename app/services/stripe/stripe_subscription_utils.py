@@ -58,10 +58,15 @@ def apply_subscriptions_from_categories(
 ) -> None:
     stmt = (
         select(models.NafSubCategory)
+        .join(
+            models.NafCategorySubCategory,
+            models.NafCategorySubCategory.subcategory_id == models.NafSubCategory.id,
+        )
         .where(
-            models.NafSubCategory.category_id.in_(category_ids),
+            models.NafCategorySubCategory.category_id.in_(category_ids),
             models.NafSubCategory.is_active.is_(True),
         )
+        .distinct(models.NafSubCategory.id)
         .order_by(models.NafSubCategory.naf_code)
     )
     subcategories = session.execute(stmt).scalars().all()

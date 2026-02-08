@@ -4,7 +4,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, date
 
-from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -246,6 +246,7 @@ class Client(Base):
         default=_default_client_listing_statuses,
         nullable=False,
     )
+    category_ids: Mapped[list[str]] = mapped_column(JSONB, default=list, nullable=False)
     include_admins_in_client_alerts: Mapped[bool] = mapped_column(
         Boolean,
         default=False,
@@ -428,36 +429,69 @@ class NafCategory(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
 
-    subcategories: Mapped[list["NafSubCategory"]] = relationship(
-        "NafSubCategory",
+    subcategory_links: Mapped[list["NafCategorySubCategory"]] = relationship(
+        "NafCategorySubCategory",
         back_populates="category",
-        cascade="all, delete",
-        order_by="NafSubCategory.naf_code",
+        cascade="all, delete-orphan",
         passive_deletes=True,
     )
+    subcategories: Mapped[list["NafSubCategory"]] = relationship(
+        "NafSubCategory",
+        secondary="naf_category_subcategories",
+        viewonly=True,
+        order_by="NafSubCategory.naf_code",
+    )
+
+
+class NafCategorySubCategory(Base):
+    """Association between NAF categories and sub-categories."""
+
+    __tablename__ = "naf_category_subcategories"
+
+    category_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("naf_categories.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    subcategory_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("naf_subcategories.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+
+    category: Mapped[NafCategory] = relationship("NafCategory", back_populates="subcategory_links")
+    subcategory: Mapped["NafSubCategory"] = relationship("NafSubCategory", back_populates="category_links")
 
 
 class NafSubCategory(Base):
     """Leaf NAF code entry attached to a category with pricing."""
 
     __tablename__ = "naf_subcategories"
+    __table_args__ = (
+        UniqueConstraint("naf_code", name="uq_naf_subcategories_naf_code"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    category_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("naf_categories.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    naf_code: Mapped[str] = mapped_column(String(10), unique=True, nullable=False, index=True)
+    naf_code: Mapped[str] = mapped_column(String(10), nullable=False, index=True)
     price_cents: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
 
-    category: Mapped[NafCategory] = relationship("NafCategory", back_populates="subcategories")
+    category_links: Mapped[list[NafCategorySubCategory]] = relationship(
+        "NafCategorySubCategory",
+        back_populates="subcategory",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    categories: Mapped[list[NafCategory]] = relationship(
+        "NafCategory",
+        secondary="naf_category_subcategories",
+        viewonly=True,
+    )
     subscriptions: Mapped[list["ClientSubscription"]] = relationship(
         "ClientSubscription",
         back_populates="subcategory",

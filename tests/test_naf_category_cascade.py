@@ -7,7 +7,7 @@ from app.db import models
 
 class NafCategoryRelationshipTests(TestCase):
     def test_subcategories_relation_cascades_delete(self) -> None:
-        rel = models.NafCategory.subcategories.property
+        rel = models.NafCategory.subcategory_links.property
         self.assertTrue(rel.passive_deletes)
         self.assertIn("delete", rel.cascade)
 
