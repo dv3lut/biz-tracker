@@ -23,6 +23,13 @@ export interface SyncRun {
   googlePendingCount: number;
   googleImmediateMatchedCount: number;
   googleLateMatchedCount: number;
+  // LinkedIn enrichment progress
+  linkedinQueueCount: number;
+  linkedinSearchedCount: number;
+  linkedinFoundCount: number;
+  linkedinNotFoundCount: number;
+  linkedinErrorCount: number;
+  linkedinEnabled: boolean;
   lastCursor: string | null;
   queryChecksum: string | null;
   resumedFromRunId: string | null;
