@@ -74,7 +74,13 @@ interface SyncRunResponse {
   estimated_completion_at: string | null;
   summary: RunSummaryResponse | null;
   google_enabled: boolean;
+  linkedin_enabled: boolean;
   months_back: number | null;
+  linkedin_queue_count: number | null;
+  linkedin_searched_count: number | null;
+  linkedin_found_count: number | null;
+  linkedin_not_found_count: number | null;
+  linkedin_error_count: number | null;
 }
 
 interface RunSummaryResponse {
@@ -301,6 +307,11 @@ interface DirectorResponse {
   siren: string | null;
   denomination: string | null;
   nationality: string | null;
+  // LinkedIn fields
+  linkedin_profile_url?: string | null;
+  linkedin_profile_data?: Record<string, unknown> | null;
+  linkedin_last_checked_at?: string | null;
+  linkedin_check_status?: string;
 }
 
 interface EstablishmentResponse {
@@ -524,12 +535,18 @@ const toSyncRun = (payload: SyncRunResponse): SyncRun => ({
   estimatedRemainingSeconds: payload.estimated_remaining_seconds,
   estimatedCompletionAt: payload.estimated_completion_at,
   googleEnabled: payload.google_enabled,
+  linkedinEnabled: payload.linkedin_enabled,
   targetNafCodes: payload.target_naf_codes ?? null,
   targetClientIds: payload.target_client_ids ?? null,
   notifyAdmins: payload.notify_admins,
   dayReplayForceGoogle: payload.day_replay_force_google,
   dayReplayReference: payload.day_replay_reference,
   monthsBack: payload.months_back ?? null,
+  linkedinQueueCount: payload.linkedin_queue_count ?? 0,
+  linkedinSearchedCount: payload.linkedin_searched_count ?? 0,
+  linkedinFoundCount: payload.linkedin_found_count ?? 0,
+  linkedinNotFoundCount: payload.linkedin_not_found_count ?? 0,
+  linkedinErrorCount: payload.linkedin_error_count ?? 0,
   summary: payload.summary ? toRunSummary(payload.summary) : null,
 });
 
@@ -714,6 +731,10 @@ const toEstablishment = (payload: EstablishmentResponse): Establishment => ({
     siren: d.siren,
     denomination: d.denomination,
     nationality: d.nationality,
+    linkedinProfileUrl: d.linkedin_profile_url ?? null,
+    linkedinProfileData: d.linkedin_profile_data ?? null,
+    linkedinLastCheckedAt: d.linkedin_last_checked_at ?? null,
+    linkedinCheckStatus: d.linkedin_check_status ?? "pending",
   })),
 });
 

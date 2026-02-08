@@ -7,7 +7,8 @@ export type SectionKey =
   | "emails"
   | "tools"
   | "billing"
-  | "establishments";
+  | "establishments"
+  | "analytics";
 
 export interface SectionDefinition {
   key: SectionKey;
@@ -18,6 +19,7 @@ export interface SectionDefinition {
 
 export const NAV_SECTIONS: ReadonlyArray<SectionDefinition> = [
   { key: "dashboard", label: "Tableau de bord", description: "Vue synthétique" },
+  { key: "analytics", label: "Statistiques", description: "Analytics par NAF" },
   { key: "sync", label: "Synchronisations", description: "Historique & états" },
   { key: "alerts", label: "Alertes", description: "Suivi des notifications" },
   { key: "clients", label: "Clients", description: "Destinataires par client" },

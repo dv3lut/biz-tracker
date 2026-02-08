@@ -5,6 +5,7 @@ export { alertsApi } from "./alerts";
 export { establishmentsApi } from "./establishments";
 export { emailApi } from "./email";
 export { googleApi } from "./google";
+export { linkedInApi } from "./linkedin";
 export { toolsApi, type SireneNewBusinessesPayload } from "./tools";
 export { syncApi, type TriggerSyncResult, type DeleteRunResponse } from "./sync";
 export { clientsApi, type ClientCreatePayload, type ClientUpdatePayload } from "./clients";
@@ -19,3 +20,4 @@ export {
 	type NafSubCategoryCreatePayload,
 	type NafSubCategoryUpdatePayload,
 } from "./naf";
+export { analyticsApi, type NafAnalyticsParams } from "./analytics";

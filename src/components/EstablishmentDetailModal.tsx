@@ -1,6 +1,7 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
-import { EstablishmentDetail } from "../types";
+import { linkedInApi } from "../api";
+import { Director, EstablishmentDetail } from "../types";
 import { formatDateTime } from "../utils/format";
 import { SiretLink } from "./SiretLink";
 
@@ -10,6 +11,7 @@ type Props = {
   isLoading: boolean;
   errorMessage: string | null;
   onClose: () => void;
+  onDirectorLinkedInUpdated?: (directorId: string, update: Partial<Director>) => void;
 };
 
 const formatValue = (value: string | number | null | undefined): string => {
@@ -66,9 +68,15 @@ export const EstablishmentDetailModal = ({
   isLoading,
   errorMessage,
   onClose,
+  onDirectorLinkedInUpdated,
 }: Props) => {
+  const [linkedInLoadingIds, setLinkedInLoadingIds] = useState<Set<string>>(new Set());
+  const [linkedInErrors, setLinkedInErrors] = useState<Record<string, string>>({});
+
   useEffect(() => {
     if (!isOpen) {
+      setLinkedInLoadingIds(new Set());
+      setLinkedInErrors({});
       return;
     }
     const handler = (event: KeyboardEvent) => {
@@ -81,6 +89,36 @@ export const EstablishmentDetailModal = ({
       window.removeEventListener("keydown", handler);
     };
   }, [isOpen, onClose]);
+
+  const handleLinkedInSearch = async (directorId: string) => {
+    setLinkedInLoadingIds((prev) => new Set(prev).add(directorId));
+    setLinkedInErrors((prev) => {
+      const next = { ...prev };
+      delete next[directorId];
+      return next;
+    });
+
+    try {
+      const result = await linkedInApi.checkDirectorLinkedIn(directorId);
+      if (onDirectorLinkedInUpdated) {
+        onDirectorLinkedInUpdated(directorId, {
+          linkedinProfileUrl: result.linkedinProfileUrl,
+          linkedinProfileData: result.linkedinProfileData,
+          linkedinCheckStatus: result.linkedinCheckStatus,
+          linkedinLastCheckedAt: result.linkedinLastCheckedAt,
+        });
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Erreur inconnue";
+      setLinkedInErrors((prev) => ({ ...prev, [directorId]: message }));
+    } finally {
+      setLinkedInLoadingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(directorId);
+        return next;
+      });
+    }
+  };
 
   if (!isOpen) {
     return null;
@@ -162,27 +200,70 @@ export const EstablishmentDetailModal = ({
                         <th>Nom</th>
                         <th>Qualité</th>
                         <th>Naissance</th>
+                        <th>LinkedIn</th>
+                        <th>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {establishment.directors.map((d) => (
-                        <tr key={d.id}>
-                          <td>{d.typeDirigeant === "personne physique" ? "Physique" : "Morale"}</td>
-                          <td>
-                            {d.typeDirigeant === "personne physique"
-                              ? [d.firstNames, d.lastName].filter(Boolean).join(" ") || "—"
-                              : d.denomination || "—"}
-                          </td>
-                          <td>{formatValue(d.quality)}</td>
-                          <td>
-                            {d.birthMonth && d.birthYear
-                              ? `${String(d.birthMonth).padStart(2, "0")}/${d.birthYear}`
-                              : d.birthYear
-                                ? String(d.birthYear)
-                                : "—"}
-                          </td>
-                        </tr>
-                      ))}
+                      {establishment.directors.map((d) => {
+                        const isPhysical = d.typeDirigeant === "personne physique";
+                        const isLinkedInLoading = linkedInLoadingIds.has(d.id);
+                        const linkedInError = linkedInErrors[d.id];
+                        return (
+                          <tr key={d.id}>
+                            <td>{isPhysical ? "Physique" : "Morale"}</td>
+                            <td>
+                              {isPhysical
+                                ? [d.firstNames, d.lastName].filter(Boolean).join(" ") || "—"
+                                : d.denomination || "—"}
+                            </td>
+                            <td>{formatValue(d.quality)}</td>
+                            <td>
+                              {d.birthMonth && d.birthYear
+                                ? `${String(d.birthMonth).padStart(2, "0")}/${d.birthYear}`
+                                : d.birthYear
+                                  ? String(d.birthYear)
+                                  : "—"}
+                            </td>
+                            <td>
+                              {isPhysical ? (
+                                d.linkedinProfileUrl ? (
+                                  <a href={d.linkedinProfileUrl} target="_blank" rel="noreferrer" className="badge badge--success">
+                                    Profil trouvé
+                                  </a>
+                                ) : d.linkedinCheckStatus === "not_found" ? (
+                                  <span className="badge badge--muted">Non trouvé</span>
+                                ) : d.linkedinCheckStatus === "error" ? (
+                                  <span className="badge badge--error">Erreur</span>
+                                ) : d.linkedinCheckStatus === "insufficient" ? (
+                                  <span className="badge badge--warning">Données insuffisantes</span>
+                                ) : (
+                                  <span className="badge badge--pending">En attente</span>
+                                )
+                              ) : (
+                                <span className="muted">—</span>
+                              )}
+                            </td>
+                            <td>
+                              {isPhysical && (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="small"
+                                    onClick={() => handleLinkedInSearch(d.id)}
+                                    disabled={isLinkedInLoading}
+                                  >
+                                    {isLinkedInLoading ? "Recherche…" : "Rechercher LinkedIn"}
+                                  </button>
+                                  {linkedInError && (
+                                    <span className="feedback error small">{linkedInError}</span>
+                                  )}
+                                </>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

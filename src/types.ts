@@ -1,4 +1,4 @@
-export type SyncMode = "full" | "sirene_only" | "google_pending" | "google_refresh" | "day_replay";
+export type SyncMode = "full" | "sirene_only" | "google_pending" | "google_refresh" | "linkedin_pending" | "linkedin_refresh" | "day_replay";
 export type DayReplayReference = "creation_date" | "insertion_date";
 
 export type ListingStatus = "recent_creation" | "recent_creation_missing_contact" | "not_recent_creation";
@@ -23,6 +23,13 @@ export interface SyncRun {
   googlePendingCount: number;
   googleImmediateMatchedCount: number;
   googleLateMatchedCount: number;
+  // LinkedIn enrichment progress
+  linkedinQueueCount: number;
+  linkedinSearchedCount: number;
+  linkedinFoundCount: number;
+  linkedinNotFoundCount: number;
+  linkedinErrorCount: number;
+  linkedinEnabled: boolean;
   lastCursor: string | null;
   queryChecksum: string | null;
   resumedFromRunId: string | null;
@@ -280,6 +287,11 @@ export interface Director {
   siren: string | null;
   denomination: string | null;
   nationality: string | null;
+  // LinkedIn fields
+  linkedinProfileUrl: string | null;
+  linkedinProfileData: Record<string, unknown> | null;
+  linkedinLastCheckedAt: string | null;
+  linkedinCheckStatus: string;
 }
 
 export interface Establishment {
@@ -586,4 +598,73 @@ export interface SireneNewBusinessesResult {
   total: number;
   returned: number;
   establishments: SireneNewBusiness[];
+}
+
+// LinkedIn types
+export interface LinkedInCheckResponse {
+  directorId: string;
+  firstNames: string | null;
+  lastName: string | null;
+  quality: string | null;
+  companyName: string | null;
+  linkedinProfileUrl: string | null;
+  linkedinProfileData: Record<string, unknown> | null;
+  linkedinCheckStatus: string;
+  linkedinLastCheckedAt: string | null;
+  message: string;
+}
+
+export interface LinkedInDebugResponse {
+  directorId: string;
+  directorName: string;
+  companyName: string;
+  searchInput: {
+    firstName: string;
+    lastName: string;
+    company: string;
+  };
+  apifyResponse: Record<string, unknown> | null;
+  profileUrl: string | null;
+  profileData: Record<string, unknown> | null;
+  status: string;
+  error: string | null;
+  retriedWithLegalUnit: boolean;
+}
+
+// NAF Analytics types
+export type NafAnalyticsGranularity = "day" | "week" | "month";
+export type NafAnalyticsAggregation = "naf" | "category" | "subcategory";
+
+export interface NafAnalyticsTimePoint {
+  period: string;
+  totalFetched: number;
+  nonDiffusible: number;
+  insufficientInfo: number;
+  googleFound: number;
+  googleNotFound: number;
+  googlePending: number;
+  listingRecent: number;
+  listingRecentMissingContact: number;
+  listingNotRecent: number;
+  linkedinFound: number;
+  linkedinNotFound: number;
+  linkedinPending: number;
+  alertsCreated: number;
+}
+
+export interface NafAnalyticsItem {
+  id: string;
+  code: string | null;
+  name: string;
+  totals: NafAnalyticsTimePoint;
+  timeSeries: NafAnalyticsTimePoint[];
+}
+
+export interface NafAnalyticsResponse {
+  granularity: NafAnalyticsGranularity;
+  startDate: string;
+  endDate: string;
+  aggregation: NafAnalyticsAggregation;
+  items: NafAnalyticsItem[];
+  globalTotals: NafAnalyticsTimePoint;
 }

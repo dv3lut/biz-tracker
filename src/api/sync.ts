@@ -41,11 +41,17 @@ export interface SyncRunResponse {
   estimated_completion_at: string | null;
   summary: RunSummaryResponse | null;
   google_enabled: boolean;
+  linkedin_enabled: boolean;
   target_naf_codes: string[] | null;
   target_client_ids: string[] | null;
   notify_admins: boolean;
   day_replay_force_google: boolean;
   months_back: number | null;
+  linkedin_queue_count: number | null;
+  linkedin_searched_count: number | null;
+  linkedin_found_count: number | null;
+  linkedin_not_found_count: number | null;
+  linkedin_error_count: number | null;
 }
 
 export interface RunSummaryResponse {
@@ -250,13 +256,19 @@ export const mapSyncRun = (payload: SyncRunResponse): SyncRun => ({
   estimatedRemainingSeconds: payload.estimated_remaining_seconds,
   estimatedCompletionAt: payload.estimated_completion_at,
   googleEnabled: payload.google_enabled,
+  linkedinEnabled: payload.linkedin_enabled,
   targetNafCodes: payload.target_naf_codes ?? null,
   targetClientIds: payload.target_client_ids ?? null,
   notifyAdmins: payload.notify_admins,
   dayReplayForceGoogle: payload.day_replay_force_google,
   dayReplayReference: payload.day_replay_reference,
   monthsBack: payload.months_back ?? null,
-  summary: payload.summary ? mapRunSummary(payload.summary) : null,
+  linkedinQueueCount: payload.linkedin_queue_count ?? 0,
+  linkedinSearchedCount: payload.linkedin_searched_count ?? 0,
+  linkedinFoundCount: payload.linkedin_found_count ?? 0,
+  linkedinNotFoundCount: payload.linkedin_not_found_count ?? 0,
+  linkedinErrorCount: payload.linkedin_error_count ?? 0,
+  summary: payload.summary && payload.summary.run ? mapRunSummary(payload.summary) : null,
 });
 
 export const mapSyncState = (payload: SyncStateResponse): SyncState => ({

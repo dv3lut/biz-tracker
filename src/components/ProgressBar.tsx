@@ -12,7 +12,7 @@ const clamp = (value: number): number => {
 interface ProgressBarProps {
   label: string;
   value: number | null | undefined;
-  tone?: "primary" | "success";
+  tone?: "primary" | "success" | "info";
   details?: ReactNode;
 }
 

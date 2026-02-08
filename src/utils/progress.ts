@@ -61,3 +61,37 @@ export const computeGoogleProgress = (run: SyncRun): GoogleProgress => {
     pending,
   };
 };
+
+export interface LinkedInProgress {
+  value: number | null;
+  total: number | null;
+  searched: number;
+  found: number;
+  notFound: number;
+  error: number;
+}
+
+export const computeLinkedInProgress = (run: SyncRun): LinkedInProgress => {
+  if (!run.linkedinEnabled) {
+    return {
+      value: null,
+      total: null,
+      searched: 0,
+      found: 0,
+      notFound: 0,
+      error: 0,
+    };
+  }
+  const total = run.linkedinQueueCount > 0 ? run.linkedinQueueCount : null;
+  const searched = run.linkedinSearchedCount;
+  const value = total && total > 0 ? clamp(searched / total) : null;
+
+  return {
+    value,
+    total,
+    searched,
+    found: run.linkedinFoundCount,
+    notFound: run.linkedinNotFoundCount,
+    error: run.linkedinErrorCount,
+  };
+};

@@ -2,7 +2,7 @@ import { type ReactNode } from "react";
 
 import { StatsSummary, SyncRun } from "../types";
 import { formatDateTime, formatNumber, formatPercent, formatDuration } from "../utils/format";
-import { computeGoogleProgress, computeSireneProgress } from "../utils/progress";
+import { computeGoogleProgress, computeLinkedInProgress, computeSireneProgress } from "../utils/progress";
 import {
   describeDayReplayReference,
   describeSyncMode,
@@ -34,7 +34,9 @@ const renderRunDetails = (run: SyncRun | null): ReactNode => {
 
   const sireneProgress = computeSireneProgress(run);
   const googleProgress = computeGoogleProgress(run);
+  const linkedinProgress = computeLinkedInProgress(run);
   const googleDisabled = !run.googleEnabled;
+  const linkedinDisabled = !run.linkedinEnabled;
   const sireneEnabled = syncModeSupportsSirene(run.mode);
   const isGoogleOnly = syncModeIsGoogleOnly(run.mode);
   const sireneDetails = sireneProgress.total
@@ -54,6 +56,26 @@ const renderRunDetails = (run: SyncRun | null): ReactNode => {
   }
   if (googleProgress.pending > 0) {
     googleDetailParts.push(`Restant: ${formatNumber(googleProgress.pending)}`);
+  }
+
+  // LinkedIn progress details
+  const hasLinkedInWork =
+    !linkedinDisabled && (linkedinProgress.total !== null || run.linkedinQueueCount > 0);
+  const linkedinDetailParts: string[] = [];
+  if (linkedinProgress.total !== null) {
+    linkedinDetailParts.push(
+      `${formatNumber(linkedinProgress.searched)} / ${formatNumber(linkedinProgress.total)} dirigeants traités`,
+    );
+  } else if (run.linkedinEnabled) {
+    linkedinDetailParts.push(
+      run.status === "running" ? "Traitement en cours" : "Aucun dirigeant à traiter",
+    );
+  }
+  if (linkedinProgress.found > 0) {
+    linkedinDetailParts.push(`Trouvés: ${formatNumber(linkedinProgress.found)}`);
+  }
+  if (linkedinProgress.notFound > 0) {
+    linkedinDetailParts.push(`Non trouvés: ${formatNumber(linkedinProgress.notFound)}`);
   }
 
   return (
@@ -89,6 +111,14 @@ const renderRunDetails = (run: SyncRun | null): ReactNode => {
         ) : googleDisabled ? (
           <p className="muted small">Google Places désactivé pour ce run.</p>
         ) : null}
+        {hasLinkedInWork ? (
+          <ProgressBar
+            label="LinkedIn"
+            tone="info"
+            value={linkedinProgress.value}
+            details={<span>{linkedinDetailParts.join(" · ")}</span>}
+          />
+        ) : linkedinDisabled ? null : null}
       </div>
       <dl className="data-grid">
         <div>

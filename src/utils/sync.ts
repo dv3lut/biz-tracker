@@ -8,6 +8,10 @@ export const describeSyncMode = (mode: SyncMode): string => {
       return "Google — nouveaux uniquement";
     case "google_refresh":
       return "Google — relancer sur tous";
+    case "linkedin_pending":
+      return "LinkedIn — nouveaux uniquement";
+    case "linkedin_refresh":
+      return "LinkedIn — relancer sur tous";
     case "day_replay":
       return "Rejouer une journée";
     case "full":
@@ -24,8 +28,16 @@ export const syncModeIsGoogleOnly = (mode: SyncMode): boolean => {
   return mode === "google_pending" || mode === "google_refresh";
 };
 
+export const syncModeIsLinkedInOnly = (mode: SyncMode): boolean => {
+  return mode === "linkedin_pending" || mode === "linkedin_refresh";
+};
+
+export const syncModeIsEnrichmentOnly = (mode: SyncMode): boolean => {
+  return syncModeIsGoogleOnly(mode) || syncModeIsLinkedInOnly(mode);
+};
+
 export const syncModeSendsAlerts = (mode: SyncMode): boolean => {
-  return mode === "full" || mode === "google_pending";
+  return mode === "full" || mode === "google_pending" || mode === "linkedin_pending";
 };
 
 export const syncModeRequiresReplayDate = (mode: SyncMode): boolean => {

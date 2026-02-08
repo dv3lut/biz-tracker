@@ -4,6 +4,7 @@ import { AppFrame } from "./app/components/AppFrame";
 import { useAdminSession } from "./app/hooks/useAdminSession";
 import { useEstablishmentDetailModal } from "./app/hooks/useEstablishmentDetailModal";
 import { AlertsSection } from "./app/sections/AlertsSection";
+import { AnalyticsSection } from "./app/sections/AnalyticsSection";
 import { ClientsSection } from "./app/sections/ClientsSection";
 import { DashboardSection } from "./app/sections/DashboardSection";
 import { EmailsSection } from "./app/sections/EmailsSection";
@@ -52,6 +53,8 @@ const App = () => {
     switch (activeSection) {
       case "dashboard":
         return <DashboardSection onUnauthorized={handleUnauthorized} />;
+      case "analytics":
+        return <AnalyticsSection onUnauthorized={handleUnauthorized} />;
       case "sync":
         return <SyncSection onUnauthorized={handleUnauthorized} />;
       case "alerts":
