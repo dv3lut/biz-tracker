@@ -25,6 +25,7 @@ from .context import SyncContext, SyncResult, UpdatedEstablishmentInfo
 from .pages import collect_pages
 from .persistence import SyncPersistenceMixin
 from .utils import append_run_note, format_target_naf_note, tag_google_error_rate
+from .annuaire_enrichment import enrich_establishments_from_annuaire
 
 
 class SyncCollectorMixin(SyncPersistenceMixin):
@@ -145,6 +146,15 @@ class SyncCollectorMixin(SyncPersistenceMixin):
         new_entities_payload = page_result.new_payloads
         updated_entities = page_result.updated_entities
         updated_payloads = page_result.updated_payloads
+
+        # --- Annuaire enrichment (director & legal unit name) ---
+        all_touched = list(new_entities_total) + [info.establishment for info in updated_entities]
+        annuaire_summary = enrich_establishments_from_annuaire(
+            context.session,
+            all_touched,
+            run_id=str(context.run.id),
+        )
+
         google_immediate_matches: list[models.Establishment] = []
         google_late_matches: list[models.Establishment] = []
         google_matches_payload: list[dict[str, object]] = []

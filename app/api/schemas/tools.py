@@ -28,6 +28,10 @@ class SireneNewBusinessesRequest(BaseModel):
         default=None,
         description="Codes départements à filtrer (ex: 75, 33).",
     )
+    enrich_annuaire: bool = Field(
+        default=False,
+        description="Si activé, enrichit chaque résultat avec les dirigeants et le nom de l'unité légale via l'API Recherche Entreprises.",
+    )
 
     @field_validator("naf_codes")
     @classmethod
@@ -56,6 +60,18 @@ class SireneNewBusinessesRequest(BaseModel):
         return self
 
 
+class SireneNewBusinessDirectorOut(BaseModel):
+    type_dirigeant: str
+    first_names: str | None = None
+    last_name: str | None = None
+    quality: str | None = None
+    birth_month: int | None = None
+    birth_year: int | None = None
+    siren: str | None = None
+    denomination: str | None = None
+    nationality: str | None = None
+
+
 class SireneNewBusinessOut(BaseModel):
     siret: str
     siren: str | None = None
@@ -80,6 +96,8 @@ class SireneNewBusinessOut(BaseModel):
     code_postal: str | None = None
     libelle_commune: str | None = None
     libelle_commune_etranger: str | None = None
+    legal_unit_name: str | None = None
+    directors: list[SireneNewBusinessDirectorOut] = []
 
 
 class SireneNewBusinessesResponse(BaseModel):
@@ -89,6 +107,7 @@ class SireneNewBusinessesResponse(BaseModel):
 
 
 __all__ = [
+    "SireneNewBusinessDirectorOut",
     "SireneNewBusinessesRequest",
     "SireneNewBusinessesResponse",
     "SireneNewBusinessOut",

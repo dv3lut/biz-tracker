@@ -4,8 +4,13 @@ from datetime import date
 from unittest import TestCase
 from unittest.mock import patch
 
-from app.api.routers.admin.tools_router import fetch_sirene_new_establishments, _build_leader_name, _parse_int
-from app.api.schemas.tools import SireneNewBusinessesRequest
+from app.api.routers.admin.tools_router import (
+    fetch_sirene_new_establishments,
+    _build_leader_name,
+    _enrich_tools_results_from_annuaire,
+    _parse_int,
+)
+from app.api.schemas.tools import SireneNewBusinessesRequest, SireneNewBusinessOut
 
 
 class SireneNewBusinessesSchemaTests(TestCase):
@@ -367,3 +372,93 @@ class SireneToolsRouteTests(TestCase):
         self.assertEqual(response.returned, 1)
         self.assertEqual(response.establishments[0].siret, "44444444400044")
         mock_log_event.assert_called_once()
+
+
+class EnrichToolsResultsTests(TestCase):
+    """Tests for _enrich_tools_results_from_annuaire."""
+
+    def _make_establishment(self, siret: str = "12345678900010", siren: str = "123456789") -> SireneNewBusinessOut:
+        return SireneNewBusinessOut(
+            siret=siret,
+            siren=siren,
+            nic="00010",
+            name="Test",
+            naf_code="56.10A",
+            naf_libelle="Restauration",
+            etat_administratif="A",
+            date_creation=date(2025, 1, 1),
+            leader_name="Jean Dupont",
+            categorie_juridique="5710",
+            is_individual=False,
+            code_postal="75001",
+            libelle_commune="Paris",
+        )
+
+    @patch("app.api.routers.admin.tools_router.AnnuaireEntreprisesClient")
+    def test_enriches_with_directors_and_legal_name(self, MockClient) -> None:
+        from app.clients.annuaire_entreprises_client import AnnuaireResult, DirectorInfo
+
+        instance = MockClient.return_value
+        instance.enabled = True
+        instance.fetch_batch.return_value = {
+            "123456789": AnnuaireResult(
+                siren="123456789",
+                legal_unit_name="ACME SARL",
+                directors=[DirectorInfo("Jean", "DUPONT", 5, 1980, quality="Gérant")],
+                success=True,
+            ),
+        }
+        instance.close = lambda: None
+
+        est = self._make_establishment()
+        _enrich_tools_results_from_annuaire([est])
+
+        self.assertEqual(est.legal_unit_name, "ACME SARL")
+        self.assertEqual(len(est.directors), 1)
+        self.assertEqual(est.directors[0].last_name, "DUPONT")
+        self.assertEqual(est.directors[0].quality, "Gérant")
+
+    @patch("app.api.routers.admin.tools_router.AnnuaireEntreprisesClient")
+    def test_disabled_client_does_nothing(self, MockClient) -> None:
+        instance = MockClient.return_value
+        instance.enabled = False
+        instance.close = lambda: None
+
+        est = self._make_establishment()
+        _enrich_tools_results_from_annuaire([est])
+
+        self.assertEqual(est.directors, [])
+        self.assertIsNone(est.legal_unit_name)
+
+    @patch("app.api.routers.admin.tools_router.AnnuaireEntreprisesClient")
+    def test_no_siren_skips(self, MockClient) -> None:
+        instance = MockClient.return_value
+        instance.enabled = True
+        instance.close = lambda: None
+
+        est = self._make_establishment(siren="")
+        _enrich_tools_results_from_annuaire([est])
+
+        instance.fetch_batch.assert_not_called()
+
+    @patch("app.api.routers.admin.tools_router.AnnuaireEntreprisesClient")
+    def test_failed_result_ignored(self, MockClient) -> None:
+        from app.clients.annuaire_entreprises_client import AnnuaireResult
+
+        instance = MockClient.return_value
+        instance.enabled = True
+        instance.fetch_batch.return_value = {
+            "123456789": AnnuaireResult(
+                siren="123456789",
+                legal_unit_name=None,
+                directors=[],
+                success=False,
+            ),
+        }
+        instance.close = lambda: None
+
+        est = self._make_establishment()
+        _enrich_tools_results_from_annuaire([est])
+
+        self.assertIsNone(est.legal_unit_name)
+        self.assertEqual(est.directors, [])

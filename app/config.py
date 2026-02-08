@@ -185,6 +185,32 @@ class SyncSettings(BaseModel):
     )
 
 
+class AnnuaireSettings(BaseModel):
+    api_base_url: str = Field(
+        default="https://recherche-entreprises.api.gouv.fr",
+        description="Base URL for the Recherche Entreprises API (dirigeants & unité légale).",
+    )
+    request_timeout_seconds: int = Field(default=15, ge=1)
+    max_workers: int = Field(
+        default=8,
+        ge=1,
+        le=50,
+        description="Number of parallel workers for annuaire enrichment during sync.",
+    )
+    max_calls_per_second: int = Field(
+        default=7,
+        ge=1,
+        le=50,
+        description="Max annuaire API calls per second (rate limit).",
+    )
+    max_retries: int = Field(default=3, ge=1)
+    backoff_factor: float = Field(default=1.0, ge=0.1)
+    enabled: bool = Field(
+        default=True,
+        description="Enable director/legal-unit enrichment from the annuaire API.",
+    )
+
+
 class ElasticsearchLoggingSettings(BaseModel):
     enabled: bool = Field(default=False)
     hosts: List[str] = Field(default_factory=lambda: ["http://localhost:9200"])
@@ -346,6 +372,7 @@ class Settings(BaseSettings):
     sirene: SireneSettings
     email: EmailSettings = Field(default_factory=EmailSettings)
     sync: SyncSettings = Field(default_factory=SyncSettings)
+    annuaire: AnnuaireSettings = Field(default_factory=AnnuaireSettings)
     logging: LoggingSettings = Field(default_factory=LoggingSettings)
     api: ApiSettings = Field(default_factory=ApiSettings)
     google: GoogleSettings = Field(default_factory=GoogleSettings)

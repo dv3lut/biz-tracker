@@ -444,6 +444,46 @@ def run_schema_upgrades(engine: Engine) -> None:
         ALTER TABLE client_stripe_subscriptions
         ADD COLUMN IF NOT EXISTS referrer_name VARCHAR(255)
         """,
+        """
+        ALTER TABLE establishments
+        ADD COLUMN IF NOT EXISTS legal_unit_name VARCHAR(512)
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS directors (
+            id UUID PRIMARY KEY,
+            establishment_siret VARCHAR(14) NOT NULL REFERENCES establishments(siret) ON DELETE CASCADE,
+            type_dirigeant VARCHAR(32) NOT NULL,
+            first_names VARCHAR(512),
+            last_name VARCHAR(255),
+            quality VARCHAR(255),
+            birth_month INTEGER,
+            birth_year INTEGER,
+            siren VARCHAR(9),
+            denomination VARCHAR(512),
+            nationality VARCHAR(128),
+            created_at TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS ix_directors_establishment_siret
+        ON directors (establishment_siret)
+        """,
+        """
+        ALTER TABLE establishments
+        DROP COLUMN IF EXISTS director_first_names
+        """,
+        """
+        ALTER TABLE establishments
+        DROP COLUMN IF EXISTS director_last_name
+        """,
+        """
+        ALTER TABLE establishments
+        DROP COLUMN IF EXISTS director_birth_month
+        """,
+        """
+        ALTER TABLE establishments
+        DROP COLUMN IF EXISTS director_birth_year
+        """,
     ]
 
     with engine.begin() as connection:

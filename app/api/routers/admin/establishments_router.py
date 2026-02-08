@@ -6,7 +6,7 @@ from datetime import date, datetime, time, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.params import Query as QueryParam
 from sqlalchemy import func, not_, or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.api.dependencies import get_db_session
 from app.api.schemas import EstablishmentDetailOut, EstablishmentOut
@@ -149,7 +149,8 @@ def list_establishments(
         else:
             query = query.filter(or_(models.Establishment.categorie_juridique.is_(None), not_(normalized_filter)))
     establishments = (
-        query.order_by(
+        query.options(selectinload(models.Establishment.directors))
+        .order_by(
             models.Establishment.date_creation.desc(),
             models.Establishment.last_seen_at.desc(),
         )
@@ -169,7 +170,12 @@ def get_establishment_detail(
     siret: str,
     session: Session = Depends(get_db_session),
 ) -> EstablishmentDetailOut:
-    entity = session.get(models.Establishment, siret)
+    entity = (
+        session.query(models.Establishment)
+        .options(selectinload(models.Establishment.directors))
+        .filter(models.Establishment.siret == siret)
+        .first()
+    )
     if entity is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Établissement introuvable.")
     return EstablishmentDetailOut.model_validate(entity)

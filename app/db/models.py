@@ -102,13 +102,47 @@ class Establishment(Base):
     google_contact_email: Mapped[str | None] = mapped_column(String(255))
     google_contact_website: Mapped[str | None] = mapped_column(String(512))
 
+    legal_unit_name: Mapped[str | None] = mapped_column(String(512))
+
     alerts: Mapped[list["Alert"]] = relationship("Alert", back_populates="establishment")
+    directors: Mapped[list["Director"]] = relationship(
+        "Director",
+        back_populates="establishment",
+        cascade="all, delete-orphan",
+        order_by="Director.created_at",
+    )
 
     @property
     def is_sole_proprietorship(self) -> bool:
         """Return True when the establishment is classified as an entreprise individuelle."""
 
         return is_individual_company(self.categorie_juridique)
+
+
+class Director(Base):
+    """Director (dirigeant) associated with an establishment."""
+
+    __tablename__ = "directors"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    establishment_siret: Mapped[str] = mapped_column(
+        String(14),
+        ForeignKey("establishments.siret", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    type_dirigeant: Mapped[str] = mapped_column(String(32), nullable=False)
+    first_names: Mapped[str | None] = mapped_column(String(512))
+    last_name: Mapped[str | None] = mapped_column(String(255))
+    quality: Mapped[str | None] = mapped_column(String(255))
+    birth_month: Mapped[int | None] = mapped_column(Integer)
+    birth_year: Mapped[int | None] = mapped_column(Integer)
+    siren: Mapped[str | None] = mapped_column(String(9))
+    denomination: Mapped[str | None] = mapped_column(String(512))
+    nationality: Mapped[str | None] = mapped_column(String(128))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+
+    establishment: Mapped[Establishment] = relationship("Establishment", back_populates="directors")
 
 
 class SyncRun(Base):

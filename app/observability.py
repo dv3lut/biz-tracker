@@ -108,7 +108,21 @@ def serialize_establishment(establishment: "Any") -> dict[str, Any]:
             "nom_usage": establishment.nom_usage,
             "nom": establishment.nom,
             "prenom1": establishment.prenom1,
+            "legal_unit_name": establishment.legal_unit_name,
         },
+        "directors": [
+            {
+                "type_dirigeant": d.type_dirigeant,
+                "first_names": d.first_names,
+                "last_name": d.last_name,
+                "quality": d.quality,
+                "birth_month": d.birth_month,
+                "birth_year": d.birth_year,
+                "siren": d.siren,
+                "denomination": d.denomination,
+            }
+            for d in (establishment.directors or [])
+        ],
         "adresse": {
             "numero_voie": establishment.numero_voie,
             "indice_repetition": establishment.indice_repetition,
