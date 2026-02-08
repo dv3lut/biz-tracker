@@ -24,7 +24,7 @@ type PublicNafCategory = {
 
 const PLAN_CATEGORY_LIMITS: Record<PlanKey, number> = {
   starter: 1,
-  business: 3,
+  business: 5,
 };
 
 type Props = {
@@ -82,7 +82,7 @@ const Pricing = ({ trialPeriodDays = 14 }: Props) => {
       description: "Le plus populaire",
       features: [
         "Alertes quotidiennes par email",
-        "3 secteurs sélectionnés (sur le catalogue complet)",
+        "5 secteurs sélectionnés (sur le catalogue complet)",
         "Historique 2 mois (sur vos secteurs)",
       ],
       cta: "Démarrer maintenant",

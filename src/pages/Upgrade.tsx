@@ -27,7 +27,7 @@ type SubscriptionInfo = {
 
 const PLAN_CATEGORY_LIMITS: Record<PlanKey, number> = {
   starter: 1,
-  business: 3,
+  business: 5,
 };
 
 const Upgrade = () => {
@@ -541,7 +541,7 @@ const Upgrade = () => {
                       }}
                     >
                       <option value="starter">Starter (1 catégorie)</option>
-                      <option value="business">Business (3 catégories)</option>
+                      <option value="business">Business (5 catégories)</option>
                     </select>
                   </div>
 
