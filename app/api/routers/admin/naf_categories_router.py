@@ -137,6 +137,45 @@ def list_naf_categories(session: Session = Depends(get_db_session)) -> list[NafC
     return output
 
 
+@router.get("/naf-subcategories", response_model=list[NafSubCategoryOut], summary="Lister les sous-catégories NAF")
+def list_naf_subcategories(session: Session = Depends(get_db_session)) -> list[NafSubCategoryOut]:
+    stmt = select(models.NafSubCategory).order_by(models.NafSubCategory.name)
+    subcategories = session.execute(stmt).scalars().all()
+
+    departments = session.execute(
+        select(models.Department).order_by(models.Department.order_index)
+    ).scalars().all()
+    department_by_id = {department.id: department for department in departments}
+    active_clients = get_active_clients(session)
+    subcategory_departments, subcategory_all_departments = build_subcategory_department_index(active_clients)
+
+    output: list[NafSubCategoryOut] = []
+    for subcategory in subcategories:
+        if subcategory.id in subcategory_all_departments:
+            dept_count = len(departments)
+            dept_all = True
+            dept_items: list[models.Department] = []
+        else:
+            dept_ids = subcategory_departments.get(subcategory.id, set())
+            dept_items = [department_by_id[dept_id] for dept_id in dept_ids if dept_id in department_by_id]
+            dept_items.sort(key=lambda department: department.order_index)
+            dept_count = len(dept_items)
+            dept_all = False
+
+        subcategory_out = NafSubCategoryOut.model_validate(subcategory).model_copy(
+            update={
+                "google_department_count": dept_count,
+                "google_department_all": dept_all,
+                "google_departments": [
+                    DepartmentOut.model_validate(department) for department in dept_items
+                ],
+            }
+        )
+        output.append(subcategory_out)
+
+    return output
+
+
 @router.post(
     "/naf-categories",
     response_model=NafCategoryOut,
