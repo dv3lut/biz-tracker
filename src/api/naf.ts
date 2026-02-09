@@ -135,6 +135,10 @@ export const nafApi = {
     const response = await request<NafCategoryResponse[]>("/admin/naf-categories");
     return response.data.map(mapCategoryResponse);
   },
+  listSubCategories: async (): Promise<NafSubCategory[]> => {
+    const response = await request<NafSubCategoryResponse[]>("/admin/naf-subcategories");
+    return response.data.map(mapNafSubCategoryResponse);
+  },
   createCategory: async (payload: NafCategoryPayload): Promise<NafCategory> => {
     const response = await request<NafCategoryResponse>("/admin/naf-categories", {
       method: "POST",

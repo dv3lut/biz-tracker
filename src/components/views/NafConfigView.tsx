@@ -16,6 +16,7 @@ type SubCategoryModalState =
 
 type Props = {
   categories: NafCategory[] | undefined;
+  allSubcategories?: NafSubCategory[];
   isLoading: boolean;
   isFetching: boolean;
   error: Error | null;
@@ -28,6 +29,7 @@ type Props = {
 
 export const NafConfigView = ({
   categories,
+  allSubcategories,
   isLoading,
   isFetching,
   error,
@@ -48,6 +50,9 @@ export const NafConfigView = ({
   const isRefreshing = useRefreshIndicator(isFetching && !isLoading, { delay: 300, minVisible: 250 });
 
   const existingSubcategories = useMemo(() => {
+    if (allSubcategories && allSubcategories.length > 0) {
+      return [...allSubcategories].sort((a, b) => a.name.localeCompare(b.name));
+    }
     if (!categories) {
       return [];
     }
@@ -58,7 +63,7 @@ export const NafConfigView = ({
       });
     });
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
-  }, [categories]);
+  }, [allSubcategories, categories]);
 
   useEffect(() => {
     if (!feedbackMessage) {
@@ -84,8 +89,9 @@ export const NafConfigView = ({
     return true;
   }, [isAuthenticated, onRequireToken]);
 
-  const invalidateCategories = useCallback(() => {
+  const invalidateNafQueries = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ["naf-categories"] });
+    queryClient.invalidateQueries({ queryKey: ["naf-subcategories"] });
   }, [queryClient]);
 
   const handleMutationError = useCallback(
@@ -106,7 +112,7 @@ export const NafConfigView = ({
     onSuccess: (category) => {
       setFeedbackMessage(`Catégorie ${category.name} créée.`);
       setErrorMessage(null);
-      invalidateCategories();
+      invalidateNafQueries();
       setCategoryModalState(null);
     },
     onError: handleMutationError,
@@ -118,7 +124,7 @@ export const NafConfigView = ({
     onSuccess: (category) => {
       setFeedbackMessage(`Catégorie ${category.name} mise à jour.`);
       setErrorMessage(null);
-      invalidateCategories();
+      invalidateNafQueries();
       setCategoryModalState(null);
     },
     onError: handleMutationError,
@@ -130,7 +136,7 @@ export const NafConfigView = ({
     onSuccess: (_, { categoryName }) => {
       setFeedbackMessage(`Catégorie ${categoryName} supprimée.`);
       setErrorMessage(null);
-      invalidateCategories();
+      invalidateNafQueries();
     },
     onError: handleMutationError,
     onSettled: () => setDeletingCategoryId(null),
@@ -141,7 +147,7 @@ export const NafConfigView = ({
     onSuccess: (subcategory) => {
       setFeedbackMessage(`Sous-catégorie ${subcategory.name} créée.`);
       setErrorMessage(null);
-      invalidateCategories();
+      invalidateNafQueries();
       setSubCategoryModalState(null);
     },
     onError: handleMutationError,
@@ -153,7 +159,7 @@ export const NafConfigView = ({
     onSuccess: (subcategory) => {
       setFeedbackMessage(`Sous-catégorie ${subcategory.name} mise à jour.`);
       setErrorMessage(null);
-      invalidateCategories();
+      invalidateNafQueries();
       setSubCategoryModalState(null);
     },
     onError: handleMutationError,
@@ -165,7 +171,7 @@ export const NafConfigView = ({
     onSuccess: (subcategory) => {
       setFeedbackMessage(`Sous-catégorie ${subcategory.name} associée.`);
       setErrorMessage(null);
-      invalidateCategories();
+      invalidateNafQueries();
       setSubCategoryModalState(null);
     },
     onError: handleMutationError,
@@ -181,7 +187,7 @@ export const NafConfigView = ({
     onSuccess: (_, { subcategoryName }) => {
       setFeedbackMessage(`Sous-catégorie ${subcategoryName} retirée.`);
       setErrorMessage(null);
-      invalidateCategories();
+      invalidateNafQueries();
     },
     onError: handleMutationError,
     onSettled: () => setDeletingSubCategoryId(null),

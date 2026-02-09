@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { nafApi, regionsApi } from "../../api";
-import type { NafCategory, Region } from "../../types";
+import type { NafCategory, NafSubCategory, Region } from "../../types";
 import { NafConfigView } from "../../components/views/NafConfigView";
 
 type Props = {
@@ -16,6 +16,11 @@ export const NafConfigSection = ({ isAuthenticated, onRequireToken, onUnauthoriz
     queryFn: () => nafApi.listCategories(),
   });
 
+  const subcategoriesQuery = useQuery<NafSubCategory[]>({
+    queryKey: ["naf-subcategories"],
+    queryFn: () => nafApi.listSubCategories(),
+  });
+
   const regionsQuery = useQuery<Region[]>({
     queryKey: ["regions"],
     queryFn: () => regionsApi.list(),
@@ -27,10 +32,14 @@ export const NafConfigSection = ({ isAuthenticated, onRequireToken, onUnauthoriz
   return (
     <NafConfigView
       categories={categoriesQuery.data}
+      allSubcategories={subcategoriesQuery.data}
       isLoading={categoriesQuery.isLoading}
       isFetching={categoriesQuery.isFetching}
       error={error}
-      onRefresh={() => categoriesQuery.refetch()}
+      onRefresh={() => {
+        categoriesQuery.refetch();
+        subcategoriesQuery.refetch();
+      }}
       regions={regionsQuery.data}
       isAuthenticated={isAuthenticated}
       onRequireToken={onRequireToken}
