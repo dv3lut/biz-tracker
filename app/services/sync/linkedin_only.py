@@ -95,7 +95,9 @@ def collect_linkedin_only(
             mode=mode,
             page_count=0,
             new_establishments=[],
+            new_establishment_payloads=[],
             updated_establishments=[],
+            updated_payloads=[],
             google_queue_count=0,
             google_eligible_count=0,
             google_matched_count=0,
@@ -104,10 +106,13 @@ def collect_linkedin_only(
             google_api_error_count=0,
             google_immediate_matches=[],
             google_late_matches=[],
+            google_match_payloads=[],
             alerts=[],
+            alert_payloads=[],
             alerts_sent_count=0,
             last_treated=None,
             max_creation_date=None,
+            duration_seconds=0.0,
         )
 
     log_event(
@@ -194,7 +199,9 @@ def collect_linkedin_only(
         mode=mode,
         page_count=0,
         new_establishments=[],
+        new_establishment_payloads=[],
         updated_establishments=[],
+        updated_payloads=[],
         google_queue_count=0,
         google_eligible_count=0,
         google_matched_count=0,
@@ -203,10 +210,13 @@ def collect_linkedin_only(
         google_api_error_count=0,
         google_immediate_matches=[],
         google_late_matches=[],
+        google_match_payloads=[],
         alerts=[],
+        alert_payloads=[],
         alerts_sent_count=0,
         last_treated=None,
         max_creation_date=None,
+        duration_seconds=duration,
     )
 
 
