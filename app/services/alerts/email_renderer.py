@@ -133,6 +133,11 @@ def _format_date_fr(value: date) -> str:
     return f"{value.day} {month_label} {value.year}"
 
 
+def _format_month_year_fr(value: date) -> str:
+    month_label = MONTH_LABELS_FR.get(value.month, str(value.month))
+    return f"{month_label.capitalize()} {value.year}"
+
+
 def _section_title_for_status(status: str) -> str:
     """Retourne le titre de section pour les emails clients."""
     if status in STATUS_TITLE_OVERRIDES:
@@ -263,6 +268,12 @@ def render_client_email(
             item_lines.append(f"  {full_address}")
         if category_name:
             item_lines.append(f"  Catégorie : {category_name}")
+        if establishment.date_creation:
+            item_lines.append(
+                f"  Création administrative : {_format_month_year_fr(establishment.date_creation)}"
+            )
+        else:
+            item_lines.append("  Création administrative : N/A")
         if google_url:
             item_lines.append(f"  Fiche Google : {google_url}")
         else:
@@ -289,6 +300,14 @@ def render_client_email(
             item_html_parts.append(
                 f"<div style=\"margin-top:8px;font-size:13px;\"><span style=\"color:{theme['text_muted']};\">Catégorie :</span> {escape(category_name)}</div>"
             )
+        creation_label = (
+            _format_month_year_fr(establishment.date_creation)
+            if establishment.date_creation
+            else "N/A"
+        )
+        item_html_parts.append(
+            f"<div style=\"margin-top:8px;font-size:13px;\"><span style=\"color:{theme['text_muted']};\">Création administrative :</span> {escape(creation_label)}</div>"
+        )
         if google_url:
             link = escape(google_url)
             item_html_parts.append(
@@ -463,7 +482,11 @@ def render_admin_email(
         siret_display, siret_url = formatter.get_siret_display_and_url(establishment.siret)
         naf_code = establishment.naf_code or "N/A"
         naf_label = establishment.naf_libelle or ""
-        creation_date = establishment.date_creation.isoformat() if establishment.date_creation else "N/A"
+        creation_date = (
+            _format_month_year_fr(establishment.date_creation)
+            if establishment.date_creation
+            else "N/A"
+        )
         google_url = establishment.google_place_url
         google_id = establishment.google_place_id or ""
         subcategory_label = formatter.format_subcategory_label(establishment.naf_code)
@@ -485,7 +508,7 @@ def render_admin_email(
             ident_section.append(escape(naf_label))
         if subcategory_label:
             ident_section.append(f"Catégorie&nbsp;: {escape(subcategory_label)}")
-        ident_section.append(f"Création&nbsp;: {escape(creation_date)}")
+        ident_section.append(f"Création administrative&nbsp;: {escape(creation_date)}")
 
         google_section: list[str] = []
         if google_url:

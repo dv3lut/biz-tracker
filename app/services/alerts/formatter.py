@@ -8,6 +8,26 @@ from app.utils.google_listing import describe_listing_age_status
 from app.utils.naf import normalize_naf_code
 from app.utils.urls import build_annuaire_etablissement_url
 
+MONTH_LABELS_FR = {
+    1: "janvier",
+    2: "février",
+    3: "mars",
+    4: "avril",
+    5: "mai",
+    6: "juin",
+    7: "juillet",
+    8: "août",
+    9: "septembre",
+    10: "octobre",
+    11: "novembre",
+    12: "décembre",
+}
+
+
+def format_month_year_fr(value) -> str:
+    month_label = MONTH_LABELS_FR.get(value.month, str(value.month))
+    return f"{month_label.capitalize()} {value.year}"
+
 
 class EstablishmentFormatter:
     """Build alert payloads and textual representations for establishments."""
@@ -83,7 +103,9 @@ class EstablishmentFormatter:
         lines.append(f"  Adresse: {' '.join(address_parts)}")
         lines.append(f"           {' '.join(commune_parts)}")
         if establishment.date_creation:
-            lines.append(f"  Création: {establishment.date_creation.isoformat()}")
+            lines.append(f"  Création administrative : {format_month_year_fr(establishment.date_creation)}")
+        else:
+            lines.append("  Création administrative : N/A")
         if include_google and establishment.google_place_url:
             lines.append(f"  Google: {establishment.google_place_url}")
         if establishment.google_place_url:
