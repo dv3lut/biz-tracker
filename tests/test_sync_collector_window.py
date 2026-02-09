@@ -16,10 +16,19 @@ from app.services.sync.replay_reference import DayReplayReference
 class _DummyCollector(SyncCollectorMixin):
     """Implémentation minimale du collecteur pour tester la fenêtre de création."""
 
-    def __init__(self, current_date: date, *, months_back: int = 6, overlap_days: int = 3) -> None:
+    def __init__(
+        self,
+        current_date: date,
+        *,
+        months_back: int = 6,
+        incremental_lookback_months: int = 1,
+    ) -> None:
         self._current_date_value = current_date
         self._settings = SimpleNamespace(
-            sync=SimpleNamespace(months_back=months_back, creation_overlap_days=overlap_days),
+            sync=SimpleNamespace(
+                months_back=months_back,
+                incremental_lookback_months=incremental_lookback_months,
+            ),
             sirene=SimpleNamespace(page_size=1000),
         )
         self._logger = logging.getLogger("dummy-collector")
@@ -35,7 +44,7 @@ class _ReplayAwareCollector(SyncCollectorMixin):
         self._replay_results = replay_results
         self._current_date_value = current_date
         self._settings = SimpleNamespace(
-            sync=SimpleNamespace(months_back=6, creation_overlap_days=3),
+            sync=SimpleNamespace(months_back=6, incremental_lookback_months=1),
             sirene=SimpleNamespace(page_size=1000),
         )
         self._logger = logging.getLogger("replay-aware-collector")
@@ -72,29 +81,40 @@ class ComputeSinceCreationTests(unittest.TestCase):
 
         self.assertEqual(result, date(2025, 5, 15))
 
-    def test_applies_overlap_and_clamps_to_today(self) -> None:
-        collector = _DummyCollector(date(2025, 11, 15), overlap_days=2)
+class ComputeSinceCreationIncrementalTests(unittest.TestCase):
+    """Vérifie le calcul de la fenêtre pour les synchros incrémentales auto."""
+
+    def test_returns_lookback_baseline_when_no_checkpoint(self) -> None:
+        """Sans checkpoint, on regarde 1 mois en arrière (incremental_lookback_months)."""
+        collector = _DummyCollector(date(2025, 11, 15), incremental_lookback_months=1)
         state = models.SyncState(scope_key="restaurants")
-        state.last_creation_date = date(2025, 11, 14)
 
-        result = collector._compute_since_creation(state, months_back=6)
+        result = collector._compute_since_creation_incremental(state)
 
-        self.assertEqual(result, date(2025, 11, 12))
+        # 15 nov - 1 mois = 15 oct
+        self.assertEqual(result, date(2025, 10, 15))
 
-        # Couvre le cas où la dernière création dépasse la date du jour (publication anticipée)
-        state.last_creation_date = date(2025, 11, 20)
-        result_future = collector._compute_since_creation(state, months_back=6)
-        self.assertEqual(result_future, date(2025, 11, 15))
-
-    def test_never_goes_before_baseline(self) -> None:
-        collector = _DummyCollector(date(2025, 11, 15), months_back=3, overlap_days=5)
+    def test_returns_baseline_with_lookback_zero(self) -> None:
+        """Si lookback est 0, on retourne la date du jour (comportement legacy)."""
+        collector = _DummyCollector(date(2025, 11, 15), incremental_lookback_months=0)
         state = models.SyncState(scope_key="restaurants")
-        state.last_creation_date = date(2025, 7, 1)
 
-        result = collector._compute_since_creation(state, months_back=3)
+        result = collector._compute_since_creation_incremental(state)
 
-        # Baseline = 2025-08-15 -> même avec overlap, on reste borné au baseline
-        self.assertEqual(result, date(2025, 8, 15))
+        self.assertEqual(result, date(2025, 11, 15))
+
+    def test_larger_lookback_goes_further_back(self) -> None:
+        """Avec 2 mois de lookback, on regarde plus loin en arrière."""
+        collector = _DummyCollector(
+            date(2025, 11, 15),
+            incremental_lookback_months=2,
+        )
+        state = models.SyncState(scope_key="restaurants")
+
+        result = collector._compute_since_creation_incremental(state)
+
+        # 15 nov - 2 mois = 15 sept
+        self.assertEqual(result, date(2025, 9, 15))
 
 
 class ResolveGoogleCandidatesTests(unittest.TestCase):

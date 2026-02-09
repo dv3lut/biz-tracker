@@ -211,7 +211,7 @@ Si vous passez par un CDN (ex: Cloudflare), configurez `real_ip_header` et `set_
 - Programmer `python -m app sync --check-for-updates` quotidiennement **après** la publication des mises à jour Sirene (cf. `Service informations`).
    - La commande interroge `dateDernierTraitementMaximum`; si elle n’a pas évolué, elle s’arrête proprement.
    - En cas de mise à jour très volumineuse (`dateDernierTraitementDeMasse`), prévoyez un monitoring spécifique.
-   - Le chevauchement `SYNC__CREATION_OVERLAP_DAYS` rejoue N jours autour du dernier `last_creation_date` pour capter des arrivées tardives sans retraiter tout l’historique.
+   - La fenêtre `SYNC__INCREMENTAL_LOOKBACK_MONTHS` force un regard en arrière (par défaut 1 mois) pour capter les créations administratives datées dans le passé.
 
 ## Données stockées
 - `establishments` : identité du SIRET (nom + fallbacks, adresse complète, dates, état, NAF 56.10A).

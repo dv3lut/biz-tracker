@@ -78,7 +78,7 @@ class SyncCollectorMixin(SyncPersistenceMixin):
             creation_range = (replay_for_date, replay_for_date)
         since_creation: date | None = None
         if creation_range is None:
-            if months_back:
+            if months_back is not None:
                 # Synchro avec mois dans le passé explicites
                 since_creation = subtract_months(self._current_date(), months_back)
             else:
@@ -143,7 +143,7 @@ class SyncCollectorMixin(SyncPersistenceMixin):
             champs=champs,
             cursor_value=cursor_value,
             tri=tri,
-            months_back=months_back or 0,
+            months_back=months_back if months_back is not None else 0,
             since_creation=effective_since,
             creation_range=creation_range,
             persist_state=should_persist_state,
@@ -543,35 +543,20 @@ class SyncCollectorMixin(SyncPersistenceMixin):
 
     def _compute_since_creation(self, state: models.SyncState, *, months_back: int) -> date:
         baseline = subtract_months(self._current_date(), months_back)
-        last_creation = state.last_creation_date
-        if not last_creation:
-            return baseline
-
-        overlap_days = max(self._settings.sync.creation_overlap_days, 0)
-        candidate = last_creation - timedelta(days=overlap_days)
-        today = self._current_date()
-        if candidate > today:
-            candidate = today
-        if candidate < baseline:
-            candidate = baseline
-        return candidate
+        return baseline
 
     def _compute_since_creation_incremental(self, state: models.SyncState) -> date:
         """Compute since_creation for incremental sync (no months_back).
 
-        Returns the last known creation date with overlap, or today if no checkpoint exists.
+        Always looks back `incremental_lookback_months` (default 1 month) to capture
+        administratively backdated establishments.
         """
-        last_creation = state.last_creation_date
-        if not last_creation:
-            # Première synchro incrémentale : on prend le jour courant
-            return self._current_date()
-
-        overlap_days = max(self._settings.sync.creation_overlap_days, 0)
-        candidate = last_creation - timedelta(days=overlap_days)
+        lookback_months = max(self._settings.sync.incremental_lookback_months, 0)
         today = self._current_date()
-        if candidate > today:
-            candidate = today
-        return candidate
+
+        # Baseline : toujours regarder au moins X mois en arrière
+        baseline = subtract_months(today, lookback_months) if lookback_months else today
+        return baseline
 
     def _current_date(self) -> date:
         return utcnow().date()

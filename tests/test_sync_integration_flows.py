@@ -45,7 +45,11 @@ def _session_scope():
 
 def _make_settings(*, google_enabled: bool = True):
     return SimpleNamespace(
-        sync=SimpleNamespace(scope_key="default", months_back=1, creation_overlap_days=0),
+        sync=SimpleNamespace(
+            scope_key="default",
+            months_back=1,
+            incremental_lookback_months=1,
+        ),
         sirene=SimpleNamespace(
             page_size=2,
             current_period_date="2100-01-01",

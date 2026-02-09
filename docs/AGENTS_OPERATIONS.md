@@ -4,7 +4,7 @@
 - Copier `.env.example` en `.env` et renseigner au minimum le token Sirene, la chaîne PostgreSQL (port local `15432`) et un `API__ADMIN_TOKEN` robuste.
 - Lancer `docker compose up -d biz-tracker-db` puis `python -m app init-db` (rejouer après chaque mise à jour pour appliquer les colonnes manquantes).
 - Optionnel : configurer l’envoi d’e-mails (`EMAIL__ENABLED=true` + SMTP). Utiliser `EMAIL__PROVIDER=mailhog` en local (lancer `docker compose up -d biz-tracker-mailhog`, interface http://localhost:8025) et `EMAIL__PROVIDER=mailjet` en production (identifiant = API key, mot de passe = secret key, expéditeur validé côté Mailjet).
-- Ajuster `SYNC__CREATION_OVERLAP_DAYS` (défaut : 3) pour rejouer davantage ou moins de jours autour du dernier `last_creation_date` et éviter les trous dus aux retards de publication.
+- Ajuster `SYNC__INCREMENTAL_LOOKBACK_MONTHS` (défaut : 1) pour élargir ou réduire la fenêtre des synchros auto (captures des créations administratives datées dans le passé).
 - Optionnel : activer l’enrichissement Google Places en définissant `GOOGLE__API_KEY` (clé API avec Places + Geocoding activées et facturation). Sans clé, le service reste inactif.
 - Pour chaque client, définir les statuts de fiches Google souhaités (`recent_creation`, `recent_creation_missing_contact`, `not_recent_creation`) directement dans l’UI. Cette sélection conditionne les alertes envoyées et les exports générés pour ce client.
 
