@@ -45,7 +45,7 @@ class GoogleBusinessService:
         self._settings = get_settings().google
         self._retry_config: GoogleRetryRuntimeConfig = load_runtime_google_retry_config(session)
         self._category_similarity_threshold = self._settings.category_similarity_threshold
-        self._neutral_google_types = {"point_of_interest", "establishment", "store", "food"}
+        self._neutral_google_types = {"point_of_interest", "establishment"}
         self._naf_keyword_map = build_naf_keyword_map(self._session)
         self._lookup_engine: GoogleLookupEngine | None = None
         if not self._settings.enabled:
@@ -90,7 +90,7 @@ class GoogleBusinessService:
             raise RuntimeError("Google lookup engine is not initialised.")
 
         naf_keyword_map = getattr(self, "_naf_keyword_map", None) or {}
-        neutral_types = getattr(self, "_neutral_google_types", {"point_of_interest", "establishment", "store", "food"})
+        neutral_types = getattr(self, "_neutral_google_types", {"point_of_interest", "establishment", "store"})
         similarity_threshold = getattr(
             self,
             "_category_similarity_threshold",
