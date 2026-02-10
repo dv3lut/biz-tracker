@@ -3,6 +3,7 @@ import type {
   Establishment,
   EstablishmentIndividualFilter,
   GoogleFindPlaceDebugResult,
+  LinkedInStatus,
   NafCategory,
   Region,
 } from "../../types";
@@ -26,6 +27,7 @@ type Props = {
   addedTo: string;
   individualFilter: EstablishmentIndividualFilter;
   googleCheckStatus: string;
+  linkedinStatuses: LinkedInStatus[];
   hasNextPage: boolean;
   onLimitChange: (limit: number) => void;
   onPageChange: (page: number) => void;
@@ -39,6 +41,7 @@ type Props = {
   onResetFilters: () => void;
   onIndividualFilterChange: (value: EstablishmentIndividualFilter) => void;
   onGoogleCheckStatusChange: (value: string) => void;
+  onLinkedinStatusesChange: (value: LinkedInStatus[]) => void;
   onRefresh: () => void;
   onDeleteEstablishment: (siret: string) => void;
   deletingSiret: string | null;
@@ -75,6 +78,7 @@ export const EstablishmentsView = ({
   addedTo,
   individualFilter,
   googleCheckStatus,
+  linkedinStatuses,
   hasNextPage,
   onLimitChange,
   onPageChange,
@@ -88,6 +92,7 @@ export const EstablishmentsView = ({
   onResetFilters,
   onIndividualFilterChange,
   onGoogleCheckStatusChange,
+  onLinkedinStatusesChange,
   onRefresh,
   onDeleteEstablishment,
   deletingSiret,
@@ -132,6 +137,7 @@ export const EstablishmentsView = ({
           addedTo={addedTo}
           individualFilter={individualFilter}
           googleCheckStatus={googleCheckStatus}
+          linkedinStatuses={linkedinStatuses}
           hasNextPage={hasNextPage}
           onLimitChange={onLimitChange}
           onPageChange={onPageChange}
@@ -145,6 +151,7 @@ export const EstablishmentsView = ({
           onResetFilters={onResetFilters}
           onIndividualFilterChange={onIndividualFilterChange}
           onGoogleCheckStatusChange={onGoogleCheckStatusChange}
+          onLinkedinStatusesChange={onLinkedinStatusesChange}
           onRefresh={onRefresh}
           onDeleteEstablishment={onDeleteEstablishment}
           deletingSiret={deletingSiret}

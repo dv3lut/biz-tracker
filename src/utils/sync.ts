@@ -11,7 +11,7 @@ export const describeSyncMode = (mode: SyncMode): string => {
     case "linkedin_pending":
       return "LinkedIn — nouveaux uniquement";
     case "linkedin_refresh":
-      return "LinkedIn — relancer sur tous";
+      return "LinkedIn";
     case "day_replay":
       return "Rejouer une journée";
     case "full":

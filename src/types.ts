@@ -1,5 +1,6 @@
 export type SyncMode = "full" | "sirene_only" | "google_pending" | "google_refresh" | "linkedin_pending" | "linkedin_refresh" | "day_replay";
 export type DayReplayReference = "creation_date" | "insertion_date";
+export type LinkedInStatus = "pending" | "found" | "not_found" | "error";
 
 export type ListingStatus = "recent_creation" | "recent_creation_missing_contact" | "not_recent_creation";
 
@@ -277,6 +278,7 @@ export interface SyncRequestPayload {
   notifyAdmins?: boolean;
   forceGoogleReplay?: boolean;
   monthsBack?: number;
+  linkedinStatuses?: LinkedInStatus[];
 }
 
 export type EstablishmentIndividualFilter = "all" | "individual" | "non_individual";

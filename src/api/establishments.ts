@@ -194,6 +194,8 @@ interface ListEstablishmentsParams {
   addedTo?: string;
   googleCheckStatus?: string;
   isIndividual?: boolean;
+  hasLinkedin?: boolean;
+  linkedinStatuses?: import("../types").LinkedInStatus[];
 }
 
 const buildEstablishmentsQuery = (params: ListEstablishmentsParams = {}): URLSearchParams => {
@@ -236,6 +238,16 @@ const buildEstablishmentsQuery = (params: ListEstablishmentsParams = {}): URLSea
   }
   if (typeof params.isIndividual === "boolean") {
     query.set("is_individual", String(params.isIndividual));
+  }
+  if (typeof params.hasLinkedin === "boolean") {
+    query.set("has_linkedin", String(params.hasLinkedin));
+  }
+  if (params.linkedinStatuses && params.linkedinStatuses.length > 0) {
+    params.linkedinStatuses.forEach((status) => {
+      if (status) {
+        query.append("linkedin_statuses", status);
+      }
+    });
   }
   return query;
 };

@@ -45,6 +45,58 @@
   min-width: 240px;
 }
 
+.establishments-control--linkedin-status {
+  flex: 0 1 220px;
+  min-width: 200px;
+}
+
+.establishments-control--linkedin-status .linkedin-status-multiselect {
+  position: relative;
+}
+
+.establishments-control--linkedin-status summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 0.45rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  user-select: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.establishments-control--linkedin-status summary::-webkit-details-marker {
+  display: none;
+}
+
+.linkedin-status-panel {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 0.5rem);
+  width: min(260px, 80vw);
+  padding: 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-alt);
+  display: grid;
+  gap: 0.5rem;
+  z-index: 20;
+}
+
+.linkedin-status-option {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.9rem;
+}
+
+.linkedin-status-option input[type="checkbox"] {
+  width: 1.05rem;
+  height: 1.05rem;
+  flex-shrink: 0;
+}
+
 .establishments-control--limit {
   flex: 0 0 auto;
 }
@@ -72,6 +124,7 @@
   .establishments-control--added-from,
   .establishments-control--added-to,
   .establishments-control--individual,
+  .establishments-control--linkedin-status,
   .establishments-control--pagination {
     min-width: 0;
     width: 100%;

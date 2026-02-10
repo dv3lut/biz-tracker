@@ -1,7 +1,7 @@
 import { KeyboardEvent, useEffect, useMemo, useState } from "react";
 
 import { LISTING_STATUS_LABELS } from "../constants/listingStatuses";
-import { Client, DayReplayReference, ListingStatus, NafCategoryStat, SyncMode } from "../types";
+import { Client, DayReplayReference, LinkedInStatus, ListingStatus, NafCategoryStat, SyncMode } from "../types";
 import {
   canonicalizeNafCode,
   denormalizeNafCode,
@@ -48,16 +48,10 @@ const MODE_OPTIONS: Array<{
     impact: "Optionnel: remettre à zéro les données Google avant de recalculer (plus sûr mais plus intrusif).",
   },
   {
-    value: "linkedin_pending",
-    title: "LinkedIn — nouveaux uniquement",
-    description: "Recherche les profils LinkedIn des dirigeants physiques jamais enrichis.",
-    impact: "Permet de rattraper les profils LinkedIn manquants.",
-  },
-  {
     value: "linkedin_refresh",
-    title: "LinkedIn — relancer sur tous",
-    description: "Relance une recherche LinkedIn sur tous les dirigeants physiques.",
-    impact: "Permet de mettre à jour les profils LinkedIn même déjà recherchés.",
+    title: "LinkedIn",
+    description: "Relance la recherche LinkedIn sur les dirigeants physiques selon les statuts sélectionnés.",
+    impact: "Ciblez précisément les statuts à rejouer (en attente, trouvés, non trouvés, en erreur).",
   },
   {
     value: "day_replay",
@@ -87,6 +81,13 @@ const DAY_REPLAY_REFERENCE_OPTIONS: Array<{
 const DEFAULT_REPLAY_REFERENCE: DayReplayReference = "creation_date";
 
 const MAX_TARGET_CLIENTS = 50;
+
+const LINKEDIN_STATUS_OPTIONS: Array<{ value: LinkedInStatus; label: string }> = [
+  { value: "pending", label: "En attente" },
+  { value: "found", label: "Trouvé" },
+  { value: "not_found", label: "Non trouvés" },
+  { value: "error", label: "En erreur" },
+];
 
 type ClientOption = {
   id: string;
@@ -176,6 +177,7 @@ type Props = {
     forceGoogleReplay?: boolean;
     replayReference?: DayReplayReference;
     monthsBack?: number;
+    linkedinStatuses?: LinkedInStatus[];
   }) => void;
   onCancel: () => void;
   isSubmitting: boolean;
@@ -259,6 +261,8 @@ export const SyncModeModal = ({
   const [monthsBack, setMonthsBack] = useState<number | null>(null);
   const [clientSearch, setClientSearch] = useState<string>("");
   const [recipientError, setRecipientError] = useState<string | null>(null);
+  const [linkedinEnabled, setLinkedinEnabled] = useState<boolean>(false);
+  const [linkedinStatuses, setLinkedinStatuses] = useState<LinkedInStatus[]>(["pending"]);
 
   useEffect(() => {
     if (isOpen) {
@@ -279,6 +283,8 @@ export const SyncModeModal = ({
       setMonthsBack(null);
       setClientSearch("");
       setRecipientError(null);
+      setLinkedinEnabled(initialMode === "linkedin_refresh");
+      setLinkedinStatuses(["pending"]);
     }
   }, [
     initialMode,
@@ -302,6 +308,12 @@ export const SyncModeModal = ({
     // Reset monthsBack si on passe sur un mode non-Sirene
     if (mode !== "full" && mode !== "sirene_only") {
       setMonthsBack(null);
+    }
+    if (mode !== "linkedin_refresh") {
+      setLinkedinEnabled(false);
+    } else {
+      setLinkedinEnabled(true);
+      setLinkedinStatuses((current) => (current.length > 0 ? current : ["pending"]));
     }
   }, [mode]);
 
@@ -520,6 +532,16 @@ export const SyncModeModal = ({
       setRecipientError("Sélectionnez au moins un client ou activez l'envoi administrateur.");
       return;
     }
+    if (mode === "linkedin_refresh") {
+      if (!linkedinEnabled) {
+        setFormError("Merci d'activer la relance LinkedIn.");
+        return;
+      }
+      if (linkedinStatuses.length === 0) {
+        setFormError("Sélectionnez au moins un statut LinkedIn à relancer.");
+        return;
+      }
+    }
 
     const nafCodesPayload =
       selectedNafCodes.length > 0 ? selectedNafCodes.map((code) => denormalizeNafCode(code)) : undefined;
@@ -545,6 +567,10 @@ export const SyncModeModal = ({
       payload.notifyAdmins = notifyAdmins;
       payload.forceGoogleReplay = forceGoogleReplay;
       payload.replayReference = replayReference;
+    }
+
+    if (mode === "linkedin_refresh") {
+      payload.linkedinStatuses = linkedinEnabled ? linkedinStatuses : [];
     }
 
     onConfirm(payload);
@@ -616,6 +642,47 @@ export const SyncModeModal = ({
                           Si coché, les Place ID / URL existants sont effacés puis recalculés. Sinon, les fiches existantes
                           sont conservées en l'absence de nouveau match.
                         </p>
+                      </div>
+                    ) : null}
+                    {option.value === "linkedin_refresh" && isSelected ? (
+                      <div className="form-control">
+                        <label className="linkedin-toggle">
+                          <input
+                            type="checkbox"
+                            checked={linkedinEnabled}
+                            onChange={(event) => setLinkedinEnabled(event.target.checked)}
+                            disabled={isSubmitting}
+                          />
+                          <span>LinkedIn</span>
+                        </label>
+                        {linkedinEnabled ? (
+                          <details className="linkedin-status-dropdown" open>
+                            <summary>Statuts à relancer</summary>
+                            <div className="linkedin-status-options">
+                              {LINKEDIN_STATUS_OPTIONS.map((status) => (
+                                <label key={status.value} className="linkedin-status-option">
+                                  <input
+                                    type="checkbox"
+                                    checked={linkedinStatuses.includes(status.value)}
+                                    onChange={(event) => {
+                                      const checked = event.target.checked;
+                                      setLinkedinStatuses((current) => {
+                                        if (checked) {
+                                          return current.includes(status.value)
+                                            ? current
+                                            : [...current, status.value];
+                                        }
+                                        return current.filter((value) => value !== status.value);
+                                      });
+                                    }}
+                                    disabled={isSubmitting}
+                                  />
+                                  <span>{status.label}</span>
+                                </label>
+                              ))}
+                            </div>
+                          </details>
+                        ) : null}
                       </div>
                     ) : null}
                     {option.value === "day_replay" && isSelected ? (

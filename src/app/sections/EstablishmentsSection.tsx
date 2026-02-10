@@ -7,6 +7,7 @@ import type {
   Establishment,
   EstablishmentIndividualFilter,
   GoogleFindPlaceDebugResult,
+  LinkedInStatus,
   NafCategory,
   Region,
 } from "../../types";
@@ -36,6 +37,7 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
   const [draftAddedTo, setDraftAddedTo] = useState("");
   const [draftIndividualFilter, setDraftIndividualFilter] = useState<EstablishmentIndividualFilter>("all");
   const [draftGoogleCheckStatus, setDraftGoogleCheckStatus] = useState("");
+  const [draftLinkedinStatuses, setDraftLinkedinStatuses] = useState<LinkedInStatus[]>([]);
 
   const [query, setQuery] = useState("");
   const [nafCodes, setNafCodes] = useState<string[]>([]);
@@ -44,6 +46,7 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
   const [addedTo, setAddedTo] = useState("");
   const [individualFilter, setIndividualFilter] = useState<EstablishmentIndividualFilter>("all");
   const [googleCheckStatus, setGoogleCheckStatus] = useState("");
+  const [linkedinStatuses, setLinkedinStatuses] = useState<LinkedInStatus[]>([]);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -75,6 +78,7 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
       addedTo,
       individualFilter,
       googleCheckStatus,
+      linkedinStatuses,
     ],
     queryFn: () =>
       establishmentsApi.fetchMany({
@@ -88,6 +92,7 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
         googleCheckStatus: googleCheckStatus ? googleCheckStatus : undefined,
         isIndividual:
           individualFilter === "all" ? undefined : individualFilter === "individual",
+        linkedinStatuses: linkedinStatuses.length > 0 ? linkedinStatuses : undefined,
       }),
     placeholderData: keepPreviousData,
   });
@@ -251,6 +256,10 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     setDraftGoogleCheckStatus(value);
   }, []);
 
+  const handleLinkedinStatusesChange = useCallback((value: LinkedInStatus[]) => {
+    setDraftLinkedinStatuses(value);
+  }, []);
+
   const handleApplyFilters = useCallback(() => {
     setQuery(draftQuery);
     setNafCodes(draftNafCodes);
@@ -259,6 +268,7 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     setAddedTo(draftAddedTo);
     setIndividualFilter(draftIndividualFilter);
     setGoogleCheckStatus(draftGoogleCheckStatus);
+    setLinkedinStatuses(draftLinkedinStatuses);
     setPage(0);
   }, [
     draftAddedFrom,
@@ -268,6 +278,7 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     draftNafCodes,
     draftQuery,
     draftDepartmentCodes,
+    draftLinkedinStatuses,
   ]);
 
   const handleResetFilters = useCallback(() => {
@@ -278,6 +289,7 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     setDraftAddedTo("");
     setDraftIndividualFilter("all");
     setDraftGoogleCheckStatus("");
+    setDraftLinkedinStatuses([]);
 
     setQuery("");
     setNafCodes([]);
@@ -286,6 +298,7 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     setAddedTo("");
     setIndividualFilter("all");
     setGoogleCheckStatus("");
+    setLinkedinStatuses([]);
     setPage(0);
   }, []);
 
@@ -305,6 +318,9 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     if (draftGoogleCheckStatus !== googleCheckStatus) {
       return true;
     }
+    if (draftLinkedinStatuses.length !== linkedinStatuses.length) {
+      return true;
+    }
     if (draftNafCodes.length !== nafCodes.length) {
       return true;
     }
@@ -318,7 +334,12 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     }
     const departmentA = [...draftDepartmentCodes].sort().join(",");
     const departmentB = [...departmentCodes].sort().join(",");
-    return departmentA !== departmentB;
+    if (departmentA !== departmentB) {
+      return true;
+    }
+    const linkedinA = [...draftLinkedinStatuses].sort().join(",");
+    const linkedinB = [...linkedinStatuses].sort().join(",");
+    return linkedinA !== linkedinB;
   }, [
     addedFrom,
     addedTo,
@@ -334,6 +355,8 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     query,
     draftDepartmentCodes,
     departmentCodes,
+    draftLinkedinStatuses,
+    linkedinStatuses,
   ]);
 
   const deletingSiret = useMemo(() => {
@@ -367,6 +390,7 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
       addedTo={draftAddedTo}
       individualFilter={draftIndividualFilter}
       googleCheckStatus={draftGoogleCheckStatus}
+      linkedinStatuses={draftLinkedinStatuses}
       hasNextPage={hasNextPage}
       onLimitChange={handleLimitChange}
       onPageChange={handlePageChange}
@@ -380,6 +404,7 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
       onResetFilters={handleResetFilters}
       onIndividualFilterChange={handleIndividualFilterChange}
       onGoogleCheckStatusChange={handleGoogleCheckStatusChange}
+      onLinkedinStatusesChange={handleLinkedinStatusesChange}
       onRefresh={() => establishmentsQuery.refetch()}
       onDeleteEstablishment={handleDeleteEstablishment}
       deletingSiret={deletingSiret}

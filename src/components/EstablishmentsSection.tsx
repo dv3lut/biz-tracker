@@ -1,6 +1,6 @@
 import { ChangeEvent, useEffect, useRef, useState } from "react";
 
-import { Establishment, EstablishmentIndividualFilter, NafCategory, Region } from "../types";
+import { Establishment, EstablishmentIndividualFilter, LinkedInStatus, NafCategory, Region } from "../types";
 import { formatDateTime, formatNumber } from "../utils/format";
 import { canonicalizeNafCode, normalizeNafCode } from "../utils/sync";
 import { openGoogleSearchForEstablishment } from "../utils/googleSearch";
@@ -28,6 +28,7 @@ interface EstablishmentsSectionProps {
   addedTo: string;
   individualFilter: EstablishmentIndividualFilter;
   googleCheckStatus: string;
+  linkedinStatuses: LinkedInStatus[];
   hasNextPage: boolean;
   onLimitChange: (limit: number) => void;
   onPageChange: (page: number) => void;
@@ -41,6 +42,7 @@ interface EstablishmentsSectionProps {
   onResetFilters: () => void;
   onIndividualFilterChange: (value: EstablishmentIndividualFilter) => void;
   onGoogleCheckStatusChange: (value: string) => void;
+  onLinkedinStatusesChange: (value: LinkedInStatus[]) => void;
   onRefresh: () => void;
   onDeleteEstablishment: (siret: string) => void;
   deletingSiret: string | null;
@@ -77,6 +79,7 @@ export const EstablishmentsSection = ({
   addedTo,
   individualFilter,
   googleCheckStatus,
+  linkedinStatuses,
   hasNextPage,
   onLimitChange,
   onPageChange,
@@ -90,6 +93,7 @@ export const EstablishmentsSection = ({
   onResetFilters,
   onIndividualFilterChange,
   onGoogleCheckStatusChange,
+  onLinkedinStatusesChange,
   onRefresh,
   onDeleteEstablishment,
   deletingSiret,
@@ -164,6 +168,26 @@ export const EstablishmentsSection = ({
 
   const handleGoogleCheckStatusChange = (event: ChangeEvent<HTMLSelectElement>) => {
     onGoogleCheckStatusChange(event.target.value);
+  };
+
+  const handleLinkedinStatusToggle = (status: LinkedInStatus, checked: boolean) => {
+    if (checked) {
+      onLinkedinStatusesChange(
+        linkedinStatuses.includes(status) ? linkedinStatuses : [...linkedinStatuses, status],
+      );
+      return;
+    }
+    onLinkedinStatusesChange(linkedinStatuses.filter((value) => value !== status));
+  };
+
+  const linkedinStatusLabel = () => {
+    if (!linkedinStatuses.length) {
+      return "Tous";
+    }
+    if (linkedinStatuses.length === 1) {
+      return linkedinStatuses[0];
+    }
+    return `${linkedinStatuses.length} sélectionnés`;
   };
 
   const handleDeleteOne = (siret: string) => {
@@ -366,6 +390,35 @@ export const EstablishmentsSection = ({
                 <option value="pending">En attente (pending)</option>
                 <option value="other">Autres statuts</option>
               </select>
+            </label>
+          </div>
+
+          <div className="establishments-control establishments-control--linkedin-status">
+            <label className="muted small">
+              Statut LinkedIn
+              <details className="linkedin-status-multiselect">
+                <summary>{linkedinStatusLabel()}</summary>
+                <div className="linkedin-status-panel">
+                  {(["pending", "found", "not_found", "error"] as LinkedInStatus[]).map((status) => (
+                    <label key={status} className="linkedin-status-option">
+                      <input
+                        type="checkbox"
+                        checked={linkedinStatuses.includes(status)}
+                        onChange={(event) => handleLinkedinStatusToggle(status, event.target.checked)}
+                      />
+                      <span>
+                        {status === "pending"
+                          ? "En attente"
+                          : status === "found"
+                            ? "Trouvé"
+                            : status === "not_found"
+                              ? "Non trouvé"
+                              : "En erreur"}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </details>
             </label>
           </div>
         </div>

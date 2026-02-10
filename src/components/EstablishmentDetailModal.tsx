@@ -65,6 +65,14 @@ const buildAddress = (establishment: EstablishmentDetail | null): string => {
   return lines.join("\n");
 };
 
+const getLinkedInErrorMessage = (data: Record<string, unknown> | null | undefined): string | null => {
+  if (!data) {
+    return null;
+  }
+  const candidate = data.message || data.error || data.statusMessage || data.errorMessage;
+  return typeof candidate === "string" && candidate.trim().length > 0 ? candidate : null;
+};
+
 export const EstablishmentDetailModal = ({
   isOpen,
   establishment,
@@ -254,6 +262,10 @@ export const EstablishmentDetailModal = ({
                         const isLinkedInDebugLoading = linkedInDebugLoadingIds.has(d.id);
                         const linkedInDebugError = linkedInDebugErrors[d.id];
                         const linkedInSearchQuery = buildLinkedInSearchQuery(establishment, d);
+                        const linkedInStatusMessage =
+                          isPhysical && d.linkedinCheckStatus === "error"
+                            ? getLinkedInErrorMessage(d.linkedinProfileData)
+                            : null;
                         return (
                           <tr key={d.id}>
                             <td>{isPhysical ? "Physique" : "Morale"}</td>
@@ -282,12 +294,27 @@ export const EstablishmentDetailModal = ({
                                   <span className="badge badge--error">Erreur</span>
                                 ) : d.linkedinCheckStatus === "insufficient" ? (
                                   <span className="badge badge--warning">Données insuffisantes</span>
+                                ) : d.linkedinCheckStatus === "skipped_nd" ? (
+                                  <span className="badge badge--muted">Non diffusible</span>
                                 ) : (
                                   <span className="badge badge--pending">En attente</span>
                                 )
                               ) : (
                                 <span className="muted">—</span>
                               )}
+                              {isPhysical ? (
+                                <div className="muted small" style={{ marginTop: 6 }}>
+                                  Dernier check : {formatDateTime(d.linkedinLastCheckedAt)}
+                                  <br />
+                                  Statut : {d.linkedinCheckStatus}
+                                  {linkedInStatusMessage ? (
+                                    <>
+                                      <br />
+                                      Détail : {linkedInStatusMessage}
+                                    </>
+                                  ) : null}
+                                </div>
+                              ) : null}
                             </td>
                             <td>
                               {isPhysical && (
@@ -298,7 +325,7 @@ export const EstablishmentDetailModal = ({
                                     onClick={() => handleLinkedInSearch(d)}
                                     disabled={isLinkedInLoading}
                                   >
-                                    {isLinkedInLoading ? "Recherche…" : "Rechercher LinkedIn"}
+                                    {isLinkedInLoading ? "Recherche…" : "Rechecker LinkedIn"}
                                   </button>
                                   <button
                                     type="button"

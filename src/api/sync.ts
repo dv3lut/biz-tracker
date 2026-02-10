@@ -330,6 +330,9 @@ export const syncApi = {
     if (payload.notifyAdmins !== undefined) {
       body.notify_admins = payload.notifyAdmins;
     }
+    if (payload.linkedinStatuses && payload.linkedinStatuses.length > 0) {
+      body.linkedin_statuses = payload.linkedinStatuses;
+    }
     if (payload.forceGoogleReplay !== undefined) {
       body.force_google_replay = payload.forceGoogleReplay;
     }
