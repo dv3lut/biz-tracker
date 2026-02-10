@@ -14,6 +14,7 @@ from .clients import (
 from .email import AdminEmailConfig, AdminEmailConfigUpdate, EmailTestRequest, EmailTestResponse
 from .establishments import DirectorOut, EstablishmentDetailOut, EstablishmentListOut, EstablishmentOut
 from .google import (
+    GoogleCheckStatusListOut,
     GoogleFindPlaceCandidateOut,
     GoogleFindPlaceDebugResponse,
     GoogleRetryConfigOut,
@@ -116,6 +117,7 @@ __all__ = [
     "EstablishmentListOut",
     "EstablishmentOut",
     "GoogleListingAgeBreakdown",
+    "GoogleCheckStatusListOut",
     "GoogleFindPlaceCandidateOut",
     "GoogleFindPlaceDebugResponse",
     "GoogleRetryConfigOut",

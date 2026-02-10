@@ -16,6 +16,13 @@ class ManualGoogleCheckResponse(BaseModel):
     establishment: EstablishmentOut = Field(description="Représentation de l'établissement après mise à jour.")
 
 
+class GoogleCheckStatusListOut(BaseModel):
+    statuses: list[str] = Field(
+        default_factory=list,
+        description="Liste des statuts Google actuellement présents en base.",
+    )
+
+
 class GoogleFindPlaceCandidateOut(BaseModel):
     place_id: str | None = Field(default=None, description="Place ID renvoyé par Google Places (Find Place).")
     name: str | None = Field(default=None, description="Nom du candidat renvoyé par Google Places.")
@@ -105,6 +112,7 @@ class GoogleRetryConfigUpdate(GoogleRetryConfigOut):
 
 
 __all__ = [
+    "GoogleCheckStatusListOut",
     "GoogleRetryConfigOut",
     "GoogleRetryConfigUpdate",
     "GoogleRetryRule",

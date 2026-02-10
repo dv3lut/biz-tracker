@@ -394,6 +394,10 @@ def run_schema_upgrades(engine: Engine) -> None:
     ALTER TABLE sync_runs
     ADD COLUMN IF NOT EXISTS linkedin_target_statuses JSONB
     """,
+    """
+    ALTER TABLE sync_runs
+    ADD COLUMN IF NOT EXISTS google_target_statuses JSONB
+    """,
         """
         ALTER TABLE sync_runs
         ADD COLUMN IF NOT EXISTS initial_backfill BOOLEAN NOT NULL DEFAULT FALSE

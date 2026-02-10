@@ -51,6 +51,7 @@ def _execute_sync(
     replay_reference: DayReplayReference = DayReplayReference.CREATION_DATE,
     target_naf_codes: list[str] | None = None,
     target_client_ids: list[str] | None = None,
+    google_statuses: list[str] | None = None,
     notify_admins: bool = True,
     force_google_replay: bool = False,
 ) -> None:
@@ -67,6 +68,7 @@ def _execute_sync(
             replay_reference=replay_reference,
             target_naf_codes=target_naf_codes,
             target_client_ids=[UUID(value) for value in target_client_ids] if target_client_ids else None,
+            google_statuses=google_statuses,
             notify_admins=notify_admins,
             force_google_replay=force_google_replay,
         )
@@ -97,8 +99,7 @@ def sync(
         case_sensitive=False,
         help=(
             "Mode d'exécution: 'full' déclenche Sirene + Google, 'sirene_only' saute Google, "
-            "'google_pending' traite uniquement les établissements jamais enrichis par Google, "
-            "'google_refresh' force une remise à zéro de toutes les fiches, "
+            "'google_refresh' relance Google selon les statuts ciblés, "
             "'day_replay' rejoue une journée complète sans notifier les clients."
         ),
     ),
@@ -126,6 +127,11 @@ def sync(
         "--target-client",
         help="Client (UUID) à notifier lors d'un rejeu. Peut être répété.",
     ),
+    google_statuses: Optional[List[str]] = typer.Option(
+        None,
+        "--google-status",
+        help="Statut Google à relancer (ex: pending). Peut être répété pour filtrer plusieurs statuts.",
+    ),
     notify_admins: bool = typer.Option(
         True,
         "--notify-admins/--skip-admins",
@@ -147,6 +153,7 @@ def sync(
         replay_reference=replay_reference,
         naf_codes=naf_codes,
         target_client_ids=target_client_ids,
+        google_statuses=google_statuses,
         notify_admins=notify_admins,
         force_google_replay=force_google_replay,
     )
@@ -157,6 +164,7 @@ def sync(
         replay_reference=request.replay_reference,
         target_naf_codes=request.naf_codes,
         target_client_ids=[str(client_id) for client_id in request.target_client_ids] if request.target_client_ids else None,
+        google_statuses=request.google_statuses,
         notify_admins=request.notify_admins,
         force_google_replay=request.force_google_replay,
     )

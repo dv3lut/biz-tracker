@@ -67,6 +67,7 @@ def trigger_sync_run(
         target_naf_codes=payload.naf_codes,
         target_client_ids=payload.target_client_ids,
         linkedin_statuses=payload.linkedin_statuses,
+        google_statuses=payload.google_statuses,
         notify_admins=payload.notify_admins,
         force_google_replay=payload.force_google_replay,
         google_reset_state=payload.reset_google_state,
@@ -96,6 +97,7 @@ def trigger_sync_run(
         replay_reference=payload.replay_reference.value,
         target_client_ids=payload.target_client_ids,
         notify_admins=payload.notify_admins,
+        google_statuses=payload.google_statuses,
         force_google_replay=payload.force_google_replay,
         months_back=payload.months_back,
     )

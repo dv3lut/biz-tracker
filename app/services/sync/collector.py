@@ -639,7 +639,15 @@ class SyncCollectorMixin(SyncPersistenceMixin):
                 target_naf_codes=context.target_naf_codes,
             )
 
-        targets = load_google_resync_targets(context.session, mode, context.target_naf_codes)
+        google_statuses = context.google_target_statuses
+        if google_statuses:
+            append_run_note(run, f"google_refresh_statuses: {', '.join(google_statuses)}")
+        targets = load_google_resync_targets(
+            context.session,
+            mode,
+            context.target_naf_codes,
+            google_statuses=google_statuses,
+        )
         target_count = len(targets)
         note_prefix = "google_refresh_targets" if mode == SyncMode.GOOGLE_REFRESH else "google_pending_targets"
         if target_count:

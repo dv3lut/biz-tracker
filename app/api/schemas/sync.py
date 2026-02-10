@@ -158,8 +158,7 @@ class SyncRequest(BaseModel):
         default=SyncMode.FULL,
         description=(
             "Mode d'exécution: 'full' exécute l'enrichissement Google et LinkedIn, 'sirene_only' le désactive, "
-            "'google_pending' relance uniquement les établissements jamais enrichis par Google et déclenche les alertes, "
-            "'google_refresh' relance une détection Google sur tous les établissements (sans alertes), "
+            "'google_refresh' relance Google sur les établissements filtrés par statuts, "
             "'linkedin_pending' relance uniquement les dirigeants jamais enrichis par LinkedIn, "
             "'linkedin_refresh' relance une détection LinkedIn sur tous les dirigeants, "
             "'day_replay' rejoue une journée complète en limitant les alertes aux administrateurs."
@@ -168,8 +167,8 @@ class SyncRequest(BaseModel):
     reset_google_state: bool = Field(
         default=False,
         description=(
-            "Disponible uniquement en mode 'google_refresh': contrôle si les données Google existantes "
-            "sont réinitialisées avant de relancer les appels (reset biz-by-biz)."
+            "Disponible uniquement en mode 'google_refresh' (forcé à true) : réinitialise les données Google "
+            "avant relance (reset biz-by-biz)."
         ),
     )
     replay_for_date: Date | None = Field(
@@ -188,6 +187,12 @@ class SyncRequest(BaseModel):
         default=None,
         description=(
             "Statuts LinkedIn à relancer lors d'un run LinkedIn-only (pending, found, not_found, error)."
+        ),
+    )
+    google_statuses: list[str] | None = Field(
+        default=None,
+        description=(
+            "Statuts Google à relancer lors d'un run Google-only (ex: pending, found, not_found, insufficient, type_mismatch)."
         ),
     )
     notify_admins: bool = Field(
@@ -229,6 +234,23 @@ class SyncRequest(BaseModel):
                 continue
             if candidate not in allowed:
                 raise ValueError("Statuts LinkedIn acceptés: pending, found, not_found, error.")
+            if candidate in seen:
+                continue
+            seen.add(candidate)
+            normalized.append(candidate)
+        return normalized or None
+
+    @field_validator("google_statuses")
+    @classmethod
+    def validate_google_statuses(cls, value: list[str] | None) -> list[str] | None:
+        if not value:
+            return None
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for raw in value:
+            candidate = (raw or "").strip().lower()
+            if not candidate:
+                continue
             if candidate in seen:
                 continue
             seen.add(candidate)
@@ -280,6 +302,12 @@ class SyncRequest(BaseModel):
     def validate_replay_settings(self) -> "SyncRequest":
         if "reset_google_state" in self.model_fields_set and self.mode is not SyncMode.GOOGLE_REFRESH:
             raise ValueError("Le paramètre reset_google_state est disponible uniquement pour les modes Google-only.")
+        if self.mode is SyncMode.GOOGLE_REFRESH and not self.google_statuses:
+            raise ValueError("Merci de sélectionner au moins un statut Google à relancer.")
+        if self.google_statuses and self.mode is not SyncMode.GOOGLE_REFRESH:
+            raise ValueError("Les statuts Google sont disponibles uniquement en mode 'google_refresh'.")
+        if self.mode is SyncMode.GOOGLE_REFRESH:
+            self.reset_google_state = True
         if self.mode.requires_replay_date and not self.replay_for_date:
             raise ValueError("Une date est requise pour rejouer une journée.")
         if self.replay_for_date and not self.mode.requires_replay_date:

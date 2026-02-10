@@ -6,16 +6,19 @@ from typing import Literal
 
 from fastapi import APIRouter, Body, Depends, Query
 from fastapi.responses import StreamingResponse
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db_session
 from app.api.schemas import (
+    GoogleCheckStatusListOut,
     GoogleFindPlaceDebugResponse,
     GoogleRetryConfigOut,
     GoogleRetryConfigUpdate,
     ListingStatus,
     ManualGoogleCheckResponse,
 )
+from app.db import models
 from app.observability import log_event
 from app.services.google.google_retry_config import (
     ensure_google_retry_config,
@@ -64,6 +67,19 @@ def debug_google_find_place(
     session: Session = Depends(get_db_session),
 ) -> GoogleFindPlaceDebugResponse:
     return debug_google_find_place_action(siret=siret, session=session)
+
+
+@router.get(
+    "/google/check-statuses",
+    response_model=GoogleCheckStatusListOut,
+    summary="Lister les statuts Google actuellement présents en base",
+)
+def list_google_check_statuses(session: Session = Depends(get_db_session)) -> GoogleCheckStatusListOut:
+    stmt = select(func.lower(func.trim(models.Establishment.google_check_status))).distinct()
+    statuses = session.execute(stmt).scalars().all()
+    cleaned = {status.strip() for status in statuses if isinstance(status, str) and status.strip()}
+    cleaned.add("pending")
+    return GoogleCheckStatusListOut(statuses=sorted(cleaned))
 
 
 @router.get(

@@ -173,17 +173,25 @@ class SyncRequestSchemaTests(unittest.TestCase):
         self.assertEqual(payload.replay_reference, DayReplayReference.INSERTION_DATE)
 
     def test_google_refresh_accepts_reset_google_state(self) -> None:
-        payload = SyncRequest(mode=SyncMode.GOOGLE_REFRESH, reset_google_state=True)
+        payload = SyncRequest(mode=SyncMode.GOOGLE_REFRESH, reset_google_state=True, google_statuses=["pending"])
         self.assertTrue(payload.reset_google_state)
         self.assertEqual(payload.mode, SyncMode.GOOGLE_REFRESH)
 
     def test_google_refresh_accepts_reset_google_state_false(self) -> None:
-        payload = SyncRequest(mode=SyncMode.GOOGLE_REFRESH, reset_google_state=False)
-        self.assertFalse(payload.reset_google_state)
+        payload = SyncRequest(mode=SyncMode.GOOGLE_REFRESH, reset_google_state=False, google_statuses=["pending"])
+        self.assertTrue(payload.reset_google_state)
 
     def test_reset_google_state_rejected_outside_google_refresh(self) -> None:
         with self.assertRaises(ValidationError):
             SyncRequest(mode=SyncMode.FULL, reset_google_state=True)
+
+    def test_google_refresh_requires_google_statuses(self) -> None:
+        with self.assertRaises(ValidationError):
+            SyncRequest(mode=SyncMode.GOOGLE_REFRESH)
+
+    def test_google_statuses_restricted_to_google_refresh(self) -> None:
+        with self.assertRaises(ValidationError):
+            SyncRequest(mode=SyncMode.FULL, google_statuses=["pending"])
 
 
 if __name__ == "__main__":

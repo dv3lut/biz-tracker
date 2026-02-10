@@ -28,8 +28,7 @@ flowchart TD
 
 - `full` : Sirene + Google + alertes.
 - `sirene_only` : Sirene uniquement (Google sauté → pas d’alertes Google).
-- `google_pending` : Google uniquement sur les établissements jamais vérifiés.
-- `google_refresh` : purge des données Google + relance totale (plutôt diagnostic / recalcul).
+- `google_refresh` : Google uniquement sur les établissements filtrés par statuts (écrase la donnée existante).
 - `day_replay` : rejeu d’une date précise (sans perturber l’état global), option de forcer Google.
 
 Référence : `app/services/sync/mode.py` et options CLI dans `app/cli.py`.

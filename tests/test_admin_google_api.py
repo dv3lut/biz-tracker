@@ -6,7 +6,12 @@ from unittest import TestCase
 from unittest.mock import MagicMock, patch, call
 
 from fastapi import HTTPException
-from app.api.routers.admin.google_router import manual_google_check, export_google_places, debug_google_find_place
+from app.api.routers.admin.google_router import (
+    manual_google_check,
+    export_google_places,
+    debug_google_find_place,
+    list_google_check_statuses,
+)
 
 
 class ManualGoogleCheckRouteTests(TestCase):
@@ -284,3 +289,20 @@ class GoogleFindPlaceDebugRouteTests(TestCase):
         exported = mock_build_workbook.call_args[0][0]
         self.assertEqual(exported, [recent])
         mock_log_event.assert_called_once()
+
+
+class GoogleCheckStatusesRouteTests(TestCase):
+    def test_list_google_statuses_includes_pending(self) -> None:
+        scalars = MagicMock()
+        scalars.all.return_value = ["found", "not_found", "type_mismatch"]
+        execution = MagicMock()
+        execution.scalars.return_value = scalars
+        session = MagicMock()
+        session.execute.return_value = execution
+
+        response = list_google_check_statuses(session=session)
+
+        self.assertIn("pending", response.statuses)
+        self.assertIn("found", response.statuses)
+        self.assertIn("not_found", response.statuses)
+        self.assertIn("type_mismatch", response.statuses)

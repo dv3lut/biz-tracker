@@ -4,7 +4,7 @@ from __future__ import annotations
 import time
 from typing import Callable, Sequence
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.db import models
@@ -23,9 +23,23 @@ def load_google_resync_targets(
     session: Session,
     mode: SyncMode,
     target_naf_codes: Sequence[str] | None = None,
+    google_statuses: Sequence[str] | None = None,
 ) -> list[models.Establishment]:
     stmt = select(models.Establishment).order_by(models.Establishment.first_seen_at.asc())
-    if mode == SyncMode.GOOGLE_PENDING:
+    cleaned_statuses = [status.strip().lower() for status in google_statuses or [] if status and status.strip()]
+    if cleaned_statuses:
+        status_conditions = []
+        normalized_status = func.lower(func.trim(models.Establishment.google_check_status))
+        for status in cleaned_statuses:
+            if status == "pending":
+                status_conditions.append(
+                    or_(models.Establishment.google_check_status.is_(None), normalized_status == "pending")
+                )
+            else:
+                status_conditions.append(normalized_status == status)
+        if status_conditions:
+            stmt = stmt.where(or_(*status_conditions))
+    elif mode == SyncMode.GOOGLE_PENDING:
         stmt = stmt.where(
             (models.Establishment.google_last_checked_at.is_(None))
             | (models.Establishment.google_check_status == "pending"),
@@ -45,6 +59,7 @@ def collect_google_only(
     session = context.session
     run = context.run
     mode = context.mode
+    google_statuses = context.google_target_statuses or []
 
     alert_service = (
         AlertService(
@@ -76,6 +91,7 @@ def collect_google_only(
             run_id=str(run.id),
             scope_key=run.scope_key,
             mode=mode.value,
+            google_statuses=google_statuses,
             reason="no_targets",
         )
         run.google_queue_count = 0
@@ -120,6 +136,7 @@ def collect_google_only(
             run_id=str(run.id),
             scope_key=run.scope_key,
             mode=mode.value,
+            google_statuses=google_statuses,
             queue_count=google_queue_count,
             eligible_count=google_eligible_count,
             matched_count=google_matched_count,
