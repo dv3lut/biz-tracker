@@ -193,6 +193,28 @@ class SyncRequestSchemaTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             SyncRequest(mode=SyncMode.FULL, google_statuses=["pending"])
 
+    def test_google_statuses_normalized_and_deduped(self) -> None:
+        payload = SyncRequest(
+            mode=SyncMode.GOOGLE_REFRESH,
+            google_statuses=[" Pending ", "pending", "FOUND", " ", "not_found"],
+        )
+        self.assertEqual(payload.google_statuses, ["pending", "found", "not_found"])
+
+    def test_google_statuses_empty_list_is_ignored(self) -> None:
+        payload = SyncRequest(mode=SyncMode.FULL, google_statuses=[])
+        self.assertIsNone(payload.google_statuses)
+
+    def test_linkedin_statuses_reject_invalid_values(self) -> None:
+        with self.assertRaises(ValidationError):
+            SyncRequest(mode=SyncMode.LINKEDIN_REFRESH, linkedin_statuses=["pending", "oops"])
+
+    def test_linkedin_statuses_dedupes_and_strips(self) -> None:
+        payload = SyncRequest(
+            mode=SyncMode.LINKEDIN_REFRESH,
+            linkedin_statuses=[" pending ", "PENDING", "found", "", "not_found"],
+        )
+        self.assertEqual(payload.linkedin_statuses, ["pending", "found", "not_found"])
+
 
 if __name__ == "__main__":
     unittest.main()

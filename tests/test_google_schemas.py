@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from app.api.schemas.google import GoogleRetryConfigOut, GoogleRetryConfigUpdate, GoogleRetryRule
 
@@ -44,6 +45,15 @@ def test_missing_rules_raise_validation_error():
         GoogleRetryConfigOut(retry_weekdays=[0], default_rules=[], micro_rules=[_rule()])
     with pytest.raises(ValueError):
         GoogleRetryConfigOut(retry_weekdays=[0], default_rules=[_rule()], micro_rules=[])
+
+
+def test_retry_weekdays_rejects_non_integers():
+    with pytest.raises(ValidationError):
+        GoogleRetryConfigOut(
+            retry_weekdays=["mardi"],
+            default_rules=[_rule()],
+            micro_rules=[_rule()],
+        )
 
 
 def test_update_schema_inherits_validations():
