@@ -65,7 +65,7 @@ export const DashboardSection = ({ onUnauthorized }: Props) => {
     notifyAdmins: true,
     replayReference: DEFAULT_REPLAY_REFERENCE,
     forceGoogleReplay: false,
-    resetGoogleState: false,
+    googleStatuses: [],
   });
   const [isGoogleExportModalOpen, setGoogleExportModalOpen] = useState(false);
   const initialExportRange = useMemo(getDefaultGoogleExportRange, []);
@@ -93,6 +93,11 @@ export const DashboardSection = ({ onUnauthorized }: Props) => {
   const googleRetryConfigQuery = useQuery<GoogleRetryConfig>({
     queryKey: ["google-retry-config"],
     queryFn: () => googleApi.fetchRetryConfig(),
+  });
+
+  const googleStatusesQuery = useQuery<string[]>({
+    queryKey: ["google-check-statuses"],
+    queryFn: () => googleApi.fetchCheckStatuses(),
   });
 
   const syncRunsQuery = useQuery<SyncRun[]>({
@@ -197,7 +202,7 @@ export const DashboardSection = ({ onUnauthorized }: Props) => {
         notifyAdmins: payload.notifyAdmins ?? pendingSyncRequest.notifyAdmins ?? true,
         forceGoogleReplay: payload.forceGoogleReplay ?? pendingSyncRequest.forceGoogleReplay ?? false,
         replayReference: payload.replayReference ?? pendingSyncRequest.replayReference ?? DEFAULT_REPLAY_REFERENCE,
-        resetGoogleState: payload.resetGoogleState ?? pendingSyncRequest.resetGoogleState ?? false,
+        googleStatuses: payload.googleStatuses ?? pendingSyncRequest.googleStatuses ?? [],
       };
       setPendingSyncRequest(persistedRequest);
       syncMutation.mutate(payload);
@@ -207,7 +212,7 @@ export const DashboardSection = ({ onUnauthorized }: Props) => {
       pendingSyncRequest.forceGoogleReplay,
       pendingSyncRequest.notifyAdmins,
       pendingSyncRequest.replayReference,
-      pendingSyncRequest.resetGoogleState,
+      pendingSyncRequest.googleStatuses,
       syncMutation,
     ],
   );
@@ -351,6 +356,12 @@ export const DashboardSection = ({ onUnauthorized }: Props) => {
     }
   }, [clientsQuery.error, onUnauthorized]);
 
+  useEffect(() => {
+    if (googleStatusesQuery.error instanceof ApiError && googleStatusesQuery.error.status === 403) {
+      onUnauthorized();
+    }
+  }, [googleStatusesQuery.error, onUnauthorized]);
+
   const manualGoogleCheckState = useMemo(
     () => ({
       siret: manualGoogleSiret,
@@ -421,7 +432,6 @@ export const DashboardSection = ({ onUnauthorized }: Props) => {
       <SyncModeModal
         isOpen={isSyncModeModalOpen}
         initialMode={pendingSyncRequest.mode}
-        initialResetGoogleState={pendingSyncRequest.resetGoogleState ?? false}
         initialReplayDate={pendingSyncRequest.replayForDate ?? null}
         initialNafCodes={pendingSyncRequest.nafCodes ?? []}
         nafCategories={dashboardQuery.data?.nafCategoryBreakdown ?? []}
@@ -429,6 +439,10 @@ export const DashboardSection = ({ onUnauthorized }: Props) => {
         initialNotifyAdmins={pendingSyncRequest.notifyAdmins}
         initialForceGoogleReplay={pendingSyncRequest.forceGoogleReplay ?? false}
         initialReplayReference={pendingSyncRequest.replayReference ?? DEFAULT_REPLAY_REFERENCE}
+        initialGoogleStatuses={pendingSyncRequest.googleStatuses ?? []}
+        googleStatuses={googleStatusesQuery.data ?? []}
+        isGoogleStatusesLoading={googleStatusesQuery.isLoading}
+        googleStatusesError={googleStatusesQuery.error instanceof Error ? googleStatusesQuery.error.message : null}
         clients={clientsQuery.data ?? []}
         isClientsLoading={clientsQuery.isLoading}
         clientsError={clientsError?.message ?? null}

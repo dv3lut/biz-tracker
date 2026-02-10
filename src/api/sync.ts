@@ -333,6 +333,9 @@ export const syncApi = {
     if (payload.linkedinStatuses && payload.linkedinStatuses.length > 0) {
       body.linkedin_statuses = payload.linkedinStatuses;
     }
+    if (payload.googleStatuses && payload.googleStatuses.length > 0) {
+      body.google_statuses = payload.googleStatuses;
+    }
     if (payload.forceGoogleReplay !== undefined) {
       body.force_google_replay = payload.forceGoogleReplay;
     }

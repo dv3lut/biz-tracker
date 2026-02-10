@@ -58,6 +58,10 @@ interface GoogleFindPlaceDebugResponse {
   candidates: GoogleFindPlaceCandidateResponse[];
 }
 
+interface GoogleCheckStatusesResponse {
+  statuses: string[];
+}
+
 const mapRetryRule = (rule: GoogleRetryRuleResponse): GoogleRetryRule => ({
   maxAgeDays: rule.max_age_days ?? null,
   frequencyDays: rule.frequency_days,
@@ -153,6 +157,11 @@ export const googleApi = {
   async fetchRetryConfig(): Promise<GoogleRetryConfig> {
     const { data } = await request<GoogleRetryConfigResponse>("/admin/google/retry-config");
     return mapRetryConfig(data);
+  },
+
+  async fetchCheckStatuses(): Promise<string[]> {
+    const { data } = await request<GoogleCheckStatusesResponse>("/admin/google/check-statuses");
+    return data.statuses ?? [];
   },
 
   async updateRetryConfig(payload: GoogleRetryConfig): Promise<GoogleRetryConfig> {

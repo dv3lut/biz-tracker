@@ -7,7 +7,7 @@ export const describeSyncMode = (mode: SyncMode): string => {
     case "google_pending":
       return "Google — nouveaux uniquement";
     case "google_refresh":
-      return "Google — relancer sur tous";
+      return "Google — relance par statut";
     case "linkedin_pending":
       return "LinkedIn — nouveaux uniquement";
     case "linkedin_refresh":

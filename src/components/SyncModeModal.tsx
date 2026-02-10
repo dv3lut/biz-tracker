@@ -1,7 +1,15 @@
 import { KeyboardEvent, useEffect, useMemo, useState } from "react";
 
 import { LISTING_STATUS_LABELS } from "../constants/listingStatuses";
-import { Client, DayReplayReference, LinkedInStatus, ListingStatus, NafCategoryStat, SyncMode } from "../types";
+import {
+  Client,
+  DayReplayReference,
+  GoogleCheckStatus,
+  LinkedInStatus,
+  ListingStatus,
+  NafCategoryStat,
+  SyncMode,
+} from "../types";
 import {
   canonicalizeNafCode,
   denormalizeNafCode,
@@ -12,7 +20,6 @@ import {
   parseNafInput,
   syncModeIsGoogleOnly,
   syncModeRequiresReplayDate,
-  syncModeSendsAlerts,
 } from "../utils/sync";
 
 const formatDateInput = (value: Date) => value.toISOString().slice(0, 10);
@@ -36,16 +43,10 @@ const MODE_OPTIONS: Array<{
     impact: "Recommandé pour analyser rapidement une base ou en cas d'incident Google.",
   },
   {
-    value: "google_pending",
-    title: "Google — nouveaux uniquement",
-    description: "Ne touche pas à Sirene et rattrape uniquement les établissements jamais enrichis par Google.",
-    impact: "Permet d'envoyer les alertes manquantes sans relancer un run complet.",
-  },
-  {
     value: "google_refresh",
-    title: "Google — relancer sur tous",
-    description: "Ne touche pas à Sirene et relance une détection Google sur tous les établissements.",
-    impact: "Optionnel: remettre à zéro les données Google avant de recalculer (plus sûr mais plus intrusif).",
+    title: "Google",
+    description: "Ne touche pas à Sirene et relance Google sur les statuts sélectionnés.",
+    impact: "Les données Google des établissements ciblés seront recalculées et écrasées.",
   },
   {
     value: "linkedin_refresh",
@@ -88,6 +89,23 @@ const LINKEDIN_STATUS_OPTIONS: Array<{ value: LinkedInStatus; label: string }> =
   { value: "not_found", label: "Non trouvés" },
   { value: "error", label: "En erreur" },
 ];
+
+const GOOGLE_STATUS_LABELS: Record<string, string> = {
+  pending: "En attente",
+  found: "Trouvé",
+  not_found: "Non trouvés",
+  insufficient: "Informations insuffisantes",
+  type_mismatch: "Incohérent",
+  non_diffusible: "Non diffusible",
+};
+
+const buildGoogleStatusOptions = (
+  statuses: GoogleCheckStatus[],
+): Array<{ value: GoogleCheckStatus; label: string }> =>
+  statuses.map((status) => ({
+    value: status,
+    label: GOOGLE_STATUS_LABELS[status] ?? status.replace(/_/g, " "),
+  }));
 
 type ClientOption = {
   id: string;
@@ -156,7 +174,6 @@ type NormalizedCategory = {
 type Props = {
   isOpen: boolean;
   initialMode: SyncMode;
-  initialResetGoogleState?: boolean | null;
   initialReplayDate?: string | null;
   initialNafCodes?: string[] | null;
   nafCategories: NafCategoryStat[];
@@ -164,12 +181,15 @@ type Props = {
   initialNotifyAdmins?: boolean | null;
   initialForceGoogleReplay?: boolean | null;
   initialReplayReference?: DayReplayReference | null;
+  initialGoogleStatuses?: GoogleCheckStatus[] | null;
+  googleStatuses?: GoogleCheckStatus[];
+  isGoogleStatusesLoading?: boolean;
+  googleStatusesError?: string | null;
   clients: Client[];
   isClientsLoading?: boolean;
   clientsError?: string | null;
   onConfirm: (payload: {
     mode: SyncMode;
-    resetGoogleState?: boolean;
     replayForDate?: string;
     nafCodes?: string[];
     targetClientIds?: string[];
@@ -178,6 +198,7 @@ type Props = {
     replayReference?: DayReplayReference;
     monthsBack?: number;
     linkedinStatuses?: LinkedInStatus[];
+    googleStatuses?: GoogleCheckStatus[];
   }) => void;
   onCancel: () => void;
   isSubmitting: boolean;
@@ -228,7 +249,6 @@ const buildNormalizedCategories = (categories: NafCategoryStat[]): NormalizedCat
 export const SyncModeModal = ({
   isOpen,
   initialMode,
-  initialResetGoogleState,
   initialReplayDate,
   initialNafCodes,
   nafCategories,
@@ -236,6 +256,10 @@ export const SyncModeModal = ({
   initialNotifyAdmins,
   initialForceGoogleReplay,
   initialReplayReference,
+  initialGoogleStatuses,
+  googleStatuses: availableGoogleStatuses = [],
+  isGoogleStatusesLoading = false,
+  googleStatusesError,
   clients,
   isClientsLoading = false,
   clientsError,
@@ -244,7 +268,6 @@ export const SyncModeModal = ({
   isSubmitting,
 }: Props) => {
   const [mode, setMode] = useState<SyncMode>(initialMode);
-  const [resetGoogleState, setResetGoogleState] = useState<boolean>(false);
   const [replayDate, setReplayDate] = useState<string>(() => {
     if (initialReplayDate) {
       return initialReplayDate;
@@ -263,15 +286,11 @@ export const SyncModeModal = ({
   const [recipientError, setRecipientError] = useState<string | null>(null);
   const [linkedinEnabled, setLinkedinEnabled] = useState<boolean>(false);
   const [linkedinStatuses, setLinkedinStatuses] = useState<LinkedInStatus[]>(["pending"]);
+  const [selectedGoogleStatuses, setSelectedGoogleStatuses] = useState<GoogleCheckStatus[]>([]);
 
   useEffect(() => {
     if (isOpen) {
       setMode(initialMode);
-      if (initialMode === "google_refresh") {
-        setResetGoogleState(initialResetGoogleState ?? false);
-      } else {
-        setResetGoogleState(false);
-      }
       setReplayDate(initialReplayDate || formatDateInput(new Date()));
       setSelectedNafCodes(normalizeList(initialNafCodes));
       setNafInput("");
@@ -285,17 +304,28 @@ export const SyncModeModal = ({
       setRecipientError(null);
       setLinkedinEnabled(initialMode === "linkedin_refresh");
       setLinkedinStatuses(["pending"]);
+      if (initialGoogleStatuses && initialGoogleStatuses.length > 0) {
+        setSelectedGoogleStatuses([...initialGoogleStatuses]);
+      } else if (availableGoogleStatuses.length > 0) {
+        const pending = availableGoogleStatuses.find(
+          (status) => status.toLowerCase() === "pending",
+        );
+        setSelectedGoogleStatuses(pending ? [pending] : [availableGoogleStatuses[0]]);
+      } else {
+        setSelectedGoogleStatuses([]);
+      }
     }
   }, [
     initialMode,
-    initialResetGoogleState,
     initialReplayDate,
     initialNafCodes,
     initialTargetClientIds,
     initialNotifyAdmins,
     initialForceGoogleReplay,
     initialReplayReference,
+    initialGoogleStatuses,
     isOpen,
+    availableGoogleStatuses,
   ]);
 
   useEffect(() => {
@@ -315,7 +345,11 @@ export const SyncModeModal = ({
       setLinkedinEnabled(true);
       setLinkedinStatuses((current) => (current.length > 0 ? current : ["pending"]));
     }
-  }, [mode]);
+    if (mode === "google_refresh" && selectedGoogleStatuses.length === 0 && availableGoogleStatuses.length > 0) {
+      const pending = availableGoogleStatuses.find((status) => status.toLowerCase() === "pending");
+      setSelectedGoogleStatuses(pending ? [pending] : [availableGoogleStatuses[0]]);
+    }
+  }, [mode, selectedGoogleStatuses, availableGoogleStatuses]);
 
 
 
@@ -325,6 +359,10 @@ export const SyncModeModal = ({
     }
   }, [mode, notifyAdmins, selectedClientIds]);
 
+  const googleStatusOptions = useMemo(
+    () => buildGoogleStatusOptions(availableGoogleStatuses),
+    [availableGoogleStatuses],
+  );
   const clientOptions = useMemo(() => buildClientOptions(clients), [clients]);
   const clientLookup = useMemo(() => new Map(clients.map((client) => [client.id, client])), [clients]);
   const filteredClients = useMemo(() => {
@@ -377,19 +415,11 @@ export const SyncModeModal = ({
       });
     }
     if (mode === "google_refresh") {
-      if (resetGoogleState) {
-        notes.push({
-          tone: "warning",
-          title: "Remise à zéro des fiches",
-          detail: "Les données Google existantes sont effacées au fil du run (biz-by-biz) puis recalculées.",
-        });
-      } else {
-        notes.push({
-          tone: "info",
-          title: "Relance sans remise à zéro",
-          detail: "Les fiches Google existantes sont conservées en l'absence de nouveau match.",
-        });
-      }
+      notes.push({
+        tone: "warning",
+        title: "Relance Google ciblée",
+        detail: "Les fiches Google des statuts sélectionnés sont recalculées et écrasent les données existantes.",
+      });
     }
     if (mode === "day_replay") {
       notes.push({
@@ -398,15 +428,8 @@ export const SyncModeModal = ({
         detail: "Choisissez les clients à notifier et/ou les administrateurs sans avancer les curseurs.",
       });
     }
-    if (mode === "google_pending" && syncModeSendsAlerts(mode)) {
-      notes.push({
-        tone: "info",
-        title: "Alertes actives",
-        detail: "Les clients recevront un e-mail pour chaque fiche détectée suite à ce run.",
-      });
-    }
     return notes;
-  }, [mode, resetGoogleState]);
+  }, [mode]);
 
   const addNafCodes = (codes: string[]) => {
     const normalized = Array.from(
@@ -542,6 +565,12 @@ export const SyncModeModal = ({
         return;
       }
     }
+    if (mode === "google_refresh") {
+      if (selectedGoogleStatuses.length === 0) {
+        setFormError("Sélectionnez au moins un statut Google à relancer.");
+        return;
+      }
+    }
 
     const nafCodesPayload =
       selectedNafCodes.length > 0 ? selectedNafCodes.map((code) => denormalizeNafCode(code)) : undefined;
@@ -556,10 +585,6 @@ export const SyncModeModal = ({
       payload.monthsBack = monthsBack;
     }
 
-    if (mode === "google_refresh") {
-      payload.resetGoogleState = resetGoogleState;
-    }
-
     if (mode === "day_replay") {
       if (selectedClientIds.length > 0) {
         payload.targetClientIds = selectedClientIds;
@@ -571,6 +596,10 @@ export const SyncModeModal = ({
 
     if (mode === "linkedin_refresh") {
       payload.linkedinStatuses = linkedinEnabled ? linkedinStatuses : [];
+    }
+
+    if (mode === "google_refresh") {
+      payload.googleStatuses = selectedGoogleStatuses;
     }
 
     onConfirm(payload);
@@ -629,19 +658,41 @@ export const SyncModeModal = ({
                     <p className="muted small mode-option-impact">{option.impact}</p>
                     {option.value === "google_refresh" && isSelected ? (
                       <div className="form-control">
-                        <label>
-                          <input
-                            type="checkbox"
-                            checked={resetGoogleState}
-                            onChange={(event) => setResetGoogleState(event.target.checked)}
-                            disabled={isSubmitting}
-                          />
-                          <span>Réinitialiser les correspondances Google avant relance (purge)</span>
-                        </label>
-                        <p className="muted small">
-                          Si coché, les Place ID / URL existants sont effacés puis recalculés. Sinon, les fiches existantes
-                          sont conservées en l'absence de nouveau match.
-                        </p>
+                        {isGoogleStatusesLoading ? (
+                          <p className="muted small">Chargement des statuts Google...</p>
+                        ) : googleStatusOptions.length > 0 ? (
+                          <details className="google-status-dropdown" open>
+                            <summary>Statuts Google à relancer</summary>
+                            <div className="google-status-options">
+                              {googleStatusOptions.map((status) => (
+                                <label key={status.value} className="google-status-option">
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedGoogleStatuses.includes(status.value)}
+                                    onChange={(event) => {
+                                      const checked = event.target.checked;
+                                      setSelectedGoogleStatuses((current) => {
+                                        if (checked) {
+                                          return current.includes(status.value)
+                                            ? current
+                                            : [...current, status.value];
+                                        }
+                                        return current.filter((value) => value !== status.value);
+                                      });
+                                    }}
+                                    disabled={isSubmitting}
+                                  />
+                                  <span>{status.label}</span>
+                                </label>
+                              ))}
+                            </div>
+                          </details>
+                        ) : (
+                          <p className="muted small">Aucun statut Google disponible en base.</p>
+                        )}
+                        {googleStatusesError ? (
+                          <p className="muted small">{googleStatusesError}</p>
+                        ) : null}
                       </div>
                     ) : null}
                     {option.value === "linkedin_refresh" && isSelected ? (
