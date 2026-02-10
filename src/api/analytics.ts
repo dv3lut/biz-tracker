@@ -16,9 +16,12 @@ interface NafAnalyticsTimePointResponse {
   listing_recent: number;
   listing_recent_missing_contact: number;
   listing_not_recent: number;
+  individual_count: number;
   linkedin_found: number;
   linkedin_not_found: number;
   linkedin_pending: number;
+  linkedin_total_directors: number;
+  linkedin_skipped_nd: number;
   alerts_created: number;
 }
 
@@ -28,6 +31,7 @@ interface NafAnalyticsItemResponse {
   name: string;
   totals: NafAnalyticsTimePointResponse;
   time_series: NafAnalyticsTimePointResponse[];
+  creation_series?: Array<{ period: string; count: number }>;
 }
 
 interface NafAnalyticsApiResponse {
@@ -51,9 +55,12 @@ const mapTimePoint = (point: NafAnalyticsTimePointResponse) => ({
   listingRecent: point.listing_recent,
   listingRecentMissingContact: point.listing_recent_missing_contact,
   listingNotRecent: point.listing_not_recent,
+  individualCount: point.individual_count,
   linkedinFound: point.linkedin_found,
   linkedinNotFound: point.linkedin_not_found,
   linkedinPending: point.linkedin_pending,
+  linkedinTotalDirectors: point.linkedin_total_directors,
+  linkedinSkippedNd: point.linkedin_skipped_nd,
   alertsCreated: point.alerts_created,
 });
 
@@ -63,6 +70,7 @@ const mapItem = (item: NafAnalyticsItemResponse) => ({
   name: item.name,
   totals: mapTimePoint(item.totals),
   timeSeries: item.time_series.map(mapTimePoint),
+  creationSeries: item.creation_series ?? [],
 });
 
 export interface NafAnalyticsParams {

@@ -653,9 +653,12 @@ export interface NafAnalyticsTimePoint {
   listingRecent: number;
   listingRecentMissingContact: number;
   listingNotRecent: number;
+  individualCount: number;
   linkedinFound: number;
   linkedinNotFound: number;
   linkedinPending: number;
+  linkedinTotalDirectors: number;
+  linkedinSkippedNd: number;
   alertsCreated: number;
 }
 
@@ -665,6 +668,7 @@ export interface NafAnalyticsItem {
   name: string;
   totals: NafAnalyticsTimePoint;
   timeSeries: NafAnalyticsTimePoint[];
+  creationSeries: Array<{ period: string; count: number }>;
 }
 
 export interface NafAnalyticsResponse {

@@ -194,6 +194,14 @@ export const AnalyticsSection = ({ onUnauthorized }: Props) => {
     }));
   }, [data]);
 
+  const selectedCreationSeriesData = useMemo(() => {
+    if (!selectedItem) return [];
+    return selectedItem.creationSeries.map((point) => ({
+      period: point.period,
+      count: point.count,
+    }));
+  }, [selectedItem]);
+
   return (
     <section className="section">
       <header className="section-header">
@@ -526,6 +534,32 @@ export const AnalyticsSection = ({ onUnauthorized }: Props) => {
               ) : (
                 <p className="muted">Aucune donnée temporelle disponible.</p>
               )}
+
+              {selectedCreationSeriesData.length > 0 ? (
+                <div className="chart-wrapper" style={{ marginTop: 24 }}>
+                  <h3 className="muted">Créations d'établissements (date de création)</h3>
+                  <ResponsiveContainer width="100%" height={260}>
+                    <BarChart data={selectedCreationSeriesData} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
+                      <CartesianGrid stroke="#e2e8f0" strokeDasharray="4 4" vertical={false} />
+                      <XAxis
+                        dataKey="period"
+                        tickLine={false}
+                        axisLine={false}
+                        tick={{ fontSize: 11, fill: "#475467" }}
+                      />
+                      <YAxis
+                        tickLine={false}
+                        axisLine={false}
+                        tick={{ fontSize: 12, fill: "#475467" }}
+                        allowDecimals={false}
+                      />
+                      <Tooltip content={<ProportionsTooltip />} />
+                      <Legend />
+                      <Bar dataKey="count" name="Créations" fill="#0ea5e9" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : null}
             </div>
           )}
 
@@ -541,11 +575,13 @@ export const AnalyticsSection = ({ onUnauthorized }: Props) => {
                     <th>Nom</th>
                     <th>Code</th>
                     <th className="num">Récupérés</th>
+                    <th className="num">% EI</th>
                     <th className="num">Insuff.</th>
                     <th className="num">Google</th>
                     <th className="num">Récent</th>
                     <th className="num">Sans contact</th>
                     <th className="num">LinkedIn</th>
+                    <th className="num">Dirigeants ND</th>
                     <th className="num">Alertes</th>
                   </tr>
                 </thead>
@@ -554,6 +590,12 @@ export const AnalyticsSection = ({ onUnauthorized }: Props) => {
                     .sort((a, b) => b.totals.totalFetched - a.totals.totalFetched)
                     .map((item) => {
                       const pct = computeProportions(item.totals);
+                      const individualPct = item.totals.totalFetched > 0
+                        ? Math.round((item.totals.individualCount / item.totals.totalFetched) * 100)
+                        : 0;
+                      const nonDiffusibleDirectorsPct = item.totals.linkedinTotalDirectors > 0
+                        ? Math.round((item.totals.linkedinSkippedNd / item.totals.linkedinTotalDirectors) * 100)
+                        : 0;
                       return (
                         <tr
                           key={item.id}
@@ -564,6 +606,10 @@ export const AnalyticsSection = ({ onUnauthorized }: Props) => {
                           <td>{item.name}</td>
                           <td className="code">{item.code}</td>
                           <td className="num">{formatNumber(item.totals.totalFetched)}</td>
+                          <td className="num">
+                            {formatNumber(item.totals.individualCount)}
+                            <span className="pct muted"> ({individualPct}%)</span>
+                          </td>
                           <td className="num">
                             {formatNumber(item.totals.insufficientInfo)}
                             <span className="pct muted"> ({pct.insufficientPct}%)</span>
@@ -583,6 +629,10 @@ export const AnalyticsSection = ({ onUnauthorized }: Props) => {
                           <td className="num">
                             {formatNumber(item.totals.linkedinFound)}
                             <span className="pct muted"> ({pct.linkedinFoundPct}%)</span>
+                          </td>
+                          <td className="num">
+                            {formatNumber(item.totals.linkedinSkippedNd)}
+                            <span className="pct muted"> ({nonDiffusibleDirectorsPct}%)</span>
                           </td>
                           <td className="num">
                             {formatNumber(item.totals.alertsCreated)}
