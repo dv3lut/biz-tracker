@@ -34,6 +34,16 @@ def _classify_outcome(status_code: int) -> str:
     return "server_error"
 
 
+def _serialize_exception(exc: BaseException) -> dict[str, Any]:
+    if isinstance(exc, BaseExceptionGroup):
+        return {
+            "type": type(exc).__name__,
+            "message": str(exc),
+            "causes": [_serialize_exception(item) for item in exc.exceptions],
+        }
+    return {"type": type(exc).__name__, "message": str(exc)}
+
+
 class AccessLogMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next) -> Response:
         started_at = time.perf_counter()
@@ -63,6 +73,22 @@ class AccessLogMiddleware(BaseHTTPMiddleware):
                 payload["request_id"] = request_id
             log_event("api.request", **payload)
             raise
+        except BaseExceptionGroup as exc:  # pragma: no cover
+            duration_ms = round((time.perf_counter() - started_at) * 1000.0, 2)
+            payload = {
+                "http": {"method": method, "status_code": 500},
+                "url": {"path": path, "query": query},
+                "client": {"ip": ip},
+                "duration_ms": duration_ms,
+                "outcome": "server_error",
+                "error": _serialize_exception(exc),
+            }
+            if user_agent:
+                payload["user_agent"] = user_agent
+            if request_id:
+                payload["request_id"] = request_id
+            log_event("api.request", level=40, **payload)
+            raise
         except Exception as exc:  # pragma: no cover
             duration_ms = round((time.perf_counter() - started_at) * 1000.0, 2)
             payload = {
@@ -71,7 +97,7 @@ class AccessLogMiddleware(BaseHTTPMiddleware):
                 "client": {"ip": ip},
                 "duration_ms": duration_ms,
                 "outcome": "server_error",
-                "error": {"type": type(exc).__name__, "message": str(exc)},
+                "error": _serialize_exception(exc),
             }
             if user_agent:
                 payload["user_agent"] = user_agent

@@ -654,7 +654,15 @@ def _validate_categories_exist(session: Session, category_ids: list[UUID]) -> No
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Aucune catégorie sélectionnée.")
     stmt = (
         select(models.NafCategory.id)
-        .join(models.NafSubCategory)
+        .select_from(models.NafCategory)
+        .join(
+            models.NafCategorySubCategory,
+            models.NafCategorySubCategory.category_id == models.NafCategory.id,
+        )
+        .join(
+            models.NafSubCategory,
+            models.NafSubCategory.id == models.NafCategorySubCategory.subcategory_id,
+        )
         .where(
             models.NafCategory.id.in_(category_ids),
             models.NafSubCategory.is_active.is_(True),
