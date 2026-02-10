@@ -184,6 +184,12 @@ class SyncRequest(BaseModel):
         default=None,
         description="Limiter l'envoi des alertes à une liste précise de clients (mode 'day_replay').",
     )
+    linkedin_statuses: list[str] | None = Field(
+        default=None,
+        description=(
+            "Statuts LinkedIn à relancer lors d'un run LinkedIn-only (pending, found, not_found, error)."
+        ),
+    )
     notify_admins: bool = Field(
         default=True,
         description="Autorise l'envoi des alertes administrateurs lors d'un rejeu (mode 'day_replay').",
@@ -208,6 +214,26 @@ class SyncRequest(BaseModel):
             "Si non spécifié, seul le jour courant est synchronisé (synchro incrémentale standard)."
         ),
     )
+
+    @field_validator("linkedin_statuses")
+    @classmethod
+    def validate_linkedin_statuses(cls, value: list[str] | None) -> list[str] | None:
+        if not value:
+            return None
+        allowed = {"pending", "found", "not_found", "error"}
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for raw in value:
+            candidate = (raw or "").strip().lower()
+            if not candidate:
+                continue
+            if candidate not in allowed:
+                raise ValueError("Statuts LinkedIn acceptés: pending, found, not_found, error.")
+            if candidate in seen:
+                continue
+            seen.add(candidate)
+            normalized.append(candidate)
+        return normalized or None
 
     @field_validator("naf_codes")
     @classmethod

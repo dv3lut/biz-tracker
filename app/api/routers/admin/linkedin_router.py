@@ -13,6 +13,7 @@ from app.clients.apify_client import ApifyClient, LinkedInSearchInput
 from app.config import get_settings
 from app.db import models
 from app.observability import log_event
+from app.utils.diffusible import any_name_non_diffusible
 
 router = APIRouter(tags=["admin"])
 
@@ -67,6 +68,29 @@ def check_director_linkedin(
     company_name = _get_company_name(establishment)
     first_name = director.first_name_for_search
     last_name = director.last_name
+
+    director_first_names = getattr(director, "first_names", None)
+    if any_name_non_diffusible(first_name, last_name, director_first_names, company_name):
+        director.linkedin_check_status = "skipped_nd"
+        director.linkedin_last_checked_at = datetime.now(timezone.utc)
+        director.linkedin_profile_url = None
+        director.linkedin_profile_data = {
+            "reason": "non_diffusible",
+            "message": "Données non diffusibles, recherche ignorée",
+        }
+        session.commit()
+        return LinkedInCheckResponse(
+            director_id=director.id,
+            first_names=director.first_names,
+            last_name=director.last_name,
+            quality=director.quality,
+            company_name=company_name,
+            linkedin_profile_url=None,
+            linkedin_profile_data=director.linkedin_profile_data,
+            linkedin_check_status="skipped_nd",
+            linkedin_last_checked_at=director.linkedin_last_checked_at,
+            message="Données non diffusibles, recherche ignorée",
+        )
 
     if not first_name or not last_name:
         director.linkedin_check_status = "insufficient"
@@ -127,9 +151,16 @@ def check_director_linkedin(
         message = "Profil LinkedIn trouvé"
     elif result.error:
         director.linkedin_check_status = "error"
+        director.linkedin_profile_url = None
+        director.linkedin_profile_data = {
+            "error": result.error,
+            "message": result.error or "Erreur lors de la recherche",
+        }
         message = f"Erreur lors de la recherche: {result.error}"
     else:
         director.linkedin_check_status = "not_found"
+        director.linkedin_profile_url = None
+        director.linkedin_profile_data = None
         message = "Aucun profil LinkedIn trouvé"
 
     director.linkedin_last_checked_at = now
@@ -197,6 +228,25 @@ def debug_director_linkedin(
     first_name = director.first_name_for_search or ""
     last_name = director.last_name or ""
     director_name = f"{first_name} {last_name}".strip()
+
+    director_first_names = getattr(director, "first_names", None)
+    if any_name_non_diffusible(first_name, last_name, director_first_names, company_name):
+        return LinkedInDebugResponse(
+            director_id=director.id,
+            director_name=director_name,
+            company_name=company_name,
+            search_input={
+                "first_name": first_name,
+                "last_name": last_name,
+                "company": company_name,
+            },
+            apify_response=None,
+            profile_url=None,
+            profile_data=None,
+            status="skipped_nd",
+            error="Données non diffusibles, recherche ignorée",
+            retried_with_legal_unit=False,
+        )
 
     search_input = LinkedInSearchInput(
         first_name=first_name,

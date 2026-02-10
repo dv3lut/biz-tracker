@@ -34,6 +34,7 @@ class SyncRunPreparationMixin:
         replay_reference: DayReplayReference = DEFAULT_DAY_REPLAY_REFERENCE,
         target_naf_codes: list[str] | None = None,
         target_client_ids: list[UUID] | None = None,
+        linkedin_statuses: list[str] | None = None,
         notify_admins: bool = True,
         force_google_replay: bool = False,
         google_reset_state: bool = False,
@@ -64,6 +65,7 @@ class SyncRunPreparationMixin:
             formatted_date = replay_for_date.isoformat()
             append_run_note(run, f"Rejeu du {formatted_date}")
             run.target_naf_codes = naf_filter
+            run.linkedin_target_statuses = linkedin_statuses or None
             run.target_client_ids = client_targets
             run.notify_admins = admin_notifications
             run.months_back = months_back
@@ -79,6 +81,7 @@ class SyncRunPreparationMixin:
                 replay_for_date=formatted_date,
                 replay_reference=replay_reference.value,
                 target_naf_codes=naf_filter,
+                linkedin_statuses=linkedin_statuses,
                 target_client_ids=client_targets,
                 notify_admins=run.notify_admins,
                 force_google_replay=run.day_replay_force_google,
@@ -122,6 +125,7 @@ class SyncRunPreparationMixin:
         if latest_treated:
             append_run_note(run, f"dateDernierTraitementMaximum: {latest_treated.isoformat()}")
         run.target_naf_codes = naf_filter
+        run.linkedin_target_statuses = linkedin_statuses or None
         run.target_client_ids = None
         run.notify_admins = True
         if naf_filter:
@@ -134,6 +138,7 @@ class SyncRunPreparationMixin:
             check_informations=check_informations,
             mode=mode.value,
             target_naf_codes=naf_filter,
+            linkedin_statuses=linkedin_statuses,
             notify_admins=run.notify_admins,
             months_back=months_back,
             run=serialize_sync_run(run),
@@ -289,6 +294,7 @@ class SyncRunPreparationMixin:
         except ValueError:
             replay_reference = DEFAULT_DAY_REPLAY_REFERENCE
         target_naf_codes = list(run.target_naf_codes or [])
+        linkedin_target_statuses = list(getattr(run, "linkedin_target_statuses", []) or [])
         persist_state = mode.updates_state and not target_naf_codes
         raw_client_targets = list(run.target_client_ids or [])
         target_client_ids: list[UUID] = []
@@ -315,6 +321,7 @@ class SyncRunPreparationMixin:
             client_notifications_enabled=(False if is_backfill else (mode.client_notifications_enabled or bool(target_client_ids))),
             admin_notifications_enabled=admin_notifications_enabled,
             target_naf_codes=target_naf_codes or None,
+            linkedin_target_statuses=linkedin_target_statuses or None,
             target_client_ids=target_client_ids or None,
             force_google_replay=bool(getattr(run, "day_replay_force_google", False)),
             google_reset_state=bool(getattr(run, "google_reset_state", False)),

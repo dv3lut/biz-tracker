@@ -29,6 +29,7 @@ class SyncContext:
     persist_state: bool = True
     client_notifications_enabled: bool = True
     target_naf_codes: list[str] | None = None
+    linkedin_target_statuses: list[str] | None = None
     admin_notifications_enabled: bool = True
     target_client_ids: list[UUID] | None = None
     force_google_replay: bool = False

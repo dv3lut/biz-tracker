@@ -210,6 +210,7 @@ class SyncRun(Base):
     reset_state: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     truncate_before_run: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     target_naf_codes: Mapped[list[str] | None] = mapped_column(JSONB, default=None)
+    linkedin_target_statuses: Mapped[list[str] | None] = mapped_column(JSONB, default=None)
     target_client_ids: Mapped[list[str] | None] = mapped_column(JSONB, default=None)
     notify_admins: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     google_reset_state: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

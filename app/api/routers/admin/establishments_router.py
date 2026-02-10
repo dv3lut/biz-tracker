@@ -5,7 +5,7 @@ from datetime import date, datetime, time, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.params import Query as QueryParam
-from sqlalchemy import func, not_, or_
+from sqlalchemy import exists, func, not_, or_
 from sqlalchemy.orm import Query as SAQuery, Session, selectinload
 
 from app.api.dependencies import get_db_session
@@ -28,11 +28,15 @@ def _build_establishments_query(
     added_to: date | None,
     google_check_status: str | None,
     is_individual: bool | None,
+    has_linkedin: bool | None,
+    linkedin_statuses: list[str] | None,
 ) -> SAQuery:
     if isinstance(region_codes, QueryParam):
         region_codes = None
     if isinstance(department_codes, QueryParam):
         department_codes = None
+    if isinstance(linkedin_statuses, QueryParam):
+        linkedin_statuses = None
 
     query = session.query(models.Establishment).filter(models.Establishment.etat_administratif == "A")
 
@@ -121,6 +125,38 @@ def _build_establishments_query(
         else:
             query = query.filter(or_(models.Establishment.categorie_juridique.is_(None), not_(normalized_filter)))
 
+    if has_linkedin is True:
+        linkedin_exists = exists().where(
+            models.Director.establishment_siret == models.Establishment.siret,
+            models.Director.linkedin_check_status == "found",
+        )
+        query = query.filter(linkedin_exists)
+    elif has_linkedin is False:
+        linkedin_exists = exists().where(
+            models.Director.establishment_siret == models.Establishment.siret,
+            models.Director.linkedin_check_status == "found",
+        )
+        query = query.filter(not_(linkedin_exists))
+
+    if linkedin_statuses:
+        allowed_statuses = {"pending", "found", "not_found", "error", "insufficient", "skipped_nd"}
+        cleaned_statuses = [status.strip().lower() for status in linkedin_statuses if status and status.strip()]
+        selected_statuses = [status for status in cleaned_statuses if status in allowed_statuses]
+        if selected_statuses:
+            status_conditions = []
+            normalized_status = func.lower(func.trim(models.Director.linkedin_check_status))
+            if "pending" in selected_statuses:
+                status_conditions.append(or_(models.Director.linkedin_check_status.is_(None), normalized_status == "pending"))
+            other_statuses = sorted({status for status in selected_statuses if status != "pending"})
+            if other_statuses:
+                status_conditions.append(normalized_status.in_(other_statuses))
+            if status_conditions:
+                linkedin_exists = exists().where(
+                    models.Director.establishment_siret == models.Establishment.siret,
+                    or_(*status_conditions),
+                )
+                query = query.filter(linkedin_exists)
+
     return query
 
 
@@ -170,6 +206,16 @@ def list_establishments(
         ),
     ),
     is_individual: bool | None = Query(None, description="Filtrer par entreprise individuelle (true/false)."),
+    has_linkedin: bool | None = Query(
+        None,
+        description="Filtrer les établissements avec au moins un dirigeant LinkedIn trouvé (true/false).",
+    ),
+    linkedin_statuses: list[str] | None = Query(
+        None,
+        description=(
+            "Filtrer par statuts LinkedIn des dirigeants (répéter linkedin_statuses=pending&linkedin_statuses=error)."
+        ),
+    ),
     session: Session = Depends(get_db_session),
 ) -> EstablishmentListOut:
     query = _build_establishments_query(
@@ -183,6 +229,8 @@ def list_establishments(
         added_to=added_to,
         google_check_status=google_check_status,
         is_individual=is_individual,
+        has_linkedin=has_linkedin,
+        linkedin_statuses=linkedin_statuses,
     )
     if hasattr(query, "with_entities"):
         total = query.with_entities(func.count(models.Establishment.siret)).scalar() or 0

@@ -20,6 +20,7 @@ def load_linkedin_resync_targets(
     session: Session,
     mode: SyncMode,
     target_naf_codes: Sequence[str] | None = None,
+    linkedin_statuses: Sequence[str] | None = None,
 ) -> list[models.Establishment]:
     """Load establishments with directors needing LinkedIn enrichment.
 
@@ -40,7 +41,22 @@ def load_linkedin_resync_targets(
         .order_by(models.Establishment.first_seen_at.asc())
     )
 
-    if mode == SyncMode.LINKEDIN_PENDING:
+    if linkedin_statuses:
+        status_set = {status for status in linkedin_statuses if status}
+        status_conditions = []
+        if "pending" in status_set:
+            status_conditions.append(
+                (models.Director.linkedin_last_checked_at.is_(None))
+                | (models.Director.linkedin_check_status == "pending")
+            )
+        other_statuses = sorted(status_set.difference({"pending"}))
+        if other_statuses:
+            status_conditions.append(models.Director.linkedin_check_status.in_(other_statuses))
+        if status_conditions:
+            stmt = stmt.where(*status_conditions) if len(status_conditions) == 1 else stmt.where(
+                status_conditions[0] | status_conditions[1]
+            )
+    elif mode == SyncMode.LINKEDIN_PENDING:
         # Only establishments with directors not yet checked
         stmt = stmt.where(
             (models.Director.linkedin_last_checked_at.is_(None))

@@ -664,7 +664,12 @@ class SyncCollectorMixin(SyncPersistenceMixin):
                 target_naf_codes=context.target_naf_codes,
             )
 
-        targets = load_linkedin_resync_targets(context.session, mode, context.target_naf_codes)
+        targets = load_linkedin_resync_targets(
+            context.session,
+            mode,
+            target_naf_codes=context.target_naf_codes,
+            linkedin_statuses=context.linkedin_target_statuses,
+        )
         target_count = len(targets)
         note_prefix = "linkedin_refresh_targets" if mode == SyncMode.LINKEDIN_REFRESH else "linkedin_pending_targets"
         if target_count:

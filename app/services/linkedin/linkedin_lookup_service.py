@@ -300,6 +300,11 @@ class LinkedInLookupService:
 
         if not search_result.success:
             director.linkedin_check_status = LINKEDIN_STATUS_ERROR
+            director.linkedin_profile_url = None
+            director.linkedin_profile_data = {
+                "error": search_result.error,
+                "message": search_result.error or "Erreur lors de la recherche",
+            }
             result.error_count += 1
             log_event(
                 "sync.linkedin.director.search.error",

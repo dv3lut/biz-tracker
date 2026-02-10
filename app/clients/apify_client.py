@@ -92,6 +92,9 @@ class ApifyClient:
 
             run_status = run_data.get("data", {}).get("status")
             if run_status not in ("SUCCEEDED", "FINISHED"):
+                status_message = run_data.get("data", {}).get("statusMessage")
+                error_message = run_data.get("data", {}).get("errorMessage")
+                details = status_message or error_message
                 _LOGGER.warning(
                     "Apify run did not succeed: status=%s, input=%s",
                     run_status,
@@ -99,7 +102,7 @@ class ApifyClient:
                 )
                 return LinkedInProfileResult(
                     success=False,
-                    error=f"Apify run status: {run_status}",
+                    error=f"Apify run status: {run_status}{f' ({details})' if details else ''}",
                 )
 
             # Fetch results from the default dataset
@@ -144,10 +147,22 @@ class ApifyClient:
                 error=f"Request timeout: {exc}",
             )
         except requests.RequestException as exc:
+            error_detail = None
+            if getattr(exc, "response", None) is not None:
+                try:
+                    payload = exc.response.json()
+                    if isinstance(payload, dict):
+                        error_detail = payload.get("message") or payload.get("error")
+                        if not error_detail:
+                            data_payload = payload.get("data")
+                            if isinstance(data_payload, dict):
+                                error_detail = data_payload.get("message")
+                except ValueError:
+                    error_detail = exc.response.text if exc.response is not None else None
             _LOGGER.warning("Apify request failed for %s: %s", run_input, exc)
             return LinkedInProfileResult(
                 success=False,
-                error=f"Request error: {exc}",
+                error=error_detail or str(exc),
             )
         except Exception as exc:
             _LOGGER.exception("Unexpected error during Apify call for %s", run_input)
