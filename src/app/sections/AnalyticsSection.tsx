@@ -186,6 +186,14 @@ export const AnalyticsSection = ({ onUnauthorized }: Props) => {
     return computeProportions(data.globalTotals);
   }, [data]);
 
+  const creationSeriesData = useMemo(() => {
+    if (!data) return [];
+    return data.creationSeries.map((point) => ({
+      period: point.period,
+      count: point.count,
+    }));
+  }, [data]);
+
   return (
     <section className="section">
       <header className="section-header">
@@ -388,6 +396,30 @@ export const AnalyticsSection = ({ onUnauthorized }: Props) => {
                       onClick={(data) => setSelectedItemId(data.id)}
                       style={{ cursor: "pointer" }}
                     />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <p className="muted">Aucune donnée disponible.</p>
+            )}
+          </div>
+
+          {/* Creation date chart */}
+          <div className="card">
+            <header className="card-header">
+              <h2>Créations d'établissements (date de création)</h2>
+              <span className="muted">Granularité : {GRANULARITY_OPTIONS.find((opt) => opt.value === granularity)?.label}</span>
+            </header>
+            {creationSeriesData.length > 0 ? (
+              <div className="chart-wrapper">
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={creationSeriesData} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
+                    <CartesianGrid stroke="#e2e8f0" strokeDasharray="4 4" vertical={false} />
+                    <XAxis dataKey="period" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "#475467" }} />
+                    <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "#475467" }} allowDecimals={false} />
+                    <Tooltip content={<ProportionsTooltip />} />
+                    <Legend />
+                    <Bar dataKey="count" name="Créations" fill="#0ea5e9" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>

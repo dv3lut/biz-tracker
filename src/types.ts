@@ -134,6 +134,8 @@ export interface NafSubCategoryStat {
   nafCode: string;
   name: string;
   establishmentCount: number;
+  individualEstablishments: number;
+  nonIndividualEstablishments: number;
   googleFound: number;
   googleNotFound: number;
   googleInsufficient: number;
@@ -144,12 +146,15 @@ export interface NafSubCategoryStat {
   listingRecentMissingContact: number;
   listingNotRecent: number;
   listingUnknown: number;
+  linkedinFound: number;
 }
 
 export interface NafCategoryStat {
   categoryId: string;
   name: string;
   totalEstablishments: number;
+  individualEstablishments: number;
+  nonIndividualEstablishments: number;
   subcategories: NafSubCategoryStat[];
 }
 
@@ -667,4 +672,5 @@ export interface NafAnalyticsResponse {
   aggregation: NafAnalyticsAggregation;
   items: NafAnalyticsItem[];
   globalTotals: NafAnalyticsTimePoint;
+  creationSeries: Array<{ period: string; count: number }>;
 }

@@ -4,6 +4,10 @@
   gap: 0.75rem;
 }
 
+.establishments-results {
+  margin: 0.5rem 0 0.25rem;
+}
+
 .establishments-controls-row {
   display: flex;
   flex-wrap: wrap;

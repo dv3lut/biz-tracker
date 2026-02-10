@@ -1,7 +1,7 @@
 import { ChangeEvent, useEffect, useRef, useState } from "react";
 
 import { Establishment, EstablishmentIndividualFilter, NafCategory, Region } from "../types";
-import { formatDateTime } from "../utils/format";
+import { formatDateTime, formatNumber } from "../utils/format";
 import { canonicalizeNafCode, normalizeNafCode } from "../utils/sync";
 import { openGoogleSearchForEstablishment } from "../utils/googleSearch";
 import toast from "react-hot-toast";
@@ -11,6 +11,8 @@ import { RegionDepartmentPanel } from "./RegionDepartmentPanel";
 
 interface EstablishmentsSectionProps {
   establishments?: Establishment[];
+  resultCount?: number;
+  isResultCountLoading: boolean;
   isLoading: boolean;
   error: Error | null;
   nafCategories: NafCategory[] | undefined;
@@ -58,6 +60,8 @@ interface EstablishmentsSectionProps {
 
 export const EstablishmentsSection = ({
   establishments,
+  resultCount,
+  isResultCountLoading,
   isLoading,
   error,
   nafCategories,
@@ -233,6 +237,10 @@ export const EstablishmentsSection = ({
           Rafraîchir
         </button>
       </header>
+
+      <div className="establishments-results muted small">
+        Résultats : {isResultCountLoading ? "Calcul en cours…" : formatNumber(resultCount ?? null)}
+      </div>
 
       <div className="establishments-controls">
         <div className="establishments-controls-row establishments-controls-row--main">

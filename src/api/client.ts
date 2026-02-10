@@ -277,6 +277,8 @@ interface NafSubCategoryStatResponse {
   naf_code: string;
   name: string;
   establishment_count: number;
+  individual_establishments: number;
+  non_individual_establishments: number;
   google_found: number;
   google_not_found: number;
   google_insufficient: number;
@@ -287,12 +289,15 @@ interface NafSubCategoryStatResponse {
   listing_recent_missing_contact: number;
   listing_not_recent: number;
   listing_unknown: number;
+  linkedin_found: number;
 }
 
 interface NafCategoryStatResponse {
   category_id: string;
   name: string;
   total_establishments: number;
+  individual_establishments: number;
+  non_individual_establishments: number;
   subcategories: NafSubCategoryStatResponse[];
 }
 
@@ -671,6 +676,8 @@ const toNafSubCategoryStat = (payload: NafSubCategoryStatResponse): NafSubCatego
   nafCode: payload.naf_code,
   name: payload.name,
   establishmentCount: payload.establishment_count,
+  individualEstablishments: payload.individual_establishments,
+  nonIndividualEstablishments: payload.non_individual_establishments,
   googleFound: payload.google_found,
   googleNotFound: payload.google_not_found,
   googleInsufficient: payload.google_insufficient,
@@ -681,12 +688,15 @@ const toNafSubCategoryStat = (payload: NafSubCategoryStatResponse): NafSubCatego
   listingRecentMissingContact: payload.listing_recent_missing_contact,
   listingNotRecent: payload.listing_not_recent,
   listingUnknown: payload.listing_unknown,
+  linkedinFound: payload.linkedin_found,
 });
 
 const toNafCategoryStat = (payload: NafCategoryStatResponse): NafCategoryStat => ({
   categoryId: payload.category_id,
   name: payload.name,
   totalEstablishments: payload.total_establishments,
+  individualEstablishments: payload.individual_establishments,
+  nonIndividualEstablishments: payload.non_individual_establishments,
   subcategories: payload.subcategories.map(toNafSubCategoryStat),
 });
 

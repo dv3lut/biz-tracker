@@ -9,6 +9,8 @@ import type {
 
 type Props = {
   establishments: Establishment[] | undefined;
+  resultCount: number | undefined;
+  isResultCountLoading: boolean;
   isLoading: boolean;
   error: Error | null;
   nafCategories: NafCategory[] | undefined;
@@ -56,6 +58,8 @@ type Props = {
 
 export const EstablishmentsView = ({
   establishments,
+  resultCount,
+  isResultCountLoading,
   isLoading,
   error,
   nafCategories,
@@ -111,6 +115,8 @@ export const EstablishmentsView = ({
       <div className="section-grid">
         <EstablishmentsSection
           establishments={establishments}
+          resultCount={resultCount}
+          isResultCountLoading={isResultCountLoading}
           isLoading={isLoading}
           error={error}
           nafCategories={nafCategories}

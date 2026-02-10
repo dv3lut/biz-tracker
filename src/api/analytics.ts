@@ -37,6 +37,7 @@ interface NafAnalyticsApiResponse {
   aggregation: NafAnalyticsAggregation;
   items: NafAnalyticsItemResponse[];
   global_totals: NafAnalyticsTimePointResponse;
+  creation_series: Array<{ period: string; count: number }>;
 }
 
 const mapTimePoint = (point: NafAnalyticsTimePointResponse) => ({
@@ -95,6 +96,7 @@ export const analyticsApi = {
       aggregation: data.aggregation,
       items: data.items.map(mapItem),
       globalTotals: mapTimePoint(data.global_totals),
+      creationSeries: data.creation_series ?? [],
     };
   },
 };

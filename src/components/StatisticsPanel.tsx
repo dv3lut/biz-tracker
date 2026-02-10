@@ -1,7 +1,7 @@
 import { Fragment } from "react";
 
 import { NafCategoryStat, NafSubCategoryStat } from "../types";
-import { formatNumber } from "../utils/format";
+import { formatNumber, formatPercent } from "../utils/format";
 
 const GOOGLE_STATUS_COLUMNS: Array<{
   key: StatusMetricKey;
@@ -24,8 +24,13 @@ const LISTING_STATUS_COLUMNS: Array<{
   { key: "listingRecent", label: "Création récente", tone: "success" },
   { key: "listingRecentMissingContact", label: "Création récente sans contact", tone: "pending" },
   { key: "listingNotRecent", label: "Création ancienne", tone: "warning" },
-  { key: "listingUnknown", label: "Ancienneté inconnue", tone: "muted" },
 ];
+
+const LINKEDIN_COLUMNS: Array<{
+  key: LinkedinMetricKey;
+  label: string;
+  tone: StatusTone;
+}> = [{ key: "linkedinFound", label: "LinkedIn trouvés", tone: "success" }];
 
 type StatusMetricKey =
   | "googleFound"
@@ -38,12 +43,19 @@ type StatusMetricKey =
 type ListingMetricKey =
   | "listingRecent"
   | "listingRecentMissingContact"
-  | "listingNotRecent"
-  | "listingUnknown";
+  | "listingNotRecent";
+
+type LinkedinMetricKey = "linkedinFound";
 
 type StatusTone = "success" | "warning" | "danger" | "pending" | "muted";
 
-type NumericMetricKey = StatusMetricKey | ListingMetricKey | "establishmentCount";
+type NumericMetricKey =
+  | StatusMetricKey
+  | ListingMetricKey
+  | "establishmentCount"
+  | "individualEstablishments"
+  | "nonIndividualEstablishments"
+  | LinkedinMetricKey;
 
 type Props = {
   categories: NafCategoryStat[];
@@ -60,6 +72,8 @@ const sumMetric = (entries: NafSubCategoryStat[], key: NumericMetricKey): number
 const buildCategoryTotals = (category: NafCategoryStat) => {
   return {
     establishmentCount: sumMetric(category.subcategories, "establishmentCount"),
+    individualEstablishments: sumMetric(category.subcategories, "individualEstablishments"),
+    nonIndividualEstablishments: sumMetric(category.subcategories, "nonIndividualEstablishments"),
     googleFound: sumMetric(category.subcategories, "googleFound"),
     googleNotFound: sumMetric(category.subcategories, "googleNotFound"),
     googleInsufficient: sumMetric(category.subcategories, "googleInsufficient"),
@@ -69,13 +83,22 @@ const buildCategoryTotals = (category: NafCategoryStat) => {
     listingRecent: sumMetric(category.subcategories, "listingRecent"),
     listingRecentMissingContact: sumMetric(category.subcategories, "listingRecentMissingContact"),
     listingNotRecent: sumMetric(category.subcategories, "listingNotRecent"),
-    listingUnknown: sumMetric(category.subcategories, "listingUnknown"),
+    linkedinFound: sumMetric(category.subcategories, "linkedinFound"),
   };
+};
+
+const formatIndividualShare = (individual: number, total: number): string => {
+  if (!total) {
+    return "—";
+  }
+  const individualRatio = individual / total;
+  const nonIndividualRatio = Math.max(0, total - individual) / total;
+  return `${formatPercent(individualRatio)} / ${formatPercent(nonIndividualRatio)}`;
 };
 
 export const StatisticsPanel = ({ categories, isLoading, error, onRefresh, isRefreshing }: Props) => {
   const visibleCategories = categories.filter((category) => category.subcategories.length > 0);
-  const columnCount = GOOGLE_STATUS_COLUMNS.length + LISTING_STATUS_COLUMNS.length + 2;
+  const columnCount = GOOGLE_STATUS_COLUMNS.length + LISTING_STATUS_COLUMNS.length + LINKEDIN_COLUMNS.length + 3;
 
   return (
     <section className="card statistics-card">
@@ -105,8 +128,10 @@ export const StatisticsPanel = ({ categories, isLoading, error, onRefresh, isRef
                 <tr>
                   <th rowSpan={2}>Sous-catégorie</th>
                   <th rowSpan={2}>Établissements suivis</th>
+                  <th rowSpan={2}>EI / non-EI</th>
                   <th colSpan={GOOGLE_STATUS_COLUMNS.length}>Statuts Google</th>
                   <th colSpan={LISTING_STATUS_COLUMNS.length}>Ancienneté des fiches</th>
+                  <th colSpan={LINKEDIN_COLUMNS.length}>LinkedIn</th>
                 </tr>
                 <tr>
                   {GOOGLE_STATUS_COLUMNS.map((column) => (
@@ -114,6 +139,9 @@ export const StatisticsPanel = ({ categories, isLoading, error, onRefresh, isRef
                   ))}
                   {LISTING_STATUS_COLUMNS.map((column) => (
                     <th key={`listing-header-${column.key}`}>{column.label}</th>
+                  ))}
+                  {LINKEDIN_COLUMNS.map((column) => (
+                    <th key={`linkedin-header-${column.key}`}>{column.label}</th>
                   ))}
                 </tr>
               </thead>
@@ -142,6 +170,9 @@ export const StatisticsPanel = ({ categories, isLoading, error, onRefresh, isRef
                             </div>
                           </td>
                           <td className="statistics-cell-number">{formatNumber(sub.establishmentCount)}</td>
+                          <td className="statistics-cell-number">
+                            {formatIndividualShare(sub.individualEstablishments, sub.establishmentCount)}
+                          </td>
                           {GOOGLE_STATUS_COLUMNS.map((column) => (
                             <td key={`${sub.subcategoryId}-${column.key}`} className="statistics-cell-number">
                               <span className={`status-pill status-pill--${column.tone}`}>
@@ -156,17 +187,32 @@ export const StatisticsPanel = ({ categories, isLoading, error, onRefresh, isRef
                               </span>
                             </td>
                           ))}
+                          {LINKEDIN_COLUMNS.map((column) => (
+                            <td key={`${sub.subcategoryId}-${column.key}`} className="statistics-cell-number">
+                              <span className={`status-pill status-pill--${column.tone}`}>
+                                {formatNumber(sub[column.key])}
+                              </span>
+                            </td>
+                          ))}
                         </tr>
                       ))}
                       <tr className="statistics-table-total-row">
                         <td>Total {category.name}</td>
                         <td className="statistics-cell-number">{formatNumber(totals.establishmentCount)}</td>
+                        <td className="statistics-cell-number">
+                          {formatIndividualShare(totals.individualEstablishments, totals.establishmentCount)}
+                        </td>
                         {GOOGLE_STATUS_COLUMNS.map((column) => (
                           <td key={`${category.categoryId}-${column.key}`} className="statistics-cell-number">
                             {formatNumber(totals[column.key])}
                           </td>
                         ))}
                         {LISTING_STATUS_COLUMNS.map((column) => (
+                          <td key={`${category.categoryId}-${column.key}`} className="statistics-cell-number">
+                            {formatNumber(totals[column.key])}
+                          </td>
+                        ))}
+                        {LINKEDIN_COLUMNS.map((column) => (
                           <td key={`${category.categoryId}-${column.key}`} className="statistics-cell-number">
                             {formatNumber(totals[column.key])}
                           </td>

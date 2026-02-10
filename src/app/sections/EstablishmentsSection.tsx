@@ -63,7 +63,7 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     staleTime: 5 * 60 * 1000,
   });
 
-  const establishmentsQuery = useQuery<Establishment[]>({
+  const establishmentsQuery = useQuery<{ total: number; items: Establishment[] }>({
     queryKey: [
       "establishments",
       limit,
@@ -136,6 +136,7 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     }
     showError(regionsQuery.error);
   }, [regionsQuery.error, showError]);
+
 
   const invalidateEstablishments = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ["establishments"] });
@@ -342,13 +343,15 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     return (deleteEstablishmentMutation.variables as string | undefined) ?? null;
   }, [deleteEstablishmentMutation.isPending, deleteEstablishmentMutation.variables]);
 
-  const hasNextPage = (establishmentsQuery.data?.length ?? 0) === limit;
+  const hasNextPage = (establishmentsQuery.data?.items.length ?? 0) === limit;
 
   const establishmentsError = establishmentsQuery.error instanceof Error ? establishmentsQuery.error : null;
 
   return (
     <EstablishmentsView
-      establishments={establishmentsQuery.data}
+      establishments={establishmentsQuery.data?.items}
+      resultCount={establishmentsQuery.data?.total}
+      isResultCountLoading={establishmentsQuery.isLoading}
       isLoading={establishmentsQuery.isLoading}
       error={establishmentsError}
       nafCategories={nafCategoriesQuery.data}

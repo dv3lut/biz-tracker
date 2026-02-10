@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react";
 
 import { linkedInApi } from "../api";
-import { Director, EstablishmentDetail } from "../types";
+import { Director, EstablishmentDetail, LinkedInCheckResponse, LinkedInDebugResponse } from "../types";
 import { formatDateTime } from "../utils/format";
+import { buildLinkedInSearchQuery, openLinkedInSearchForDirector } from "../utils/linkedinSearch";
 import { SiretLink } from "./SiretLink";
+import { LinkedInCheckModal } from "./LinkedInCheckModal";
+import { LinkedInDebugModal } from "./LinkedInDebugModal";
 
 type Props = {
   isOpen: boolean;
@@ -72,11 +75,23 @@ export const EstablishmentDetailModal = ({
 }: Props) => {
   const [linkedInLoadingIds, setLinkedInLoadingIds] = useState<Set<string>>(new Set());
   const [linkedInErrors, setLinkedInErrors] = useState<Record<string, string>>({});
+  const [linkedInDebugLoadingIds, setLinkedInDebugLoadingIds] = useState<Set<string>>(new Set());
+  const [linkedInDebugErrors, setLinkedInDebugErrors] = useState<Record<string, string>>({});
+  const [linkedInCheckModal, setLinkedInCheckModal] = useState<
+    { director: Director; result: LinkedInCheckResponse } | null
+  >(null);
+  const [linkedInDebugModal, setLinkedInDebugModal] = useState<
+    { director: Director; result: LinkedInDebugResponse } | null
+  >(null);
 
   useEffect(() => {
     if (!isOpen) {
       setLinkedInLoadingIds(new Set());
       setLinkedInErrors({});
+      setLinkedInDebugLoadingIds(new Set());
+      setLinkedInDebugErrors({});
+      setLinkedInCheckModal(null);
+      setLinkedInDebugModal(null);
       return;
     }
     const handler = (event: KeyboardEvent) => {
@@ -90,7 +105,8 @@ export const EstablishmentDetailModal = ({
     };
   }, [isOpen, onClose]);
 
-  const handleLinkedInSearch = async (directorId: string) => {
+  const handleLinkedInSearch = async (director: Director) => {
+    const directorId = director.id;
     setLinkedInLoadingIds((prev) => new Set(prev).add(directorId));
     setLinkedInErrors((prev) => {
       const next = { ...prev };
@@ -108,11 +124,36 @@ export const EstablishmentDetailModal = ({
           linkedinLastCheckedAt: result.linkedinLastCheckedAt,
         });
       }
+      setLinkedInCheckModal({ director, result });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Erreur inconnue";
       setLinkedInErrors((prev) => ({ ...prev, [directorId]: message }));
     } finally {
       setLinkedInLoadingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(directorId);
+        return next;
+      });
+    }
+  };
+
+  const handleLinkedInDebug = async (director: Director) => {
+    const directorId = director.id;
+    setLinkedInDebugLoadingIds((prev) => new Set(prev).add(directorId));
+    setLinkedInDebugErrors((prev) => {
+      const next = { ...prev };
+      delete next[directorId];
+      return next;
+    });
+
+    try {
+      const result = await linkedInApi.debugDirectorLinkedIn(directorId);
+      setLinkedInDebugModal({ director, result });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Erreur inconnue";
+      setLinkedInDebugErrors((prev) => ({ ...prev, [directorId]: message }));
+    } finally {
+      setLinkedInDebugLoadingIds((prev) => {
         const next = new Set(prev);
         next.delete(directorId);
         return next;
@@ -131,8 +172,9 @@ export const EstablishmentDetailModal = ({
   const lastFound = establishment ? formatDateTime(establishment.googleLastFoundAt) : "—";
 
   return (
-    <div className="modal-overlay" onClick={onClose} role="dialog" aria-modal="true">
-      <div className="modal" onClick={(event) => event.stopPropagation()}>
+    <>
+      <div className="modal-overlay" onClick={onClose} role="dialog" aria-modal="true">
+        <div className="modal" onClick={(event) => event.stopPropagation()}>
         <header className="modal-header">
           <div>
             <h2>Fiche établissement</h2>
@@ -209,6 +251,9 @@ export const EstablishmentDetailModal = ({
                         const isPhysical = d.typeDirigeant === "personne physique";
                         const isLinkedInLoading = linkedInLoadingIds.has(d.id);
                         const linkedInError = linkedInErrors[d.id];
+                        const isLinkedInDebugLoading = linkedInDebugLoadingIds.has(d.id);
+                        const linkedInDebugError = linkedInDebugErrors[d.id];
+                        const linkedInSearchQuery = buildLinkedInSearchQuery(establishment, d);
                         return (
                           <tr key={d.id}>
                             <td>{isPhysical ? "Physique" : "Morale"}</td>
@@ -250,13 +295,32 @@ export const EstablishmentDetailModal = ({
                                   <button
                                     type="button"
                                     className="small"
-                                    onClick={() => handleLinkedInSearch(d.id)}
+                                    onClick={() => handleLinkedInSearch(d)}
                                     disabled={isLinkedInLoading}
                                   >
                                     {isLinkedInLoading ? "Recherche…" : "Rechercher LinkedIn"}
                                   </button>
+                                  <button
+                                    type="button"
+                                    className="small ghost"
+                                    onClick={() => openLinkedInSearchForDirector(establishment, d)}
+                                    disabled={!linkedInSearchQuery}
+                                  >
+                                    Recherche LinkedIn
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="small ghost"
+                                    onClick={() => handleLinkedInDebug(d)}
+                                    disabled={isLinkedInDebugLoading}
+                                  >
+                                    {isLinkedInDebugLoading ? "Debug…" : "Debug LinkedIn"}
+                                  </button>
                                   {linkedInError && (
                                     <span className="feedback error small">{linkedInError}</span>
+                                  )}
+                                  {linkedInDebugError && (
+                                    <span className="feedback error small">{linkedInDebugError}</span>
                                   )}
                                 </>
                               )}
@@ -340,7 +404,35 @@ export const EstablishmentDetailModal = ({
             </section>
           </div>
         )}
+        </div>
       </div>
-    </div>
+      {linkedInCheckModal ? (
+        <LinkedInCheckModal
+          directorName={
+            linkedInCheckModal.director.typeDirigeant === "personne physique"
+              ? [linkedInCheckModal.director.firstNames, linkedInCheckModal.director.lastName]
+                  .filter(Boolean)
+                  .join(" ")
+              : linkedInCheckModal.director.denomination || "—"
+          }
+          companyName={linkedInCheckModal.result.companyName}
+          result={linkedInCheckModal.result}
+          onClose={() => setLinkedInCheckModal(null)}
+        />
+      ) : null}
+      {linkedInDebugModal ? (
+        <LinkedInDebugModal
+          directorName={
+            linkedInDebugModal.director.typeDirigeant === "personne physique"
+              ? [linkedInDebugModal.director.firstNames, linkedInDebugModal.director.lastName]
+                  .filter(Boolean)
+                  .join(" ")
+              : linkedInDebugModal.director.denomination || "—"
+          }
+          result={linkedInDebugModal.result}
+          onClose={() => setLinkedInDebugModal(null)}
+        />
+      ) : null}
+    </>
   );
 };

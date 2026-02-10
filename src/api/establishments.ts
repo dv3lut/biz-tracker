@@ -90,6 +90,11 @@ export interface EstablishmentDetailResponse extends EstablishmentResponse {
   libelle_pays: string | null;
 }
 
+interface EstablishmentListResponse {
+  total: number;
+  items: EstablishmentResponse[];
+}
+
 const mapDirector = (payload: DirectorResponse): Director => ({
   id: payload.id,
   typeDirigeant: payload.type_dirigeant,
@@ -191,52 +196,59 @@ interface ListEstablishmentsParams {
   isIndividual?: boolean;
 }
 
+const buildEstablishmentsQuery = (params: ListEstablishmentsParams = {}): URLSearchParams => {
+  const query = new URLSearchParams();
+  if (typeof params.limit === "number") {
+    query.set("limit", String(params.limit));
+  }
+  if (typeof params.offset === "number") {
+    query.set("offset", String(params.offset));
+  }
+  if (params.q) {
+    query.set("q", params.q);
+  }
+  if (params.nafCode) {
+    query.set("naf_code", params.nafCode);
+  }
+  if (params.nafCodes && params.nafCodes.length > 0) {
+    params.nafCodes
+      .filter((code) => Boolean(code && code.trim()))
+      .forEach((code) => {
+        const trimmed = code.trim();
+        query.append("naf_codes", canonicalizeNafCode(trimmed) ?? trimmed);
+      });
+  }
+  if (params.departmentCodes && params.departmentCodes.length > 0) {
+    params.departmentCodes
+      .filter((code) => Boolean(code && code.trim()))
+      .forEach((code) => {
+        query.append("department_codes", code.trim());
+      });
+  }
+  if (params.addedFrom) {
+    query.set("added_from", params.addedFrom);
+  }
+  if (params.addedTo) {
+    query.set("added_to", params.addedTo);
+  }
+  if (params.googleCheckStatus) {
+    query.set("google_check_status", params.googleCheckStatus);
+  }
+  if (typeof params.isIndividual === "boolean") {
+    query.set("is_individual", String(params.isIndividual));
+  }
+  return query;
+};
+
 export const establishmentsApi = {
-  async fetchMany(params: ListEstablishmentsParams = {}): Promise<Establishment[]> {
-    const query = new URLSearchParams();
-    if (typeof params.limit === "number") {
-      query.set("limit", String(params.limit));
-    }
-    if (typeof params.offset === "number") {
-      query.set("offset", String(params.offset));
-    }
-    if (params.q) {
-      query.set("q", params.q);
-    }
-    if (params.nafCode) {
-      query.set("naf_code", params.nafCode);
-    }
-    if (params.nafCodes && params.nafCodes.length > 0) {
-      params.nafCodes
-        .filter((code) => Boolean(code && code.trim()))
-        .forEach((code) => {
-          const trimmed = code.trim();
-          query.append("naf_codes", canonicalizeNafCode(trimmed) ?? trimmed);
-        });
-    }
-    if (params.departmentCodes && params.departmentCodes.length > 0) {
-      params.departmentCodes
-        .filter((code) => Boolean(code && code.trim()))
-        .forEach((code) => {
-          query.append("department_codes", code.trim());
-        });
-    }
-    if (params.addedFrom) {
-      query.set("added_from", params.addedFrom);
-    }
-    if (params.addedTo) {
-      query.set("added_to", params.addedTo);
-    }
-    if (params.googleCheckStatus) {
-      query.set("google_check_status", params.googleCheckStatus);
-    }
-    if (typeof params.isIndividual === "boolean") {
-      query.set("is_individual", String(params.isIndividual));
-    }
-    const queryString = query.toString();
+  async fetchMany(params: ListEstablishmentsParams = {}): Promise<{ total: number; items: Establishment[] }> {
+    const queryString = buildEstablishmentsQuery(params).toString();
     const path = `/admin/establishments${queryString ? `?${queryString}` : ""}`;
-    const { data } = await request<EstablishmentResponse[]>(path);
-    return data.map(mapEstablishment);
+    const { data } = await request<EstablishmentListResponse>(path);
+    return {
+      total: data.total,
+      items: data.items.map(mapEstablishment),
+    };
   },
 
   async fetchOne(siret: string): Promise<EstablishmentDetail> {
