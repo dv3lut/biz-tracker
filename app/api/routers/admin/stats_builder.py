@@ -675,6 +675,9 @@ def build_naf_analytics(
             else_=0,
         )
     ).label("listing_not_recent")
+    individual_count = func.sum(
+        case((models.Establishment.categorie_juridique.ilike("1%"), 1), else_=0)
+    ).label("individual_count")
 
     # LinkedIn stats via directors
     linkedin_subq = (
@@ -684,6 +687,7 @@ def build_naf_analytics(
             func.sum(case((models.Director.linkedin_check_status == "found", 1), else_=0)).label("li_found"),
             func.sum(case((models.Director.linkedin_check_status == "not_found", 1), else_=0)).label("li_not_found"),
             func.sum(case((models.Director.linkedin_check_status == "pending", 1), else_=0)).label("li_pending"),
+            func.sum(case((models.Director.linkedin_check_status == "skipped_nd", 1), else_=0)).label("li_skipped_nd"),
         )
         .group_by(models.Director.establishment_siret)
         .subquery()
@@ -692,6 +696,10 @@ def build_naf_analytics(
     linkedin_found_expr = func.coalesce(func.sum(linkedin_subq.c.li_found), 0).label("linkedin_found")
     linkedin_not_found_expr = func.coalesce(func.sum(linkedin_subq.c.li_not_found), 0).label("linkedin_not_found")
     linkedin_pending_expr = func.coalesce(func.sum(linkedin_subq.c.li_pending), 0).label("linkedin_pending")
+    linkedin_total_directors_expr = func.coalesce(
+        func.sum(linkedin_subq.c.total_directors), 0
+    ).label("linkedin_total_directors")
+    linkedin_skipped_nd_expr = func.coalesce(func.sum(linkedin_subq.c.li_skipped_nd), 0).label("linkedin_skipped_nd")
 
     # Alerts count per establishment
     alerts_subq = (
@@ -720,9 +728,12 @@ def build_naf_analytics(
         listing_recent,
         listing_recent_missing_contact,
         listing_not_recent,
+        individual_count,
         linkedin_found_expr,
         linkedin_not_found_expr,
         linkedin_pending_expr,
+        linkedin_total_directors_expr,
+        linkedin_skipped_nd_expr,
         alerts_created_expr,
     ).where(
         models.Establishment.first_seen_at >= since_dt,
@@ -773,6 +784,16 @@ def build_naf_analytics(
     rows = session.execute(base_query).all()
 
     creation_series = _build_creation_date_series(session, start_date, end_date, period_format)
+    creation_series_by_key = _build_creation_date_series_by_group(
+        session,
+        start_date=start_date,
+        end_date=end_date,
+        period_format=period_format,
+        aggregation=aggregation,
+        category_id=category_id,
+        naf_code=naf_code,
+    )
+    creation_periods = _iter_periods(start_date, end_date, period_format)
 
     # Build result structure
     items_map: dict[str, NafAnalyticsItem] = {}
@@ -791,6 +812,10 @@ def build_naf_analytics(
                 name=row.group_name or "Inconnu",
                 totals=_empty_analytics_point("total"),
                 time_series=[],
+                creation_series=[
+                    {"period": period, "count": creation_series_by_key.get(key, {}).get(period, 0)}
+                    for period in creation_periods
+                ],
             )
 
         item = items_map[key]
@@ -805,9 +830,12 @@ def build_naf_analytics(
             listing_recent=int(row.listing_recent or 0),
             listing_recent_missing_contact=int(row.listing_recent_missing_contact or 0),
             listing_not_recent=int(row.listing_not_recent or 0),
+            individual_count=int(row.individual_count or 0),
             linkedin_found=int(row.linkedin_found or 0),
             linkedin_not_found=int(row.linkedin_not_found or 0),
             linkedin_pending=int(row.linkedin_pending or 0),
+            linkedin_total_directors=int(row.linkedin_total_directors or 0),
+            linkedin_skipped_nd=int(row.linkedin_skipped_nd or 0),
             alerts_created=int(row.alerts_created or 0),
         )
         item.time_series.append(point)
@@ -859,6 +887,75 @@ def _build_creation_date_series(
     return [{"period": period, "count": counts_map.get(period, 0)} for period in periods]
 
 
+def _build_creation_date_series_by_group(
+    session: Session,
+    *,
+    start_date: date,
+    end_date: date,
+    period_format: str,
+    aggregation: Literal["naf", "category", "subcategory"],
+    category_id: str | None,
+    naf_code: str | None,
+) -> dict[str, dict[str, int]]:
+    period_expr = func.to_char(models.Establishment.date_creation, period_format).label("period")
+
+    if aggregation == "naf":
+        group_key = func.upper(models.Establishment.naf_code).label("group_key")
+    elif aggregation == "category":
+        group_key = func.cast(models.NafCategory.id, SqlString).label("group_key")
+    else:
+        group_key = func.cast(models.NafSubCategory.id, SqlString).label("group_key")
+
+    stmt = (
+        select(
+            period_expr,
+            group_key,
+            func.count(models.Establishment.siret).label("count"),
+        )
+        .where(
+            models.Establishment.date_creation.is_not(None),
+            models.Establishment.date_creation >= start_date,
+            models.Establishment.date_creation <= end_date,
+        )
+        .group_by(period_expr, group_key)
+        .order_by(period_expr)
+    )
+
+    if aggregation in ("category", "subcategory"):
+        stmt = stmt.outerjoin(
+            models.NafSubCategory,
+            func.upper(models.Establishment.naf_code) == func.upper(models.NafSubCategory.naf_code),
+        ).outerjoin(
+            models.NafCategorySubCategory,
+            models.NafSubCategory.id == models.NafCategorySubCategory.subcategory_id,
+        ).outerjoin(
+            models.NafCategory,
+            models.NafCategorySubCategory.category_id == models.NafCategory.id,
+        )
+
+    if category_id:
+        try:
+            cat_uuid = UUID(category_id)
+            stmt = stmt.where(models.NafCategory.id == cat_uuid)
+        except ValueError:
+            pass
+
+    if naf_code:
+        stmt = stmt.where(
+            func.upper(models.Establishment.naf_code) == naf_code.upper().replace(".", "")
+        )
+
+    rows = session.execute(stmt).all()
+    series_map: dict[str, dict[str, int]] = {}
+    for row in rows:
+        key = row.group_key or "unknown"
+        period = row.period
+        if not period:
+            continue
+        series_map.setdefault(key, {})[period] = int(row.count or 0)
+    return series_map
+
+
 def _iter_periods(start_date: date, end_date: date, period_format: str) -> list[str]:
     periods: list[str] = []
     if period_format == "YYYY-MM-DD":
@@ -900,9 +997,12 @@ def _empty_analytics_point(period: str) -> NafAnalyticsTimePoint:
         listing_recent=0,
         listing_recent_missing_contact=0,
         listing_not_recent=0,
+        individual_count=0,
         linkedin_found=0,
         linkedin_not_found=0,
         linkedin_pending=0,
+        linkedin_total_directors=0,
+        linkedin_skipped_nd=0,
         alerts_created=0,
     )
 
@@ -917,7 +1017,10 @@ def _accumulate_point(target: NafAnalyticsTimePoint, source: NafAnalyticsTimePoi
     target.listing_recent += source.listing_recent
     target.listing_recent_missing_contact += source.listing_recent_missing_contact
     target.listing_not_recent += source.listing_not_recent
+    target.individual_count += source.individual_count
     target.linkedin_found += source.linkedin_found
     target.linkedin_not_found += source.linkedin_not_found
     target.linkedin_pending += source.linkedin_pending
+    target.linkedin_total_directors += source.linkedin_total_directors
+    target.linkedin_skipped_nd += source.linkedin_skipped_nd
     target.alerts_created += source.alerts_created

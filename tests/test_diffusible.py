@@ -26,6 +26,8 @@ class DiffusibleTests(TestCase):
         self.assertTrue(is_non_diffusible("NON DIFFUSIBLE"))
         self.assertTrue(is_non_diffusible("non diffusible"))  # Case insensitive
         self.assertTrue(is_non_diffusible("Établissement NON DIFFUSIBLE"))
+        self.assertTrue(is_non_diffusible("NON-DIFFUSIBLE"))
+        self.assertTrue(is_non_diffusible("[NON-DIFFUSIBLE]"))
 
     def test_any_name_non_diffusible_returns_false_when_all_names_are_normal(self) -> None:
         self.assertFalse(any_name_non_diffusible("Jean", "Dupont", None))

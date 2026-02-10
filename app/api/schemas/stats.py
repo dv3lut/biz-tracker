@@ -122,9 +122,12 @@ class NafAnalyticsTimePoint(BaseModel):
     listing_recent: int = Field(default=0, description="Fiches Google récentes.")
     listing_recent_missing_contact: int = Field(default=0, description="Fiches récentes sans contact.")
     listing_not_recent: int = Field(default=0, description="Fiches anciennes / reprise.")
+    individual_count: int = Field(default=0, description="Établissements en entreprise individuelle.")
     linkedin_found: int = Field(default=0, description="Profils LinkedIn trouvés.")
     linkedin_not_found: int = Field(default=0, description="Profils LinkedIn non trouvés.")
     linkedin_pending: int = Field(default=0, description="En attente de recherche LinkedIn.")
+    linkedin_total_directors: int = Field(default=0, description="Total dirigeants rattachés.")
+    linkedin_skipped_nd: int = Field(default=0, description="Dirigeants non diffusibles (LinkedIn skipped_nd).")
     alerts_created: int = Field(default=0, description="Alertes générées.")
 
 
@@ -137,6 +140,10 @@ class NafAnalyticsItem(BaseModel):
     totals: NafAnalyticsTimePoint = Field(description="Totaux cumulés sur la période.")
     time_series: list[NafAnalyticsTimePoint] = Field(
         default_factory=list, description="Séries temporelles par période."
+    )
+    creation_series: list[dict[str, object]] = Field(
+        default_factory=list,
+        description="Série temporelle des créations d'établissements (date de création) pour cet item.",
     )
 
 

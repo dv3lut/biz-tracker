@@ -6,7 +6,8 @@ import re
 # Patterns indicating a non-diffusible entity
 _ND_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\[ND\]", re.IGNORECASE),
-    re.compile(r"NON\s+DIFFUSIBLE", re.IGNORECASE),
+    re.compile(r"NON[-\s]*DIFFUSIBLE", re.IGNORECASE),
+    re.compile(r"\[NON[-\s]*DIFFUSIBLE\]", re.IGNORECASE),
 )
 
 
