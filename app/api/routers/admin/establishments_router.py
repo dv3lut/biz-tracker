@@ -6,19 +6,127 @@ from datetime import date, datetime, time, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.params import Query as QueryParam
 from sqlalchemy import func, not_, or_
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Query as SAQuery, Session, selectinload
 
 from app.api.dependencies import get_db_session
-from app.api.schemas import EstablishmentDetailOut, EstablishmentOut
+from app.api.schemas import EstablishmentDetailOut, EstablishmentListOut, EstablishmentOut
 from app.db import models
 from app.utils.regions import get_department_codes_for_region_codes, normalize_department_codes
 
 router = APIRouter(tags=["admin"])
 
 
+def _build_establishments_query(
+    session: Session,
+    *,
+    search: str | None,
+    naf_code: str | None,
+    naf_codes: list[str] | None,
+    department_codes: list[str] | None,
+    region_codes: list[str] | None,
+    added_from: date | None,
+    added_to: date | None,
+    google_check_status: str | None,
+    is_individual: bool | None,
+) -> SAQuery:
+    if isinstance(region_codes, QueryParam):
+        region_codes = None
+    if isinstance(department_codes, QueryParam):
+        department_codes = None
+
+    query = session.query(models.Establishment).filter(models.Establishment.etat_administratif == "A")
+
+    if search:
+        pattern = f"%{search.strip()}%"
+        query = query.filter(
+            or_(
+                models.Establishment.siret.ilike(pattern),
+                models.Establishment.name.ilike(pattern),
+                models.Establishment.code_postal.ilike(pattern),
+            )
+        )
+
+    cleaned_naf_codes: list[str] = []
+    if naf_code:
+        cleaned = naf_code.strip().replace(" ", "").replace(".", "").upper()
+        if cleaned:
+            cleaned_naf_codes.append(cleaned)
+    if naf_codes:
+        for code in naf_codes:
+            cleaned = code.strip().replace(" ", "").replace(".", "").upper()
+            if cleaned:
+                cleaned_naf_codes.append(cleaned)
+    if cleaned_naf_codes:
+        normalized_db_naf = func.replace(
+            func.replace(func.upper(func.trim(models.Establishment.naf_code)), ".", ""),
+            " ",
+            "",
+        )
+        query = query.filter(normalized_db_naf.in_(cleaned_naf_codes))
+
+    cleaned_departments: list[str] = []
+    if region_codes:
+        cleaned_departments.extend(get_department_codes_for_region_codes(region_codes))
+    if department_codes:
+        cleaned_departments.extend(department_codes)
+    if cleaned_departments:
+        region_filters = []
+        for dept in normalize_department_codes(cleaned_departments):
+            token = dept.strip().upper()
+            if not token:
+                continue
+            if token in {"2A", "2B"}:
+                region_filters.append(models.Establishment.code_commune.ilike(f"{token}%"))
+                region_filters.append(models.Establishment.code_postal.ilike("20%"))
+            elif len(token) == 3 and token.isdigit():
+                region_filters.append(models.Establishment.code_commune.ilike(f"{token}%"))
+                region_filters.append(models.Establishment.code_postal.ilike(f"{token}%"))
+            elif len(token) == 2 and token.isdigit():
+                region_filters.append(models.Establishment.code_commune.ilike(f"{token}%"))
+                region_filters.append(models.Establishment.code_postal.ilike(f"{token}%"))
+        if region_filters:
+            query = query.filter(or_(*region_filters))
+
+    if added_from is not None:
+        start = datetime.combine(added_from, time.min)
+        query = query.filter(models.Establishment.first_seen_at >= start)
+    if added_to is not None:
+        end_exclusive = datetime.combine(added_to, time.min) + timedelta(days=1)
+        query = query.filter(models.Establishment.first_seen_at < end_exclusive)
+
+    if google_check_status:
+        cleaned_status = google_check_status.strip().lower()
+        normalized_status = func.lower(func.trim(models.Establishment.google_check_status))
+        if cleaned_status == "other":
+            query = query.filter(
+                or_(
+                    models.Establishment.google_check_status.is_(None),
+                    normalized_status.notin_(["found", "not_found", "insufficient", "pending"]),
+                )
+            )
+        elif cleaned_status == "pending":
+            query = query.filter(
+                or_(
+                    models.Establishment.google_check_status.is_(None),
+                    normalized_status == "pending",
+                )
+            )
+        else:
+            query = query.filter(normalized_status == cleaned_status)
+
+    if is_individual is not None:
+        normalized_filter = models.Establishment.categorie_juridique.ilike("1%")
+        if is_individual:
+            query = query.filter(normalized_filter)
+        else:
+            query = query.filter(or_(models.Establishment.categorie_juridique.is_(None), not_(normalized_filter)))
+
+    return query
+
+
 @router.get(
     "/establishments",
-    response_model=list[EstablishmentOut],
+    response_model=EstablishmentListOut,
     summary="Lister les établissements actifs",
 )
 def list_establishments(
@@ -63,91 +171,25 @@ def list_establishments(
     ),
     is_individual: bool | None = Query(None, description="Filtrer par entreprise individuelle (true/false)."),
     session: Session = Depends(get_db_session),
-) -> list[EstablishmentOut]:
-    if isinstance(region_codes, QueryParam):
-        region_codes = None
-    if isinstance(department_codes, QueryParam):
-        department_codes = None
-    query = session.query(models.Establishment).filter(models.Establishment.etat_administratif == "A")
-    if search:
-        pattern = f"%{search.strip()}%"
-        query = query.filter(
-            or_(
-                models.Establishment.siret.ilike(pattern),
-                models.Establishment.name.ilike(pattern),
-                models.Establishment.code_postal.ilike(pattern),
-            )
-        )
-    cleaned_naf_codes: list[str] = []
-    if naf_code:
-        cleaned = naf_code.strip().replace(" ", "").replace(".", "").upper()
-        if cleaned:
-            cleaned_naf_codes.append(cleaned)
-    if naf_codes:
-        for code in naf_codes:
-            cleaned = code.strip().replace(" ", "").replace(".", "").upper()
-            if cleaned:
-                cleaned_naf_codes.append(cleaned)
-    if cleaned_naf_codes:
-        normalized_db_naf = func.replace(
-            func.replace(func.upper(func.trim(models.Establishment.naf_code)), ".", ""),
-            " ",
-            "",
-        )
-        query = query.filter(normalized_db_naf.in_(cleaned_naf_codes))
-    cleaned_departments: list[str] = []
-    if region_codes:
-        cleaned_departments.extend(get_department_codes_for_region_codes(region_codes))
-    if department_codes:
-        cleaned_departments.extend(department_codes)
-    if cleaned_departments:
-        region_filters = []
-        for dept in normalize_department_codes(cleaned_departments):
-            token = dept.strip().upper()
-            if not token:
-                continue
-            if token in {"2A", "2B"}:
-                region_filters.append(models.Establishment.code_commune.ilike(f"{token}%"))
-                region_filters.append(models.Establishment.code_postal.ilike("20%"))
-            elif len(token) == 3 and token.isdigit():
-                region_filters.append(models.Establishment.code_commune.ilike(f"{token}%"))
-                region_filters.append(models.Establishment.code_postal.ilike(f"{token}%"))
-            elif len(token) == 2 and token.isdigit():
-                region_filters.append(models.Establishment.code_commune.ilike(f"{token}%"))
-                region_filters.append(models.Establishment.code_postal.ilike(f"{token}%"))
-        if region_filters:
-            query = query.filter(or_(*region_filters))
-    if added_from is not None:
-        start = datetime.combine(added_from, time.min)
-        query = query.filter(models.Establishment.first_seen_at >= start)
-    if added_to is not None:
-        end_exclusive = datetime.combine(added_to, time.min) + timedelta(days=1)
-        query = query.filter(models.Establishment.first_seen_at < end_exclusive)
-    if google_check_status:
-        cleaned_status = google_check_status.strip().lower()
-        normalized_status = func.lower(func.trim(models.Establishment.google_check_status))
-        if cleaned_status == "other":
-            query = query.filter(
-                or_(
-                    models.Establishment.google_check_status.is_(None),
-                    normalized_status.notin_(["found", "not_found", "insufficient", "pending"]),
-                )
-            )
-        elif cleaned_status == "pending":
-            query = query.filter(
-                or_(
-                    models.Establishment.google_check_status.is_(None),
-                    normalized_status == "pending",
-                )
-            )
-        else:
-            query = query.filter(normalized_status == cleaned_status)
-    if is_individual is not None:
-        normalized_filter = models.Establishment.categorie_juridique.ilike("1%")
-        if is_individual:
-            query = query.filter(normalized_filter)
-        else:
-            query = query.filter(or_(models.Establishment.categorie_juridique.is_(None), not_(normalized_filter)))
+) -> EstablishmentListOut:
+    query = _build_establishments_query(
+        session,
+        search=search,
+        naf_code=naf_code,
+        naf_codes=naf_codes,
+        department_codes=department_codes,
+        region_codes=region_codes,
+        added_from=added_from,
+        added_to=added_to,
+        google_check_status=google_check_status,
+        is_individual=is_individual,
+    )
+    if hasattr(query, "with_entities"):
+        total = query.with_entities(func.count(models.Establishment.siret)).scalar() or 0
+    elif hasattr(query, "count"):
+        total = query.count() or 0
+    else:
+        total = 0
     establishments = (
         query.options(selectinload(models.Establishment.directors))
         .order_by(
@@ -158,7 +200,10 @@ def list_establishments(
         .limit(limit)
         .all()
     )
-    return [EstablishmentOut.model_validate(item) for item in establishments]
+    return EstablishmentListOut(
+        total=total,
+        items=[EstablishmentOut.model_validate(item) for item in establishments],
+    )
 
 
 @router.get(

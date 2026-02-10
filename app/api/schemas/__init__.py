@@ -12,7 +12,7 @@ from .clients import (
     ListingStatus,
 )
 from .email import AdminEmailConfig, AdminEmailConfigUpdate, EmailTestRequest, EmailTestResponse
-from .establishments import DirectorOut, EstablishmentDetailOut, EstablishmentOut
+from .establishments import DirectorOut, EstablishmentDetailOut, EstablishmentListOut, EstablishmentOut
 from .google import (
     GoogleFindPlaceCandidateOut,
     GoogleFindPlaceDebugResponse,
@@ -113,6 +113,7 @@ __all__ = [
     "EmailTestRequest",
     "EmailTestResponse",
     "EstablishmentDetailOut",
+    "EstablishmentListOut",
     "EstablishmentOut",
     "GoogleListingAgeBreakdown",
     "GoogleFindPlaceCandidateOut",

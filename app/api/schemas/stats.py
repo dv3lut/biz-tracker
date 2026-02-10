@@ -149,6 +149,10 @@ class NafAnalyticsResponse(BaseModel):
     aggregation: str = Field(description="Mode d'agrégation: naf, category, subcategory.")
     items: list[NafAnalyticsItem] = Field(default_factory=list, description="Données par NAF/catégorie.")
     global_totals: NafAnalyticsTimePoint = Field(description="Totaux globaux tous NAF confondus.")
+    creation_series: list[dict[str, object]] = Field(
+        default_factory=list,
+        description="Série temporelle des établissements par date de création (donnée établissement).",
+    )
 
 
 __all__ = [

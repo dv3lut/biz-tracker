@@ -100,4 +100,9 @@ class EstablishmentDetailOut(EstablishmentOut):
     libelle_pays: str | None
 
 
-__all__ = ["DirectorOut", "EstablishmentDetailOut", "EstablishmentOut"]
+class EstablishmentListOut(BaseModel):
+    total: int
+    items: list[EstablishmentOut]
+
+
+__all__ = ["DirectorOut", "EstablishmentDetailOut", "EstablishmentListOut", "EstablishmentOut"]

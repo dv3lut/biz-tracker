@@ -14,6 +14,12 @@ class NafSubCategoryStats(BaseModel):
     naf_code: str = Field(description="Code NAF exact suivi par Business tracker.")
     name: str = Field(description="Libellé lisible de la sous-catégorie.")
     establishment_count: int = Field(description="Nombre d'établissements correspondant à ce code NAF.")
+    individual_establishments: int = Field(
+        description="Nombre d'entreprises individuelles pour cette sous-catégorie."
+    )
+    non_individual_establishments: int = Field(
+        description="Nombre d'entreprises non-individuelles pour cette sous-catégorie."
+    )
     google_found: int = Field(description="Nombre d'établissements avec fiche Google identifiée.")
     google_not_found: int = Field(description="Nombre d'établissements sans fiche Google trouvée.")
     google_insufficient: int = Field(description="Nombre d'établissements dont l'identité est insuffisante pour Google.")
@@ -26,12 +32,19 @@ class NafSubCategoryStats(BaseModel):
     )
     listing_not_recent: int = Field(description="Fiches Google considérées comme création ancienne ou reprise.")
     listing_unknown: int = Field(description="Fiches Google sans information fiable sur l'ancienneté.")
+    linkedin_found: int = Field(description="Nombre de profils LinkedIn trouvés (dirigeants).")
 
 
 class NafCategoryStats(BaseModel):
     category_id: UUID = Field(description="Identifiant de la catégorie regroupant plusieurs NAF.")
     name: str = Field(description="Nom commercial de la catégorie.")
     total_establishments: int = Field(description="Total d'établissements rattachés aux sous-catégories de cette catégorie.")
+    individual_establishments: int = Field(
+        description="Total d'entreprises individuelles dans cette catégorie."
+    )
+    non_individual_establishments: int = Field(
+        description="Total d'entreprises non-individuelles dans cette catégorie."
+    )
     subcategories: list[NafSubCategoryStats] = Field(
         default_factory=list,
         description="Détail par sous-catégorie NAF.",

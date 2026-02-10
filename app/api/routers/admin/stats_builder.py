@@ -388,6 +388,16 @@ def _build_establishment_breakdown(session: Session) -> dict[str, int]:
 
 
 def _build_naf_category_breakdown(session: Session) -> list[dict[str, object]]:
+    linkedin_subq = (
+        select(
+            models.Director.establishment_siret,
+            func.sum(case((models.Director.linkedin_check_status == "found", 1), else_=0)).label(
+                "linkedin_found"
+            ),
+        )
+        .group_by(models.Director.establishment_siret)
+        .subquery()
+    )
     rows = (
         session.execute(
             select(
@@ -397,6 +407,9 @@ def _build_naf_category_breakdown(session: Session) -> list[dict[str, object]]:
                 models.NafSubCategory.name.label("subcategory_name"),
                 models.NafSubCategory.naf_code.label("naf_code"),
                 func.count(models.Establishment.siret).label("establishment_count"),
+                func.sum(
+                    case((models.Establishment.categorie_juridique.ilike("1%"), 1), else_=0)
+                ).label("individual_count"),
                 func.sum(
                     case((models.Establishment.google_check_status == "found", 1), else_=0)
                 ).label("google_found_count"),
@@ -460,6 +473,7 @@ def _build_naf_category_breakdown(session: Session) -> list[dict[str, object]]:
                         else_=0,
                     )
                 ).label("listing_not_recent_count"),
+                func.coalesce(func.sum(linkedin_subq.c.linkedin_found), 0).label("linkedin_found_count"),
             )
             .join(models.NafCategorySubCategory, models.NafCategorySubCategory.category_id == models.NafCategory.id)
             .join(
@@ -470,6 +484,7 @@ def _build_naf_category_breakdown(session: Session) -> list[dict[str, object]]:
                 models.Establishment,
                 func.upper(models.Establishment.naf_code) == func.upper(models.NafSubCategory.naf_code),
             )
+            .outerjoin(linkedin_subq, linkedin_subq.c.establishment_siret == models.Establishment.siret)
             .where(models.NafSubCategory.is_active.is_(True))
             .group_by(
                 models.NafCategory.id,
@@ -488,6 +503,8 @@ def _build_naf_category_breakdown(session: Session) -> list[dict[str, object]]:
     for row in rows:
         category_id = row.category_id
         sub_count = int(row.establishment_count or 0)
+        individual_count = int(row.individual_count or 0)
+        non_individual_count = max(0, sub_count - individual_count)
         google_found = int(row.google_found_count or 0)
         google_not_found = int(row.google_not_found_count or 0)
         google_insufficient = int(row.google_insufficient_count or 0)
@@ -497,6 +514,7 @@ def _build_naf_category_breakdown(session: Session) -> list[dict[str, object]]:
         listing_recent = int(row.listing_recent_count or 0)
         listing_recent_missing_contact = int(row.listing_recent_missing_contact_count or 0)
         listing_not_recent = int(row.listing_not_recent_count or 0)
+        linkedin_found = int(row.linkedin_found_count or 0)
         listing_unknown = max(
             0,
             google_found - listing_recent - listing_recent_missing_contact - listing_not_recent,
@@ -508,18 +526,28 @@ def _build_naf_category_breakdown(session: Session) -> list[dict[str, object]]:
                 "category_id": category_id,
                 "name": row.category_name,
                 "total_establishments": 0,
+                "individual_establishments": 0,
+                "non_individual_establishments": 0,
                 "subcategories": [],
             }
             category_map[category_id] = category_entry
             breakdown.append(category_entry)
 
         category_entry["total_establishments"] = int(category_entry["total_establishments"]) + sub_count
+        category_entry["individual_establishments"] = (
+            int(category_entry["individual_establishments"]) + individual_count
+        )
+        category_entry["non_individual_establishments"] = (
+            int(category_entry["non_individual_establishments"]) + non_individual_count
+        )
         category_entry.setdefault("subcategories", []).append(
             {
                 "subcategory_id": row.subcategory_id,
                 "naf_code": row.naf_code,
                 "name": row.subcategory_name,
                 "establishment_count": sub_count,
+                "individual_establishments": individual_count,
+                "non_individual_establishments": non_individual_count,
                 "google_found": google_found,
                 "google_not_found": google_not_found,
                 "google_insufficient": google_insufficient,
@@ -530,6 +558,7 @@ def _build_naf_category_breakdown(session: Session) -> list[dict[str, object]]:
                 "listing_recent_missing_contact": listing_recent_missing_contact,
                 "listing_not_recent": listing_not_recent,
                 "listing_unknown": listing_unknown,
+                "linkedin_found": linkedin_found,
             }
         )
 
@@ -743,6 +772,8 @@ def build_naf_analytics(
 
     rows = session.execute(base_query).all()
 
+    creation_series = _build_creation_date_series(session, start_date, end_date, period_format)
+
     # Build result structure
     items_map: dict[str, NafAnalyticsItem] = {}
     global_totals = _empty_analytics_point("")
@@ -796,7 +827,65 @@ def build_naf_analytics(
         aggregation=aggregation,
         items=list(items_map.values()),
         global_totals=global_totals,
+        creation_series=creation_series,
     )
+
+
+def _build_creation_date_series(
+    session: Session,
+    start_date: date,
+    end_date: date,
+    period_format: str,
+) -> list[dict[str, object]]:
+    period_expr = func.to_char(models.Establishment.date_creation, period_format).label("period")
+    rows = (
+        session.execute(
+            select(
+                period_expr,
+                func.count(models.Establishment.siret).label("count"),
+            )
+            .where(
+                models.Establishment.date_creation.is_not(None),
+                models.Establishment.date_creation >= start_date,
+                models.Establishment.date_creation <= end_date,
+            )
+            .group_by(period_expr)
+            .order_by(period_expr)
+        ).all()
+    )
+
+    counts_map = {row.period: int(row.count or 0) for row in rows if row.period}
+    periods = _iter_periods(start_date, end_date, period_format)
+    return [{"period": period, "count": counts_map.get(period, 0)} for period in periods]
+
+
+def _iter_periods(start_date: date, end_date: date, period_format: str) -> list[str]:
+    periods: list[str] = []
+    if period_format == "YYYY-MM-DD":
+        cursor = start_date
+        while cursor <= end_date:
+            periods.append(cursor.isoformat())
+            cursor += timedelta(days=1)
+        return periods
+
+    if period_format == "IYYY-\"W\"IW":
+        cursor = start_date
+        while cursor <= end_date:
+            iso_year, iso_week, _ = cursor.isocalendar()
+            label = f"{iso_year}-W{iso_week:02d}"
+            if not periods or periods[-1] != label:
+                periods.append(label)
+            cursor += timedelta(days=7)
+        return periods
+
+    cursor = start_date.replace(day=1)
+    end_marker = end_date.replace(day=1)
+    while cursor <= end_marker:
+        periods.append(f"{cursor.year}-{cursor.month:02d}")
+        year = cursor.year + (1 if cursor.month == 12 else 0)
+        month = 1 if cursor.month == 12 else cursor.month + 1
+        cursor = cursor.replace(year=year, month=month)
+    return periods
 
 
 def _empty_analytics_point(period: str) -> NafAnalyticsTimePoint:

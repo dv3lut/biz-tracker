@@ -204,7 +204,7 @@ def debug_director_linkedin(
         company=company_name,
     )
 
-    client = ApifyClient(settings.apify)
+    client = ApifyClient()
     result = client.search_linkedin_profile(search_input)
 
     retried_with_legal_unit = False
