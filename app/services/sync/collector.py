@@ -1,12 +1,15 @@
 """Collection helpers for synchronization runs."""
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta
 from typing import Sequence
 
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.orm import Session, selectinload
 
 from app.db import models
+from app.db.session import session_scope
 from app.observability import log_event, serialize_alert, serialize_establishment
 from app.services.alerts.alert_service import AlertService
 from app.services.sync.day_replay import (
@@ -184,144 +187,166 @@ class SyncCollectorMixin(SyncPersistenceMixin):
         google_pending_count = 0
         google_api_call_count = 0
         google_api_error_count = 0
+        linkedin_summary: dict[str, object] = {}
+        linkedin_future = None
+        linkedin_executor: ThreadPoolExecutor | None = None
+        should_parallelize_linkedin = bool(context.mode.google_enabled and context.mode.linkedin_enabled)
+        establishment_ids: list[object] = []
+        if should_parallelize_linkedin and new_entities_total:
+            establishment_ids = [est.id for est in new_entities_total if getattr(est, "id", None)]
+            if establishment_ids:
+                linkedin_executor = ThreadPoolExecutor(max_workers=1)
+                linkedin_future = linkedin_executor.submit(
+                    self._run_linkedin_enrichment_parallel,
+                    context,
+                    establishment_ids,
+                )
         google_candidates, force_refresh_google = self._resolve_google_candidates(
             context,
             new_entities_total,
             naf_codes,
         )
 
-        if context.mode.google_enabled:
-            # Désactiver les alertes si months_back est fourni (rattrapage historique)
-            is_backfill = context.months_back is not None
-            alerts_enabled = context.mode.dispatch_alerts and not is_backfill
-            alert_service = (
-                AlertService(
-                    context.session,
-                    context.run,
-                    client_notifications_enabled=context.client_notifications_enabled,
-                    admin_notifications_enabled=context.admin_notifications_enabled,
-                    target_client_ids=context.target_client_ids,
+        try:
+            if context.mode.google_enabled:
+                # Désactiver les alertes si months_back est fourni (rattrapage historique)
+                is_backfill = context.months_back is not None
+                alerts_enabled = context.mode.dispatch_alerts and not is_backfill
+                alert_service = (
+                    AlertService(
+                        context.session,
+                        context.run,
+                        client_notifications_enabled=context.client_notifications_enabled,
+                        admin_notifications_enabled=context.admin_notifications_enabled,
+                        target_client_ids=context.target_client_ids,
+                    )
+                    if alerts_enabled
+                    else None
                 )
-                if alerts_enabled
-                else None
-            )
-            include_backlog = not force_refresh_google
-            progress_callback = create_google_progress_callback(context.session, context.run)
-            enrichment_result, alerts_created = run_google_enrichment(
-                session=context.session,
-                targets=google_candidates,
-                include_backlog=include_backlog,
-                reset_google_state=False,
-                recheck_all=force_refresh_google,
-                alert_service=alert_service,
-                progress_callback=progress_callback,
-            )
+                include_backlog = not force_refresh_google
+                progress_callback = create_google_progress_callback(context.session, context.run)
+                enrichment_result, alerts_created = run_google_enrichment(
+                    session=context.session,
+                    targets=google_candidates,
+                    include_backlog=include_backlog,
+                    reset_google_state=False,
+                    recheck_all=force_refresh_google,
+                    alert_service=alert_service,
+                    progress_callback=progress_callback,
+                )
 
-            google_queue_count = enrichment_result.queue_count
-            google_eligible_count = enrichment_result.eligible_count
-            google_matched_count = enrichment_result.matched_count
-            google_pending_count = enrichment_result.pending_count
-            google_api_call_count = enrichment_result.api_call_count
-            google_api_error_count = enrichment_result.api_error_count
-            missing_contact_checked_count = enrichment_result.missing_contact_checked_count
-            missing_contact_updated_count = enrichment_result.missing_contact_updated_count
-            retry_backlog_count = enrichment_result.retry_backlog_count
-            retry_backlog_age_buckets = enrichment_result.retry_backlog_age_buckets
-            missing_contact_age_buckets = enrichment_result.missing_contact_age_buckets
+                google_queue_count = enrichment_result.queue_count
+                google_eligible_count = enrichment_result.eligible_count
+                google_matched_count = enrichment_result.matched_count
+                google_pending_count = enrichment_result.pending_count
+                google_api_call_count = enrichment_result.api_call_count
+                google_api_error_count = enrichment_result.api_error_count
+                missing_contact_checked_count = enrichment_result.missing_contact_checked_count
+                missing_contact_updated_count = enrichment_result.missing_contact_updated_count
+                retry_backlog_count = enrichment_result.retry_backlog_count
+                retry_backlog_age_buckets = enrichment_result.retry_backlog_age_buckets
+                missing_contact_age_buckets = enrichment_result.missing_contact_age_buckets
 
-            context.run.google_queue_count = google_queue_count
-            context.run.google_eligible_count = google_eligible_count
-            context.run.google_matched_count = google_matched_count
-            context.run.google_pending_count = google_pending_count
-            context.run.google_api_call_count = google_api_call_count
+                context.run.google_queue_count = google_queue_count
+                context.run.google_eligible_count = google_eligible_count
+                context.run.google_matched_count = google_matched_count
+                context.run.google_pending_count = google_pending_count
+                context.run.google_api_call_count = google_api_call_count
 
-            google_error_rate = (
-                round(google_api_error_count / google_api_call_count, 4)
-                if google_api_call_count > 0
-                else 0.0
-            )
+                google_error_rate = (
+                    round(google_api_error_count / google_api_call_count, 4)
+                    if google_api_call_count > 0
+                    else 0.0
+                )
 
-            log_event(
-                "sync.google.summary",
-                run_id=str(context.run.id),
-                scope_key=context.run.scope_key,
-                queue_count=google_queue_count,
-                eligible_count=google_eligible_count,
-                matched_count=google_matched_count,
-                remaining_count=google_pending_count,
-                api_call_count=google_api_call_count,
-                api_error_count=google_api_error_count,
-                error_rate=google_error_rate,
-                missing_contact_checked_count=missing_contact_checked_count,
-                missing_contact_updated_count=missing_contact_updated_count,
-                retry_backlog_count=retry_backlog_count,
-                retry_backlog_age_buckets=retry_backlog_age_buckets,
-                missing_contact_age_buckets=missing_contact_age_buckets,
-                new_establishment_count=len(new_entities_total),
-                google_candidate_count=len(google_candidates),
-                force_refresh=force_refresh_google,
-                reset_google_state=False,
-                recheck_all=force_refresh_google,
-                include_backlog=include_backlog,
-            )
-
-            tag_google_error_rate(
-                context.run,
-                api_call_count=google_api_call_count,
-                api_error_count=google_api_error_count,
-                threshold=0.10,
-                event_name="sync.google.error_rate.high",
-            )
-
-            if enrichment_result.matches:
-                for match in enrichment_result.matches:
-                    if match.created_run_id == context.run.id:
-                        google_immediate_matches.append(match)
-                    else:
-                        google_late_matches.append(match)
-                context.run.google_immediate_matched_count = len(google_immediate_matches)
-                context.run.google_late_matched_count = len(google_late_matches)
-
-                google_matches_payload = [serialize_establishment(item) for item in enrichment_result.matches]
                 log_event(
-                    "sync.google.enrichment",
+                    "sync.google.summary",
                     run_id=str(context.run.id),
                     scope_key=context.run.scope_key,
-                    matched_count=len(google_matches_payload),
-                    immediate_matched_count=context.run.google_immediate_matched_count,
-                    late_matched_count=context.run.google_late_matched_count,
-                    establishments=google_matches_payload,
+                    queue_count=google_queue_count,
+                    eligible_count=google_eligible_count,
+                    matched_count=google_matched_count,
+                    remaining_count=google_pending_count,
+                    api_call_count=google_api_call_count,
+                    api_error_count=google_api_error_count,
+                    error_rate=google_error_rate,
+                    missing_contact_checked_count=missing_contact_checked_count,
+                    missing_contact_updated_count=missing_contact_updated_count,
+                    retry_backlog_count=retry_backlog_count,
+                    retry_backlog_age_buckets=retry_backlog_age_buckets,
+                    missing_contact_age_buckets=missing_contact_age_buckets,
+                    new_establishment_count=len(new_entities_total),
+                    google_candidate_count=len(google_candidates),
+                    force_refresh=force_refresh_google,
+                    reset_google_state=False,
+                    recheck_all=force_refresh_google,
+                    include_backlog=include_backlog,
                 )
-                for match_payload in google_matches_payload:
+
+                tag_google_error_rate(
+                    context.run,
+                    api_call_count=google_api_call_count,
+                    api_error_count=google_api_error_count,
+                    threshold=0.10,
+                    event_name="sync.google.error_rate.high",
+                )
+
+                if enrichment_result.matches:
+                    for match in enrichment_result.matches:
+                        if match.created_run_id == context.run.id:
+                            google_immediate_matches.append(match)
+                        else:
+                            google_late_matches.append(match)
+                    context.run.google_immediate_matched_count = len(google_immediate_matches)
+                    context.run.google_late_matched_count = len(google_late_matches)
+
+                    google_matches_payload = [serialize_establishment(item) for item in enrichment_result.matches]
                     log_event(
-                        "sync.google.match",
+                        "sync.google.enrichment",
                         run_id=str(context.run.id),
                         scope_key=context.run.scope_key,
-                        establishment=match_payload,
+                        matched_count=len(google_matches_payload),
+                        immediate_matched_count=context.run.google_immediate_matched_count,
+                        late_matched_count=context.run.google_late_matched_count,
+                        establishments=google_matches_payload,
                     )
+                    for match_payload in google_matches_payload:
+                        log_event(
+                            "sync.google.match",
+                            run_id=str(context.run.id),
+                            scope_key=context.run.scope_key,
+                            establishment=match_payload,
+                        )
 
-            alerts_payload = self._log_alerts_created(context.run, alerts_created)
-        else:
-            log_event(
-                "sync.google.skipped",
-                run_id=str(context.run.id),
-                scope_key=context.run.scope_key,
-                reason="mode_sirene_only",
-            )
-            context.run.google_queue_count = 0
-            context.run.google_eligible_count = 0
-            context.run.google_matched_count = 0
-            context.run.google_pending_count = 0
-            context.run.google_api_call_count = 0
-            context.run.google_immediate_matched_count = 0
-            context.run.google_late_matched_count = 0
-            alerts_payload = []
+                alerts_payload = self._log_alerts_created(context.run, alerts_created)
+            else:
+                log_event(
+                    "sync.google.skipped",
+                    run_id=str(context.run.id),
+                    scope_key=context.run.scope_key,
+                    reason="mode_sirene_only",
+                )
+                context.run.google_queue_count = 0
+                context.run.google_eligible_count = 0
+                context.run.google_matched_count = 0
+                context.run.google_pending_count = 0
+                context.run.google_api_call_count = 0
+                context.run.google_immediate_matched_count = 0
+                context.run.google_late_matched_count = 0
+                alerts_payload = []
+        finally:
+            if linkedin_executor is not None:
+                linkedin_executor.shutdown(wait=True)
 
         # --- LinkedIn enrichment (for physical person directors) ---
-        linkedin_summary = self._run_linkedin_enrichment(
-            context,
-            new_entities_total,
-        )
+        if linkedin_future is not None:
+            linkedin_summary = linkedin_future.result()
+            self._apply_linkedin_summary(context.run, linkedin_summary)
+        else:
+            linkedin_summary = self._run_linkedin_enrichment(
+                context,
+                new_entities_total,
+            )
 
         context.session.commit()
 
@@ -448,6 +473,9 @@ class SyncCollectorMixin(SyncPersistenceMixin):
         self,
         context: SyncContext,
         establishments: Sequence[models.Establishment],
+        *,
+        session_override: Session | None = None,
+        update_run_counters: bool = True,
     ) -> dict[str, object]:
         """Run LinkedIn enrichment for directors of new establishments.
 
@@ -478,7 +506,9 @@ class SyncCollectorMixin(SyncPersistenceMixin):
             )
             return {}
 
-        linkedin_service = LinkedInLookupService(context.session)
+        session = session_override or context.session
+        update_counters = bool(update_run_counters and session_override is None)
+        linkedin_service = LinkedInLookupService(session)
         if not linkedin_service.enabled:
             log_event(
                 "sync.linkedin.skipped",
@@ -488,35 +518,40 @@ class SyncCollectorMixin(SyncPersistenceMixin):
             )
             return {}
 
-        # Create progress callback to update run counters
-        def linkedin_progress_callback(
-            total: int,
-            searched: int,
-            found: int,
-            not_found: int,
-            error: int,
-        ) -> None:
-            context.run.linkedin_queue_count = total
-            context.run.linkedin_searched_count = searched
-            context.run.linkedin_found_count = found
-            context.run.linkedin_not_found_count = not_found
-            context.run.linkedin_error_count = error
-            context.session.flush()
+        progress_callback = None
+        if update_counters:
+            # Create progress callback to update run counters
+            def linkedin_progress_callback(
+                total: int,
+                searched: int,
+                found: int,
+                not_found: int,
+                error: int,
+            ) -> None:
+                context.run.linkedin_queue_count = total
+                context.run.linkedin_searched_count = searched
+                context.run.linkedin_found_count = found
+                context.run.linkedin_not_found_count = not_found
+                context.run.linkedin_error_count = error
+                session.flush()
+
+            progress_callback = linkedin_progress_callback
 
         try:
             result = linkedin_service.enrich_batch(
                 establishments,
                 run_id=context.run.id,
                 force_refresh=False,
-                progress_callback=linkedin_progress_callback,
+                progress_callback=progress_callback,
             )
 
             # Final update of run counters
-            context.run.linkedin_queue_count = result.total_directors
-            context.run.linkedin_searched_count = result.searched_count
-            context.run.linkedin_found_count = result.found_count
-            context.run.linkedin_not_found_count = result.not_found_count
-            context.run.linkedin_error_count = result.error_count
+            if update_counters:
+                context.run.linkedin_queue_count = result.total_directors
+                context.run.linkedin_searched_count = result.searched_count
+                context.run.linkedin_found_count = result.found_count
+                context.run.linkedin_not_found_count = result.not_found_count
+                context.run.linkedin_error_count = result.error_count
 
             summary = {
                 "total_directors": result.total_directors,
@@ -540,6 +575,37 @@ class SyncCollectorMixin(SyncPersistenceMixin):
 
         finally:
             linkedin_service.close()
+
+    def _run_linkedin_enrichment_parallel(
+        self,
+        context: SyncContext,
+        establishment_ids: Sequence[object],
+    ) -> dict[str, object]:
+        if not establishment_ids:
+            return {}
+
+        with session_scope() as session:
+            stmt = (
+                select(models.Establishment)
+                .where(models.Establishment.id.in_(establishment_ids))
+                .options(selectinload(models.Establishment.directors))
+            )
+            establishments = session.execute(stmt).scalars().all()
+            return self._run_linkedin_enrichment(
+                context,
+                establishments,
+                session_override=session,
+                update_run_counters=False,
+            )
+
+    def _apply_linkedin_summary(self, run: models.SyncRun, summary: dict[str, object]) -> None:
+        if not summary:
+            return
+        run.linkedin_queue_count = int(summary.get("total_directors") or 0)
+        run.linkedin_searched_count = int(summary.get("searched_count") or 0)
+        run.linkedin_found_count = int(summary.get("found_count") or 0)
+        run.linkedin_not_found_count = int(summary.get("not_found_count") or 0)
+        run.linkedin_error_count = int(summary.get("error_count") or 0)
 
     def _compute_since_creation(self, state: models.SyncState, *, months_back: int) -> date:
         baseline = subtract_months(self._current_date(), months_back)
