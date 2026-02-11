@@ -42,10 +42,14 @@ def _build_leader_name(fields: dict[str, object]) -> str | None:
 )
 def fetch_sirene_new_establishments(payload: SireneNewBusinessesRequest) -> SireneNewBusinessesResponse:
     end_date = payload.end_date or payload.start_date
+    last_treatment_from = payload.last_treatment_from
+    last_treatment_to = payload.last_treatment_to
     service = SyncService()
     query = service._build_restaurant_query(
         payload.naf_codes,
         creation_range=(payload.start_date, end_date),
+        last_treatment_from=last_treatment_from,
+        last_treatment_to=last_treatment_to,
     )
 
     client = SireneClient()
@@ -129,6 +133,8 @@ def fetch_sirene_new_establishments(payload: SireneNewBusinessesRequest) -> Sire
         "tools.sirene.new_businesses",
         start_date=payload.start_date.isoformat(),
         end_date=end_date.isoformat(),
+        last_treatment_from=last_treatment_from.isoformat() if last_treatment_from else None,
+        last_treatment_to=last_treatment_to.isoformat() if last_treatment_to else None,
         naf_codes=payload.naf_codes,
         region_codes=None,
         department_codes=sorted(department_filter) if department_filter else None,

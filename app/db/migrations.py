@@ -284,6 +284,24 @@ def run_schema_upgrades(engine: Engine) -> None:
         ALTER TABLE establishments
         ADD COLUMN IF NOT EXISTS google_category_match_confidence DOUBLE PRECISION
         """,
+        """
+        ALTER TABLE establishments
+        ADD COLUMN IF NOT EXISTS date_creation_current DATE
+        """,
+        """
+        ALTER TABLE establishments
+        ADD COLUMN IF NOT EXISTS date_dernier_traitement_etablissement_current TIMESTAMP
+        """,
+        """
+        UPDATE establishments
+        SET date_creation_current = date_creation
+        WHERE date_creation_current IS NULL
+        """,
+        """
+        UPDATE establishments
+        SET date_dernier_traitement_etablissement_current = date_dernier_traitement_etablissement
+        WHERE date_dernier_traitement_etablissement_current IS NULL
+        """,
     """
     ALTER TABLE establishments
     ADD COLUMN IF NOT EXISTS google_listing_origin_at TIMESTAMP

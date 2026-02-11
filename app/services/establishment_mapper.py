@@ -87,6 +87,10 @@ def extract_fields(payload: dict[str, Any]) -> Dict[str, Any]:
         "date_debut_activite": parse_date(current_period.get("dateDebut")),
         "date_dernier_traitement_etablissement": parse_datetime(payload.get("dateDernierTraitementEtablissement")),
         "date_dernier_traitement_unite_legale": parse_datetime(unite_legale.get("dateDernierTraitementUniteLegale")),
+        "date_creation_current": parse_date(payload.get("dateCreationEtablissement")),
+        "date_dernier_traitement_etablissement_current": parse_datetime(
+            payload.get("dateDernierTraitementEtablissement")
+        ),
         "name": extract_name(payload),
         "denomination_unite_legale": _clean(unite_legale.get("denominationUniteLegale")),
         "denomination_usuelle_unite_legale": _clean(unite_legale.get("denominationUsuelle1UniteLegale")),

@@ -173,7 +173,7 @@ class SyncSettings(BaseModel):
         description="Polling interval (in minutes) for the background sync scheduler.",
     )
     incremental_lookback_months: int = Field(
-        default=1,
+        default=3,
         ge=0,
         description="Nombre de mois en arrière à vérifier lors des synchros incrémentales auto pour capturer les créations administratives passées.",
     )

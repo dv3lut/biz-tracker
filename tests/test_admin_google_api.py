@@ -86,6 +86,7 @@ class ManualGoogleCheckRouteTests(TestCase):
         establishment.libelle_commune = "Paris"
         establishment.libelle_commune_etranger = None
         establishment.date_creation = None
+        establishment.date_creation_current = None
         establishment.date_debut_activite = None
         establishment.created_run_id = None
         establishment.last_run_id = None

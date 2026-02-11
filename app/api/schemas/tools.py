@@ -14,6 +14,18 @@ class SireneNewBusinessesRequest(BaseModel):
         default=None,
         description="Date de fin (incluse). Si absente, la date de début est utilisée.",
     )
+    last_treatment_from: date | None = Field(
+        default=None,
+        description=(
+            "Filtrer sur la date du dernier traitement établissement à partir de cette date incluse (YYYY-MM-DD)."
+        ),
+    )
+    last_treatment_to: date | None = Field(
+        default=None,
+        description=(
+            "Filtrer sur la date du dernier traitement établissement jusqu'à cette date incluse (YYYY-MM-DD)."
+        ),
+    )
     naf_codes: list[str] = Field(
         description="Liste des codes NAF à cibler (ex: 56.10A).",
         min_length=1,
@@ -57,6 +69,11 @@ class SireneNewBusinessesRequest(BaseModel):
     def validate_dates(self) -> "SireneNewBusinessesRequest":
         if self.end_date and self.end_date < self.start_date:
             raise ValueError("La date de fin doit être postérieure ou égale à la date de début.")
+        if self.last_treatment_from and self.last_treatment_to:
+            if self.last_treatment_to < self.last_treatment_from:
+                raise ValueError(
+                    "La date de fin du dernier traitement doit être postérieure ou égale à la date de début."
+                )
         return self
 
 

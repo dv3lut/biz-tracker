@@ -35,6 +35,8 @@ class Establishment(Base):
     date_debut_activite: Mapped[date | None] = mapped_column(Date)
     date_dernier_traitement_etablissement: Mapped[datetime | None] = mapped_column(DateTime)
     date_dernier_traitement_unite_legale: Mapped[datetime | None] = mapped_column(DateTime)
+    date_creation_current: Mapped[date | None] = mapped_column(Date)
+    date_dernier_traitement_etablissement_current: Mapped[datetime | None] = mapped_column(DateTime)
 
     name: Mapped[str | None] = mapped_column(String(255), index=True)
     denomination_unite_legale: Mapped[str | None] = mapped_column(String(255))

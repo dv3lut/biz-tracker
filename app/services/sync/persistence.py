@@ -27,6 +27,8 @@ class SyncPersistenceMixin:
         *,
         since_creation: date | None = None,
         creation_range: tuple[date, date] | None = None,
+        last_treatment_from: date | None = None,
+        last_treatment_to: date | None = None,
     ) -> str:
         normalized_codes: list[str] = []
         for code in naf_codes:
@@ -50,6 +52,17 @@ class SyncPersistenceMixin:
         elif since_creation:
             creation_clause = f"dateCreationEtablissement:[{since_creation.isoformat()} TO *]"
             clauses.append(creation_clause)
+
+        if last_treatment_from or last_treatment_to:
+            if last_treatment_from and last_treatment_to:
+                treatment_clause = (
+                    f"dateDernierTraitementEtablissement:[{last_treatment_from.isoformat()} TO {last_treatment_to.isoformat()}]"
+                )
+            elif last_treatment_from:
+                treatment_clause = f"dateDernierTraitementEtablissement:[{last_treatment_from.isoformat()} TO *]"
+            else:
+                treatment_clause = f"dateDernierTraitementEtablissement:[* TO {last_treatment_to.isoformat()}]"
+            clauses.append(treatment_clause)
 
         return " AND ".join(clauses)
 
@@ -124,6 +137,8 @@ class SyncPersistenceMixin:
             if entity:
                 changed_fields: list[str] = []
                 for key, value in fields.items():
+                    if key in {"date_creation", "date_dernier_traitement_etablissement"}:
+                        continue
                     current_value = getattr(entity, key)
                     if current_value != value:
                         setattr(entity, key, value)

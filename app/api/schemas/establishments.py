@@ -39,6 +39,7 @@ class EstablishmentOut(BaseModel):
     code_postal: str | None
     libelle_commune: str | None
     date_creation: Date | None
+    date_creation_current: Date | None
     date_debut_activite: Date | None
     first_seen_at: datetime
     last_seen_at: datetime
@@ -85,6 +86,7 @@ class EstablishmentDetailOut(EstablishmentOut):
     pseudonyme: str | None
     sexe: str | None
     date_dernier_traitement_etablissement: datetime | None
+    date_dernier_traitement_etablissement_current: datetime | None
     date_dernier_traitement_unite_legale: datetime | None
     complement_adresse: str | None
     numero_voie: str | None

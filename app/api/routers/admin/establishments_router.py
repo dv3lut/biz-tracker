@@ -26,6 +26,8 @@ def _build_establishments_query(
     region_codes: list[str] | None,
     added_from: date | None,
     added_to: date | None,
+    last_treatment_from: date | None,
+    last_treatment_to: date | None,
     google_check_status: str | None,
     is_individual: bool | None,
     has_linkedin: bool | None,
@@ -37,6 +39,10 @@ def _build_establishments_query(
         department_codes = None
     if isinstance(linkedin_statuses, QueryParam):
         linkedin_statuses = None
+    if isinstance(last_treatment_from, QueryParam):
+        last_treatment_from = None
+    if isinstance(last_treatment_to, QueryParam):
+        last_treatment_to = None
 
     query = session.query(models.Establishment).filter(models.Establishment.etat_administratif == "A")
 
@@ -97,6 +103,13 @@ def _build_establishments_query(
     if added_to is not None:
         end_exclusive = datetime.combine(added_to, time.min) + timedelta(days=1)
         query = query.filter(models.Establishment.first_seen_at < end_exclusive)
+
+    if last_treatment_from is not None:
+        start = datetime.combine(last_treatment_from, time.min)
+        query = query.filter(models.Establishment.date_dernier_traitement_etablissement >= start)
+    if last_treatment_to is not None:
+        end_exclusive = datetime.combine(last_treatment_to, time.min) + timedelta(days=1)
+        query = query.filter(models.Establishment.date_dernier_traitement_etablissement < end_exclusive)
 
     if google_check_status:
         cleaned_status = google_check_status.strip().lower()
@@ -198,6 +211,20 @@ def list_establishments(
             "Pour une date exacte, utiliser la même date pour added_from et added_to."
         ),
     ),
+    last_treatment_from: date | None = Query(
+        None,
+        description=(
+            "Filtrer sur la date du dernier traitement établissement à partir de cette date incluse (YYYY-MM-DD). "
+            "Peut être utilisé seul (borne ouverte) ou combiné avec last_treatment_to."
+        ),
+    ),
+    last_treatment_to: date | None = Query(
+        None,
+        description=(
+            "Filtrer sur la date du dernier traitement établissement jusqu'à cette date incluse (YYYY-MM-DD). "
+            "Peut être utilisé seul (borne ouverte) ou combiné avec last_treatment_from."
+        ),
+    ),
     google_check_status: str | None = Query(
         None,
         description=(
@@ -227,6 +254,8 @@ def list_establishments(
         region_codes=region_codes,
         added_from=added_from,
         added_to=added_to,
+        last_treatment_from=last_treatment_from,
+        last_treatment_to=last_treatment_to,
         google_check_status=google_check_status,
         is_individual=is_individual,
         has_linkedin=has_linkedin,

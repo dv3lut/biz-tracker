@@ -101,6 +101,8 @@ class SireneToolsRouteTests(TestCase):
         mock_service._build_restaurant_query.assert_called_once_with(
             payload.naf_codes,
             creation_range=(payload.start_date, payload.start_date),
+            last_treatment_from=None,
+            last_treatment_to=None,
         )
         mock_client.search_establishments.assert_called_once()
         mock_client.close.assert_called_once()
