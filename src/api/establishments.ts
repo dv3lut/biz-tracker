@@ -192,6 +192,8 @@ interface ListEstablishmentsParams {
   departmentCodes?: string[];
   addedFrom?: string;
   addedTo?: string;
+  lastTreatmentFrom?: string;
+  lastTreatmentTo?: string;
   googleCheckStatus?: string;
   isIndividual?: boolean;
   hasLinkedin?: boolean;
@@ -232,6 +234,12 @@ const buildEstablishmentsQuery = (params: ListEstablishmentsParams = {}): URLSea
   }
   if (params.addedTo) {
     query.set("added_to", params.addedTo);
+  }
+  if (params.lastTreatmentFrom) {
+    query.set("last_treatment_from", params.lastTreatmentFrom);
+  }
+  if (params.lastTreatmentTo) {
+    query.set("last_treatment_to", params.lastTreatmentTo);
   }
   if (params.googleCheckStatus) {
     query.set("google_check_status", params.googleCheckStatus);

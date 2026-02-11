@@ -35,6 +35,8 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
   const [draftDepartmentCodes, setDraftDepartmentCodes] = useState<string[]>([]);
   const [draftAddedFrom, setDraftAddedFrom] = useState("");
   const [draftAddedTo, setDraftAddedTo] = useState("");
+  const [draftLastTreatmentFrom, setDraftLastTreatmentFrom] = useState("");
+  const [draftLastTreatmentTo, setDraftLastTreatmentTo] = useState("");
   const [draftIndividualFilter, setDraftIndividualFilter] = useState<EstablishmentIndividualFilter>("all");
   const [draftGoogleCheckStatus, setDraftGoogleCheckStatus] = useState("");
   const [draftLinkedinStatuses, setDraftLinkedinStatuses] = useState<LinkedInStatus[]>([]);
@@ -44,6 +46,8 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
   const [departmentCodes, setDepartmentCodes] = useState<string[]>([]);
   const [addedFrom, setAddedFrom] = useState("");
   const [addedTo, setAddedTo] = useState("");
+  const [lastTreatmentFrom, setLastTreatmentFrom] = useState("");
+  const [lastTreatmentTo, setLastTreatmentTo] = useState("");
   const [individualFilter, setIndividualFilter] = useState<EstablishmentIndividualFilter>("all");
   const [googleCheckStatus, setGoogleCheckStatus] = useState("");
   const [linkedinStatuses, setLinkedinStatuses] = useState<LinkedInStatus[]>([]);
@@ -76,6 +80,8 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
       departmentCodes,
       addedFrom,
       addedTo,
+      lastTreatmentFrom,
+      lastTreatmentTo,
       individualFilter,
       googleCheckStatus,
       linkedinStatuses,
@@ -89,6 +95,8 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
         departmentCodes: departmentCodes.length > 0 ? departmentCodes : undefined,
         addedFrom: addedFrom ? addedFrom : undefined,
         addedTo: addedTo ? addedTo : undefined,
+        lastTreatmentFrom: lastTreatmentFrom ? lastTreatmentFrom : undefined,
+        lastTreatmentTo: lastTreatmentTo ? lastTreatmentTo : undefined,
         googleCheckStatus: googleCheckStatus ? googleCheckStatus : undefined,
         isIndividual:
           individualFilter === "all" ? undefined : individualFilter === "individual",
@@ -248,6 +256,14 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     setDraftAddedTo(value);
   }, []);
 
+  const handleLastTreatmentFromChange = useCallback((value: string) => {
+    setDraftLastTreatmentFrom(value);
+  }, []);
+
+  const handleLastTreatmentToChange = useCallback((value: string) => {
+    setDraftLastTreatmentTo(value);
+  }, []);
+
   const handleIndividualFilterChange = useCallback((value: EstablishmentIndividualFilter) => {
     setDraftIndividualFilter(value);
   }, []);
@@ -266,6 +282,8 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     setDepartmentCodes(draftDepartmentCodes);
     setAddedFrom(draftAddedFrom);
     setAddedTo(draftAddedTo);
+    setLastTreatmentFrom(draftLastTreatmentFrom);
+    setLastTreatmentTo(draftLastTreatmentTo);
     setIndividualFilter(draftIndividualFilter);
     setGoogleCheckStatus(draftGoogleCheckStatus);
     setLinkedinStatuses(draftLinkedinStatuses);
@@ -273,6 +291,8 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
   }, [
     draftAddedFrom,
     draftAddedTo,
+    draftLastTreatmentFrom,
+    draftLastTreatmentTo,
     draftGoogleCheckStatus,
     draftIndividualFilter,
     draftNafCodes,
@@ -287,6 +307,8 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     setDraftDepartmentCodes([]);
     setDraftAddedFrom("");
     setDraftAddedTo("");
+    setDraftLastTreatmentFrom("");
+    setDraftLastTreatmentTo("");
     setDraftIndividualFilter("all");
     setDraftGoogleCheckStatus("");
     setDraftLinkedinStatuses([]);
@@ -296,6 +318,8 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     setDepartmentCodes([]);
     setAddedFrom("");
     setAddedTo("");
+    setLastTreatmentFrom("");
+    setLastTreatmentTo("");
     setIndividualFilter("all");
     setGoogleCheckStatus("");
     setLinkedinStatuses([]);
@@ -310,6 +334,12 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
       return true;
     }
     if (draftAddedTo !== addedTo) {
+      return true;
+    }
+    if (draftLastTreatmentFrom !== lastTreatmentFrom) {
+      return true;
+    }
+    if (draftLastTreatmentTo !== lastTreatmentTo) {
       return true;
     }
     if (draftIndividualFilter !== individualFilter) {
@@ -345,12 +375,16 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     addedTo,
     draftAddedFrom,
     draftAddedTo,
+    draftLastTreatmentFrom,
+    draftLastTreatmentTo,
     draftGoogleCheckStatus,
     draftIndividualFilter,
     draftNafCodes,
     draftQuery,
     googleCheckStatus,
     individualFilter,
+    lastTreatmentFrom,
+    lastTreatmentTo,
     nafCodes,
     query,
     draftDepartmentCodes,
@@ -388,6 +422,8 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
       departmentCodes={draftDepartmentCodes}
       addedFrom={draftAddedFrom}
       addedTo={draftAddedTo}
+      lastTreatmentFrom={draftLastTreatmentFrom}
+      lastTreatmentTo={draftLastTreatmentTo}
       individualFilter={draftIndividualFilter}
       googleCheckStatus={draftGoogleCheckStatus}
       linkedinStatuses={draftLinkedinStatuses}
@@ -399,6 +435,8 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
       onDepartmentCodesChange={handleDepartmentCodesChange}
       onAddedFromChange={handleAddedFromChange}
       onAddedToChange={handleAddedToChange}
+      onLastTreatmentFromChange={handleLastTreatmentFromChange}
+      onLastTreatmentToChange={handleLastTreatmentToChange}
       onApplyFilters={handleApplyFilters}
       hasPendingFilters={hasPendingFilters}
       onResetFilters={handleResetFilters}

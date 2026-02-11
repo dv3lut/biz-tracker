@@ -26,6 +26,8 @@ interface EstablishmentsSectionProps {
   departmentCodes: string[];
   addedFrom: string;
   addedTo: string;
+  lastTreatmentFrom: string;
+  lastTreatmentTo: string;
   individualFilter: EstablishmentIndividualFilter;
   googleCheckStatus: string;
   linkedinStatuses: LinkedInStatus[];
@@ -37,6 +39,8 @@ interface EstablishmentsSectionProps {
   onDepartmentCodesChange: (value: string[]) => void;
   onAddedFromChange: (value: string) => void;
   onAddedToChange: (value: string) => void;
+  onLastTreatmentFromChange: (value: string) => void;
+  onLastTreatmentToChange: (value: string) => void;
   onApplyFilters: () => void;
   hasPendingFilters: boolean;
   onResetFilters: () => void;
@@ -77,6 +81,8 @@ export const EstablishmentsSection = ({
   departmentCodes,
   addedFrom,
   addedTo,
+  lastTreatmentFrom,
+  lastTreatmentTo,
   individualFilter,
   googleCheckStatus,
   linkedinStatuses,
@@ -88,6 +94,8 @@ export const EstablishmentsSection = ({
   onDepartmentCodesChange,
   onAddedFromChange,
   onAddedToChange,
+  onLastTreatmentFromChange,
+  onLastTreatmentToChange,
   onApplyFilters,
   hasPendingFilters,
   onResetFilters,
@@ -156,6 +164,14 @@ export const EstablishmentsSection = ({
 
   const handleAddedToChange = (event: ChangeEvent<HTMLInputElement>) => {
     onAddedToChange(event.target.value);
+  };
+
+  const handleLastTreatmentFromChange = (event: ChangeEvent<HTMLInputElement>) => {
+    onLastTreatmentFromChange(event.target.value);
+  };
+
+  const handleLastTreatmentToChange = (event: ChangeEvent<HTMLInputElement>) => {
+    onLastTreatmentToChange(event.target.value);
   };
 
   const handleLimitChange = (event: ChangeEvent<HTMLSelectElement>) => {
@@ -363,6 +379,30 @@ export const EstablishmentsSection = ({
                 type="date"
                 value={addedTo}
                 onChange={handleAddedToChange}
+                title="Pour une date exacte, mettre la même date dans 'du' et 'au'."
+              />
+            </label>
+          </div>
+
+          <div className="establishments-control establishments-control--last-treatment-from">
+            <label className="muted small">
+              Dernier traitement du
+              <input
+                type="date"
+                value={lastTreatmentFrom}
+                onChange={handleLastTreatmentFromChange}
+                title="Pour une date exacte, mettre la même date dans 'du' et 'au'."
+              />
+            </label>
+          </div>
+
+          <div className="establishments-control establishments-control--last-treatment-to">
+            <label className="muted small">
+              au
+              <input
+                type="date"
+                value={lastTreatmentTo}
+                onChange={handleLastTreatmentToChange}
                 title="Pour une date exacte, mettre la même date dans 'du' et 'au'."
               />
             </label>

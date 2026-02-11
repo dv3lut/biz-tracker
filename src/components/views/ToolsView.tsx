@@ -4,6 +4,8 @@ import { SireneNewBusinessesPanel } from "../SireneNewBusinessesPanel";
 type Props = {
   startDate: string;
   endDate: string;
+  lastTreatmentFrom: string;
+  lastTreatmentTo: string;
   nafCodesInput: string;
   selectedNafCodes: string[];
   limit: number;
@@ -17,6 +19,8 @@ type Props = {
   result: SireneNewBusinessesResult | null;
   onStartDateChange: (value: string) => void;
   onEndDateChange: (value: string) => void;
+  onLastTreatmentFromChange: (value: string) => void;
+  onLastTreatmentToChange: (value: string) => void;
   onNafCodesInputChange: (value: string) => void;
   onToggleNafCode: (value: string) => void;
   onDepartmentCodesChange: (value: string[]) => void;
@@ -35,6 +39,8 @@ type Props = {
 export const ToolsView = ({
   startDate,
   endDate,
+  lastTreatmentFrom,
+  lastTreatmentTo,
   nafCodesInput,
   selectedNafCodes,
   limit,
@@ -48,6 +54,8 @@ export const ToolsView = ({
   result,
   onStartDateChange,
   onEndDateChange,
+  onLastTreatmentFromChange,
+  onLastTreatmentToChange,
   onNafCodesInputChange,
   onToggleNafCode,
   onDepartmentCodesChange,
@@ -74,6 +82,8 @@ export const ToolsView = ({
         <SireneNewBusinessesPanel
           startDate={startDate}
           endDate={endDate}
+          lastTreatmentFrom={lastTreatmentFrom}
+          lastTreatmentTo={lastTreatmentTo}
           nafCodesInput={nafCodesInput}
           selectedNafCodes={selectedNafCodes}
           limit={limit}
@@ -87,6 +97,8 @@ export const ToolsView = ({
           result={result}
           onStartDateChange={onStartDateChange}
           onEndDateChange={onEndDateChange}
+          onLastTreatmentFromChange={onLastTreatmentFromChange}
+          onLastTreatmentToChange={onLastTreatmentToChange}
           onNafCodesInputChange={onNafCodesInputChange}
           onToggleNafCode={onToggleNafCode}
           onDepartmentCodesChange={onDepartmentCodesChange}

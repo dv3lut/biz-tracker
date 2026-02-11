@@ -30,7 +30,9 @@
 }
 
 .establishments-control--added-from,
-.establishments-control--added-to {
+.establishments-control--added-to,
+.establishments-control--last-treatment-from,
+.establishments-control--last-treatment-to {
   flex: 0 0 auto;
   min-width: 170px;
 }
@@ -123,6 +125,8 @@
   .establishments-control--naf,
   .establishments-control--added-from,
   .establishments-control--added-to,
+  .establishments-control--last-treatment-from,
+  .establishments-control--last-treatment-to,
   .establishments-control--individual,
   .establishments-control--linkedin-status,
   .establishments-control--pagination {

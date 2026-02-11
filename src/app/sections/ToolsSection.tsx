@@ -30,6 +30,8 @@ type Props = {
 export const ToolsSection = ({ onUnauthorized }: Props) => {
   const [startDate, setStartDate] = useState(buildDefaultStartDate);
   const [endDate, setEndDate] = useState("");
+  const [lastTreatmentFrom, setLastTreatmentFrom] = useState("");
+  const [lastTreatmentTo, setLastTreatmentTo] = useState("");
   const [nafCodesInput, setNafCodesInput] = useState("");
   const [selectedNafCodes, setSelectedNafCodes] = useState<string[]>([]);
   const [selectedDepartmentCodes, setSelectedDepartmentCodes] = useState<string[]>([]);
@@ -139,6 +141,10 @@ export const ToolsSection = ({ onUnauthorized }: Props) => {
       setErrorMessage("La date de début est requise.");
       return;
     }
+    if (lastTreatmentFrom && lastTreatmentTo && lastTreatmentTo < lastTreatmentFrom) {
+      setErrorMessage("La date de fin du dernier traitement doit être postérieure ou égale à la date de début.");
+      return;
+    }
     const parsedCodes = sanitizeNafCodes([
       ...selectedNafCodes,
       ...parseNafInput(nafCodesInput),
@@ -151,16 +157,31 @@ export const ToolsSection = ({ onUnauthorized }: Props) => {
     mutation.mutate({
       startDate,
       endDate: endDate || undefined,
+      lastTreatmentFrom: lastTreatmentFrom || undefined,
+      lastTreatmentTo: lastTreatmentTo || undefined,
       nafCodes: parsedCodes,
       limit,
       departmentCodes: selectedDepartmentCodes.length > 0 ? selectedDepartmentCodes : undefined,
       enrichAnnuaire,
     });
-  }, [startDate, selectedNafCodes, nafCodesInput, endDate, limit, mutation, selectedDepartmentCodes, enrichAnnuaire]);
+  }, [
+    startDate,
+    selectedNafCodes,
+    nafCodesInput,
+    endDate,
+    lastTreatmentFrom,
+    lastTreatmentTo,
+    limit,
+    mutation,
+    selectedDepartmentCodes,
+    enrichAnnuaire,
+  ]);
 
   const handleReset = useCallback(() => {
     setStartDate(buildDefaultStartDate());
     setEndDate("");
+    setLastTreatmentFrom("");
+    setLastTreatmentTo("");
     setNafCodesInput("");
     setSelectedNafCodes([]);
     setSelectedDepartmentCodes([]);
@@ -223,6 +244,8 @@ export const ToolsSection = ({ onUnauthorized }: Props) => {
       <ToolsView
         startDate={startDate}
         endDate={endDate}
+        lastTreatmentFrom={lastTreatmentFrom}
+        lastTreatmentTo={lastTreatmentTo}
         nafCodesInput={nafCodesInput}
         selectedNafCodes={selectedNafCodes}
         limit={limit}
@@ -236,6 +259,8 @@ export const ToolsSection = ({ onUnauthorized }: Props) => {
         result={result}
         onStartDateChange={setStartDate}
         onEndDateChange={setEndDate}
+        onLastTreatmentFromChange={setLastTreatmentFrom}
+        onLastTreatmentToChange={setLastTreatmentTo}
         onNafCodesInputChange={setNafCodesInput}
         onToggleNafCode={handleToggleNafCode}
         onDepartmentCodesChange={handleDepartmentCodesChange}

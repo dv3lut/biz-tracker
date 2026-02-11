@@ -9,6 +9,8 @@ import { RegionDepartmentPanel } from "./RegionDepartmentPanel";
 type Props = {
   startDate: string;
   endDate: string;
+  lastTreatmentFrom: string;
+  lastTreatmentTo: string;
   nafCodesInput: string;
   selectedNafCodes: string[];
   limit: number;
@@ -22,6 +24,8 @@ type Props = {
   result: SireneNewBusinessesResult | null;
   onStartDateChange: (value: string) => void;
   onEndDateChange: (value: string) => void;
+  onLastTreatmentFromChange: (value: string) => void;
+  onLastTreatmentToChange: (value: string) => void;
   onNafCodesInputChange: (value: string) => void;
   onToggleNafCode: (value: string) => void;
   onDepartmentCodesChange: (value: string[]) => void;
@@ -75,6 +79,8 @@ const buildAddress = (item: SireneNewBusiness): string => {
 export const SireneNewBusinessesPanel = ({
   startDate,
   endDate,
+  lastTreatmentFrom,
+  lastTreatmentTo,
   nafCodesInput,
   selectedNafCodes,
   limit,
@@ -88,6 +94,8 @@ export const SireneNewBusinessesPanel = ({
   result,
   onStartDateChange,
   onEndDateChange,
+  onLastTreatmentFromChange,
+  onLastTreatmentToChange,
   onNafCodesInputChange,
   onToggleNafCode,
   onDepartmentCodesChange,
@@ -234,6 +242,31 @@ export const SireneNewBusinessesPanel = ({
             disabled={isLoading}
           />
           <span className="muted small">Si vide, la date de fin = date de début.</span>
+        </div>
+        <div className="form-field">
+          <label className="input-label" htmlFor="sirene-last-treatment-from">
+            Dernier traitement du (optionnel)
+          </label>
+          <input
+            id="sirene-last-treatment-from"
+            type="date"
+            value={lastTreatmentFrom}
+            onChange={(event) => onLastTreatmentFromChange(event.target.value)}
+            disabled={isLoading}
+          />
+        </div>
+        <div className="form-field">
+          <label className="input-label" htmlFor="sirene-last-treatment-to">
+            au (optionnel)
+          </label>
+          <input
+            id="sirene-last-treatment-to"
+            type="date"
+            value={lastTreatmentTo}
+            onChange={(event) => onLastTreatmentToChange(event.target.value)}
+            disabled={isLoading}
+          />
+          <span className="muted small">Si vide, pas de filtre sur le dernier traitement.</span>
         </div>
         <div className="form-field" style={{ gridColumn: "1 / -1" }}>
           <label className="input-label">Codes NAF (base + libre)</label>

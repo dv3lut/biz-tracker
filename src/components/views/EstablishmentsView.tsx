@@ -25,6 +25,8 @@ type Props = {
   departmentCodes: string[];
   addedFrom: string;
   addedTo: string;
+  lastTreatmentFrom: string;
+  lastTreatmentTo: string;
   individualFilter: EstablishmentIndividualFilter;
   googleCheckStatus: string;
   linkedinStatuses: LinkedInStatus[];
@@ -36,6 +38,8 @@ type Props = {
   onDepartmentCodesChange: (value: string[]) => void;
   onAddedFromChange: (value: string) => void;
   onAddedToChange: (value: string) => void;
+  onLastTreatmentFromChange: (value: string) => void;
+  onLastTreatmentToChange: (value: string) => void;
   onApplyFilters: () => void;
   hasPendingFilters: boolean;
   onResetFilters: () => void;
@@ -76,6 +80,8 @@ export const EstablishmentsView = ({
   departmentCodes,
   addedFrom,
   addedTo,
+  lastTreatmentFrom,
+  lastTreatmentTo,
   individualFilter,
   googleCheckStatus,
   linkedinStatuses,
@@ -87,6 +93,8 @@ export const EstablishmentsView = ({
   onDepartmentCodesChange,
   onAddedFromChange,
   onAddedToChange,
+  onLastTreatmentFromChange,
+  onLastTreatmentToChange,
   onApplyFilters,
   hasPendingFilters,
   onResetFilters,
@@ -135,6 +143,8 @@ export const EstablishmentsView = ({
           departmentCodes={departmentCodes}
           addedFrom={addedFrom}
           addedTo={addedTo}
+          lastTreatmentFrom={lastTreatmentFrom}
+          lastTreatmentTo={lastTreatmentTo}
           individualFilter={individualFilter}
           googleCheckStatus={googleCheckStatus}
           linkedinStatuses={linkedinStatuses}
@@ -146,6 +156,8 @@ export const EstablishmentsView = ({
           onDepartmentCodesChange={onDepartmentCodesChange}
           onAddedFromChange={onAddedFromChange}
           onAddedToChange={onAddedToChange}
+          onLastTreatmentFromChange={onLastTreatmentFromChange}
+          onLastTreatmentToChange={onLastTreatmentToChange}
           onApplyFilters={onApplyFilters}
           hasPendingFilters={hasPendingFilters}
           onResetFilters={onResetFilters}

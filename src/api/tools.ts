@@ -9,6 +9,8 @@ import type {
 export interface SireneNewBusinessesPayload {
   startDate: string;
   endDate?: string;
+  lastTreatmentFrom?: string;
+  lastTreatmentTo?: string;
   nafCodes: string[];
   limit?: number;
   departmentCodes?: string[];
@@ -120,6 +122,8 @@ export const toolsApi = {
       body: JSON.stringify({
         start_date: payload.startDate,
         end_date: payload.endDate ?? null,
+        last_treatment_from: payload.lastTreatmentFrom ?? null,
+        last_treatment_to: payload.lastTreatmentTo ?? null,
         naf_codes: payload.nafCodes,
         limit: payload.limit ?? 100,
         department_codes: payload.departmentCodes && payload.departmentCodes.length > 0 ? payload.departmentCodes : null,
