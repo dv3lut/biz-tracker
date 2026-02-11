@@ -385,7 +385,7 @@ class GoogleLookupEngine:
     ) -> GoogleMatch | None:
         establishment.google_last_checked_at = now
         if not result:
-            if establishment.google_check_status not in {"found", TYPE_MISMATCH_STATUS}:
+            if establishment.google_check_status not in {"found", TYPE_MISMATCH_STATUS, "insufficient"}:
                 establishment.google_check_status = "not_found"
             return None
 

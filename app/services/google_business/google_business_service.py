@@ -448,6 +448,8 @@ class GoogleBusinessService:
             return False
         if establishment.google_check_status == TYPE_MISMATCH_STATUS:
             return False
+        if (establishment.google_check_status or "").lower() == "pending":
+            return True
         if is_new:
             return True
         if not establishment.google_last_checked_at:
