@@ -2538,6 +2538,27 @@ def test_apply_subscriptions_from_categories_updates_client(monkeypatch):
     assert client.subscriptions
 
 
+def test_apply_subscriptions_from_categories_distinct_ordering_is_postgres_safe():
+    from sqlalchemy.dialects import postgresql
+
+    category_id = uuid4()
+    captured: dict[str, str] = {}
+
+    def execute(stmt):
+        compiled = stmt.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True})
+        captured["sql"] = str(compiled)
+        return _FakeResult([])
+
+    session = SimpleNamespace(execute=execute)
+    client = SimpleNamespace(subscriptions=[])
+
+    stripe_subscription_utils.apply_subscriptions_from_categories(session, client, [category_id])
+
+    sql = captured.get("sql", "")
+    assert "DISTINCT ON (naf_subcategories.id)" in sql
+    assert "ORDER BY naf_subcategories.id, naf_subcategories.naf_code" in sql
+
+
 def test_apply_stripe_fields_sets_plan_key_from_price(settings=None):
     settings = _settings()
     subscription = {

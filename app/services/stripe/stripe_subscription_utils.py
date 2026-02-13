@@ -67,7 +67,7 @@ def apply_subscriptions_from_categories(
             models.NafSubCategory.is_active.is_(True),
         )
         .distinct(models.NafSubCategory.id)
-        .order_by(models.NafSubCategory.naf_code)
+        .order_by(models.NafSubCategory.id, models.NafSubCategory.naf_code)
     )
     subcategories = session.execute(stmt).scalars().all()
     updated: list[models.ClientSubscription] = []
