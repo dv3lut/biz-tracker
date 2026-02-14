@@ -143,6 +143,8 @@ class GoogleBusinessService:
         self._api_call_count = 0
         self._api_error_count = 0
         allowed_departments = resolve_enabled_department_codes(self._session)
+        if not include_backlog and allowed_departments is not None and not allowed_departments:
+            allowed_departments = None
         unique_new = {establishment.siret: establishment for establishment in new_establishments if establishment.siret}
         filtered_new = self._filter_establishments_for_departments(unique_new.values(), allowed_departments)
         new_sirets = {establishment.siret for establishment in filtered_new if establishment.siret}

@@ -111,13 +111,19 @@ def keyword_similarity(token: str, keyword: str) -> float:
 
 
 def build_place_query(establishment: models.Establishment, placeholder_tokens: set[str]) -> str:
-    parts = [
-        sanitize_placeholder(establishment.name, placeholder_tokens),
-        sanitize_placeholder(establishment.libelle_commune, placeholder_tokens),
-    ]
-    if not parts[-1]:
-        parts[-1] = sanitize_placeholder(establishment.libelle_commune_etranger, placeholder_tokens)
-    parts.append(sanitize_placeholder(establishment.code_postal, placeholder_tokens))
+    name = sanitize_placeholder(establishment.name, placeholder_tokens)
+    if not name:
+        return ""
+
+    commune = sanitize_placeholder(establishment.libelle_commune, placeholder_tokens)
+    if not commune:
+        commune = sanitize_placeholder(establishment.libelle_commune_etranger, placeholder_tokens)
+    code_postal = sanitize_placeholder(establishment.code_postal, placeholder_tokens)
+
+    if not commune and not code_postal:
+        return ""
+
+    parts = [name, commune, code_postal]
     filtered = [part for part in parts if part]
     return " ".join(filtered)
 
