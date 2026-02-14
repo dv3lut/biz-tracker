@@ -38,6 +38,7 @@ from app.services.stripe.stripe_subscription_utils import (
     to_datetime,
 )
 from app.services.stripe.stripe_upgrade_tokens import build_upgrade_url, parse_upgrade_token
+from app.utils.regions import ALL_DEPARTMENT_CODES
 
 PLAN_CATEGORY_LIMITS: dict[StripePlanKey, int] = {
     "starter": 1,
@@ -73,6 +74,8 @@ class StripeSubscriptionInfo:
     contact_name: str | None
     contact_email: str | None
     categories: list[dict[str, object]]
+    departments: list[dict[str, object]]
+    all_departments: bool
 
 
 @dataclass(frozen=True)
@@ -575,6 +578,17 @@ def get_subscription_info(
 
     categories.sort(key=lambda entry: str(entry.get("name") or ""))
 
+    departments: list[dict[str, object]] = []
+    department_codes: set[str] = set()
+    for department in getattr(client, "departments", []) or []:
+        code = getattr(department, "code", None)
+        name = getattr(department, "name", None)
+        if not code or not name:
+            continue
+        department_codes.add(code)
+        departments.append({"id": department.id, "code": code, "name": name})
+    all_departments = not department_codes or department_codes.issuperset(set(ALL_DEPARTMENT_CODES))
+
     current_period_end = client.stripe_current_period_end
     cancel_at = client.stripe_cancel_at
     contact_email = (access.email or "").strip() or None
@@ -603,6 +617,8 @@ def get_subscription_info(
         contact_name=contact_name,
         contact_email=contact_email,
         categories=categories,
+        departments=departments,
+        all_departments=all_departments,
     )
 
 

@@ -247,6 +247,8 @@ def get_stripe_subscription_info(
         contact_name=info.contact_name,
         contact_email=info.contact_email,
         categories=info.categories,
+        departments=info.departments,
+        all_departments=info.all_departments,
     )
 
 

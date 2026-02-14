@@ -183,6 +183,34 @@ def resolve_client_listing_statuses(client: models.Client) -> list[str]:
     return statuses
 
 
+def resolve_client_department_codes(client: models.Client) -> set[str] | None:
+    """Return the normalized department codes for a client, or None if all are allowed."""
+    all_departments = set(ALL_DEPARTMENT_CODES)
+    department_codes = {
+        department.code
+        for department in getattr(client, "departments", [])
+        if getattr(department, "code", None)
+    }
+    if department_codes:
+        department_codes = department_codes & all_departments
+    if not department_codes or department_codes == all_departments:
+        return None
+    return department_codes
+
+
+def resolve_client_subscription_codes(client: models.Client) -> set[str]:
+    """Return the set of normalized NAF codes configured for a client."""
+    codes: set[str] = set()
+    for subscription in getattr(client, "subscriptions", []) or []:
+        subcategory = getattr(subscription, "subcategory", None)
+        if not subcategory or not getattr(subcategory, "is_active", True):
+            continue
+        normalized_code = normalize_naf_code(getattr(subcategory, "naf_code", None))
+        if normalized_code:
+            codes.add(normalized_code)
+    return codes
+
+
 def client_allows_listing_status(client: models.Client, listing_status: str | None) -> bool:
     """Return True if the client's filters include the provided listing status."""
 
@@ -411,6 +439,43 @@ def _department_allows_establishment(
     if department_code == "20" and ("2A" in allowed_departments or "2B" in allowed_departments):
         return True
     return department_code in allowed_departments
+
+
+def count_establishments_outside_client_departments(
+    client: models.Client,
+    establishments: Sequence[models.Establishment],
+) -> int:
+    """Count establishments matching client filters but outside selected departments."""
+    allowed_departments = resolve_client_department_codes(client)
+    if allowed_departments is None:
+        return 0
+    allowed_statuses = set(resolve_client_listing_statuses(client))
+    subscription_codes = resolve_client_subscription_codes(client)
+    has_subscription_filter = bool(subscription_codes)
+    seen_sirets: set[str] = set()
+    outside_count = 0
+
+    for establishment in establishments:
+        siret = getattr(establishment, "siret", None)
+        if siret and siret in seen_sirets:
+            continue
+        if not _establishment_matches_listing_status(establishment, allowed_statuses):
+            continue
+        if has_subscription_filter:
+            naf_code = normalize_naf_code(getattr(establishment, "naf_code", None))
+            if not naf_code or naf_code not in subscription_codes:
+                continue
+        department_code = resolve_department_code(
+            getattr(establishment, "code_commune", None),
+            getattr(establishment, "code_postal", None),
+        )
+        if _department_allows_establishment(department_code, allowed_departments):
+            continue
+        if siret:
+            seen_sirets.add(siret)
+        outside_count += 1
+
+    return outside_count
 
 
 def dispatch_email_to_clients(

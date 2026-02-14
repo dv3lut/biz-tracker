@@ -49,6 +49,12 @@ class PublicStripeSubscriptionCategoryOut(BaseModel):
     name: str
 
 
+class PublicStripeSubscriptionDepartmentOut(BaseModel):
+    id: UUID
+    code: str
+    name: str
+
+
 class PublicStripeSubscriptionInfoResponse(BaseModel):
     plan_key: str | None = None
     status: str | None = None
@@ -57,6 +63,8 @@ class PublicStripeSubscriptionInfoResponse(BaseModel):
     contact_name: str | None = None
     contact_email: str | None = None
     categories: list[PublicStripeSubscriptionCategoryOut] = Field(default_factory=list)
+    departments: list[PublicStripeSubscriptionDepartmentOut] = Field(default_factory=list)
+    all_departments: bool = False
 
 
 class PublicStripeUpdateRequest(BaseModel):
@@ -94,6 +102,7 @@ __all__ = [
     "PublicStripePortalSessionResponse",
     "PublicStripeSubscriptionInfoRequest",
     "PublicStripeSubscriptionCategoryOut",
+    "PublicStripeSubscriptionDepartmentOut",
     "PublicStripeSubscriptionInfoResponse",
     "PublicStripeUpdateRequest",
     "PublicStripeUpdateResponse",

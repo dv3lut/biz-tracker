@@ -20,6 +20,7 @@ from app.services.client_service import (
     ClientEmailPayload,
     assign_establishments_to_clients,
     collect_client_emails,
+    count_establishments_outside_client_departments,
     dispatch_email_to_clients,
     get_active_clients,
     get_admin_emails,
@@ -343,6 +344,12 @@ class AlertService:
 
         payloads: list[ClientEmailPayload] = []
         unique_recipients = set(admin_recipients)
+        outside_department_counts: dict[object, int] = {}
+        if establishments:
+            for client in clients:
+                outside_count = count_establishments_outside_client_departments(client, establishments)
+                if outside_count:
+                    outside_department_counts[client.id] = outside_count
         for client in clients:
             client_establishments = assignments.get(client.id, [])
             client_alerts = [
@@ -362,6 +369,7 @@ class AlertService:
                 filters=filters,
                 previous_month_day_establishments=previous_month_day_establishments,
                 previous_month_day_date=previous_month_day_date,
+                outside_departments_alert_count=outside_department_counts.get(client.id),
             )
             payloads.append(
                 ClientEmailPayload(

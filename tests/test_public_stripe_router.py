@@ -138,6 +138,8 @@ def test_get_stripe_subscription_info_returns_payload(monkeypatch):
             contact_name="Jean Dupont",
             contact_email="jean@example.com",
             categories=[{"id": uuid4(), "name": "Restauration"}],
+            departments=[{"id": uuid4(), "code": "13", "name": "Bouches-du-Rhône"}],
+            all_departments=False,
         ),
     )
 
@@ -149,6 +151,8 @@ def test_get_stripe_subscription_info_returns_payload(monkeypatch):
     assert result.contact_name == "Jean Dupont"
     assert result.contact_email == "jean@example.com"
     assert result.categories
+    assert result.departments
+    assert result.all_departments is False
 
 
 def test_get_public_stripe_settings_returns_trial_days(monkeypatch):

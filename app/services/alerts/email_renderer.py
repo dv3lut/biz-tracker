@@ -198,6 +198,7 @@ def render_client_email(
     filters: ClientFilterSummary | None = None,
     previous_month_day_establishments: Sequence[models.Establishment] | None = None,
     previous_month_day_date: date | None = None,
+    outside_departments_alert_count: int | None = None,
 ) -> tuple[str, str]:
     match_count = len(establishments)
     selected_statuses = list(filters.listing_statuses) if filters and filters.listing_statuses else list(STATUS_SECTION_ORDER)
@@ -378,6 +379,20 @@ def render_client_email(
         )
         html_parts.append(
             f"<p style=\"margin:0 0 16px;color:{theme['text_muted']};\">Synthèse : 0 nouvel établissement détecté.</p>"
+        )
+
+    if outside_departments_alert_count and outside_departments_alert_count > 0:
+        plural = "s" if outside_departments_alert_count > 1 else ""
+        lines.append(
+            "En dehors de vos départements sélectionnés, nous avons également émis "
+            f"{outside_departments_alert_count} alerte{plural} aujourd'hui sur le territoire français."
+        )
+        lines.append("")
+        html_parts.append(
+            f"<p style=\"margin:0 0 16px;color:{theme['text_muted']};\">"
+            f"En dehors de vos départements sélectionnés, nous avons également émis "
+            f"{outside_departments_alert_count} alerte{plural} aujourd'hui sur le territoire français."
+            "</p>"
         )
 
     if not match_count:

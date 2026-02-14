@@ -222,6 +222,24 @@ class EmailRendererTests(unittest.TestCase):
         self.assertIn("Nous vous notifierons", text_body)
         self.assertIn("0 nouvel établissement détecté", html_body)
 
+    def test_client_email_mentions_alerts_outside_departments(self) -> None:
+        establishment = self._make_establishment(
+            name="Bistrot Local",
+            status="recent_creation",
+            google_url="https://maps.google.com/?cid=10",
+        )
+
+        text_body, html_body = render_client_email(
+            self.formatter,
+            [establishment],
+            client=self._make_client(),
+            outside_departments_alert_count=19,
+        )
+
+        self.assertIn("En dehors de vos départements sélectionnés", text_body)
+        self.assertIn("19 alerte", text_body)
+        self.assertIn("En dehors de vos départements sélectionnés", html_body)
+
     def test_client_email_includes_previous_month_day_section(self) -> None:
         establishment = self._make_establishment(
             name="Bistrot du Mois",

@@ -221,6 +221,39 @@ def test_assign_establishments_to_clients_handles_empty_payload():
     assert filters_enabled is False
 
 
+def test_count_establishments_outside_client_departments():
+    client = _client(
+        subscriptions=[_subscription("5610A")],
+        departments=[SimpleNamespace(code="13")],
+        listing_statuses=["recent_creation"],
+    )
+    establishments = [
+        _establishment("5610A", status="recent_creation", code_postal="13001", code_commune="13201"),
+        _establishment("5610A", status="recent_creation", code_postal="75001", code_commune="75101"),
+        _establishment("5610A", status="not_recent_creation", code_postal="75001", code_commune="75101"),
+        _establishment("4939B", status="recent_creation", code_postal="75001", code_commune="75101"),
+    ]
+
+    outside = client_service.count_establishments_outside_client_departments(client, establishments)
+
+    assert outside == 1
+
+
+def test_count_establishments_outside_departments_returns_zero_for_all_departments():
+    client = _client(
+        subscriptions=[_subscription("5610A")],
+        departments=[],
+        listing_statuses=["recent_creation"],
+    )
+    establishments = [
+        _establishment("5610A", status="recent_creation", code_postal="75001", code_commune="75101"),
+    ]
+
+    outside = client_service.count_establishments_outside_client_departments(client, establishments)
+
+    assert outside == 0
+
+
 def test_dispatch_email_to_clients_sends_once(monkeypatch):
     class FixedDate(date):
         @classmethod
