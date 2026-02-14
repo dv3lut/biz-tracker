@@ -23,6 +23,8 @@ type SubscriptionInfo = {
   contactEmail: string | null;
   categoryIds: string[];
   categories: { id: string; name: string }[];
+  departments: { id: string; code: string; name: string }[];
+  allDepartments: boolean;
 };
 
 const PLAN_CATEGORY_LIMITS: Record<PlanKey, number> = {
@@ -63,6 +65,7 @@ const Upgrade = () => {
   const [isPortalLoading, setIsPortalLoading] = useState(false);
   const [hasInitializedCategories, setHasInitializedCategories] = useState(false);
   const [hasInitializedPlan, setHasInitializedPlan] = useState(false);
+  const [isDepartmentsOpen, setIsDepartmentsOpen] = useState(false);
 
   useEffect(() => {
     if (!accessToken) return undefined;
@@ -123,8 +126,11 @@ const Upgrade = () => {
       contact_name?: string | null;
       contact_email?: string | null;
       categories?: Array<{ id: string; name: string }>;
+      departments?: Array<{ id: string; code: string; name: string }>;
+      all_departments?: boolean;
     };
     const categoriesPayload = payload.categories ?? [];
+    const departmentsPayload = payload.departments ?? [];
     setSubscriptionInfo({
       planKey: payload.plan_key ?? null,
       status: payload.status ?? null,
@@ -134,6 +140,8 @@ const Upgrade = () => {
       contactEmail: payload.contact_email ?? null,
       categoryIds: categoriesPayload.map((category) => category.id),
       categories: categoriesPayload,
+      departments: departmentsPayload,
+      allDepartments: payload.all_departments ?? false,
     });
     if (!hasInitializedPlan && payload.plan_key) {
       setPlan(payload.plan_key as PlanKey);
@@ -185,6 +193,19 @@ const Upgrade = () => {
       .map((id) => categoryMap.get(id))
       .filter((name): name is string => Boolean(name));
   }, [categories, categoryIds]);
+
+  const departmentsLabel = useMemo(() => {
+    if (!subscriptionInfo) return "-";
+    if (subscriptionInfo.allDepartments) return "Toute la France";
+    const count = subscriptionInfo.departments.length;
+    if (!count) return "-";
+    return `${count} département${count > 1 ? "s" : ""}`;
+  }, [subscriptionInfo]);
+
+  const hasDepartmentsList =
+    Boolean(subscriptionInfo) &&
+    !subscriptionInfo?.allDepartments &&
+    (subscriptionInfo?.departments.length ?? 0) > 0;
 
   const formatAmount = useCallback((amount: number | null, currency: string | null) => {
     if (amount === null) return null;
@@ -481,6 +502,31 @@ const Upgrade = () => {
                         ? subscriptionInfo.categories.map((category) => category.name).join(", ")
                         : "-"}
                     </p>
+                    <p>
+                      <span className="font-medium text-foreground">Départements sélectionnés :</span>{" "}
+                      {subscriptionInfo.allDepartments || !hasDepartmentsList ? (
+                        departmentsLabel
+                      ) : (
+                        <button
+                          type="button"
+                          className="text-sky-700 font-semibold underline underline-offset-2"
+                          onClick={() => setIsDepartmentsOpen((current) => !current)}
+                        >
+                          {departmentsLabel}
+                        </button>
+                      )}
+                    </p>
+                    {hasDepartmentsList && isDepartmentsOpen ? (
+                      <div className="ml-4 mt-1 text-xs text-muted-foreground">
+                        <ul className="list-disc pl-4">
+                          {subscriptionInfo.departments.map((department) => (
+                            <li key={department.id}>
+                              {department.code} — {department.name}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
                     <p>
                       <span className="font-medium text-foreground">Prochaine échéance :</span>{" "}
                       {subscriptionInfo.currentPeriodEnd
