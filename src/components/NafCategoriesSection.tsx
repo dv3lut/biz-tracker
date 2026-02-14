@@ -9,6 +9,7 @@ const truncateText = (text: string, maxLength: number): string => {
 
 type Props = {
   categories?: NafCategory[];
+  orphanSubcategories?: NafSubCategory[];
   isLoading: boolean;
   isRefreshing: boolean;
   error: Error | null;
@@ -22,12 +23,15 @@ type Props = {
   onCreateSubCategory: (categoryId?: string) => void;
   onEditSubCategory: (subcategory: NafSubCategory) => void;
   onDetachSubCategory: (subcategory: NafSubCategory, categoryId: string) => void;
+  onDeactivateSubCategory: (subcategory: NafSubCategory) => void;
+  onDeleteSubCategory: (subcategory: NafSubCategory) => void;
   deletingCategoryId: string | null;
   deletingSubCategoryId: string | null;
 };
 
 export const NafCategoriesSection = ({
   categories,
+  orphanSubcategories,
   isLoading,
   isRefreshing,
   error,
@@ -41,6 +45,8 @@ export const NafCategoriesSection = ({
   onCreateSubCategory,
   onEditSubCategory,
   onDetachSubCategory,
+  onDeactivateSubCategory,
+  onDeleteSubCategory,
   deletingCategoryId,
   deletingSubCategoryId,
 }: Props) => {
@@ -71,6 +77,26 @@ export const NafCategoriesSection = ({
       )
     ) {
       onDetachSubCategory(subcategory, categoryId);
+    }
+  };
+
+  const handleDeactivateSubCategory = (subcategory: NafSubCategory) => {
+    if (
+      window.confirm(
+        `Désactiver la sous-catégorie "${subcategory.name}" (${subcategory.nafCode}) ? Les syncs ne cibleront plus ce NAF.`,
+      )
+    ) {
+      onDeactivateSubCategory(subcategory);
+    }
+  };
+
+  const handleDeleteSubCategory = (subcategory: NafSubCategory) => {
+    if (
+      window.confirm(
+        `Supprimer définitivement la sous-catégorie "${subcategory.name}" (${subcategory.nafCode}) ?`,
+      )
+    ) {
+      onDeleteSubCategory(subcategory);
     }
   };
 
@@ -250,6 +276,81 @@ export const NafCategoriesSection = ({
               )}
             </article>
           ))}
+        </div>
+      )}
+
+      {!isLoading && !error && orphanSubcategories && orphanSubcategories.length > 0 && (
+        <div className="category-table-block naf-orphans">
+          <header className="category-panel-header">
+            <div>
+              <h3>Sous-catégories sans catégorie</h3>
+              <p className="muted small">
+                Ces sous-catégories ne sont rattachées à aucune catégorie. Vous pouvez les désactiver ou les supprimer.
+              </p>
+            </div>
+          </header>
+          <div className="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th style={{ width: "auto" }}>Nom</th>
+                  <th style={{ width: "120px", whiteSpace: "nowrap" }}>Code NAF</th>
+                  <th style={{ width: "110px", whiteSpace: "nowrap" }}>Tarif</th>
+                  <th style={{ width: "100px", whiteSpace: "nowrap" }}>Statut</th>
+                  <th style={{ width: "120px", whiteSpace: "nowrap" }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {orphanSubcategories.map((subcategory) => (
+                  <tr key={subcategory.id}>
+                    <td>
+                      <div style={{ minWidth: "200px" }}>
+                        <strong>{subcategory.name}</strong>
+                        {subcategory.description ? (
+                          <p className="small muted" title={subcategory.description}>
+                            {truncateText(subcategory.description, 150)}
+                          </p>
+                        ) : null}
+                      </div>
+                    </td>
+                    <td style={{ whiteSpace: "nowrap" }}>
+                      <span className="badge">{subcategory.nafCode}</span>
+                    </td>
+                    <td style={{ whiteSpace: "nowrap" }}>{formatCurrency(subcategory.priceEur)}</td>
+                    <td style={{ whiteSpace: "nowrap" }}>
+                      <span className={`badge status-${subcategory.isActive ? "success" : "error"}`}>
+                        {subcategory.isActive ? "Active" : "Inactive"}
+                      </span>
+                    </td>
+                    <td style={{ whiteSpace: "nowrap" }}>
+                      <div className="card-actions">
+                        <button type="button" className="ghost" onClick={() => onEditSubCategory(subcategory)}>
+                          Modifier
+                        </button>
+                        {subcategory.isActive ? (
+                          <button
+                            type="button"
+                            className="ghost"
+                            onClick={() => handleDeactivateSubCategory(subcategory)}
+                          >
+                            Désactiver
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          className="danger"
+                          onClick={() => handleDeleteSubCategory(subcategory)}
+                          disabled={deletingSubCategoryId === subcategory.id}
+                        >
+                          {deletingSubCategoryId === subcategory.id ? "Suppression…" : "Supprimer"}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

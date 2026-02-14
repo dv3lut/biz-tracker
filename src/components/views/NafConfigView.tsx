@@ -65,6 +65,21 @@ export const NafConfigView = ({
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [allSubcategories, categories]);
 
+  const orphanSubcategories = useMemo(() => {
+    if (!allSubcategories || allSubcategories.length === 0) {
+      return [];
+    }
+    const attachedIds = new Set<string>();
+    (categories ?? []).forEach((category) => {
+      category.subcategories.forEach((subcategory) => {
+        attachedIds.add(subcategory.id);
+      });
+    });
+    return allSubcategories
+      .filter((subcategory) => !attachedIds.has(subcategory.id))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [allSubcategories, categories]);
+
   useEffect(() => {
     if (!feedbackMessage) {
       return;
@@ -193,6 +208,18 @@ export const NafConfigView = ({
     onSettled: () => setDeletingSubCategoryId(null),
   });
 
+  const deleteSubCategoryMutation = useMutation<void, unknown, { subcategoryId: string; subcategoryName: string }>({
+    mutationFn: ({ subcategoryId }) => nafApi.deleteSubCategory(subcategoryId),
+    onMutate: ({ subcategoryId }) => setDeletingSubCategoryId(subcategoryId),
+    onSuccess: (_, { subcategoryName }) => {
+      setFeedbackMessage(`Sous-catégorie ${subcategoryName} supprimée.`);
+      setErrorMessage(null);
+      invalidateNafQueries();
+    },
+    onError: handleMutationError,
+    onSettled: () => setDeletingSubCategoryId(null),
+  });
+
   const isCategoryModalProcessing = useMemo(
     () => createCategoryMutation.isPending || updateCategoryMutation.isPending,
     [createCategoryMutation.isPending, updateCategoryMutation.isPending],
@@ -311,6 +338,32 @@ export const NafConfigView = ({
     [ensureAuthenticated, detachSubCategoryMutation],
   );
 
+  const handleDeactivateSubCategory = useCallback(
+    (subcategory: NafSubCategory) => {
+      if (!ensureAuthenticated()) {
+        return;
+      }
+      updateSubCategoryMutation.mutate({
+        subcategoryId: subcategory.id,
+        payload: { isActive: false },
+      });
+    },
+    [ensureAuthenticated, updateSubCategoryMutation],
+  );
+
+  const handleDeleteSubCategory = useCallback(
+    (subcategory: NafSubCategory) => {
+      if (!ensureAuthenticated()) {
+        return;
+      }
+      deleteSubCategoryMutation.mutate({
+        subcategoryId: subcategory.id,
+        subcategoryName: subcategory.name,
+      });
+    },
+    [ensureAuthenticated, deleteSubCategoryMutation],
+  );
+
   return (
     <>
       <section className="dashboard-section">
@@ -323,6 +376,7 @@ export const NafConfigView = ({
         <div className="section-grid">
           <NafCategoriesSection
             categories={categories}
+            orphanSubcategories={orphanSubcategories}
             isLoading={isLoading}
             isRefreshing={isRefreshing}
             error={error}
@@ -336,6 +390,8 @@ export const NafConfigView = ({
             onCreateSubCategory={(categoryId) => handleOpenSubCategoryModal("create", { categoryId })}
             onEditSubCategory={(subcategory) => handleOpenSubCategoryModal("edit", { subcategory })}
             onDetachSubCategory={handleDetachSubCategory}
+            onDeactivateSubCategory={handleDeactivateSubCategory}
+            onDeleteSubCategory={handleDeleteSubCategory}
             deletingCategoryId={deletingCategoryId}
             deletingSubCategoryId={deletingSubCategoryId}
           />
