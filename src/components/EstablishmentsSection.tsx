@@ -247,7 +247,8 @@ export const EstablishmentsSection = ({
     if (!establishment.websiteScrapedAt) {
       return "pending";
     }
-    const hasInfo = [
+    const hasContacts = (establishment.scrapedContacts ?? []).length > 0;
+    const hasLegacyInfo = [
       establishment.websiteScrapedMobilePhones,
       establishment.websiteScrapedNationalPhones,
       establishment.websiteScrapedEmails,
@@ -256,7 +257,7 @@ export const EstablishmentsSection = ({
       establishment.websiteScrapedTwitter,
       establishment.websiteScrapedLinkedin,
     ].some((value) => Boolean(value && value.trim()));
-    return hasInfo ? "found" : "no_info";
+    return hasContacts || hasLegacyInfo ? "found" : "no_info";
   };
 
   const computeLinkedInSummary = (establishment: Establishment): string => {

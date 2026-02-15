@@ -26,6 +26,7 @@ import {
   NafCategoryStat,
   NafSubCategoryStat,
   SyncMode,
+  ScrapedContact,
 } from "../types";
 
 export class ApiError extends Error {
@@ -371,6 +372,14 @@ interface EstablishmentResponse {
   is_sole_proprietorship: boolean;
   legal_unit_name: string | null;
   directors: DirectorResponse[];
+  scraped_contacts?: ScrapedContactResponse[];
+}
+
+interface ScrapedContactResponse {
+  id: string;
+  contact_type: string;
+  value: string;
+  label: string | null;
 }
 
 interface EstablishmentDetailResponse extends EstablishmentResponse {
@@ -787,6 +796,12 @@ const toEstablishment = (payload: EstablishmentResponse): Establishment => ({
     linkedinProfileData: d.linkedin_profile_data ?? null,
     linkedinLastCheckedAt: d.linkedin_last_checked_at ?? null,
     linkedinCheckStatus: d.linkedin_check_status ?? "pending",
+  })),
+  scrapedContacts: (payload.scraped_contacts ?? []).map((c): ScrapedContact => ({
+    id: c.id,
+    contactType: c.contact_type,
+    value: c.value,
+    label: c.label,
   })),
 });
 

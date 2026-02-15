@@ -359,6 +359,14 @@ export interface Establishment {
   isSoleProprietorship: boolean;
   legalUnitName: string | null;
   directors: Director[];
+  scrapedContacts: ScrapedContact[];
+}
+
+export interface ScrapedContact {
+  id: string;
+  contactType: string;
+  value: string;
+  label: string | null;
 }
 
 export interface EstablishmentDetail extends Establishment {

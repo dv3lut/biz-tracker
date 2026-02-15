@@ -1,4 +1,4 @@
-import { Director, Establishment, EstablishmentDetail } from "../types";
+import { Director, Establishment, EstablishmentDetail, ScrapedContact } from "../types";
 import { canonicalizeNafCode } from "../utils/sync";
 import { request } from "./http";
 
@@ -59,6 +59,14 @@ export interface EstablishmentResponse {
   is_sole_proprietorship: boolean;
   legal_unit_name: string | null;
   directors: DirectorResponse[];
+  scraped_contacts?: ScrapedContactResponse[];
+}
+
+export interface ScrapedContactResponse {
+  id: string;
+  contact_type: string;
+  value: string;
+  label: string | null;
 }
 
 export interface EstablishmentDetailResponse extends EstablishmentResponse {
@@ -120,6 +128,13 @@ const mapDirector = (payload: DirectorResponse): Director => ({
   linkedinCheckStatus: payload.linkedin_check_status ?? "pending",
 });
 
+const mapScrapedContact = (payload: ScrapedContactResponse): ScrapedContact => ({
+  id: payload.id,
+  contactType: payload.contact_type,
+  value: payload.value,
+  label: payload.label,
+});
+
 export const mapEstablishment = (payload: EstablishmentResponse): Establishment => ({
   siret: payload.siret,
   siren: payload.siren,
@@ -159,6 +174,7 @@ export const mapEstablishment = (payload: EstablishmentResponse): Establishment 
   isSoleProprietorship: payload.is_sole_proprietorship,
   legalUnitName: payload.legal_unit_name ?? null,
   directors: (payload.directors ?? []).map(mapDirector),
+  scrapedContacts: (payload.scraped_contacts ?? []).map(mapScrapedContact),
 });
 
 export const mapEstablishmentDetail = (payload: EstablishmentDetailResponse): EstablishmentDetail => ({

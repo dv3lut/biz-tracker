@@ -6,6 +6,7 @@ import {
   EstablishmentDetail,
   LinkedInCheckResponse,
   LinkedInDebugResponse,
+  ScrapedContact,
   WebsiteScrapeStatus,
 } from "../types";
 import { formatDateTime } from "../utils/format";
@@ -88,7 +89,8 @@ const computeWebsiteScrapeStatus = (establishment: EstablishmentDetail | null): 
   if (!establishment?.websiteScrapedAt) {
     return "pending";
   }
-  const hasInfo = [
+  const hasContacts = (establishment.scrapedContacts ?? []).length > 0;
+  const hasLegacyInfo = [
     establishment.websiteScrapedMobilePhones,
     establishment.websiteScrapedNationalPhones,
     establishment.websiteScrapedEmails,
@@ -97,7 +99,7 @@ const computeWebsiteScrapeStatus = (establishment: EstablishmentDetail | null): 
     establishment.websiteScrapedTwitter,
     establishment.websiteScrapedLinkedin,
   ].some((value) => Boolean(value && value.trim()));
-  return hasInfo ? "found" : "no_info";
+  return hasContacts || hasLegacyInfo ? "found" : "no_info";
 };
 
 const websiteScrapeStatusLabel = (status: WebsiteScrapeStatus): string => {
@@ -472,21 +474,102 @@ export const EstablishmentDetailModal = ({
                 <dd>{websiteScrapeStatusLabel(websiteScrapeStatus)}</dd>
                 <dt>Dernier scraping</dt>
                 <dd>{formatDateTime(establishment.websiteScrapedAt)}</dd>
-                <dt>Téléphones mobiles</dt>
-                <dd>{formatValue(establishment.websiteScrapedMobilePhones)}</dd>
-                <dt>Téléphones nationaux</dt>
-                <dd>{formatValue(establishment.websiteScrapedNationalPhones)}</dd>
-                <dt>Emails</dt>
-                <dd>{formatValue(establishment.websiteScrapedEmails)}</dd>
-                <dt>Facebook</dt>
-                <dd>{formatValue(establishment.websiteScrapedFacebook)}</dd>
-                <dt>Instagram</dt>
-                <dd>{formatValue(establishment.websiteScrapedInstagram)}</dd>
-                <dt>Twitter/X</dt>
-                <dd>{formatValue(establishment.websiteScrapedTwitter)}</dd>
-                <dt>LinkedIn</dt>
-                <dd>{formatValue(establishment.websiteScrapedLinkedin)}</dd>
               </dl>
+
+              {(() => {
+                const contacts = establishment.scrapedContacts ?? [];
+                const mobilePhones = contacts.filter((c: ScrapedContact) => c.contactType === "mobile_phone");
+                const nationalPhones = contacts.filter((c: ScrapedContact) => c.contactType === "national_phone");
+                const emails = contacts.filter((c: ScrapedContact) => c.contactType === "email");
+                const hasContacts = mobilePhones.length > 0 || nationalPhones.length > 0 || emails.length > 0;
+                const hasSocials = Boolean(
+                  establishment.websiteScrapedFacebook ||
+                  establishment.websiteScrapedInstagram ||
+                  establishment.websiteScrapedTwitter ||
+                  establishment.websiteScrapedLinkedin
+                );
+
+                if (!hasContacts && !hasSocials) {
+                  return establishment.websiteScrapedAt ? (
+                    <p className="muted" style={{ marginTop: 8 }}>Aucune information de contact trouvée.</p>
+                  ) : null;
+                }
+
+                return (
+                  <div style={{ marginTop: 12 }}>
+                    {mobilePhones.length > 0 && (
+                      <>
+                        <h4 style={{ margin: "8px 0 4px" }}>Téléphones mobiles</h4>
+                        <div className="table-wrapper">
+                          <table className="data-table">
+                            <thead><tr><th>Numéro</th><th>Libellé</th></tr></thead>
+                            <tbody>
+                              {mobilePhones.map((c: ScrapedContact) => (
+                                <tr key={c.id}>
+                                  <td><a href={`tel:${c.value}`}>{c.value}</a></td>
+                                  <td>{c.label || "—"}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </>
+                    )}
+                    {nationalPhones.length > 0 && (
+                      <>
+                        <h4 style={{ margin: "8px 0 4px" }}>Téléphones fixes</h4>
+                        <div className="table-wrapper">
+                          <table className="data-table">
+                            <thead><tr><th>Numéro</th><th>Libellé</th></tr></thead>
+                            <tbody>
+                              {nationalPhones.map((c: ScrapedContact) => (
+                                <tr key={c.id}>
+                                  <td><a href={`tel:${c.value}`}>{c.value}</a></td>
+                                  <td>{c.label || "—"}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </>
+                    )}
+                    {emails.length > 0 && (
+                      <>
+                        <h4 style={{ margin: "8px 0 4px" }}>Emails</h4>
+                        <div className="table-wrapper">
+                          <table className="data-table">
+                            <thead><tr><th>Email</th><th>Libellé</th></tr></thead>
+                            <tbody>
+                              {emails.map((c: ScrapedContact) => (
+                                <tr key={c.id}>
+                                  <td><a href={`mailto:${c.value}`}>{c.value}</a></td>
+                                  <td>{c.label || "—"}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </>
+                    )}
+                    {hasSocials && (
+                      <dl className="data-grid" style={{ marginTop: 8 }}>
+                        {establishment.websiteScrapedFacebook && (
+                          <><dt>Facebook</dt><dd><a href={establishment.websiteScrapedFacebook} target="_blank" rel="noreferrer">{establishment.websiteScrapedFacebook}</a></dd></>
+                        )}
+                        {establishment.websiteScrapedInstagram && (
+                          <><dt>Instagram</dt><dd><a href={establishment.websiteScrapedInstagram} target="_blank" rel="noreferrer">{establishment.websiteScrapedInstagram}</a></dd></>
+                        )}
+                        {establishment.websiteScrapedTwitter && (
+                          <><dt>Twitter/X</dt><dd><a href={establishment.websiteScrapedTwitter} target="_blank" rel="noreferrer">{establishment.websiteScrapedTwitter}</a></dd></>
+                        )}
+                        {establishment.websiteScrapedLinkedin && (
+                          <><dt>LinkedIn</dt><dd><a href={establishment.websiteScrapedLinkedin} target="_blank" rel="noreferrer">{establishment.websiteScrapedLinkedin}</a></dd></>
+                        )}
+                      </dl>
+                    )}
+                  </div>
+                );
+              })()}
               <div style={{ marginTop: 12 }}>
                 <button type="button" className="small" onClick={handleManualWebsiteScrape} disabled={isScrapingWebsite}>
                   {isScrapingWebsite ? "Scraping..." : "Re-scraper le site"}
