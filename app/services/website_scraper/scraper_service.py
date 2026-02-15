@@ -26,12 +26,20 @@ _CRAWL_TIMEOUT = 80
 
 
 @dataclass
+class ContactItem:
+    """A single scraped contact with an optional contextual label."""
+
+    value: str
+    label: str | None = None
+
+
+@dataclass
 class WebsiteScrapingResult:
     """Structured output of a website scraping pass."""
 
-    mobile_phones: list[str] = field(default_factory=list)
-    national_phones: list[str] = field(default_factory=list)
-    emails: list[str] = field(default_factory=list)
+    mobile_phones: list[ContactItem] = field(default_factory=list)
+    national_phones: list[ContactItem] = field(default_factory=list)
+    emails: list[ContactItem] = field(default_factory=list)
     facebook: str | None = None
     instagram: str | None = None
     twitter: str | None = None
@@ -49,18 +57,30 @@ class WebsiteScrapingResult:
             or self.linkedin
         )
 
-    # Pipe-separated helpers matching the DB column format.
+    # Pipe-separated helpers kept for backward compatibility with old DB columns.
     @property
     def mobile_phones_str(self) -> str | None:
-        return "|".join(self.mobile_phones) if self.mobile_phones else None
+        return "|".join(c.value for c in self.mobile_phones) if self.mobile_phones else None
 
     @property
     def national_phones_str(self) -> str | None:
-        return "|".join(self.national_phones) if self.national_phones else None
+        return "|".join(c.value for c in self.national_phones) if self.national_phones else None
 
     @property
     def emails_str(self) -> str | None:
-        return "|".join(self.emails) if self.emails else None
+        return "|".join(c.value for c in self.emails) if self.emails else None
+
+    @property
+    def all_contacts(self) -> list[tuple[str, str, str | None]]:
+        """Return a flat list of ``(contact_type, value, label)`` tuples."""
+        items: list[tuple[str, str, str | None]] = []
+        for c in self.mobile_phones:
+            items.append(("mobile_phone", c.value, c.label))
+        for c in self.national_phones:
+            items.append(("national_phone", c.value, c.label))
+        for c in self.emails:
+            items.append(("email", c.value, c.label))
+        return items
 
 
 class _TimeoutHandler:
@@ -104,9 +124,9 @@ async def scrape_website_async(website_url: str, label: str = "Inconnu") -> Webs
             )
 
             result = WebsiteScrapingResult(
-                mobile_phones=raw.get("mobile_phones", [])[:_MAX_ITEMS],
-                national_phones=raw.get("national_phones", [])[:_MAX_ITEMS],
-                emails=raw.get("emails", [])[:_MAX_ITEMS],
+                mobile_phones=[ContactItem(v, l) for v, l in raw.get("mobile_phones", [])[:_MAX_ITEMS]],
+                national_phones=[ContactItem(v, l) for v, l in raw.get("national_phones", [])[:_MAX_ITEMS]],
+                emails=[ContactItem(v, l) for v, l in raw.get("emails", [])[:_MAX_ITEMS]],
                 facebook=raw.get("facebook"),
                 instagram=raw.get("instagram"),
                 twitter=raw.get("twitter"),

@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.db import models
 from app.observability import log_event
 from app.services.website_scraper.scraper_service import WebsiteScrapingResult, scrape_website
+from app.services.google_business.google_business_service import _persist_scraped_contacts
 from app.utils.dates import utcnow
 
 from .context import SyncContext, SyncResult
@@ -131,6 +132,9 @@ def collect_website_scrape_only(
             establishment.website_scraped_instagram = result.instagram
             establishment.website_scraped_twitter = result.twitter
             establishment.website_scraped_linkedin = result.linkedin
+
+            # Persist structured contacts to the dedicated table.
+            _persist_scraped_contacts(session, establishment.siret, result, now)
 
             has_data = bool(
                 result.mobile_phones

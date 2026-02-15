@@ -13,8 +13,8 @@ from requests.adapters import HTTPAdapter, Retry
 
 from app.services.website_scraper.browser_pool import browser_pool, is_playwright_available
 from app.services.website_scraper.extractors import (
-    extract_emails,
-    extract_phones,
+    extract_emails_with_labels,
+    extract_phones_with_labels,
     extract_social_links,
     needs_browser_rendering,
 )
@@ -36,6 +36,20 @@ _EMPTY_RESULT: Dict = {
     "twitter": None,
     "linkedin": None,
 }
+
+# Type alias — (value, label | None)
+_ContactPair = tuple[str, str | None]
+
+
+def _merge_contacts(
+    target: Dict[str, str | None],
+    items: list[_ContactPair],
+) -> None:
+    """Merge *items* into *target*, preferring entries that carry a label."""
+
+    for value, label in items:
+        if value not in target or (label and not target[value]):
+            target[value] = label
 
 
 # ---------------------------------------------------------------------------
@@ -92,7 +106,10 @@ async def crawl_with_browser(
 
     _LOGGER.info("[%s] Démarrage du crawl Playwright pour %s", label, url)
 
-    result: Dict = {k: ([] if isinstance(v, list) else v) for k, v in _EMPTY_RESULT.items()}
+    all_mobiles: Dict[str, str | None] = {}
+    all_nationals: Dict[str, str | None] = {}
+    all_emails: Dict[str, str | None] = {}
+    social_links = {"facebook": None, "instagram": None, "twitter": None, "linkedin": None}
     visited_urls: Set[str] = set()
     counter = 0
     to_visit: list = [(get_url_priority(url), counter, url, 0)]
@@ -150,16 +167,16 @@ async def crawl_with_browser(
                         page_content = await page.content()
                         page_text = await page.evaluate("() => document.body.innerText")
 
-                        mobiles, nationals = extract_phones(page_text)
-                        emails = extract_emails(page_text)
+                        mobiles, nationals = extract_phones_with_labels(page_text)
+                        emails = extract_emails_with_labels(page_text)
                         socials = extract_social_links(page_content)
 
-                        result["mobile_phones"].extend(mobiles)
-                        result["national_phones"].extend(nationals)
-                        result["emails"].extend(emails)
+                        _merge_contacts(all_mobiles, mobiles)
+                        _merge_contacts(all_nationals, nationals)
+                        _merge_contacts(all_emails, emails)
                         for network, link in socials.items():
-                            if link and not result[network]:
-                                result[network] = link
+                            if link and not social_links[network]:
+                                social_links[network] = link
 
                         if depth < max_depth:
                             links = await page.evaluate(
@@ -184,10 +201,12 @@ async def crawl_with_browser(
     except Exception as exc:  # noqa: BLE001
         _LOGGER.error("[%s] Erreur Playwright générale: %s", label, exc)
 
-    result["mobile_phones"] = list(set(result["mobile_phones"]))
-    result["national_phones"] = list(set(result["national_phones"]))
-    result["emails"] = list(set(result["emails"]))
-    return result
+    return {
+        "mobile_phones": list(all_mobiles.items()),
+        "national_phones": list(all_nationals.items()),
+        "emails": list(all_emails.items()),
+        **social_links,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -213,9 +232,9 @@ def crawl_website(
     to_visit: list = [(get_url_priority(start_url), counter, start_url, 0)]
     heapq.heapify(to_visit)
 
-    all_mobiles: List[str] = []
-    all_nationals: List[str] = []
-    all_emails: List[str] = []
+    all_mobiles: Dict[str, str | None] = {}
+    all_nationals: Dict[str, str | None] = {}
+    all_emails: Dict[str, str | None] = {}
     social_links = {"facebook": None, "instagram": None, "twitter": None, "linkedin": None}
 
     page_count = 0
@@ -243,13 +262,13 @@ def crawl_website(
             page_text = soup.get_text()
             page_html = str(soup)
 
-            mobiles, nationals = extract_phones(page_text)
-            emails = extract_emails(page_text)
+            mobiles, nationals = extract_phones_with_labels(page_text)
+            emails = extract_emails_with_labels(page_text)
             socials = extract_social_links(page_html)
 
-            all_mobiles.extend(mobiles)
-            all_nationals.extend(nationals)
-            all_emails.extend(emails)
+            _merge_contacts(all_mobiles, mobiles)
+            _merge_contacts(all_nationals, nationals)
+            _merge_contacts(all_emails, emails)
             for network, link in socials.items():
                 if link and not social_links[network]:
                     social_links[network] = link
@@ -266,15 +285,15 @@ def crawl_website(
     _LOGGER.info(
         "[%s] Crawl terminé — %d mobiles, %d fixes, %d emails",
         label,
-        len(set(all_mobiles)),
-        len(set(all_nationals)),
-        len(set(all_emails)),
+        len(all_mobiles),
+        len(all_nationals),
+        len(all_emails),
     )
 
     return {
-        "mobile_phones": list(set(all_mobiles)),
-        "national_phones": list(set(all_nationals)),
-        "emails": list(set(all_emails)),
+        "mobile_phones": list(all_mobiles.items()),
+        "national_phones": list(all_nationals.items()),
+        "emails": list(all_emails.items()),
         **social_links,
     }
 

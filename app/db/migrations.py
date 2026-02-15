@@ -688,6 +688,84 @@ def run_schema_upgrades(engine: Engine) -> None:
         ALTER TABLE sync_runs
         ADD COLUMN IF NOT EXISTS website_scrape_statuses JSONB
         """,
+        # --- Scraped contacts table (replaces pipe-separated columns) ---
+        """
+        CREATE TABLE IF NOT EXISTS scraped_contacts (
+            id UUID PRIMARY KEY,
+            establishment_siret VARCHAR(14) NOT NULL
+                REFERENCES establishments(siret) ON DELETE CASCADE,
+            contact_type VARCHAR(32) NOT NULL,
+            value VARCHAR(512) NOT NULL,
+            label VARCHAR(255),
+            created_at TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS ix_scraped_contacts_siret
+        ON scraped_contacts (establishment_siret)
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS ix_scraped_contacts_type
+        ON scraped_contacts (contact_type)
+        """,
+        # --- Migrate existing pipe-separated data to scraped_contacts ---
+        """
+        INSERT INTO scraped_contacts (id, establishment_siret, contact_type, value, created_at)
+        SELECT
+            gen_random_uuid(),
+            e.siret,
+            'mobile_phone',
+            trim(phone),
+            COALESCE(e.website_scraped_at, NOW())
+        FROM establishments e,
+             unnest(string_to_array(e.website_scraped_mobile_phones, '|')) AS phone
+        WHERE e.website_scraped_mobile_phones IS NOT NULL
+          AND e.website_scraped_mobile_phones != ''
+          AND NOT EXISTS (
+              SELECT 1 FROM scraped_contacts sc
+              WHERE sc.establishment_siret = e.siret
+                AND sc.contact_type = 'mobile_phone'
+                AND sc.value = trim(phone)
+          )
+        """,
+        """
+        INSERT INTO scraped_contacts (id, establishment_siret, contact_type, value, created_at)
+        SELECT
+            gen_random_uuid(),
+            e.siret,
+            'national_phone',
+            trim(phone),
+            COALESCE(e.website_scraped_at, NOW())
+        FROM establishments e,
+             unnest(string_to_array(e.website_scraped_national_phones, '|')) AS phone
+        WHERE e.website_scraped_national_phones IS NOT NULL
+          AND e.website_scraped_national_phones != ''
+          AND NOT EXISTS (
+              SELECT 1 FROM scraped_contacts sc
+              WHERE sc.establishment_siret = e.siret
+                AND sc.contact_type = 'national_phone'
+                AND sc.value = trim(phone)
+          )
+        """,
+        """
+        INSERT INTO scraped_contacts (id, establishment_siret, contact_type, value, created_at)
+        SELECT
+            gen_random_uuid(),
+            e.siret,
+            'email',
+            trim(email),
+            COALESCE(e.website_scraped_at, NOW())
+        FROM establishments e,
+             unnest(string_to_array(e.website_scraped_emails, '|')) AS email
+        WHERE e.website_scraped_emails IS NOT NULL
+          AND e.website_scraped_emails != ''
+          AND NOT EXISTS (
+              SELECT 1 FROM scraped_contacts sc
+              WHERE sc.establishment_siret = e.siret
+                AND sc.contact_type = 'email'
+                AND sc.value = trim(email)
+          )
+        """,
     ]
 
     with engine.begin() as connection:

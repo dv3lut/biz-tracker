@@ -319,7 +319,10 @@ def list_establishments(
     else:
         total = 0
     establishments = (
-        query.options(selectinload(models.Establishment.directors))
+        query.options(
+            selectinload(models.Establishment.directors),
+            selectinload(models.Establishment.scraped_contacts),
+        )
         .order_by(
             models.Establishment.date_creation.desc(),
             models.Establishment.last_seen_at.desc(),
@@ -345,7 +348,10 @@ def get_establishment_detail(
 ) -> EstablishmentDetailOut:
     entity = (
         session.query(models.Establishment)
-        .options(selectinload(models.Establishment.directors))
+        .options(
+            selectinload(models.Establishment.directors),
+            selectinload(models.Establishment.scraped_contacts),
+        )
         .filter(models.Establishment.siret == siret)
         .first()
     )

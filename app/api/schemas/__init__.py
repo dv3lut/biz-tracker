@@ -12,7 +12,7 @@ from .clients import (
     ListingStatus,
 )
 from .email import AdminEmailConfig, AdminEmailConfigUpdate, EmailTestRequest, EmailTestResponse
-from .establishments import DirectorOut, EstablishmentDetailOut, EstablishmentListOut, EstablishmentOut
+from .establishments import DirectorOut, EstablishmentDetailOut, EstablishmentListOut, EstablishmentOut, ScrapedContactOut
 from .google import (
     GoogleCheckStatusListOut,
     GoogleFindPlaceCandidateOut,

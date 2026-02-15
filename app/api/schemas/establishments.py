@@ -27,6 +27,15 @@ class DirectorOut(BaseModel):
     linkedin_check_status: str = "pending"
 
 
+class ScrapedContactOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    contact_type: str
+    value: str
+    label: str | None = None
+
+
 class EstablishmentOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -70,6 +79,7 @@ class EstablishmentOut(BaseModel):
     is_sole_proprietorship: bool
     legal_unit_name: str | None = None
     directors: list[DirectorOut] = []
+    scraped_contacts: list[ScrapedContactOut] = []
 
 
 class EstablishmentDetailOut(EstablishmentOut):
@@ -115,4 +125,4 @@ class EstablishmentListOut(BaseModel):
     items: list[EstablishmentOut]
 
 
-__all__ = ["DirectorOut", "EstablishmentDetailOut", "EstablishmentListOut", "EstablishmentOut"]
+__all__ = ["DirectorOut", "EstablishmentDetailOut", "EstablishmentListOut", "EstablishmentOut", "ScrapedContactOut"]

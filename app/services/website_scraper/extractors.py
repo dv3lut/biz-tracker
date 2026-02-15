@@ -8,6 +8,91 @@ from bs4 import BeautifulSoup
 
 
 # ---------------------------------------------------------------------------
+# Label extraction helpers
+# ---------------------------------------------------------------------------
+
+_LABEL_MIN_LEN = 2
+_LABEL_MAX_LEN = 80
+_LABEL_SEPARATORS = ":.-–—•|/"
+
+# Words too generic to be useful as standalone labels.
+_GENERIC_WORDS = {
+    "tel", "tél", "telephone", "téléphone", "phone", "fax",
+    "email", "e-mail", "mail", "courriel", "adresse",
+}
+
+
+def _validate_label(candidate: str) -> bool:
+    """Return ``True`` when *candidate* looks like a meaningful label."""
+
+    if not candidate or len(candidate) < _LABEL_MIN_LEN or len(candidate) > _LABEL_MAX_LEN:
+        return False
+    # Must contain at least one letter.
+    if not re.search(r"[a-zA-ZÀ-ÿ]", candidate):
+        return False
+    # Reject URLs.
+    if re.match(r"https?://", candidate, re.IGNORECASE):
+        return False
+    # Reject email-like strings.
+    if "@" in candidate:
+        return False
+    # Reject if more than 50 % digits.
+    digits = sum(1 for c in candidate if c.isdigit())
+    if digits > len(candidate) * 0.5:
+        return False
+    # Reject HTML tag artifacts.
+    if "<" in candidate and ">" in candidate:
+        return False
+    # Reject single generic words (but allow them as part of a longer phrase).
+    if candidate.lower().strip() in _GENERIC_WORDS:
+        return False
+    return True
+
+
+def _extract_preceding_label(
+    text: str,
+    match_start: int,
+    max_lookback: int = 150,
+) -> str | None:
+    """Extract a potential label from text preceding a matched value.
+
+    Looks at the same line and, if empty, the previous line.
+    """
+
+    start = max(0, match_start - max_lookback)
+    preceding = text[start:match_start]
+
+    # Split by newlines — the last segment is on the same line as the match.
+    lines = preceding.split("\n")
+
+    # Try the same-line text first.
+    same_line = lines[-1].strip() if lines else ""
+    if same_line:
+        candidate = same_line.rstrip(_LABEL_SEPARATORS + " \t").strip()
+        # If very long, try to take only the last phrase.
+        if len(candidate) > 60:
+            for sep in (",", ";", "|", " - ", " – ", " — "):
+                idx = candidate.rfind(sep)
+                if idx > 0:
+                    shorter = candidate[idx + len(sep):].strip()
+                    if _validate_label(shorter):
+                        return shorter
+            return None
+        if _validate_label(candidate):
+            return candidate
+
+    # Fallback: try the previous line (useful for <dt>/<dd> or heading layouts).
+    if len(lines) >= 2:
+        prev_line = lines[-2].strip()
+        if prev_line:
+            candidate = prev_line.rstrip(_LABEL_SEPARATORS + " \t").strip()
+            if len(candidate) <= 60 and _validate_label(candidate):
+                return candidate
+
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Phone extraction
 # ---------------------------------------------------------------------------
 
@@ -46,6 +131,57 @@ def extract_phones(text: str) -> Tuple[List[str], List[str]]:
     return list(set(mobile_phones)), list(set(national_phones))
 
 
+def extract_phones_with_labels(text: str) -> Tuple[List[Tuple[str, Optional[str]]], List[Tuple[str, Optional[str]]]]:
+    """Return *(mobile_phones, national_phones)* as ``(value, label)`` tuples.
+
+    The label is extracted from contextual text preceding the phone number.
+    """
+
+    mobile_pattern = r'(?:\+33[\s.]?[67]|0[67])(?:[\s.]?\d{2}){4}'
+    national_pattern = r'(?:\+33[\s.]?[1-59]|0[1-59])(?:[\s.]?\d{2}){4}'
+
+    def _clean(phone: str) -> str:
+        phone = re.sub(r'[\s.\-]', '', phone)
+        if phone.startswith('+33'):
+            return phone
+        if phone.startswith('0'):
+            return '+33' + phone[1:]
+        return phone
+
+    mobile_dict: Dict[str, Optional[str]] = {}
+    for match in re.finditer(mobile_pattern, text):
+        cleaned = _clean(match.group())
+        if len(re.sub(r'[^\d]', '', cleaned)) < 11:
+            continue
+        if cleaned not in mobile_dict:
+            label = _extract_preceding_label(text, match.start())
+            mobile_dict[cleaned] = label
+        elif not mobile_dict[cleaned]:
+            label = _extract_preceding_label(text, match.start())
+            if label:
+                mobile_dict[cleaned] = label
+
+    national_dict: Dict[str, Optional[str]] = {}
+    for match in re.finditer(national_pattern, text):
+        cleaned = _clean(match.group())
+        if len(re.sub(r'[^\d]', '', cleaned)) < 11:
+            continue
+        if cleaned in mobile_dict:
+            continue
+        if cleaned not in national_dict:
+            label = _extract_preceding_label(text, match.start())
+            national_dict[cleaned] = label
+        elif not national_dict[cleaned]:
+            label = _extract_preceding_label(text, match.start())
+            if label:
+                national_dict[cleaned] = label
+
+    return (
+        [(v, l) for v, l in mobile_dict.items()],
+        [(v, l) for v, l in national_dict.items()],
+    )
+
+
 # ---------------------------------------------------------------------------
 # Email extraction
 # ---------------------------------------------------------------------------
@@ -55,6 +191,24 @@ def extract_emails(text: str) -> List[str]:
 
     pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
     return list(set(re.findall(pattern, text)))
+
+
+def extract_emails_with_labels(text: str) -> List[Tuple[str, Optional[str]]]:
+    """Return unique email addresses found in *text* as ``(value, label)`` tuples."""
+
+    pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
+    email_dict: Dict[str, Optional[str]] = {}
+    for match in re.finditer(pattern, text):
+        email = match.group()
+        lower = email.lower()
+        if lower not in email_dict:
+            label = _extract_preceding_label(text, match.start())
+            email_dict[lower] = label
+        elif not email_dict[lower]:
+            label = _extract_preceding_label(text, match.start())
+            if label:
+                email_dict[lower] = label
+    return [(v, l) for v, l in email_dict.items()]
 
 
 # ---------------------------------------------------------------------------

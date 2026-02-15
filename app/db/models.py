@@ -123,6 +123,12 @@ class Establishment(Base):
         cascade="all, delete-orphan",
         order_by="Director.created_at",
     )
+    scraped_contacts: Mapped[list["ScrapedContact"]] = relationship(
+        "ScrapedContact",
+        back_populates="establishment",
+        cascade="all, delete-orphan",
+        order_by="ScrapedContact.contact_type, ScrapedContact.value",
+    )
 
     @property
     def is_sole_proprietorship(self) -> bool:
@@ -181,6 +187,26 @@ class Director(Base):
         if not self.linkedin_profile_data:
             return None
         return self.linkedin_profile_data.get("title")
+
+
+class ScrapedContact(Base):
+    """Phone number or email address extracted from a website, with optional label."""
+
+    __tablename__ = "scraped_contacts"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    establishment_siret: Mapped[str] = mapped_column(
+        String(14),
+        ForeignKey("establishments.siret", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    contact_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    value: Mapped[str] = mapped_column(String(512), nullable=False)
+    label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+
+    establishment: Mapped[Establishment] = relationship("Establishment", back_populates="scraped_contacts")
 
 
 class SyncRun(Base):

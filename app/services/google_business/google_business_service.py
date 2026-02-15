@@ -25,7 +25,7 @@ from app.services.google_business.google_types import GoogleEnrichmentResult, Go
 from app.services.google.google_retry_config import GoogleRetryRuntimeConfig, load_runtime_google_retry_config
 from app.services.client_service import resolve_enabled_department_codes
 from app.services.rate_limiter import RateLimiter
-from app.services.website_scraper.scraper_service import WebsiteScrapingResult, scrape_website
+from app.services.website_scraper.scraper_service import ContactItem, WebsiteScrapingResult, scrape_website
 from app.utils.business_types import is_micro_company
 from app.utils.dates import utcnow
 from app.utils.diffusible import any_name_non_diffusible
@@ -36,6 +36,31 @@ ProgressCallback = Callable[[int, int, int, int, int], None]
 AgeBuckets = dict[str, int]
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _persist_scraped_contacts(
+    session: Session,
+    siret: str,
+    result: WebsiteScrapingResult,
+    now: datetime,
+) -> None:
+    """Replace existing scraped contacts for *siret* with fresh entries from *result*."""
+
+    # Remove previous contacts for this establishment.
+    session.query(models.ScrapedContact).filter(
+        models.ScrapedContact.establishment_siret == siret,
+    ).delete(synchronize_session="fetch")
+
+    for contact_type, value, label in result.all_contacts:
+        session.add(
+            models.ScrapedContact(
+                establishment_siret=siret,
+                contact_type=contact_type,
+                value=value,
+                label=label,
+                created_at=now,
+            )
+        )
 
 
 class GoogleBusinessService:
@@ -637,6 +662,10 @@ class GoogleBusinessService:
         establishment.website_scraped_instagram = None
         establishment.website_scraped_twitter = None
         establishment.website_scraped_linkedin = None
+        # Clear structured contacts too.
+        self._session.query(models.ScrapedContact).filter(
+            models.ScrapedContact.establishment_siret == establishment.siret,
+        ).delete(synchronize_session="fetch")
 
     def _scrape_establishment_website(
         self,
@@ -667,6 +696,7 @@ class GoogleBusinessService:
             )
             return False
 
+        # Persist legacy pipe-separated columns (used by stats queries).
         establishment.website_scraped_at = now
         establishment.website_scraped_mobile_phones = result.mobile_phones_str
         establishment.website_scraped_national_phones = result.national_phones_str
@@ -675,6 +705,9 @@ class GoogleBusinessService:
         establishment.website_scraped_instagram = result.instagram
         establishment.website_scraped_twitter = result.twitter
         establishment.website_scraped_linkedin = result.linkedin
+
+        # Persist structured contacts to the dedicated table.
+        _persist_scraped_contacts(self._session, establishment.siret, result, now)
         self._session.flush()
 
         log_event(
@@ -689,6 +722,9 @@ class GoogleBusinessService:
                 "instagram": result.instagram is not None,
                 "twitter": result.twitter is not None,
                 "linkedin": result.linkedin is not None,
+                "labels_found": sum(
+                    1 for _, _, lbl in result.all_contacts if lbl
+                ),
             },
         )
         return result.has_data

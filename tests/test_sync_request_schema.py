@@ -215,6 +215,21 @@ class SyncRequestSchemaTests(unittest.TestCase):
         )
         self.assertEqual(payload.linkedin_statuses, ["pending", "found", "not_found", "insufficient"])
 
+    def test_website_statuses_normalized_and_deduped(self) -> None:
+        payload = SyncRequest(
+            mode=SyncMode.FULL,
+            website_statuses=[" scraped ", "NOT_SCRAPED", "scraped", ""],
+        )
+        self.assertEqual(payload.website_statuses, ["scraped", "not_scraped"])
+
+    def test_website_statuses_invalid_rejected(self) -> None:
+        with self.assertRaises(ValidationError):
+            SyncRequest(mode=SyncMode.FULL, website_statuses=["invalid"])
+
+    def test_website_statuses_empty_list_is_ignored(self) -> None:
+        payload = SyncRequest(mode=SyncMode.FULL, website_statuses=[])
+        self.assertIsNone(payload.website_statuses)
+
 
 if __name__ == "__main__":
     unittest.main()
