@@ -1,7 +1,13 @@
-import { useEffect, useState } from "react";
+import { ReactNode, useEffect, useState } from "react";
 
-import { linkedInApi } from "../api";
-import { Director, EstablishmentDetail, LinkedInCheckResponse, LinkedInDebugResponse } from "../types";
+import { googleApi, linkedInApi } from "../api";
+import {
+  Director,
+  EstablishmentDetail,
+  LinkedInCheckResponse,
+  LinkedInDebugResponse,
+  WebsiteScrapeStatus,
+} from "../types";
 import { formatDateTime } from "../utils/format";
 import { buildLinkedInSearchQuery, openLinkedInSearchForDirector } from "../utils/linkedinSearch";
 import { SiretLink } from "./SiretLink";
@@ -14,6 +20,7 @@ type Props = {
   isLoading: boolean;
   errorMessage: string | null;
   onClose: () => void;
+  onRefreshEstablishment?: (siret: string) => Promise<void> | void;
   onDirectorLinkedInUpdated?: (directorId: string, update: Partial<Director>) => void;
 };
 
@@ -73,12 +80,48 @@ const getLinkedInErrorMessage = (data: Record<string, unknown> | null | undefine
   return typeof candidate === "string" && candidate.trim().length > 0 ? candidate : null;
 };
 
+const computeWebsiteScrapeStatus = (establishment: EstablishmentDetail | null): WebsiteScrapeStatus => {
+  const website = establishment?.googleContactWebsite?.trim();
+  if (!website) {
+    return "no_website";
+  }
+  if (!establishment?.websiteScrapedAt) {
+    return "pending";
+  }
+  const hasInfo = [
+    establishment.websiteScrapedMobilePhones,
+    establishment.websiteScrapedNationalPhones,
+    establishment.websiteScrapedEmails,
+    establishment.websiteScrapedFacebook,
+    establishment.websiteScrapedInstagram,
+    establishment.websiteScrapedTwitter,
+    establishment.websiteScrapedLinkedin,
+  ].some((value) => Boolean(value && value.trim()));
+  return hasInfo ? "found" : "no_info";
+};
+
+const websiteScrapeStatusLabel = (status: WebsiteScrapeStatus): string => {
+  switch (status) {
+    case "pending":
+      return "En attente";
+    case "found":
+      return "Infos trouvées";
+    case "no_info":
+      return "Aucune info";
+    case "no_website":
+      return "Sans site web";
+    default:
+      return status;
+  }
+};
+
 export const EstablishmentDetailModal = ({
   isOpen,
   establishment,
   isLoading,
   errorMessage,
   onClose,
+  onRefreshEstablishment,
   onDirectorLinkedInUpdated,
 }: Props) => {
   const [linkedInLoadingIds, setLinkedInLoadingIds] = useState<Set<string>>(new Set());
@@ -91,6 +134,9 @@ export const EstablishmentDetailModal = ({
   const [linkedInDebugModal, setLinkedInDebugModal] = useState<
     { director: Director; result: LinkedInDebugResponse } | null
   >(null);
+  const [isScrapingWebsite, setIsScrapingWebsite] = useState(false);
+  const [websiteScrapeMessage, setWebsiteScrapeMessage] = useState<string | null>(null);
+  const [websiteScrapeError, setWebsiteScrapeError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) {
@@ -100,6 +146,9 @@ export const EstablishmentDetailModal = ({
       setLinkedInDebugErrors({});
       setLinkedInCheckModal(null);
       setLinkedInDebugModal(null);
+      setIsScrapingWebsite(false);
+      setWebsiteScrapeMessage(null);
+      setWebsiteScrapeError(null);
       return;
     }
     const handler = (event: KeyboardEvent) => {
@@ -169,6 +218,28 @@ export const EstablishmentDetailModal = ({
     }
   };
 
+  const handleManualWebsiteScrape = async () => {
+    if (!establishment) {
+      return;
+    }
+    setIsScrapingWebsite(true);
+    setWebsiteScrapeError(null);
+    setWebsiteScrapeMessage(null);
+
+    try {
+      const result = await googleApi.scrapeWebsite(establishment.siret);
+      setWebsiteScrapeMessage(result.message || "Scraping du site relancé.");
+      if (onRefreshEstablishment) {
+        await onRefreshEstablishment(establishment.siret);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Erreur inconnue";
+      setWebsiteScrapeError(message);
+    } finally {
+      setIsScrapingWebsite(false);
+    }
+  };
+
   if (!isOpen) {
     return null;
   }
@@ -178,6 +249,62 @@ export const EstablishmentDetailModal = ({
   const googlePlaceId = establishment?.googlePlaceId ?? null;
   const lastChecked = establishment ? formatDateTime(establishment.googleLastCheckedAt) : "—";
   const lastFound = establishment ? formatDateTime(establishment.googleLastFoundAt) : "—";
+  const websiteScrapeStatus = computeWebsiteScrapeStatus(establishment);
+  const detailRows: Array<{ label: string; value: ReactNode }> = establishment
+    ? [
+        { label: "SIRET", value: <SiretLink value={establishment.siret} /> },
+        { label: "SIREN", value: formatValue(establishment.siren) },
+        { label: "NIC", value: formatValue(establishment.nic) },
+        { label: "Nom", value: formatValue(establishment.name) },
+        {
+          label: "Enseigne",
+          value: formatValue(establishment.enseigne1 || establishment.enseigne2 || establishment.enseigne3),
+        },
+        {
+          label: "NAF",
+          value: `${formatValue(establishment.nafCode)}${establishment.nafLibelle ? ` (${establishment.nafLibelle})` : ""}`,
+        },
+        { label: "Catégorie juridique", value: formatValue(establishment.categorieJuridique) },
+        { label: "Catégorie entreprise", value: formatValue(establishment.categorieEntreprise) },
+        { label: "Entreprise individuelle", value: establishment.isSoleProprietorship ? "Oui" : "Non" },
+        { label: "Tranche effectifs", value: formatValue(establishment.trancheEffectifs) },
+        { label: "Année effectifs", value: formatValue(establishment.anneeEffectifs) },
+        { label: "Unité légale", value: formatValue(establishment.legalUnitName) },
+        { label: "Adresse", value: <span className="preformatted">{buildAddress(establishment)}</span> },
+        { label: "Distribution spéciale", value: formatValue(establishment.distributionSpeciale) },
+        { label: "Code commune", value: formatValue(establishment.codeCommune) },
+        { label: "Code cedex", value: formatValue(establishment.codeCedex) },
+        { label: "Pays", value: formatValue(establishment.libellePays) },
+        { label: "Date création", value: formatValue(establishment.dateCreation) },
+        { label: "Date début activité", value: formatValue(establishment.dateDebutActivite) },
+        { label: "Première vue", value: formatDateTime(establishment.firstSeenAt) },
+        { label: "Dernière vue", value: formatDateTime(establishment.lastSeenAt) },
+        { label: "Run d'origine", value: formatValue(establishment.createdRunId) },
+        { label: "Dernier run", value: formatValue(establishment.lastRunId) },
+        {
+          label: "Dernier traitement établissement",
+          value: formatDateTime(establishment.dateDernierTraitementEtablissement),
+        },
+        {
+          label: "Dernier traitement unité légale",
+          value: formatDateTime(establishment.dateDernierTraitementUniteLegale),
+        },
+        { label: "Statut Google", value: formatValue(googleStatus) },
+        { label: "Dernier contrôle Google", value: lastChecked },
+        { label: "Dernière détection Google", value: lastFound },
+        { label: "Place ID", value: formatValue(googlePlaceId) },
+        {
+          label: "URL Google",
+          value: placeUrl ? (
+            <a href={placeUrl} target="_blank" rel="noreferrer">
+              Ouvrir la fiche Google
+            </a>
+          ) : (
+            "—"
+          ),
+        },
+      ]
+    : [];
 
   return (
     <>
@@ -205,43 +332,10 @@ export const EstablishmentDetailModal = ({
         {!isLoading && !errorMessage && establishment && (
           <div className="modal-content">
             <section>
-              <h3>Identité</h3>
-              <dl className="data-grid">
-                <dt>SIRET</dt>
-                <dd>
-                  <SiretLink value={establishment.siret} />
-                </dd>
-                <dt>SIREN</dt>
-                <dd>{establishment.siren}</dd>
-                <dt>NIC</dt>
-                <dd>{formatValue(establishment.nic)}</dd>
-                <dt>Nom</dt>
-                <dd>{formatValue(establishment.name)}</dd>
-                <dt>Enseigne</dt>
-                <dd>{formatValue(establishment.enseigne1 || establishment.enseigne2 || establishment.enseigne3)}</dd>
-                <dt>NAF</dt>
-                <dd>
-                  {formatValue(establishment.nafCode)}
-                  {establishment.nafLibelle ? ` (${establishment.nafLibelle})` : ""}
-                </dd>
-                <dt>Catégorie juridique</dt>
-                <dd>{formatValue(establishment.categorieJuridique)}</dd>
-                <dt>Catégorie entreprise</dt>
-                <dd>{formatValue(establishment.categorieEntreprise)}</dd>
-                <dt>Entreprise individuelle</dt>
-                <dd>{establishment.isSoleProprietorship ? "Oui" : "Non"}</dd>
-                <dt>Tranche effectifs</dt>
-                <dd>{formatValue(establishment.trancheEffectifs)}</dd>
-                <dt>Année effectifs</dt>
-                <dd>{formatValue(establishment.anneeEffectifs)}</dd>
-                <dt>Unité légale</dt>
-                <dd>{formatValue(establishment.legalUnitName)}</dd>
-              </dl>
-            </section>
-
-            {establishment.directors.length > 0 && (
-              <section>
-                <h3>Dirigeants ({establishment.directors.length})</h3>
+              <h3>Actions dirigeants (LinkedIn)</h3>
+              {establishment.directors.length === 0 ? (
+                <p className="muted">Aucun dirigeant rattaché.</p>
+              ) : (
                 <div className="table-wrapper">
                   <table>
                     <thead>
@@ -358,76 +452,64 @@ export const EstablishmentDetailModal = ({
                     </tbody>
                   </table>
                 </div>
-              </section>
-            )}
-
-            <section>
-              <h3>Localisation</h3>
-              <dl className="data-grid">
-                <dt>Adresse</dt>
-                <dd>
-                  <span className="preformatted">{buildAddress(establishment)}</span>
-                </dd>
-                <dt>Distribution spéciale</dt>
-                <dd>{formatValue(establishment.distributionSpeciale)}</dd>
-                <dt>Code commune</dt>
-                <dd>{formatValue(establishment.codeCommune)}</dd>
-                <dt>Code cedex</dt>
-                <dd>{formatValue(establishment.codeCedex)}</dd>
-                <dt>Pays</dt>
-                <dd>{formatValue(establishment.libellePays)}</dd>
-              </dl>
+              )}
             </section>
 
             <section>
-              <h3>Synchronisation</h3>
+              <h3>Scraping du site web</h3>
               <dl className="data-grid">
-                <dt>Date création</dt>
-                <dd>{formatValue(establishment.dateCreation)}</dd>
-                <dt>Date début activité</dt>
-                <dd>{formatValue(establishment.dateDebutActivite)}</dd>
-                <dt>Première vue</dt>
-                <dd>{formatDateTime(establishment.firstSeenAt)}</dd>
-                <dt>Dernière vue</dt>
-                <dd>{formatDateTime(establishment.lastSeenAt)}</dd>
-                <dt>Run d'origine</dt>
-                <dd>{formatValue(establishment.createdRunId)}</dd>
-                <dt>Dernier run</dt>
-                <dd>{formatValue(establishment.lastRunId)}</dd>
-                <dt>Dernier traitement établissement</dt>
-                <dd>{formatDateTime(establishment.dateDernierTraitementEtablissement)}</dd>
-                <dt>Dernier traitement unité légale</dt>
-                <dd>{formatDateTime(establishment.dateDernierTraitementUniteLegale)}</dd>
-              </dl>
-            </section>
-
-            <section>
-              <h3>Informations Google</h3>
-              <dl className="data-grid">
-                <dt>Statut</dt>
-                <dd>{formatValue(googleStatus)}</dd>
-                <dt>Dernier contrôle</dt>
-                <dd>{lastChecked}</dd>
-                <dt>Dernière détection</dt>
-                <dd>{lastFound}</dd>
-                <dt>Place ID</dt>
-                <dd>{formatValue(googlePlaceId)}</dd>
-                <dt>URL Google</dt>
+                <dt>Site web</dt>
                 <dd>
-                  {placeUrl ? (
-                    <a href={placeUrl} target="_blank" rel="noreferrer">
-                      Ouvrir la fiche Google
+                  {establishment.googleContactWebsite ? (
+                    <a href={establishment.googleContactWebsite} target="_blank" rel="noreferrer">
+                      {establishment.googleContactWebsite}
                     </a>
                   ) : (
                     "—"
                   )}
                 </dd>
+                <dt>Statut scraping</dt>
+                <dd>{websiteScrapeStatusLabel(websiteScrapeStatus)}</dd>
+                <dt>Dernier scraping</dt>
+                <dd>{formatDateTime(establishment.websiteScrapedAt)}</dd>
+                <dt>Téléphones mobiles</dt>
+                <dd>{formatValue(establishment.websiteScrapedMobilePhones)}</dd>
+                <dt>Téléphones nationaux</dt>
+                <dd>{formatValue(establishment.websiteScrapedNationalPhones)}</dd>
+                <dt>Emails</dt>
+                <dd>{formatValue(establishment.websiteScrapedEmails)}</dd>
+                <dt>Facebook</dt>
+                <dd>{formatValue(establishment.websiteScrapedFacebook)}</dd>
+                <dt>Instagram</dt>
+                <dd>{formatValue(establishment.websiteScrapedInstagram)}</dd>
+                <dt>Twitter/X</dt>
+                <dd>{formatValue(establishment.websiteScrapedTwitter)}</dd>
+                <dt>LinkedIn</dt>
+                <dd>{formatValue(establishment.websiteScrapedLinkedin)}</dd>
               </dl>
+              <div style={{ marginTop: 12 }}>
+                <button type="button" className="small" onClick={handleManualWebsiteScrape} disabled={isScrapingWebsite}>
+                  {isScrapingWebsite ? "Scraping..." : "Re-scraper le site"}
+                </button>
+                {websiteScrapeMessage ? <p className="feedback success">{websiteScrapeMessage}</p> : null}
+                {websiteScrapeError ? <p className="feedback error">{websiteScrapeError}</p> : null}
+              </div>
             </section>
 
             <section>
-              <h3>Données brutes</h3>
-              <pre className="payload">{JSON.stringify(establishment, null, 2)}</pre>
+              <h3>Détails établissement</h3>
+              <div className="table-wrapper">
+                <table className="data-table">
+                  <tbody>
+                    {detailRows.map((row) => (
+                      <tr key={row.label}>
+                        <th style={{ width: "35%", textAlign: "left" }}>{row.label}</th>
+                        <td>{row.value}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </section>
           </div>
         )}

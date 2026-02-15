@@ -52,6 +52,8 @@ export interface SyncRunResponse {
   linkedin_found_count: number | null;
   linkedin_not_found_count: number | null;
   linkedin_error_count: number | null;
+  website_scrape_count: number;
+  website_scrape_success_count: number;
 }
 
 export interface RunSummaryResponse {
@@ -268,6 +270,8 @@ export const mapSyncRun = (payload: SyncRunResponse): SyncRun => ({
   linkedinFoundCount: payload.linkedin_found_count ?? 0,
   linkedinNotFoundCount: payload.linkedin_not_found_count ?? 0,
   linkedinErrorCount: payload.linkedin_error_count ?? 0,
+  websiteScrapeCount: payload.website_scrape_count ?? 0,
+  websiteScrapeSuccessCount: payload.website_scrape_success_count ?? 0,
   summary: payload.summary && payload.summary.run ? mapRunSummary(payload.summary) : null,
 });
 
@@ -335,6 +339,9 @@ export const syncApi = {
     }
     if (payload.googleStatuses && payload.googleStatuses.length > 0) {
       body.google_statuses = payload.googleStatuses;
+    }
+    if (payload.websiteStatuses && payload.websiteStatuses.length > 0) {
+      body.website_statuses = payload.websiteStatuses;
     }
     if (payload.forceGoogleReplay !== undefined) {
       body.force_google_replay = payload.forceGoogleReplay;

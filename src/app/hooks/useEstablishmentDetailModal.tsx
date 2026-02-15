@@ -51,8 +51,13 @@ export const useEstablishmentDetailModal = (isAuthenticated: boolean, onUnauthor
       isLoading,
       errorMessage,
       onClose: closeDetail,
+      onRefreshEstablishment: async (siret: string) => {
+        await queryClient.invalidateQueries({ queryKey: ["establishment-detail", siret] });
+        await queryClient.refetchQueries({ queryKey: ["establishment-detail", siret], exact: true });
+        await queryClient.invalidateQueries({ queryKey: ["establishments"] });
+      },
     }),
-    [selectedSiret, detailQuery.data, isLoading, errorMessage, closeDetail],
+    [selectedSiret, detailQuery.data, isLoading, errorMessage, closeDetail, queryClient],
   );
 
   const invalidateDetail = useCallback(

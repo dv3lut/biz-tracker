@@ -81,6 +81,8 @@ interface SyncRunResponse {
   linkedin_found_count: number | null;
   linkedin_not_found_count: number | null;
   linkedin_error_count: number | null;
+  website_scrape_count: number;
+  website_scrape_success_count: number;
 }
 
 interface RunSummaryResponse {
@@ -256,6 +258,8 @@ interface DashboardRunBreakdownResponse {
   listing_unknown: number;
   alerts_created: number;
   alerts_sent: number;
+  website_scrape_count: number;
+  website_scrape_success_count: number;
 }
 
 interface DashboardMetricsResponse {
@@ -270,6 +274,13 @@ interface DashboardMetricsResponse {
   listing_age_breakdown: GoogleListingAgeBreakdownResponse;
   establishment_status_breakdown: Record<string, number>;
   naf_category_breakdown: NafCategoryStatResponse[];
+  website_scraping_breakdown: {
+    with_website: number;
+    without_website: number;
+    scraped: number;
+    scraped_with_info: number;
+    not_scraped: number;
+  };
 }
 
 interface NafSubCategoryStatResponse {
@@ -290,6 +301,8 @@ interface NafSubCategoryStatResponse {
   listing_not_recent: number;
   listing_unknown: number;
   linkedin_found: number;
+  website_count: number;
+  website_scraped_count: number;
 }
 
 interface NafCategoryStatResponse {
@@ -340,6 +353,14 @@ interface EstablishmentResponse {
   google_contact_phone: string | null;
   google_contact_email: string | null;
   google_contact_website: string | null;
+  website_scraped_at: string | null;
+  website_scraped_mobile_phones: string | null;
+  website_scraped_national_phones: string | null;
+  website_scraped_emails: string | null;
+  website_scraped_facebook: string | null;
+  website_scraped_instagram: string | null;
+  website_scraped_twitter: string | null;
+  website_scraped_linkedin: string | null;
   google_match_confidence: number | null;
   google_last_checked_at: string | null;
   google_last_found_at: string | null;
@@ -552,6 +573,8 @@ const toSyncRun = (payload: SyncRunResponse): SyncRun => ({
   linkedinFoundCount: payload.linkedin_found_count ?? 0,
   linkedinNotFoundCount: payload.linkedin_not_found_count ?? 0,
   linkedinErrorCount: payload.linkedin_error_count ?? 0,
+  websiteScrapeCount: payload.website_scrape_count ?? 0,
+  websiteScrapeSuccessCount: payload.website_scrape_success_count ?? 0,
   summary: payload.summary ? toRunSummary(payload.summary) : null,
 });
 
@@ -655,6 +678,8 @@ const toDashboardRunBreakdown = (payload: DashboardRunBreakdownResponse): Dashbo
   listingRecentMissingContact: payload.listing_recent_missing_contact,
   listingNotRecent: payload.listing_not_recent,
   listingUnknown: payload.listing_unknown,
+  websiteScrapeCount: payload.website_scrape_count ?? 0,
+  websiteScrapeSuccessCount: payload.website_scrape_success_count ?? 0,
 });
 
 const toDashboardMetrics = (payload: DashboardMetricsResponse): DashboardMetrics => ({
@@ -669,6 +694,13 @@ const toDashboardMetrics = (payload: DashboardMetricsResponse): DashboardMetrics
   listingAgeBreakdown: toGoogleListingAgeBreakdown(payload.listing_age_breakdown),
   establishmentStatusBreakdown: payload.establishment_status_breakdown,
   nafCategoryBreakdown: payload.naf_category_breakdown.map(toNafCategoryStat),
+  websiteScrapingBreakdown: {
+    withWebsite: payload.website_scraping_breakdown?.with_website ?? 0,
+    withoutWebsite: payload.website_scraping_breakdown?.without_website ?? 0,
+    scraped: payload.website_scraping_breakdown?.scraped ?? 0,
+    scrapedWithInfo: payload.website_scraping_breakdown?.scraped_with_info ?? 0,
+    notScraped: payload.website_scraping_breakdown?.not_scraped ?? 0,
+  },
 });
 
 const toNafSubCategoryStat = (payload: NafSubCategoryStatResponse): NafSubCategoryStat => ({
@@ -689,6 +721,8 @@ const toNafSubCategoryStat = (payload: NafSubCategoryStatResponse): NafSubCatego
   listingNotRecent: payload.listing_not_recent,
   listingUnknown: payload.listing_unknown,
   linkedinFound: payload.linkedin_found,
+  websiteCount: payload.website_count ?? 0,
+  websiteScrapedCount: payload.website_scraped_count ?? 0,
 });
 
 const toNafCategoryStat = (payload: NafCategoryStatResponse): NafCategoryStat => ({
@@ -728,6 +762,14 @@ const toEstablishment = (payload: EstablishmentResponse): Establishment => ({
   googleContactPhone: payload.google_contact_phone,
   googleContactEmail: payload.google_contact_email,
   googleContactWebsite: payload.google_contact_website,
+  websiteScrapedAt: payload.website_scraped_at,
+  websiteScrapedMobilePhones: payload.website_scraped_mobile_phones,
+  websiteScrapedNationalPhones: payload.website_scraped_national_phones,
+  websiteScrapedEmails: payload.website_scraped_emails,
+  websiteScrapedFacebook: payload.website_scraped_facebook,
+  websiteScrapedInstagram: payload.website_scraped_instagram,
+  websiteScrapedTwitter: payload.website_scraped_twitter,
+  websiteScrapedLinkedin: payload.website_scraped_linkedin,
   isSoleProprietorship: payload.is_sole_proprietorship,
   legalUnitName: payload.legal_unit_name ?? null,
   directors: (payload.directors ?? []).map((d): Director => ({

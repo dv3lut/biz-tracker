@@ -88,17 +88,24 @@ const ProportionsTooltip = ({ active, payload, label }: TooltipProps<ValueType, 
 
 const computeProportions = (point: NafAnalyticsTimePoint) => {
   const searchable = point.totalFetched - point.nonDiffusible - point.insufficientInfo;
+  const googleTracked = point.googleFound + point.googleNotFound + point.googlePending;
   const total = point.totalFetched || 1;
   return {
     nonDiffusiblePct: Math.round((point.nonDiffusible / total) * 100),
     insufficientPct: Math.round((point.insufficientInfo / total) * 100),
-    googleFoundPct: searchable > 0 ? Math.round((point.googleFound / searchable) * 100) : 0,
-    googleNotFoundPct: searchable > 0 ? Math.round((point.googleNotFound / searchable) * 100) : 0,
+    googleFoundPct: googleTracked > 0 ? Math.round((point.googleFound / googleTracked) * 100) : 0,
+    googleNotFoundPct: googleTracked > 0 ? Math.round((point.googleNotFound / googleTracked) * 100) : 0,
     listingRecentPct: point.googleFound > 0 ? Math.round((point.listingRecent / point.googleFound) * 100) : 0,
     listingRecentMissingContactPct:
       point.googleFound > 0 ? Math.round((point.listingRecentMissingContact / point.googleFound) * 100) : 0,
     linkedinFoundPct: searchable > 0 ? Math.round((point.linkedinFound / searchable) * 100) : 0,
     alertsPct: searchable > 0 ? Math.round((point.alertsCreated / searchable) * 100) : 0,
+    googleWithWebsitePct: point.googleFound > 0 ? Math.round((point.websiteWithWebsite / point.googleFound) * 100) : 0,
+    websiteScrapedPct: point.websiteWithWebsite > 0 ? Math.round((point.websiteScraped / point.websiteWithWebsite) * 100) : 0,
+    websiteScrapedWithInfoPct:
+      point.websiteScraped > 0
+        ? Math.round((point.websiteScrapedWithInfo / point.websiteScraped) * 100)
+        : 0,
   };
 };
 
@@ -337,6 +344,20 @@ export const AnalyticsSection = ({ onUnauthorized }: Props) => {
                 <span className="stat-label">Alertes générées</span>
                 {globalProportions && (
                   <span className="stat-pct muted">({globalProportions.alertsPct}%)</span>
+                )}
+              </div>
+              <div className="summary-stat">
+                <span className="stat-value">{formatNumber(data.globalTotals.websiteWithWebsite)}</span>
+                <span className="stat-label">Fiches Google avec site</span>
+                {globalProportions && (
+                  <span className="stat-pct muted">({globalProportions.googleWithWebsitePct}% des Google)</span>
+                )}
+              </div>
+              <div className="summary-stat">
+                <span className="stat-value">{formatNumber(data.globalTotals.websiteScraped)}</span>
+                <span className="stat-label">Sites scrapés</span>
+                {globalProportions && (
+                  <span className="stat-pct muted">({globalProportions.websiteScrapedPct}% des sites)</span>
                 )}
               </div>
             </div>
@@ -582,6 +603,9 @@ export const AnalyticsSection = ({ onUnauthorized }: Props) => {
                     <th className="num">Sans contact</th>
                     <th className="num">LinkedIn</th>
                     <th className="num">Dirigeants ND</th>
+                    <th className="num">Google avec site</th>
+                    <th className="num">Sites scrapés</th>
+                    <th className="num">Scrape avec infos</th>
                     <th className="num">Alertes</th>
                   </tr>
                 </thead>
@@ -633,6 +657,18 @@ export const AnalyticsSection = ({ onUnauthorized }: Props) => {
                           <td className="num">
                             {formatNumber(item.totals.linkedinSkippedNd)}
                             <span className="pct muted"> ({nonDiffusibleDirectorsPct}%)</span>
+                          </td>
+                          <td className="num">
+                            {formatNumber(item.totals.websiteWithWebsite)}
+                            <span className="pct muted"> ({pct.googleWithWebsitePct}%)</span>
+                          </td>
+                          <td className="num">
+                            {formatNumber(item.totals.websiteScraped)}
+                            <span className="pct muted"> ({pct.websiteScrapedPct}%)</span>
+                          </td>
+                          <td className="num">
+                            {formatNumber(item.totals.websiteScrapedWithInfo)}
+                            <span className="pct muted"> ({pct.websiteScrapedWithInfoPct}%)</span>
                           </td>
                           <td className="num">
                             {formatNumber(item.totals.alertsCreated)}

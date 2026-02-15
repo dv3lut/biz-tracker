@@ -10,6 +10,7 @@ import type {
   LinkedInStatus,
   NafCategory,
   Region,
+  WebsiteScrapeStatus,
 } from "../../types";
 import { EstablishmentsView } from "../../components/views/EstablishmentsView";
 import { useGoogleCheckMutation } from "../hooks/useGoogleCheckMutation";
@@ -40,6 +41,7 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
   const [draftIndividualFilter, setDraftIndividualFilter] = useState<EstablishmentIndividualFilter>("all");
   const [draftGoogleCheckStatus, setDraftGoogleCheckStatus] = useState("");
   const [draftLinkedinStatuses, setDraftLinkedinStatuses] = useState<LinkedInStatus[]>([]);
+  const [draftWebsiteScrapeStatuses, setDraftWebsiteScrapeStatuses] = useState<WebsiteScrapeStatus[]>([]);
 
   const [query, setQuery] = useState("");
   const [nafCodes, setNafCodes] = useState<string[]>([]);
@@ -51,6 +53,7 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
   const [individualFilter, setIndividualFilter] = useState<EstablishmentIndividualFilter>("all");
   const [googleCheckStatus, setGoogleCheckStatus] = useState("");
   const [linkedinStatuses, setLinkedinStatuses] = useState<LinkedInStatus[]>([]);
+  const [websiteScrapeStatuses, setWebsiteScrapeStatuses] = useState<WebsiteScrapeStatus[]>([]);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -85,6 +88,7 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
       individualFilter,
       googleCheckStatus,
       linkedinStatuses,
+      websiteScrapeStatuses,
     ],
     queryFn: () =>
       establishmentsApi.fetchMany({
@@ -101,6 +105,7 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
         isIndividual:
           individualFilter === "all" ? undefined : individualFilter === "individual",
         linkedinStatuses: linkedinStatuses.length > 0 ? linkedinStatuses : undefined,
+        websiteScrapeStatuses: websiteScrapeStatuses.length > 0 ? websiteScrapeStatuses : undefined,
       }),
     placeholderData: keepPreviousData,
   });
@@ -276,6 +281,10 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     setDraftLinkedinStatuses(value);
   }, []);
 
+  const handleWebsiteScrapeStatusesChange = useCallback((value: WebsiteScrapeStatus[]) => {
+    setDraftWebsiteScrapeStatuses(value);
+  }, []);
+
   const handleApplyFilters = useCallback(() => {
     setQuery(draftQuery);
     setNafCodes(draftNafCodes);
@@ -287,6 +296,7 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     setIndividualFilter(draftIndividualFilter);
     setGoogleCheckStatus(draftGoogleCheckStatus);
     setLinkedinStatuses(draftLinkedinStatuses);
+    setWebsiteScrapeStatuses(draftWebsiteScrapeStatuses);
     setPage(0);
   }, [
     draftAddedFrom,
@@ -299,6 +309,7 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     draftQuery,
     draftDepartmentCodes,
     draftLinkedinStatuses,
+    draftWebsiteScrapeStatuses,
   ]);
 
   const handleResetFilters = useCallback(() => {
@@ -312,6 +323,7 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     setDraftIndividualFilter("all");
     setDraftGoogleCheckStatus("");
     setDraftLinkedinStatuses([]);
+    setDraftWebsiteScrapeStatuses([]);
 
     setQuery("");
     setNafCodes([]);
@@ -323,6 +335,7 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     setIndividualFilter("all");
     setGoogleCheckStatus("");
     setLinkedinStatuses([]);
+    setWebsiteScrapeStatuses([]);
     setPage(0);
   }, []);
 
@@ -357,6 +370,9 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     if (draftDepartmentCodes.length !== departmentCodes.length) {
       return true;
     }
+    if (draftWebsiteScrapeStatuses.length !== websiteScrapeStatuses.length) {
+      return true;
+    }
     const a = [...draftNafCodes].sort().join(",");
     const b = [...nafCodes].sort().join(",");
     if (a !== b) {
@@ -369,7 +385,12 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     }
     const linkedinA = [...draftLinkedinStatuses].sort().join(",");
     const linkedinB = [...linkedinStatuses].sort().join(",");
-    return linkedinA !== linkedinB;
+    if (linkedinA !== linkedinB) {
+      return true;
+    }
+    const websiteA = [...draftWebsiteScrapeStatuses].sort().join(",");
+    const websiteB = [...websiteScrapeStatuses].sort().join(",");
+    return websiteA !== websiteB;
   }, [
     addedFrom,
     addedTo,
@@ -391,6 +412,8 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     departmentCodes,
     draftLinkedinStatuses,
     linkedinStatuses,
+    draftWebsiteScrapeStatuses,
+    websiteScrapeStatuses,
   ]);
 
   const deletingSiret = useMemo(() => {
@@ -427,6 +450,7 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
       individualFilter={draftIndividualFilter}
       googleCheckStatus={draftGoogleCheckStatus}
       linkedinStatuses={draftLinkedinStatuses}
+      websiteScrapeStatuses={draftWebsiteScrapeStatuses}
       hasNextPage={hasNextPage}
       onLimitChange={handleLimitChange}
       onPageChange={handlePageChange}
@@ -443,6 +467,7 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
       onIndividualFilterChange={handleIndividualFilterChange}
       onGoogleCheckStatusChange={handleGoogleCheckStatusChange}
       onLinkedinStatusesChange={handleLinkedinStatusesChange}
+      onWebsiteScrapeStatusesChange={handleWebsiteScrapeStatusesChange}
       onRefresh={() => establishmentsQuery.refetch()}
       onDeleteEstablishment={handleDeleteEstablishment}
       deletingSiret={deletingSiret}

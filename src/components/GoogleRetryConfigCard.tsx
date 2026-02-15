@@ -16,6 +16,7 @@ const DEFAULT_CONFIG: GoogleRetryConfig = {
   retryWeekdays: [0],
   retryMissingContactEnabled: true,
   retryMissingContactFrequencyDays: 14,
+  retryNoWebsiteFrequencyDays: 14,
   defaultRules: [
     { maxAgeDays: 60, frequencyDays: 7 },
     { maxAgeDays: 120, frequencyDays: 14 },
@@ -256,6 +257,30 @@ export const GoogleRetryConfigCard = ({
                     }))
                   }
                   disabled={isDisabled || !formState.retryMissingContactEnabled}
+                />
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Rattrapage sites web</legend>
+            <p className="muted small">
+              Re-vérifie les fiches Google sans site web pour détecter les nouvelles URL et les scraper.
+            </p>
+            <div className="switch-row">
+              <label className="switch-row__input">
+                <span className="input-label">Fréquence min (jours)</span>
+                <input
+                  type="number"
+                  min={1}
+                  value={formState.retryNoWebsiteFrequencyDays}
+                  onChange={(event) =>
+                    setFormState((current) => ({
+                      ...current,
+                      retryNoWebsiteFrequencyDays: Math.max(1, Number(event.target.value || 1)),
+                    }))
+                  }
+                  disabled={isDisabled}
                 />
               </label>
             </div>

@@ -1,6 +1,7 @@
-export type SyncMode = "full" | "sirene_only" | "google_pending" | "google_refresh" | "linkedin_pending" | "linkedin_refresh" | "day_replay";
+export type SyncMode = "full" | "sirene_only" | "google_pending" | "google_refresh" | "linkedin_pending" | "linkedin_refresh" | "day_replay" | "website_scrape";
 export type DayReplayReference = "creation_date" | "insertion_date";
-export type LinkedInStatus = "pending" | "found" | "not_found" | "error";
+export type LinkedInStatus = "pending" | "found" | "not_found" | "error" | "insufficient";
+export type WebsiteScrapeStatus = "pending" | "found" | "no_info" | "no_website";
 export type GoogleCheckStatus = string;
 
 export type ListingStatus = "recent_creation" | "recent_creation_missing_contact" | "not_recent_creation";
@@ -32,6 +33,8 @@ export interface SyncRun {
   linkedinNotFoundCount: number;
   linkedinErrorCount: number;
   linkedinEnabled: boolean;
+  websiteScrapeCount: number;
+  websiteScrapeSuccessCount: number;
   lastCursor: string | null;
   queryChecksum: string | null;
   resumedFromRunId: string | null;
@@ -149,6 +152,8 @@ export interface NafSubCategoryStat {
   listingNotRecent: number;
   listingUnknown: number;
   linkedinFound: number;
+  websiteCount: number;
+  websiteScrapedCount: number;
 }
 
 export interface NafCategoryStat {
@@ -179,6 +184,8 @@ export interface DashboardRunBreakdown {
   listingUnknown: number;
   alertsCreated: number;
   alertsSent: number;
+  websiteScrapeCount: number;
+  websiteScrapeSuccessCount: number;
 }
 
 export interface RunSummary {
@@ -254,6 +261,14 @@ export interface RunEmailSummary {
   reason?: string | null;
 }
 
+export interface WebsiteScrapingBreakdown {
+  withWebsite: number;
+  withoutWebsite: number;
+  scraped: number;
+  scrapedWithInfo: number;
+  notScraped: number;
+}
+
 export interface DashboardMetrics {
   latestRun: SyncRun | null;
   latestRunBreakdown: DashboardRunBreakdown | null;
@@ -266,6 +281,7 @@ export interface DashboardMetrics {
   listingAgeBreakdown: GoogleListingAgeBreakdown;
   establishmentStatusBreakdown: Record<string, number>;
   nafCategoryBreakdown: NafCategoryStat[];
+  websiteScrapingBreakdown: WebsiteScrapingBreakdown;
 }
 
 export interface SyncRequestPayload {
@@ -281,6 +297,7 @@ export interface SyncRequestPayload {
   monthsBack?: number;
   linkedinStatuses?: LinkedInStatus[];
   googleStatuses?: GoogleCheckStatus[];
+  websiteStatuses?: string[];
 }
 
 export type EstablishmentIndividualFilter = "all" | "individual" | "non_individual";
@@ -331,6 +348,14 @@ export interface Establishment {
   googleContactPhone: string | null;
   googleContactEmail: string | null;
   googleContactWebsite: string | null;
+  websiteScrapedAt: string | null;
+  websiteScrapedMobilePhones: string | null;
+  websiteScrapedNationalPhones: string | null;
+  websiteScrapedEmails: string | null;
+  websiteScrapedFacebook: string | null;
+  websiteScrapedInstagram: string | null;
+  websiteScrapedTwitter: string | null;
+  websiteScrapedLinkedin: string | null;
   isSoleProprietorship: boolean;
   legalUnitName: string | null;
   directors: Director[];
@@ -525,6 +550,15 @@ export interface GoogleCheckResult {
   establishment: Establishment;
 }
 
+export interface WebsiteScrapeResult {
+  scraped: boolean;
+  infoFound: boolean;
+  message: string;
+  websiteUrl: string | null;
+  scrapeStatus: WebsiteScrapeStatus;
+  establishment: Establishment;
+}
+
 export interface GoogleRetryRule {
   maxAgeDays: number | null;
   frequencyDays: number;
@@ -549,6 +583,7 @@ export interface GoogleRetryConfig {
   retryWeekdays: number[];
   retryMissingContactEnabled: boolean;
   retryMissingContactFrequencyDays: number;
+  retryNoWebsiteFrequencyDays: number;
   defaultRules: GoogleRetryRule[];
   microRules: GoogleRetryRule[];
 }
@@ -662,6 +697,9 @@ export interface NafAnalyticsTimePoint {
   linkedinTotalDirectors: number;
   linkedinSkippedNd: number;
   alertsCreated: number;
+  websiteWithWebsite: number;
+  websiteScraped: number;
+  websiteScrapedWithInfo: number;
 }
 
 export interface NafAnalyticsItem {

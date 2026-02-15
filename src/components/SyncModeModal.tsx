@@ -60,6 +60,12 @@ const MODE_OPTIONS: Array<{
     description: "Relance la collecte Sirene + Google sur une date précise pour diagnostiquer ou compléter une journée.",
     impact: "Les alertes sont limitées aux administrateurs et n'impactent pas les curseurs.",
   },
+  {
+    value: "website_scrape",
+    title: "Scraping site web",
+    description: "Scrape les sites web des établissements ayant une fiche Google avec URL, selon les statuts sélectionnés.",
+    impact: "Extrait téléphones, emails et réseaux sociaux depuis les sites web des établissements.",
+  },
 ];
 
 const DAY_REPLAY_REFERENCE_OPTIONS: Array<{
@@ -88,6 +94,7 @@ const LINKEDIN_STATUS_OPTIONS: Array<{ value: LinkedInStatus; label: string }> =
   { value: "found", label: "Trouvé" },
   { value: "not_found", label: "Non trouvés" },
   { value: "error", label: "En erreur" },
+  { value: "insufficient", label: "Identité insuffisante" },
 ];
 
 const GOOGLE_STATUS_LABELS: Record<string, string> = {
@@ -98,6 +105,11 @@ const GOOGLE_STATUS_LABELS: Record<string, string> = {
   type_mismatch: "Incohérent",
   non_diffusible: "Non diffusible",
 };
+
+const WEBSITE_STATUS_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "not_scraped", label: "Non scrapé" },
+  { value: "scraped", label: "Déjà scrapé" },
+];
 
 const buildGoogleStatusOptions = (
   statuses: GoogleCheckStatus[],
@@ -199,6 +211,7 @@ type Props = {
     monthsBack?: number;
     linkedinStatuses?: LinkedInStatus[];
     googleStatuses?: GoogleCheckStatus[];
+    websiteStatuses?: string[];
   }) => void;
   onCancel: () => void;
   isSubmitting: boolean;
@@ -287,6 +300,7 @@ export const SyncModeModal = ({
   const [linkedinEnabled, setLinkedinEnabled] = useState<boolean>(false);
   const [linkedinStatuses, setLinkedinStatuses] = useState<LinkedInStatus[]>(["pending"]);
   const [selectedGoogleStatuses, setSelectedGoogleStatuses] = useState<GoogleCheckStatus[]>([]);
+  const [selectedWebsiteStatuses, setSelectedWebsiteStatuses] = useState<string[]>(["not_scraped"]);
 
   useEffect(() => {
     if (isOpen) {
@@ -304,6 +318,7 @@ export const SyncModeModal = ({
       setRecipientError(null);
       setLinkedinEnabled(initialMode === "linkedin_refresh");
       setLinkedinStatuses(["pending"]);
+      setSelectedWebsiteStatuses(["not_scraped"]);
       if (initialGoogleStatuses && initialGoogleStatuses.length > 0) {
         setSelectedGoogleStatuses([...initialGoogleStatuses]);
       } else if (availableGoogleStatuses.length > 0) {
@@ -571,6 +586,12 @@ export const SyncModeModal = ({
         return;
       }
     }
+    if (mode === "website_scrape") {
+      if (selectedWebsiteStatuses.length === 0) {
+        setFormError("Sélectionnez au moins un statut de scraping.");
+        return;
+      }
+    }
 
     const nafCodesPayload =
       selectedNafCodes.length > 0 ? selectedNafCodes.map((code) => denormalizeNafCode(code)) : undefined;
@@ -600,6 +621,10 @@ export const SyncModeModal = ({
 
     if (mode === "google_refresh") {
       payload.googleStatuses = selectedGoogleStatuses;
+    }
+
+    if (mode === "website_scrape") {
+      payload.websiteStatuses = selectedWebsiteStatuses.length > 0 ? selectedWebsiteStatuses : ["not_scraped"];
     }
 
     onConfirm(payload);
@@ -734,6 +759,36 @@ export const SyncModeModal = ({
                             </div>
                           </details>
                         ) : null}
+                      </div>
+                    ) : null}
+                    {option.value === "website_scrape" && isSelected ? (
+                      <div className="form-control">
+                        <details className="google-status-dropdown" open>
+                          <summary>Statuts de scraping à cibler</summary>
+                          <div className="google-status-options">
+                            {WEBSITE_STATUS_OPTIONS.map((status) => (
+                              <label key={status.value} className="google-status-option">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedWebsiteStatuses.includes(status.value)}
+                                  onChange={(event) => {
+                                    const checked = event.target.checked;
+                                    setSelectedWebsiteStatuses((current) => {
+                                      if (checked) {
+                                        return current.includes(status.value)
+                                          ? current
+                                          : [...current, status.value];
+                                      }
+                                      return current.filter((value) => value !== status.value);
+                                    });
+                                  }}
+                                  disabled={isSubmitting}
+                                />
+                                <span>{status.label}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </details>
                       </div>
                     ) : null}
                     {option.value === "day_replay" && isSelected ? (

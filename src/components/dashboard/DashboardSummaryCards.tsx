@@ -1,11 +1,20 @@
 import { DashboardMetrics } from "../../types";
-import { formatDateTime, formatNumber } from "../../utils/format";
+import { formatDateTime, formatNumber, formatPercent } from "../../utils/format";
 
 type DashboardSummaryCardsProps = {
   metrics: DashboardMetrics;
 };
 
 export const DashboardSummaryCards = ({ metrics }: DashboardSummaryCardsProps) => {
+  const withWebsite = metrics.websiteScrapingBreakdown.withWebsite;
+  const withoutWebsite = metrics.websiteScrapingBreakdown.withoutWebsite;
+  const scraped = metrics.websiteScrapingBreakdown.scraped;
+  const scrapedWithInfo = metrics.websiteScrapingBreakdown.scrapedWithInfo;
+  const totalGoogleProfiles = withWebsite + withoutWebsite;
+  const websiteCoverageRatio = totalGoogleProfiles > 0 ? withWebsite / totalGoogleProfiles : null;
+  const scrapedRatio = withWebsite > 0 ? scraped / withWebsite : null;
+  const scrapedWithInfoRatio = scraped > 0 ? scrapedWithInfo / scraped : null;
+
   return (
     <div className="insight-grid">
       <article className="insight-card">
@@ -134,6 +143,33 @@ export const DashboardSummaryCards = ({ metrics }: DashboardSummaryCardsProps) =
         ) : (
           <p className="muted">Aucune donnee disponible.</p>
         )}
+      </article>
+
+      <article className="insight-card">
+        <h3>Scraping sites web</h3>
+        <ul className="metric-list">
+          <li>
+            <strong>{formatPercent(websiteCoverageRatio)}</strong> des fiches Google ont un site web
+          </li>
+          <li>
+            <strong>{formatPercent(scrapedRatio)}</strong> des sites détectés ont déjà été scrapés
+          </li>
+          <li>
+            <strong>{formatPercent(scrapedWithInfoRatio)}</strong> des sites scrapés ont retourné des informations
+          </li>
+          <li>
+            <strong>{formatNumber(metrics.websiteScrapingBreakdown.withWebsite)}</strong> avec site web
+          </li>
+          <li>
+            <strong>{formatNumber(metrics.websiteScrapingBreakdown.withoutWebsite)}</strong> sans site web
+          </li>
+          <li>
+            <strong>{formatNumber(metrics.websiteScrapingBreakdown.scraped)}</strong> scrapes
+          </li>
+          <li>
+            <strong>{formatNumber(metrics.websiteScrapingBreakdown.notScraped)}</strong> en attente de scraping
+          </li>
+        </ul>
       </article>
 
       <article className="insight-card">

@@ -1,6 +1,13 @@
 import { ChangeEvent, useEffect, useRef, useState } from "react";
 
-import { Establishment, EstablishmentIndividualFilter, LinkedInStatus, NafCategory, Region } from "../types";
+import {
+  Establishment,
+  EstablishmentIndividualFilter,
+  LinkedInStatus,
+  NafCategory,
+  Region,
+  WebsiteScrapeStatus,
+} from "../types";
 import { formatDateTime, formatNumber } from "../utils/format";
 import { canonicalizeNafCode, normalizeNafCode } from "../utils/sync";
 import { openGoogleSearchForEstablishment } from "../utils/googleSearch";
@@ -31,6 +38,7 @@ interface EstablishmentsSectionProps {
   individualFilter: EstablishmentIndividualFilter;
   googleCheckStatus: string;
   linkedinStatuses: LinkedInStatus[];
+  websiteScrapeStatuses: WebsiteScrapeStatus[];
   hasNextPage: boolean;
   onLimitChange: (limit: number) => void;
   onPageChange: (page: number) => void;
@@ -47,6 +55,7 @@ interface EstablishmentsSectionProps {
   onIndividualFilterChange: (value: EstablishmentIndividualFilter) => void;
   onGoogleCheckStatusChange: (value: string) => void;
   onLinkedinStatusesChange: (value: LinkedInStatus[]) => void;
+  onWebsiteScrapeStatusesChange: (value: WebsiteScrapeStatus[]) => void;
   onRefresh: () => void;
   onDeleteEstablishment: (siret: string) => void;
   deletingSiret: string | null;
@@ -86,6 +95,7 @@ export const EstablishmentsSection = ({
   individualFilter,
   googleCheckStatus,
   linkedinStatuses,
+  websiteScrapeStatuses,
   hasNextPage,
   onLimitChange,
   onPageChange,
@@ -102,6 +112,7 @@ export const EstablishmentsSection = ({
   onIndividualFilterChange,
   onGoogleCheckStatusChange,
   onLinkedinStatusesChange,
+  onWebsiteScrapeStatusesChange,
   onRefresh,
   onDeleteEstablishment,
   deletingSiret,
@@ -196,6 +207,18 @@ export const EstablishmentsSection = ({
     onLinkedinStatusesChange(linkedinStatuses.filter((value) => value !== status));
   };
 
+  const handleWebsiteScrapeStatusToggle = (status: WebsiteScrapeStatus, checked: boolean) => {
+    if (checked) {
+      onWebsiteScrapeStatusesChange(
+        websiteScrapeStatuses.includes(status)
+          ? websiteScrapeStatuses
+          : [...websiteScrapeStatuses, status],
+      );
+      return;
+    }
+    onWebsiteScrapeStatusesChange(websiteScrapeStatuses.filter((value) => value !== status));
+  };
+
   const linkedinStatusLabel = () => {
     if (!linkedinStatuses.length) {
       return "Tous";
@@ -204,6 +227,49 @@ export const EstablishmentsSection = ({
       return linkedinStatuses[0];
     }
     return `${linkedinStatuses.length} sélectionnés`;
+  };
+
+  const websiteScrapeStatusLabel = () => {
+    if (!websiteScrapeStatuses.length) {
+      return "Tous";
+    }
+    if (websiteScrapeStatuses.length === 1) {
+      return websiteScrapeStatuses[0];
+    }
+    return `${websiteScrapeStatuses.length} sélectionnés`;
+  };
+
+  const computeWebsiteScrapeStatus = (establishment: Establishment): WebsiteScrapeStatus => {
+    const websiteUrl = establishment.googleContactWebsite?.trim();
+    if (!websiteUrl) {
+      return "no_website";
+    }
+    if (!establishment.websiteScrapedAt) {
+      return "pending";
+    }
+    const hasInfo = [
+      establishment.websiteScrapedMobilePhones,
+      establishment.websiteScrapedNationalPhones,
+      establishment.websiteScrapedEmails,
+      establishment.websiteScrapedFacebook,
+      establishment.websiteScrapedInstagram,
+      establishment.websiteScrapedTwitter,
+      establishment.websiteScrapedLinkedin,
+    ].some((value) => Boolean(value && value.trim()));
+    return hasInfo ? "found" : "no_info";
+  };
+
+  const computeLinkedInSummary = (establishment: Establishment): string => {
+    const directors = establishment.directors ?? [];
+    const physical = directors.filter((d) => d.typeDirigeant === "personne physique");
+    if (physical.length === 0) {
+      return "Aucun dirigeant physique";
+    }
+    const found = physical.filter((d) => d.linkedinCheckStatus === "found" || Boolean(d.linkedinProfileUrl)).length;
+    const insufficient = physical.filter((d) => d.linkedinCheckStatus === "insufficient").length;
+    const notFound = physical.filter((d) => d.linkedinCheckStatus === "not_found").length;
+    const pending = physical.filter((d) => d.linkedinCheckStatus === "pending").length;
+    return `${found} trouvé(s) · ${insufficient} insuffisant(s) · ${notFound} non trouvé(s) · ${pending} en attente`;
   };
 
   const handleDeleteOne = (siret: string) => {
@@ -439,7 +505,7 @@ export const EstablishmentsSection = ({
               <details className="linkedin-status-multiselect">
                 <summary>{linkedinStatusLabel()}</summary>
                 <div className="linkedin-status-panel">
-                  {(["pending", "found", "not_found", "error"] as LinkedInStatus[]).map((status) => (
+                  {(["pending", "found", "not_found", "error", "insufficient"] as LinkedInStatus[]).map((status) => (
                     <label key={status} className="linkedin-status-option">
                       <input
                         type="checkbox"
@@ -453,7 +519,38 @@ export const EstablishmentsSection = ({
                             ? "Trouvé"
                             : status === "not_found"
                               ? "Non trouvé"
-                              : "En erreur"}
+                              : status === "error"
+                                ? "En erreur"
+                                : "Identité insuffisante"}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </details>
+            </label>
+          </div>
+
+          <div className="establishments-control establishments-control--linkedin-status">
+            <label className="muted small">
+              Statut scraping site
+              <details className="linkedin-status-multiselect">
+                <summary>{websiteScrapeStatusLabel()}</summary>
+                <div className="linkedin-status-panel">
+                  {(["pending", "found", "no_info", "no_website"] as WebsiteScrapeStatus[]).map((status) => (
+                    <label key={status} className="linkedin-status-option">
+                      <input
+                        type="checkbox"
+                        checked={websiteScrapeStatuses.includes(status)}
+                        onChange={(event) => handleWebsiteScrapeStatusToggle(status, event.target.checked)}
+                      />
+                      <span>
+                        {status === "pending"
+                          ? "En attente"
+                          : status === "found"
+                            ? "Infos trouvées"
+                            : status === "no_info"
+                              ? "Aucune info"
+                              : "Sans site web"}
                       </span>
                     </label>
                   ))}
@@ -615,13 +712,29 @@ export const EstablishmentsSection = ({
                       {establishment.googleLastCheckedAt ? ` (checké le ${formatDateTime(establishment.googleLastCheckedAt)})` : ""}
                     </span>
                     <br />
+                    <span className="small muted">LinkedIn: {computeLinkedInSummary(establishment)}</span>
+                    <br />
                     <span className="small muted">
                       Dernière détection: {establishment.googleLastFoundAt ? formatDateTime(establishment.googleLastFoundAt) : "—"}
+                    </span>
+                    <br />
+                    <span className="small muted">Scraping site: {computeWebsiteScrapeStatus(establishment)}</span>
+                    <br />
+                    <span className="small muted">
+                      Site web: {establishment.googleContactWebsite ? "détecté" : "absent"}
                     </span>
                     {establishment.googlePlaceId && (
                       <>
                         <br />
                         <span className="small muted">Place ID: {establishment.googlePlaceId}</span>
+                      </>
+                    )}
+                    {establishment.googleContactWebsite && (
+                      <>
+                        <br />
+                        <a className="small" href={establishment.googleContactWebsite} target="_blank" rel="noreferrer">
+                          Ouvrir le site web
+                        </a>
                       </>
                     )}
                     {establishment.googlePlaceUrl && (

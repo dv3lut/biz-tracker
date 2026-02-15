@@ -14,6 +14,8 @@ export const describeSyncMode = (mode: SyncMode): string => {
       return "LinkedIn";
     case "day_replay":
       return "Rejouer une journée";
+    case "website_scrape":
+      return "Scraping site web";
     case "full":
     default:
       return "Complet";
@@ -32,8 +34,12 @@ export const syncModeIsLinkedInOnly = (mode: SyncMode): boolean => {
   return mode === "linkedin_pending" || mode === "linkedin_refresh";
 };
 
+export const syncModeIsWebsiteScrapeOnly = (mode: SyncMode): boolean => {
+  return mode === "website_scrape";
+};
+
 export const syncModeIsEnrichmentOnly = (mode: SyncMode): boolean => {
-  return syncModeIsGoogleOnly(mode) || syncModeIsLinkedInOnly(mode);
+  return syncModeIsGoogleOnly(mode) || syncModeIsLinkedInOnly(mode) || syncModeIsWebsiteScrapeOnly(mode);
 };
 
 export const syncModeSendsAlerts = (mode: SyncMode): boolean => {

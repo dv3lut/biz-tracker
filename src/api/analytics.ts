@@ -23,6 +23,9 @@ interface NafAnalyticsTimePointResponse {
   linkedin_total_directors: number;
   linkedin_skipped_nd: number;
   alerts_created: number;
+  website_with_website: number;
+  website_scraped: number;
+  website_scraped_with_info: number;
 }
 
 interface NafAnalyticsItemResponse {
@@ -62,6 +65,9 @@ const mapTimePoint = (point: NafAnalyticsTimePointResponse) => ({
   linkedinTotalDirectors: point.linkedin_total_directors,
   linkedinSkippedNd: point.linkedin_skipped_nd,
   alertsCreated: point.alerts_created,
+  websiteWithWebsite: point.website_with_website ?? 0,
+  websiteScraped: point.website_scraped ?? 0,
+  websiteScrapedWithInfo: point.website_scraped_with_info ?? 0,
 });
 
 const mapItem = (item: NafAnalyticsItemResponse) => ({

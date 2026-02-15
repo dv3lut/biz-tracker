@@ -4,6 +4,7 @@ import {
   GoogleRetryConfig,
   GoogleRetryRule,
   ListingStatus,
+  WebsiteScrapeResult,
 } from "../types";
 import { getAdminToken } from "./auth";
 import { ApiError, request } from "./http";
@@ -30,6 +31,15 @@ interface ManualGoogleCheckResponse {
   establishment: EstablishmentResponse;
 }
 
+interface ManualWebsiteScrapeResponse {
+  scraped: boolean;
+  info_found: boolean;
+  message: string;
+  website_url: string | null;
+  scrape_status: "pending" | "found" | "no_info" | "no_website";
+  establishment: EstablishmentResponse;
+}
+
 interface GoogleRetryRuleResponse {
   max_age_days: number | null;
   frequency_days: number;
@@ -39,6 +49,7 @@ interface GoogleRetryConfigResponse {
   retry_weekdays: number[];
   retry_missing_contact_enabled?: boolean;
   retry_missing_contact_frequency_days?: number;
+  retry_no_website_frequency_days?: number;
   default_rules: GoogleRetryRuleResponse[];
   micro_rules: GoogleRetryRuleResponse[];
 }
@@ -71,6 +82,7 @@ const mapRetryConfig = (payload: GoogleRetryConfigResponse): GoogleRetryConfig =
   retryWeekdays: payload.retry_weekdays ?? [],
   retryMissingContactEnabled: payload.retry_missing_contact_enabled ?? true,
   retryMissingContactFrequencyDays: payload.retry_missing_contact_frequency_days ?? 14,
+  retryNoWebsiteFrequencyDays: payload.retry_no_website_frequency_days ?? 14,
   defaultRules: (payload.default_rules ?? []).map(mapRetryRule),
   microRules: (payload.micro_rules ?? []).map(mapRetryRule),
 });
@@ -84,6 +96,7 @@ const serializeConfig = (payload: GoogleRetryConfig): GoogleRetryConfigResponse 
   retry_weekdays: payload.retryWeekdays,
   retry_missing_contact_enabled: payload.retryMissingContactEnabled,
   retry_missing_contact_frequency_days: payload.retryMissingContactFrequencyDays,
+  retry_no_website_frequency_days: payload.retryNoWebsiteFrequencyDays,
   default_rules: payload.defaultRules.map(serializeRule),
   micro_rules: payload.microRules.map(serializeRule),
 });
@@ -108,6 +121,21 @@ export const googleApi = {
       placeId: data.place_id,
       placeUrl: data.place_url,
       checkStatus: data.check_status,
+      establishment: mapEstablishment(data.establishment),
+    };
+  },
+
+  async scrapeWebsite(siret: string): Promise<WebsiteScrapeResult> {
+    const path = `/admin/establishments/${encodeURIComponent(siret)}/website-scrape`;
+    const { data } = await request<ManualWebsiteScrapeResponse>(path, {
+      method: "POST",
+    });
+    return {
+      scraped: data.scraped,
+      infoFound: data.info_found,
+      message: data.message,
+      websiteUrl: data.website_url,
+      scrapeStatus: data.scrape_status,
       establishment: mapEstablishment(data.establishment),
     };
   },

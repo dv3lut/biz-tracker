@@ -9,6 +9,7 @@ import {
   GoogleListingAgeBreakdown,
   NafCategoryStat,
   StatsSummary,
+  WebsiteScrapingBreakdown,
 } from "../types";
 import { request } from "./http";
 import { AlertResponse, mapAlert } from "./alerts";
@@ -87,6 +88,8 @@ interface NafSubCategoryStatResponse {
   listing_not_recent: number;
   listing_unknown: number;
   linkedin_found: number;
+  website_count: number;
+  website_scraped_count: number;
 }
 
 interface NafCategoryStatResponse {
@@ -117,6 +120,16 @@ interface DashboardRunBreakdownResponse {
   listing_unknown: number;
   alerts_created: number;
   alerts_sent: number;
+  website_scrape_count: number;
+  website_scrape_success_count: number;
+}
+
+interface WebsiteScrapingBreakdownResponse {
+  with_website: number;
+  without_website: number;
+  scraped: number;
+  scraped_with_info: number;
+  not_scraped: number;
 }
 
 interface DashboardMetricsResponse {
@@ -131,6 +144,7 @@ interface DashboardMetricsResponse {
   listing_age_breakdown: GoogleListingAgeBreakdownResponse;
   establishment_status_breakdown: Record<string, number>;
   naf_category_breakdown: NafCategoryStatResponse[];
+  website_scraping_breakdown: WebsiteScrapingBreakdownResponse;
 }
 
 const mapDailyMetricPoint = (payload: DailyMetricPointResponse): DailyMetricPoint => ({
@@ -212,6 +226,8 @@ const mapNafSubCategoryStat = (
   listingNotRecent: payload.listing_not_recent,
   listingUnknown: payload.listing_unknown,
   linkedinFound: payload.linkedin_found,
+  websiteCount: payload.website_count ?? 0,
+  websiteScrapedCount: payload.website_scraped_count ?? 0,
 });
 
 const mapNafCategoryStat = (payload: NafCategoryStatResponse): NafCategoryStat => ({
@@ -244,6 +260,18 @@ const mapDashboardRunBreakdown = (
   listingUnknown: payload.listing_unknown,
   alertsCreated: payload.alerts_created,
   alertsSent: payload.alerts_sent,
+  websiteScrapeCount: payload.website_scrape_count ?? 0,
+  websiteScrapeSuccessCount: payload.website_scrape_success_count ?? 0,
+});
+
+const mapWebsiteScrapingBreakdown = (
+  payload: WebsiteScrapingBreakdownResponse,
+): WebsiteScrapingBreakdown => ({
+  withWebsite: payload.with_website,
+  withoutWebsite: payload.without_website,
+  scraped: payload.scraped,
+  scrapedWithInfo: payload.scraped_with_info ?? 0,
+  notScraped: payload.not_scraped,
 });
 
 const mapStatsSummary = (payload: StatsSummaryResponse): StatsSummary => ({
@@ -268,6 +296,7 @@ const mapDashboardMetrics = (payload: DashboardMetricsResponse): DashboardMetric
   listingAgeBreakdown: mapGoogleListingAgeBreakdown(payload.listing_age_breakdown),
   establishmentStatusBreakdown: payload.establishment_status_breakdown,
   nafCategoryBreakdown: payload.naf_category_breakdown.map(mapNafCategoryStat),
+  websiteScrapingBreakdown: mapWebsiteScrapingBreakdown(payload.website_scraping_breakdown),
 });
 
 export const statsApi = {

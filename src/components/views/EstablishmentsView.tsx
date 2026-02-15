@@ -6,6 +6,7 @@ import type {
   LinkedInStatus,
   NafCategory,
   Region,
+  WebsiteScrapeStatus,
 } from "../../types";
 
 type Props = {
@@ -30,6 +31,7 @@ type Props = {
   individualFilter: EstablishmentIndividualFilter;
   googleCheckStatus: string;
   linkedinStatuses: LinkedInStatus[];
+  websiteScrapeStatuses: WebsiteScrapeStatus[];
   hasNextPage: boolean;
   onLimitChange: (limit: number) => void;
   onPageChange: (page: number) => void;
@@ -46,6 +48,7 @@ type Props = {
   onIndividualFilterChange: (value: EstablishmentIndividualFilter) => void;
   onGoogleCheckStatusChange: (value: string) => void;
   onLinkedinStatusesChange: (value: LinkedInStatus[]) => void;
+  onWebsiteScrapeStatusesChange: (value: WebsiteScrapeStatus[]) => void;
   onRefresh: () => void;
   onDeleteEstablishment: (siret: string) => void;
   deletingSiret: string | null;
@@ -85,6 +88,7 @@ export const EstablishmentsView = ({
   individualFilter,
   googleCheckStatus,
   linkedinStatuses,
+  websiteScrapeStatuses,
   hasNextPage,
   onLimitChange,
   onPageChange,
@@ -101,6 +105,7 @@ export const EstablishmentsView = ({
   onIndividualFilterChange,
   onGoogleCheckStatusChange,
   onLinkedinStatusesChange,
+  onWebsiteScrapeStatusesChange,
   onRefresh,
   onDeleteEstablishment,
   deletingSiret,
@@ -148,6 +153,7 @@ export const EstablishmentsView = ({
           individualFilter={individualFilter}
           googleCheckStatus={googleCheckStatus}
           linkedinStatuses={linkedinStatuses}
+          websiteScrapeStatuses={websiteScrapeStatuses}
           hasNextPage={hasNextPage}
           onLimitChange={onLimitChange}
           onPageChange={onPageChange}
@@ -164,6 +170,7 @@ export const EstablishmentsView = ({
           onIndividualFilterChange={onIndividualFilterChange}
           onGoogleCheckStatusChange={onGoogleCheckStatusChange}
           onLinkedinStatusesChange={onLinkedinStatusesChange}
+          onWebsiteScrapeStatusesChange={onWebsiteScrapeStatusesChange}
           onRefresh={onRefresh}
           onDeleteEstablishment={onDeleteEstablishment}
           deletingSiret={deletingSiret}

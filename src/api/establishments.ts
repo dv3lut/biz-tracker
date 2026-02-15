@@ -48,6 +48,14 @@ export interface EstablishmentResponse {
   google_contact_phone: string | null;
   google_contact_email: string | null;
   google_contact_website: string | null;
+  website_scraped_at: string | null;
+  website_scraped_mobile_phones: string | null;
+  website_scraped_national_phones: string | null;
+  website_scraped_emails: string | null;
+  website_scraped_facebook: string | null;
+  website_scraped_instagram: string | null;
+  website_scraped_twitter: string | null;
+  website_scraped_linkedin: string | null;
   is_sole_proprietorship: boolean;
   legal_unit_name: string | null;
   directors: DirectorResponse[];
@@ -140,6 +148,14 @@ export const mapEstablishment = (payload: EstablishmentResponse): Establishment 
   googleContactPhone: payload.google_contact_phone,
   googleContactEmail: payload.google_contact_email,
   googleContactWebsite: payload.google_contact_website,
+  websiteScrapedAt: payload.website_scraped_at,
+  websiteScrapedMobilePhones: payload.website_scraped_mobile_phones,
+  websiteScrapedNationalPhones: payload.website_scraped_national_phones,
+  websiteScrapedEmails: payload.website_scraped_emails,
+  websiteScrapedFacebook: payload.website_scraped_facebook,
+  websiteScrapedInstagram: payload.website_scraped_instagram,
+  websiteScrapedTwitter: payload.website_scraped_twitter,
+  websiteScrapedLinkedin: payload.website_scraped_linkedin,
   isSoleProprietorship: payload.is_sole_proprietorship,
   legalUnitName: payload.legal_unit_name ?? null,
   directors: (payload.directors ?? []).map(mapDirector),
@@ -198,6 +214,7 @@ interface ListEstablishmentsParams {
   isIndividual?: boolean;
   hasLinkedin?: boolean;
   linkedinStatuses?: import("../types").LinkedInStatus[];
+  websiteScrapeStatuses?: import("../types").WebsiteScrapeStatus[];
 }
 
 const buildEstablishmentsQuery = (params: ListEstablishmentsParams = {}): URLSearchParams => {
@@ -254,6 +271,13 @@ const buildEstablishmentsQuery = (params: ListEstablishmentsParams = {}): URLSea
     params.linkedinStatuses.forEach((status) => {
       if (status) {
         query.append("linkedin_statuses", status);
+      }
+    });
+  }
+  if (params.websiteScrapeStatuses && params.websiteScrapeStatuses.length > 0) {
+    params.websiteScrapeStatuses.forEach((status) => {
+      if (status) {
+        query.append("website_scrape_statuses", status);
       }
     });
   }
