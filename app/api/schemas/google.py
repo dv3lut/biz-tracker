@@ -16,6 +16,15 @@ class ManualGoogleCheckResponse(BaseModel):
     establishment: EstablishmentOut = Field(description="Représentation de l'établissement après mise à jour.")
 
 
+class ManualWebsiteScrapeResponse(BaseModel):
+    scraped: bool = Field(description="Indique si un scraping a été exécuté.")
+    info_found: bool = Field(description="Indique si le scraping a trouvé au moins une information exploitable.")
+    message: str = Field(description="Résumé textuel du résultat.")
+    website_url: str | None = Field(default=None, description="URL du site web scrapé (si disponible).")
+    scrape_status: str = Field(description="Statut de scraping: pending, found, no_info, no_website.")
+    establishment: EstablishmentOut = Field(description="Représentation de l'établissement après mise à jour.")
+
+
 class GoogleCheckStatusListOut(BaseModel):
     statuses: list[str] = Field(
         default_factory=list,
@@ -75,6 +84,14 @@ class GoogleRetryConfigOut(BaseModel):
         gt=0,
         description="Fréquence minimale (en jours) de relance des fiches sans contact.",
     )
+    retry_no_website_frequency_days: int = Field(
+        default=14,
+        gt=0,
+        description=(
+            "Fréquence (en jours) de re-vérification des fiches Google sans site web. "
+            "Si un site apparaît, il est automatiquement scrapé."
+        ),
+    )
     default_rules: list[GoogleRetryRule] = Field(description="Règles appliquées à l'ensemble des établissements.")
     micro_rules: list[GoogleRetryRule] = Field(
         description="Règles spécifiques aux micro/auto-entreprises.",
@@ -119,4 +136,5 @@ __all__ = [
     "GoogleFindPlaceCandidateOut",
     "GoogleFindPlaceDebugResponse",
     "ManualGoogleCheckResponse",
+    "ManualWebsiteScrapeResponse",
 ]

@@ -104,6 +104,16 @@ class Establishment(Base):
     google_contact_email: Mapped[str | None] = mapped_column(String(255))
     google_contact_website: Mapped[str | None] = mapped_column(String(512))
 
+    # Website scraping — contacts & social links extracted from the Google website.
+    website_scraped_at: Mapped[datetime | None] = mapped_column(DateTime)
+    website_scraped_mobile_phones: Mapped[str | None] = mapped_column(Text)
+    website_scraped_national_phones: Mapped[str | None] = mapped_column(Text)
+    website_scraped_emails: Mapped[str | None] = mapped_column(Text)
+    website_scraped_facebook: Mapped[str | None] = mapped_column(String(512))
+    website_scraped_instagram: Mapped[str | None] = mapped_column(String(512))
+    website_scraped_twitter: Mapped[str | None] = mapped_column(String(512))
+    website_scraped_linkedin: Mapped[str | None] = mapped_column(String(512))
+
     legal_unit_name: Mapped[str | None] = mapped_column(String(512))
 
     alerts: Mapped[list["Alert"]] = relationship("Alert", back_populates="establishment")
@@ -204,6 +214,9 @@ class SyncRun(Base):
     linkedin_found_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     linkedin_not_found_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     linkedin_error_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Website scraping progress
+    website_scrape_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    website_scrape_success_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     updated_records: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     summary: Mapped[dict[str, object] | None] = mapped_column(JSONB, default=None)
     resumed_from_run_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("sync_runs.id"), nullable=True)
@@ -214,6 +227,7 @@ class SyncRun(Base):
     target_naf_codes: Mapped[list[str] | None] = mapped_column(JSONB, default=None)
     linkedin_target_statuses: Mapped[list[str] | None] = mapped_column(JSONB, default=None)
     google_target_statuses: Mapped[list[str] | None] = mapped_column(JSONB, default=None)
+    website_scrape_statuses: Mapped[list[str] | None] = mapped_column(JSONB, default=None)
     target_client_ids: Mapped[list[str] | None] = mapped_column(JSONB, default=None)
     notify_admins: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     google_reset_state: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
@@ -623,4 +637,5 @@ class GoogleRetryConfig(Base):
     micro_legal_categories: Mapped[list[str]] = mapped_column(JSONB, default=list, nullable=False)
     retry_missing_contact_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     retry_missing_contact_frequency_days: Mapped[int] = mapped_column(Integer, default=14, nullable=False)
+    retry_no_website_frequency_days: Mapped[int] = mapped_column(Integer, default=14, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)

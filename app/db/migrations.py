@@ -636,6 +636,58 @@ def run_schema_upgrades(engine: Engine) -> None:
         ALTER TABLE sync_runs
         ADD COLUMN IF NOT EXISTS linkedin_error_count INTEGER NOT NULL DEFAULT 0
         """,
+        # Website scraping columns on establishments
+        """
+        ALTER TABLE establishments
+        ADD COLUMN IF NOT EXISTS website_scraped_at TIMESTAMP
+        """,
+        """
+        ALTER TABLE establishments
+        ADD COLUMN IF NOT EXISTS website_scraped_mobile_phones TEXT
+        """,
+        """
+        ALTER TABLE establishments
+        ADD COLUMN IF NOT EXISTS website_scraped_national_phones TEXT
+        """,
+        """
+        ALTER TABLE establishments
+        ADD COLUMN IF NOT EXISTS website_scraped_emails TEXT
+        """,
+        """
+        ALTER TABLE establishments
+        ADD COLUMN IF NOT EXISTS website_scraped_facebook VARCHAR(512)
+        """,
+        """
+        ALTER TABLE establishments
+        ADD COLUMN IF NOT EXISTS website_scraped_instagram VARCHAR(512)
+        """,
+        """
+        ALTER TABLE establishments
+        ADD COLUMN IF NOT EXISTS website_scraped_twitter VARCHAR(512)
+        """,
+        """
+        ALTER TABLE establishments
+        ADD COLUMN IF NOT EXISTS website_scraped_linkedin VARCHAR(512)
+        """,
+        # --- SyncRun: website scraping counters ---
+        """
+        ALTER TABLE sync_runs
+        ADD COLUMN IF NOT EXISTS website_scrape_count INTEGER NOT NULL DEFAULT 0
+        """,
+        """
+        ALTER TABLE sync_runs
+        ADD COLUMN IF NOT EXISTS website_scrape_success_count INTEGER NOT NULL DEFAULT 0
+        """,
+        # --- GoogleRetryConfig: no-website re-check frequency ---
+        """
+        ALTER TABLE google_retry_config
+        ADD COLUMN IF NOT EXISTS retry_no_website_frequency_days INTEGER NOT NULL DEFAULT 14
+        """,
+        # --- SyncRun: website scrape statuses filter ---
+        """
+        ALTER TABLE sync_runs
+        ADD COLUMN IF NOT EXISTS website_scrape_statuses JSONB
+        """,
     ]
 
     with engine.begin() as connection:

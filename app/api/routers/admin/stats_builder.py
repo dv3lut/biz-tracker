@@ -17,6 +17,7 @@ from app.api.schemas import (
     NafAnalyticsResponse,
     NafAnalyticsTimePoint,
     StatsSummary,
+    WebsiteScrapingBreakdown,
 )
 from app.db import models
 from app.utils.dates import utcnow
@@ -78,6 +79,7 @@ def build_dashboard_metrics(session: Session, *, days: int, scope_key: str) -> D
     listing_age_breakdown = GoogleListingAgeBreakdown(**_build_listing_age_counts(session))
     establishment_status_breakdown = _build_establishment_breakdown(session)
     naf_category_breakdown = _build_naf_category_breakdown(session)
+    website_scraping_breakdown = _build_website_scraping_breakdown(session)
 
     return DashboardMetrics(
         latest_run=serialized_last_run,
@@ -91,6 +93,7 @@ def build_dashboard_metrics(session: Session, *, days: int, scope_key: str) -> D
         listing_age_breakdown=listing_age_breakdown,
         establishment_status_breakdown=establishment_status_breakdown,
         naf_category_breakdown=naf_category_breakdown,
+        website_scraping_breakdown=website_scraping_breakdown,
     )
 
 
@@ -191,6 +194,8 @@ def _build_latest_run_breakdown(
         listing_unknown=run_listing_counts["unknown"],
         alerts_created=int(alerts_row.created or 0),
         alerts_sent=int(alerts_row.sent or 0),
+        website_scrape_count=last_run.website_scrape_count or 0,
+        website_scrape_success_count=last_run.website_scrape_success_count or 0,
     )
 
 
@@ -387,6 +392,66 @@ def _build_establishment_breakdown(session: Session) -> dict[str, int]:
     return breakdown
 
 
+def _build_website_scraping_breakdown(session: Session) -> WebsiteScrapingBreakdown:
+    """Count establishments by website scraping status."""
+    has_scraped_info = (
+        (models.Establishment.website_scraped_mobile_phones.is_not(None)
+         & (func.trim(models.Establishment.website_scraped_mobile_phones) != ""))
+        | (models.Establishment.website_scraped_national_phones.is_not(None)
+           & (func.trim(models.Establishment.website_scraped_national_phones) != ""))
+        | (models.Establishment.website_scraped_emails.is_not(None)
+           & (func.trim(models.Establishment.website_scraped_emails) != ""))
+        | (models.Establishment.website_scraped_facebook.is_not(None)
+           & (func.trim(models.Establishment.website_scraped_facebook) != ""))
+        | (models.Establishment.website_scraped_instagram.is_not(None)
+           & (func.trim(models.Establishment.website_scraped_instagram) != ""))
+        | (models.Establishment.website_scraped_twitter.is_not(None)
+           & (func.trim(models.Establishment.website_scraped_twitter) != ""))
+        | (models.Establishment.website_scraped_linkedin.is_not(None)
+           & (func.trim(models.Establishment.website_scraped_linkedin) != ""))
+    )
+
+    row = session.execute(
+        select(
+            func.count(models.Establishment.siret).label("total_google_found"),
+            func.sum(
+                case(
+                    (
+                        (models.Establishment.google_contact_website.is_not(None))
+                        & (models.Establishment.google_contact_website != ""),
+                        1,
+                    ),
+                    else_=0,
+                )
+            ).label("with_website"),
+            func.sum(
+                case(
+                    (models.Establishment.website_scraped_at.is_not(None), 1),
+                    else_=0,
+                )
+            ).label("scraped"),
+            func.sum(
+                case(
+                    ((models.Establishment.website_scraped_at.is_not(None)) & has_scraped_info, 1),
+                    else_=0,
+                )
+            ).label("scraped_with_info"),
+        )
+        .where(models.Establishment.google_check_status == "found")
+    ).one()
+    total = int(row.total_google_found or 0)
+    with_website = int(row.with_website or 0)
+    scraped = int(row.scraped or 0)
+    scraped_with_info = int(row.scraped_with_info or 0)
+    return WebsiteScrapingBreakdown(
+        with_website=with_website,
+        without_website=total - with_website,
+        scraped=scraped,
+        scraped_with_info=scraped_with_info,
+        not_scraped=max(0, with_website - scraped),
+    )
+
+
 def _build_naf_category_breakdown(session: Session) -> list[dict[str, object]]:
     linkedin_subq = (
         select(
@@ -474,6 +539,22 @@ def _build_naf_category_breakdown(session: Session) -> list[dict[str, object]]:
                     )
                 ).label("listing_not_recent_count"),
                 func.coalesce(func.sum(linkedin_subq.c.linkedin_found), 0).label("linkedin_found_count"),
+                func.sum(
+                    case(
+                        (
+                            (models.Establishment.google_contact_website.is_not(None))
+                            & (models.Establishment.google_contact_website != ""),
+                            1,
+                        ),
+                        else_=0,
+                    )
+                ).label("website_count"),
+                func.sum(
+                    case(
+                        (models.Establishment.website_scraped_at.is_not(None), 1),
+                        else_=0,
+                    )
+                ).label("website_scraped_count"),
             )
             .join(models.NafCategorySubCategory, models.NafCategorySubCategory.category_id == models.NafCategory.id)
             .join(
@@ -515,6 +596,8 @@ def _build_naf_category_breakdown(session: Session) -> list[dict[str, object]]:
         listing_recent_missing_contact = int(row.listing_recent_missing_contact_count or 0)
         listing_not_recent = int(row.listing_not_recent_count or 0)
         linkedin_found = int(row.linkedin_found_count or 0)
+        website_count = int(row.website_count or 0)
+        website_scraped_count = int(row.website_scraped_count or 0)
         listing_unknown = max(
             0,
             google_found - listing_recent - listing_recent_missing_contact - listing_not_recent,
@@ -559,6 +642,8 @@ def _build_naf_category_breakdown(session: Session) -> list[dict[str, object]]:
                 "listing_not_recent": listing_not_recent,
                 "listing_unknown": listing_unknown,
                 "linkedin_found": linkedin_found,
+                "website_count": website_count,
+                "website_scraped_count": website_scraped_count,
             }
         )
 
@@ -713,6 +798,57 @@ def build_naf_analytics(
     )
     alerts_created_expr = func.coalesce(func.sum(alerts_subq.c.alert_count), 0).label("alerts_created")
 
+    # Website scraping columns
+    website_with_website_expr = func.sum(
+        case(
+            (
+                (models.Establishment.google_check_status == "found")
+                &
+                (models.Establishment.google_contact_website.is_not(None))
+                & (models.Establishment.google_contact_website != ""),
+                1,
+            ),
+            else_=0,
+        )
+    ).label("website_with_website")
+    website_scraped_expr = func.sum(
+        case(
+            (
+                (models.Establishment.google_check_status == "found")
+                & (models.Establishment.website_scraped_at.is_not(None)),
+                1,
+            ),
+            else_=0,
+        )
+    ).label("website_scraped")
+    has_scraped_info_expr = (
+        (models.Establishment.website_scraped_mobile_phones.is_not(None)
+         & (func.trim(models.Establishment.website_scraped_mobile_phones) != ""))
+        | (models.Establishment.website_scraped_national_phones.is_not(None)
+           & (func.trim(models.Establishment.website_scraped_national_phones) != ""))
+        | (models.Establishment.website_scraped_emails.is_not(None)
+           & (func.trim(models.Establishment.website_scraped_emails) != ""))
+        | (models.Establishment.website_scraped_facebook.is_not(None)
+           & (func.trim(models.Establishment.website_scraped_facebook) != ""))
+        | (models.Establishment.website_scraped_instagram.is_not(None)
+           & (func.trim(models.Establishment.website_scraped_instagram) != ""))
+        | (models.Establishment.website_scraped_twitter.is_not(None)
+           & (func.trim(models.Establishment.website_scraped_twitter) != ""))
+        | (models.Establishment.website_scraped_linkedin.is_not(None)
+           & (func.trim(models.Establishment.website_scraped_linkedin) != ""))
+    )
+    website_scraped_with_info_expr = func.sum(
+        case(
+            (
+                (models.Establishment.google_check_status == "found")
+                & (models.Establishment.website_scraped_at.is_not(None))
+                & has_scraped_info_expr,
+                1,
+            ),
+            else_=0,
+        )
+    ).label("website_scraped_with_info")
+
     # Build main query
     base_query = select(
         period_expr,
@@ -735,6 +871,9 @@ def build_naf_analytics(
         linkedin_total_directors_expr,
         linkedin_skipped_nd_expr,
         alerts_created_expr,
+        website_with_website_expr,
+        website_scraped_expr,
+        website_scraped_with_info_expr,
     ).where(
         models.Establishment.first_seen_at >= since_dt,
         models.Establishment.first_seen_at < until_dt,
@@ -837,6 +976,9 @@ def build_naf_analytics(
             linkedin_total_directors=int(row.linkedin_total_directors or 0),
             linkedin_skipped_nd=int(row.linkedin_skipped_nd or 0),
             alerts_created=int(row.alerts_created or 0),
+            website_with_website=int(row.website_with_website or 0),
+            website_scraped=int(row.website_scraped or 0),
+            website_scraped_with_info=int(row.website_scraped_with_info or 0),
         )
         item.time_series.append(point)
 
@@ -1004,6 +1146,9 @@ def _empty_analytics_point(period: str) -> NafAnalyticsTimePoint:
         linkedin_total_directors=0,
         linkedin_skipped_nd=0,
         alerts_created=0,
+        website_with_website=0,
+        website_scraped=0,
+        website_scraped_with_info=0,
     )
 
 
@@ -1024,3 +1169,6 @@ def _accumulate_point(target: NafAnalyticsTimePoint, source: NafAnalyticsTimePoi
     target.linkedin_total_directors += source.linkedin_total_directors
     target.linkedin_skipped_nd += source.linkedin_skipped_nd
     target.alerts_created += source.alerts_created
+    target.website_with_website += source.website_with_website
+    target.website_scraped += source.website_scraped
+    target.website_scraped_with_info += source.website_scraped_with_info

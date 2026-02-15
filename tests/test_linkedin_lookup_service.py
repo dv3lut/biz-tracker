@@ -10,6 +10,7 @@ from app.services.linkedin.linkedin_lookup_service import (
     LINKEDIN_STATUS_FOUND,
     LINKEDIN_STATUS_INSUFFICIENT,
     LINKEDIN_STATUS_PENDING,
+    LinkedInEnrichmentResult,
     LinkedInLookupService,
 )
 
@@ -458,7 +459,7 @@ class LinkedInLookupServiceTests(TestCase):
     @patch("app.services.linkedin.linkedin_lookup_service.utcnow")
     @patch("app.services.linkedin.linkedin_lookup_service.ApifyClient")
     @patch("app.services.linkedin.linkedin_lookup_service.get_settings")
-    def test_enrich_directors_skips_non_diffusible_name(
+    def test_enrich_directors_marks_insufficient_for_non_diffusible_name(
         self,
         mock_get_settings,
         mock_client_cls,
@@ -498,7 +499,7 @@ class LinkedInLookupServiceTests(TestCase):
 
         self.assertEqual(result.skipped_nd_count, 1)
         self.assertEqual(result.searched_count, 0)
-        self.assertEqual(director.linkedin_check_status, "skipped_nd")
+        self.assertEqual(director.linkedin_check_status, LINKEDIN_STATUS_INSUFFICIENT)
         mock_client.search_linkedin_profile.assert_not_called()
 
     @patch("app.services.linkedin.linkedin_lookup_service.utcnow")
@@ -676,7 +677,7 @@ class LinkedInLookupServiceTests(TestCase):
     @patch("app.services.linkedin.linkedin_lookup_service.utcnow")
     @patch("app.services.linkedin.linkedin_lookup_service.ApifyClient")
     @patch("app.services.linkedin.linkedin_lookup_service.get_settings")
-    def test_search_director_parallel_skips_nd_names(
+    def test_search_director_parallel_marks_insufficient_for_nd_names(
         self,
         mock_get_settings,
         mock_client_cls,
@@ -705,7 +706,8 @@ class LinkedInLookupServiceTests(TestCase):
 
         result = service._search_director_parallel(director, establishment, None, now)
 
-        self.assertEqual(result["status"], "skipped_nd")
+        self.assertEqual(result["status"], "insufficient")
+        self.assertEqual(result["reason"], "non_diffusible")
         self.assertEqual(result["api_calls"], 0)
 
     @patch("app.services.linkedin.linkedin_lookup_service.utcnow")
@@ -785,7 +787,7 @@ class LinkedInLookupServiceTests(TestCase):
     @patch("app.services.linkedin.linkedin_lookup_service.utcnow")
     @patch("app.services.linkedin.linkedin_lookup_service.ApifyClient")
     @patch("app.services.linkedin.linkedin_lookup_service.get_settings")
-    def test_search_director_parallel_returns_skipped_nd_for_nd_company(
+    def test_search_director_parallel_returns_insufficient_for_nd_company(
         self,
         mock_get_settings,
         mock_client_cls,
@@ -817,8 +819,90 @@ class LinkedInLookupServiceTests(TestCase):
 
         result = service._search_director_parallel(director, establishment, None, now)
 
-        self.assertEqual(result["status"], "skipped_nd")
+        self.assertEqual(result["status"], "insufficient")
         self.assertEqual(result["reason"], "non_diffusible_company")
+
+    @patch("app.services.linkedin.linkedin_lookup_service.utcnow")
+    @patch("app.services.linkedin.linkedin_lookup_service.ApifyClient")
+    @patch("app.services.linkedin.linkedin_lookup_service.get_settings")
+    def test_apply_search_result_counts_non_diffusible_insufficient_as_skipped_nd(
+        self,
+        mock_get_settings,
+        mock_client_cls,
+        mock_utcnow,
+    ) -> None:
+        mock_get_settings.return_value = SimpleNamespace(
+            apify=SimpleNamespace(enabled=True, api_token="token")
+        )
+        mock_client_cls.return_value = MagicMock()
+        now = datetime(2026, 2, 8, tzinfo=timezone.utc)
+        mock_utcnow.return_value = now
+
+        session = MagicMock()
+        service = LinkedInLookupService(session)
+
+        director = SimpleNamespace(
+            id="dir-1",
+            linkedin_check_status=LINKEDIN_STATUS_PENDING,
+            linkedin_last_checked_at=None,
+            linkedin_profile_url=None,
+            linkedin_profile_data=None,
+        )
+        establishment = SimpleNamespace(siret="000")
+        aggregated = LinkedInEnrichmentResult()
+
+        service._apply_search_result(
+            director,
+            establishment,
+            {"status": LINKEDIN_STATUS_INSUFFICIENT, "reason": "non_diffusible", "api_calls": 0},
+            None,
+            now,
+            aggregated,
+        )
+
+        self.assertEqual(director.linkedin_check_status, LINKEDIN_STATUS_INSUFFICIENT)
+        self.assertEqual(aggregated.skipped_nd_count, 1)
+
+    @patch("app.services.linkedin.linkedin_lookup_service.utcnow")
+    @patch("app.services.linkedin.linkedin_lookup_service.ApifyClient")
+    @patch("app.services.linkedin.linkedin_lookup_service.get_settings")
+    def test_apply_search_result_does_not_count_missing_name_insufficient_as_skipped_nd(
+        self,
+        mock_get_settings,
+        mock_client_cls,
+        mock_utcnow,
+    ) -> None:
+        mock_get_settings.return_value = SimpleNamespace(
+            apify=SimpleNamespace(enabled=True, api_token="token")
+        )
+        mock_client_cls.return_value = MagicMock()
+        now = datetime(2026, 2, 8, tzinfo=timezone.utc)
+        mock_utcnow.return_value = now
+
+        session = MagicMock()
+        service = LinkedInLookupService(session)
+
+        director = SimpleNamespace(
+            id="dir-1",
+            linkedin_check_status=LINKEDIN_STATUS_PENDING,
+            linkedin_last_checked_at=None,
+            linkedin_profile_url=None,
+            linkedin_profile_data=None,
+        )
+        establishment = SimpleNamespace(siret="000")
+        aggregated = LinkedInEnrichmentResult()
+
+        service._apply_search_result(
+            director,
+            establishment,
+            {"status": LINKEDIN_STATUS_INSUFFICIENT, "reason": "missing_name", "api_calls": 0},
+            None,
+            now,
+            aggregated,
+        )
+
+        self.assertEqual(director.linkedin_check_status, LINKEDIN_STATUS_INSUFFICIENT)
+        self.assertEqual(aggregated.skipped_nd_count, 0)
 
     @patch("app.services.linkedin.linkedin_lookup_service.utcnow")
     @patch("app.services.linkedin.linkedin_lookup_service.ApifyClient")

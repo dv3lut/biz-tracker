@@ -41,6 +41,7 @@ from app.services.stripe.stripe_portal_service import (
     create_portal_session_for_access_token,
     send_portal_access_email,
 )
+from app.services.stripe.stripe_admin_notifications import notify_admins_of_stripe_webhook_failure
 from app.services.stripe.stripe_webhook_service import handle_stripe_webhook
 from app.services.stripe.stripe_settings_service import get_billing_settings
 
@@ -258,17 +259,52 @@ def get_stripe_subscription_info(
 )
 async def stripe_webhook(request: Request, session: Session = Depends(get_db_session)) -> dict[str, bool]:
     settings = get_settings()
-    if not settings.stripe.webhook_secret:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Webhook Stripe non configuré.")
-    payload = await request.body()
-    signature = request.headers.get("stripe-signature")
-    if not signature:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Signature Stripe manquante.")
+    payload: bytes | None = None
+    signature: str | None = None
+    event_type: str | None = None
 
     try:
-        event = stripe.Webhook.construct_event(payload, signature, settings.stripe.webhook_secret)
-    except stripe.error.SignatureVerificationError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Signature Stripe invalide.") from exc
+        if not settings.stripe.webhook_secret:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Webhook Stripe non configuré.")
 
-    handle_stripe_webhook(session, settings, event)
-    return {"received": True}
+        payload = await request.body()
+        signature = request.headers.get("stripe-signature")
+        if not signature:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Signature Stripe manquante.")
+
+        try:
+            event = stripe.Webhook.construct_event(payload, signature, settings.stripe.webhook_secret)
+        except stripe.error.SignatureVerificationError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Signature Stripe invalide.") from exc
+
+        if isinstance(event, dict):
+            event_type = event.get("type")
+
+        handle_stripe_webhook(session, settings, event)
+        return {"received": True}
+
+    except HTTPException as exc:
+        notify_admins_of_stripe_webhook_failure(
+            session,
+            status_code=exc.status_code,
+            detail=exc.detail,
+            payload=payload,
+            signature=signature,
+            event_type=event_type,
+            exc=exc,
+        )
+        raise
+    except Exception as exc:
+        notify_admins_of_stripe_webhook_failure(
+            session,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(exc),
+            payload=payload,
+            signature=signature,
+            event_type=event_type,
+            exc=exc,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Erreur lors du traitement du webhook Stripe.",
+        ) from exc

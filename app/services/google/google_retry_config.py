@@ -12,6 +12,7 @@ from app.db import models
 _DEFAULT_RETRY_WEEKDAYS = [0]  # Monday
 _DEFAULT_RETRY_MISSING_CONTACT_ENABLED = True
 _DEFAULT_RETRY_MISSING_CONTACT_FREQUENCY_DAYS = 14
+_DEFAULT_RETRY_NO_WEBSITE_FREQUENCY_DAYS = 14
 _DEFAULT_DEFAULT_RULES = [
     {"max_age_days": 60, "frequency_days": 7},
     {"max_age_days": 120, "frequency_days": 14},
@@ -36,6 +37,7 @@ class GoogleRetryRuntimeConfig:
     micro_rules: tuple[RetryRule, ...]
     retry_missing_contact_enabled: bool
     retry_missing_contact_frequency_days: int
+    retry_no_website_frequency_days: int
 
 
 def ensure_google_retry_config(session: Session) -> models.GoogleRetryConfig:
@@ -49,6 +51,7 @@ def ensure_google_retry_config(session: Session) -> models.GoogleRetryConfig:
             micro_rules=list(_DEFAULT_MICRO_RULES),
             retry_missing_contact_enabled=_DEFAULT_RETRY_MISSING_CONTACT_ENABLED,
             retry_missing_contact_frequency_days=_DEFAULT_RETRY_MISSING_CONTACT_FREQUENCY_DAYS,
+            retry_no_website_frequency_days=_DEFAULT_RETRY_NO_WEBSITE_FREQUENCY_DAYS,
         )
         session.add(config)
         session.flush()
@@ -98,6 +101,9 @@ def load_runtime_google_retry_config(session: Session) -> GoogleRetryRuntimeConf
     missing_contact_frequency = record.retry_missing_contact_frequency_days
     if not isinstance(missing_contact_frequency, int) or missing_contact_frequency <= 0:
         missing_contact_frequency = _DEFAULT_RETRY_MISSING_CONTACT_FREQUENCY_DAYS
+    no_website_frequency = record.retry_no_website_frequency_days
+    if not isinstance(no_website_frequency, int) or no_website_frequency <= 0:
+        no_website_frequency = _DEFAULT_RETRY_NO_WEBSITE_FREQUENCY_DAYS
     default_rules = tuple(_normalize_rules(record.default_rules, _DEFAULT_DEFAULT_RULES))
     micro_rules = tuple(_normalize_rules(record.micro_rules, _DEFAULT_MICRO_RULES))
     return GoogleRetryRuntimeConfig(
@@ -106,6 +112,7 @@ def load_runtime_google_retry_config(session: Session) -> GoogleRetryRuntimeConf
         micro_rules=micro_rules,
         retry_missing_contact_enabled=bool(missing_contact_enabled),
         retry_missing_contact_frequency_days=missing_contact_frequency,
+        retry_no_website_frequency_days=no_website_frequency,
     )
 
 
@@ -125,6 +132,12 @@ def serialize_google_retry_config(record: models.GoogleRetryConfig) -> dict[str,
             and record.retry_missing_contact_frequency_days > 0
             else _DEFAULT_RETRY_MISSING_CONTACT_FREQUENCY_DAYS
         ),
+        "retry_no_website_frequency_days": (
+            record.retry_no_website_frequency_days
+            if isinstance(record.retry_no_website_frequency_days, int)
+            and record.retry_no_website_frequency_days > 0
+            else _DEFAULT_RETRY_NO_WEBSITE_FREQUENCY_DAYS
+        ),
     }
 
 
@@ -136,6 +149,7 @@ def update_google_retry_config(
     micro_rules: list[dict[str, object]],
     retry_missing_contact_enabled: bool,
     retry_missing_contact_frequency_days: int,
+    retry_no_website_frequency_days: int | None = None,
 ) -> models.GoogleRetryConfig:
     record = ensure_google_retry_config(session)
     sanitized_weekdays = (
@@ -150,6 +164,10 @@ def update_google_retry_config(
     if not isinstance(frequency_days, int) or frequency_days <= 0:
         frequency_days = _DEFAULT_RETRY_MISSING_CONTACT_FREQUENCY_DAYS
     record.retry_missing_contact_frequency_days = frequency_days
+    no_website_freq = retry_no_website_frequency_days
+    if not isinstance(no_website_freq, int) or no_website_freq is None or no_website_freq <= 0:
+        no_website_freq = _DEFAULT_RETRY_NO_WEBSITE_FREQUENCY_DAYS
+    record.retry_no_website_frequency_days = no_website_freq
     session.flush()
     return record
 

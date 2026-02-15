@@ -32,6 +32,7 @@ def _build_establishments_query(
     is_individual: bool | None,
     has_linkedin: bool | None,
     linkedin_statuses: list[str] | None,
+    website_scrape_statuses: list[str] | None,
 ) -> SAQuery:
     if isinstance(region_codes, QueryParam):
         region_codes = None
@@ -39,6 +40,8 @@ def _build_establishments_query(
         department_codes = None
     if isinstance(linkedin_statuses, QueryParam):
         linkedin_statuses = None
+    if isinstance(website_scrape_statuses, QueryParam):
+        website_scrape_statuses = None
     if isinstance(last_treatment_from, QueryParam):
         last_treatment_from = None
     if isinstance(last_treatment_to, QueryParam):
@@ -170,6 +173,46 @@ def _build_establishments_query(
                 )
                 query = query.filter(linkedin_exists)
 
+    if website_scrape_statuses:
+        allowed_statuses = {"pending", "found", "no_info", "no_website"}
+        cleaned_statuses = [status.strip().lower() for status in website_scrape_statuses if status and status.strip()]
+        selected_statuses = [status for status in cleaned_statuses if status in allowed_statuses]
+        if selected_statuses:
+            has_website = (
+                (models.Establishment.google_contact_website.is_not(None))
+                & (func.trim(models.Establishment.google_contact_website) != "")
+            )
+            has_scraped_info = (
+                (models.Establishment.website_scraped_mobile_phones.is_not(None)
+                 & (func.trim(models.Establishment.website_scraped_mobile_phones) != ""))
+                | (models.Establishment.website_scraped_national_phones.is_not(None)
+                   & (func.trim(models.Establishment.website_scraped_national_phones) != ""))
+                | (models.Establishment.website_scraped_emails.is_not(None)
+                   & (func.trim(models.Establishment.website_scraped_emails) != ""))
+                | (models.Establishment.website_scraped_facebook.is_not(None)
+                   & (func.trim(models.Establishment.website_scraped_facebook) != ""))
+                | (models.Establishment.website_scraped_instagram.is_not(None)
+                   & (func.trim(models.Establishment.website_scraped_instagram) != ""))
+                | (models.Establishment.website_scraped_twitter.is_not(None)
+                   & (func.trim(models.Establishment.website_scraped_twitter) != ""))
+                | (models.Establishment.website_scraped_linkedin.is_not(None)
+                   & (func.trim(models.Establishment.website_scraped_linkedin) != ""))
+            )
+
+            scrape_conditions = []
+            for status in selected_statuses:
+                if status == "pending":
+                    scrape_conditions.append(has_website & models.Establishment.website_scraped_at.is_(None))
+                elif status == "found":
+                    scrape_conditions.append(models.Establishment.website_scraped_at.is_not(None) & has_scraped_info)
+                elif status == "no_info":
+                    scrape_conditions.append(models.Establishment.website_scraped_at.is_not(None) & not_(has_scraped_info))
+                elif status == "no_website":
+                    scrape_conditions.append(not_(has_website))
+
+            if scrape_conditions:
+                query = query.filter(or_(*scrape_conditions))
+
     return query
 
 
@@ -243,6 +286,13 @@ def list_establishments(
             "Filtrer par statuts LinkedIn des dirigeants (répéter linkedin_statuses=pending&linkedin_statuses=error)."
         ),
     ),
+    website_scrape_statuses: list[str] | None = Query(
+        None,
+        description=(
+            "Filtrer par statut de scraping website (répéter website_scrape_statuses=pending&website_scrape_statuses=found). "
+            "Valeurs: pending, found, no_info, no_website."
+        ),
+    ),
     session: Session = Depends(get_db_session),
 ) -> EstablishmentListOut:
     query = _build_establishments_query(
@@ -260,6 +310,7 @@ def list_establishments(
         is_individual=is_individual,
         has_linkedin=has_linkedin,
         linkedin_statuses=linkedin_statuses,
+        website_scrape_statuses=website_scrape_statuses,
     )
     if hasattr(query, "with_entities"):
         total = query.with_entities(func.count(models.Establishment.siret)).scalar() or 0

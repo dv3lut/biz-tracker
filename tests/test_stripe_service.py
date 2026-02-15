@@ -456,6 +456,69 @@ def test_notify_admins_of_stripe_event_skips_when_no_recipients(monkeypatch):
     assert called == {}
 
 
+def test_notify_admins_of_stripe_webhook_failure_sends_email(monkeypatch):
+    sent = {}
+
+    class DummyEmail:
+        def is_enabled(self):
+            return True
+
+        def is_configured(self):
+            return True
+
+        def send(self, subject, body, recipients, *, html_body=None, **_kwargs):
+            sent["subject"] = subject
+            sent["body"] = body
+            sent["html"] = html_body
+            sent["recipients"] = recipients
+
+    monkeypatch.setattr(stripe_admin_notifications, "EmailService", lambda: DummyEmail())
+    monkeypatch.setattr(stripe_admin_notifications, "get_admin_emails", lambda session: ["ops@example.com"])
+
+    stripe_admin_notifications.notify_admins_of_stripe_webhook_failure(
+        SimpleNamespace(),
+        status_code=500,
+        detail="Traitement en échec",
+        payload=b'{"id":"evt_123"}',
+        signature="sig_123",
+        event_type="checkout.session.completed",
+        exc=RuntimeError("boom"),
+    )
+
+    assert sent.get("recipients") == ["ops@example.com"]
+    assert "HTTP 500" in sent.get("subject", "")
+    assert "Traitement en échec" in sent.get("body", "")
+    assert "checkout.session.completed" in sent.get("body", "")
+    assert "RuntimeError: boom" in sent.get("body", "")
+    assert "evt_123" in sent.get("html", "")
+
+
+def test_notify_admins_of_stripe_webhook_failure_skips_when_email_disabled(monkeypatch):
+    called = {}
+
+    class DummyEmail:
+        def is_enabled(self):
+            return False
+
+        def is_configured(self):
+            return False
+
+        def send(self, *_args, **_kwargs):
+            called["send"] = True
+
+    monkeypatch.setattr(stripe_admin_notifications, "EmailService", lambda: DummyEmail())
+
+    stripe_admin_notifications.notify_admins_of_stripe_webhook_failure(
+        SimpleNamespace(),
+        status_code=400,
+        detail="Signature Stripe invalide.",
+        payload=b"{}",
+        signature="sig_123",
+    )
+
+    assert called == {}
+
+
 def test_build_admin_event_subject_variants():
     assert (
         stripe_admin_notifications._build_admin_event_subject(

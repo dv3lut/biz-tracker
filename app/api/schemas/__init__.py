@@ -21,6 +21,7 @@ from .google import (
     GoogleRetryConfigUpdate,
     GoogleRetryRule,
     ManualGoogleCheckResponse,
+    ManualWebsiteScrapeResponse,
 )
 from .linkedin import LinkedInCheckResponse, LinkedInDebugResponse
 from .public_contact import PublicContactRequest, PublicContactResponse
@@ -68,6 +69,7 @@ from .stats import (
     NafAnalyticsResponse,
     NafAnalyticsTimePoint,
     StatsSummary,
+    WebsiteScrapingBreakdown,
 )
 from .sync import (
     DeleteRunResult,
@@ -129,6 +131,7 @@ __all__ = [
     "LinkedInDebugResponse",
     "ListingStatus",
     "ManualGoogleCheckResponse",
+    "ManualWebsiteScrapeResponse",
     "NafAnalyticsItem",
     "NafAnalyticsResponse",
     "NafAnalyticsTimePoint",
@@ -146,6 +149,7 @@ __all__ = [
     "RunSummaryStats",
     "RunUpdatedEstablishmentSummary",
     "StatsSummary",
+    "WebsiteScrapingBreakdown",
     "SyncRequest",
     "SyncRunOut",
     "SyncRunReport",

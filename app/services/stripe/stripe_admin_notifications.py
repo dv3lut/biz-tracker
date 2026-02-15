@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import html
+import json
 from sqlalchemy.orm import Session
 
 from app.config import Settings
@@ -15,6 +16,61 @@ from app.services.stripe.stripe_subscription_utils import (
     to_datetime,
     retrieve_subscription,
 )
+
+
+def notify_admins_of_stripe_webhook_failure(
+    session: Session,
+    *,
+    status_code: int,
+    detail: object,
+    payload: bytes | None,
+    signature: str | None,
+    event_type: str | None = None,
+    exc: Exception | None = None,
+) -> None:
+    email_service = EmailService()
+    if not email_service.is_enabled() or not email_service.is_configured():
+        return
+
+    recipients = get_admin_emails(session)
+    if not recipients:
+        return
+
+    error_detail = _stringify_error_detail(detail)
+    payload_preview = _format_webhook_payload_preview(payload)
+    exception_label = f"{exc.__class__.__name__}: {exc}" if exc else None
+
+    lines = [
+        "Le webhook Stripe a échoué.",
+        "",
+        f"HTTP: {status_code}",
+        f"Erreur: {error_detail}",
+        f"Type événement: {event_type or '-'}",
+        f"Signature présente: {'oui' if signature else 'non'}",
+    ]
+    if exception_label:
+        lines.append(f"Exception: {exception_label}")
+    lines.extend(["", "Payload:", payload_preview])
+
+    html_lines = [
+        "<p><strong>Le webhook Stripe a échoué.</strong></p>",
+        "<p>",
+        f"<strong>HTTP:</strong> {status_code}<br/>",
+        f"<strong>Erreur:</strong> {html.escape(error_detail)}<br/>",
+        f"<strong>Type événement:</strong> {html.escape(event_type or '-')}<br/>",
+        f"<strong>Signature présente:</strong> {'oui' if signature else 'non'}",
+    ]
+    if exception_label:
+        html_lines.append(f"<br/><strong>Exception:</strong> {html.escape(exception_label)}")
+    html_lines.append("</p>")
+    html_lines.append(f"<p><strong>Payload:</strong></p><pre>{html.escape(payload_preview)}</pre>")
+
+    email_service.send(
+        subject=f"[Stripe] Échec webhook (HTTP {status_code})",
+        body="\n".join(lines),
+        recipients=recipients,
+        html_body="".join(html_lines),
+    )
 
 
 def notify_admins_of_stripe_event(
@@ -214,3 +270,21 @@ def _extract_cancellation_reason(details: object) -> str | None:
     if isinstance(comment, str) and comment.strip():
         return comment.strip()
     return None
+
+
+def _stringify_error_detail(detail: object) -> str:
+    if isinstance(detail, str):
+        return detail
+    try:
+        return json.dumps(detail, ensure_ascii=False)
+    except TypeError:
+        return str(detail)
+
+
+def _format_webhook_payload_preview(payload: bytes | None, *, max_chars: int = 4_000) -> str:
+    if not payload:
+        return "-"
+    decoded = payload.decode("utf-8", errors="replace")
+    if len(decoded) <= max_chars:
+        return decoded
+    return f"{decoded[:max_chars]}\n… payload tronqué ({len(decoded)} caractères)."

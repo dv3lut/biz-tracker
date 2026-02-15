@@ -36,3 +36,7 @@ class GoogleEnrichmentResult:
     retry_backlog_count: int = 0
     retry_backlog_age_buckets: dict[str, int] | None = None
     missing_contact_age_buckets: dict[str, int] | None = None
+    website_scrape_count: int = 0
+    website_scrape_success_count: int = 0
+    no_website_checked_count: int = 0
+    no_website_updated_count: int = 0

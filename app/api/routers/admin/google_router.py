@@ -17,6 +17,7 @@ from app.api.schemas import (
     GoogleRetryConfigUpdate,
     ListingStatus,
     ManualGoogleCheckResponse,
+    ManualWebsiteScrapeResponse,
 )
 from app.db import models
 from app.observability import log_event
@@ -31,6 +32,7 @@ from .google_handlers import (
     build_google_places_export_response,
     debug_google_find_place_action,
     manual_google_check_action,
+    manual_website_scrape_action,
 )
 
 router = APIRouter(tags=["admin"])
@@ -67,6 +69,18 @@ def debug_google_find_place(
     session: Session = Depends(get_db_session),
 ) -> GoogleFindPlaceDebugResponse:
     return debug_google_find_place_action(siret=siret, session=session)
+
+
+@router.post(
+    "/establishments/{siret}/website-scrape",
+    response_model=ManualWebsiteScrapeResponse,
+    summary="Relancer un scraping manuel du site web lié à la fiche Google",
+)
+def manual_website_scrape(
+    siret: str,
+    session: Session = Depends(get_db_session),
+) -> ManualWebsiteScrapeResponse:
+    return manual_website_scrape_action(siret=siret, session=session)
 
 
 @router.get(
@@ -132,6 +146,7 @@ def update_google_retry_config_endpoint(
         micro_rules=[rule.model_dump() for rule in payload.micro_rules],
         retry_missing_contact_enabled=payload.retry_missing_contact_enabled,
         retry_missing_contact_frequency_days=payload.retry_missing_contact_frequency_days,
+        retry_no_website_frequency_days=payload.retry_no_website_frequency_days,
     )
     session.flush()
     payload_dict = serialize_google_retry_config(record)

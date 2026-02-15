@@ -223,3 +223,26 @@ def test_list_establishments_applies_department_filter():
 
     rendered = "\n".join(str(item) for item in session.query_obj.filters)
     assert "code_commune" in rendered or "code_postal" in rendered
+
+
+def test_list_establishments_applies_website_scrape_status_filter():
+    session = _FakeSession()
+
+    list_establishments(
+        limit=10,
+        offset=0,
+        search=None,
+        naf_code=None,
+        naf_codes=None,
+        department_codes=None,
+        region_codes=None,
+        added_from=None,
+        added_to=None,
+        google_check_status=None,
+        is_individual=None,
+        website_scrape_statuses=["pending", "found"],
+        session=session,  # type: ignore[arg-type]
+    )
+
+    rendered = "\n".join(str(item) for item in session.query_obj.filters)
+    assert "website_scraped_at" in rendered

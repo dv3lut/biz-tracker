@@ -16,6 +16,7 @@ from app.api.schemas import (
     GoogleFindPlaceDebugResponse,
     ListingStatus,
     ManualGoogleCheckResponse,
+    ManualWebsiteScrapeResponse,
 )
 from app.config import get_settings
 from app.db import models
@@ -40,6 +41,25 @@ from app.utils.dates import utcnow
 from app.utils.google_listing import normalize_listing_age_status, normalize_listing_status_filters
 
 from .common import format_establishment_summary
+
+
+def _compute_website_scrape_status(establishment: models.Establishment) -> str:
+    website_url = (establishment.google_contact_website or "").strip()
+    if not website_url:
+        return "no_website"
+    if establishment.website_scraped_at is None:
+        return "pending"
+    info_values = [
+        establishment.website_scraped_mobile_phones,
+        establishment.website_scraped_national_phones,
+        establishment.website_scraped_emails,
+        establishment.website_scraped_facebook,
+        establishment.website_scraped_instagram,
+        establishment.website_scraped_twitter,
+        establishment.website_scraped_linkedin,
+    ]
+    has_info = any(isinstance(value, str) and value.strip() for value in info_values)
+    return "found" if has_info else "no_info"
 
 
 def manual_google_check_action(
@@ -245,6 +265,74 @@ def manual_google_check_action(
         place_id=place_id,
         place_url=place_url,
         check_status=check_status,
+        establishment=establishment_payload,
+    )
+
+
+def manual_website_scrape_action(
+    *,
+    siret: str,
+    session: Session,
+) -> ManualWebsiteScrapeResponse:
+    """Execute a manual website scraping for one establishment."""
+
+    establishment = session.get(models.Establishment, siret)
+    if establishment is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Établissement introuvable.")
+
+    website_url = (establishment.google_contact_website or "").strip() or None
+    if not website_url:
+        scrape_status = _compute_website_scrape_status(establishment)
+        message = "Aucun site web disponible sur la fiche Google pour cet établissement."
+        log_event(
+            "sync.google.website_scrape.manual",
+            siret=siret,
+            scraped=False,
+            info_found=False,
+            scrape_status=scrape_status,
+            website_url=None,
+        )
+        establishment_payload = EstablishmentOut.model_validate(establishment)
+        return ManualWebsiteScrapeResponse(
+            scraped=False,
+            info_found=False,
+            message=message,
+            website_url=None,
+            scrape_status=scrape_status,
+            establishment=establishment_payload,
+        )
+
+    service = GoogleBusinessService(session)
+    try:
+        info_found = service.manual_scrape_website(establishment, website_url=website_url)
+    finally:
+        service.close()
+
+    session.refresh(establishment)
+    scrape_status = _compute_website_scrape_status(establishment)
+    if scrape_status == "found":
+        message = "Le site web a été scrapé et des informations ont été trouvées."
+    elif scrape_status == "no_info":
+        message = "Le site web a été scrapé mais aucune information exploitable n'a été trouvée."
+    else:
+        message = "Le scraping du site web n'a pas pu être exécuté."
+
+    log_event(
+        "sync.google.website_scrape.manual",
+        siret=siret,
+        scraped=True,
+        info_found=bool(info_found),
+        scrape_status=scrape_status,
+        website_url=website_url,
+    )
+
+    establishment_payload = EstablishmentOut.model_validate(establishment)
+    return ManualWebsiteScrapeResponse(
+        scraped=True,
+        info_found=bool(info_found),
+        message=message,
+        website_url=website_url,
+        scrape_status=scrape_status,
         establishment=establishment_payload,
     )
 

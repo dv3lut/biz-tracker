@@ -69,6 +69,17 @@ class GoogleListingAgeBreakdown(BaseModel):
     unknown: int = Field(default=0, description="Nombre d'établissements sans information d'âge de fiche.")
 
 
+class WebsiteScrapingBreakdown(BaseModel):
+    with_website: int = Field(default=0, description="Établissements disposant d'un site web sur la fiche Google.")
+    without_website: int = Field(default=0, description="Établissements sans site web détecté sur la fiche Google.")
+    scraped: int = Field(default=0, description="Établissements dont le site web a été scrapé avec succès.")
+    scraped_with_info: int = Field(
+        default=0,
+        description="Établissements scrapés pour lesquels au moins une information exploitable a été trouvée.",
+    )
+    not_scraped: int = Field(default=0, description="Établissements avec site web mais pas encore scrapés.")
+
+
 class DashboardRunBreakdown(BaseModel):
     run_id: UUID = Field(description="Identifiant du run analysé.")
     started_at: datetime = Field(description="Horodatage de démarrage du run.")
@@ -90,6 +101,8 @@ class DashboardRunBreakdown(BaseModel):
     listing_unknown: int = Field(description="Fiches sans information d'âge sur le run.")
     alerts_created: int = Field(description="Alertes créées pendant le run.")
     alerts_sent: int = Field(description="Alertes envoyées pendant le run.")
+    website_scrape_count: int = Field(default=0, description="Sites web scrapés durant le run.")
+    website_scrape_success_count: int = Field(default=0, description="Sites web scrapés avec succès durant le run.")
 
 
 class DashboardMetrics(BaseModel):
@@ -106,6 +119,10 @@ class DashboardMetrics(BaseModel):
     naf_category_breakdown: list[NafCategoryStats] = Field(
         default_factory=list,
         description="Répartition des établissements par catégorie et sous-catégorie NAF.",
+    )
+    website_scraping_breakdown: WebsiteScrapingBreakdown = Field(
+        default_factory=WebsiteScrapingBreakdown,
+        description="Répartition globale du scraping de sites web.",
     )
 
 
@@ -129,6 +146,12 @@ class NafAnalyticsTimePoint(BaseModel):
     linkedin_total_directors: int = Field(default=0, description="Total dirigeants rattachés.")
     linkedin_skipped_nd: int = Field(default=0, description="Dirigeants non diffusibles (LinkedIn skipped_nd).")
     alerts_created: int = Field(default=0, description="Alertes générées.")
+    website_with_website: int = Field(default=0, description="Établissements avec un site web.")
+    website_scraped: int = Field(default=0, description="Établissements dont le site web a été scrapé.")
+    website_scraped_with_info: int = Field(
+        default=0,
+        description="Établissements scrapés avec au moins une information exploitable.",
+    )
 
 
 class NafAnalyticsItem(BaseModel):
@@ -176,4 +199,5 @@ __all__ = [
     "NafAnalyticsResponse",
     "NafAnalyticsTimePoint",
     "StatsSummary",
+    "WebsiteScrapingBreakdown",
 ]

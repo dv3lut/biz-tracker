@@ -36,6 +36,7 @@ class SyncRunPreparationMixin:
         target_client_ids: list[UUID] | None = None,
         linkedin_statuses: list[str] | None = None,
         google_statuses: list[str] | None = None,
+        website_statuses: list[str] | None = None,
         notify_admins: bool = True,
         force_google_replay: bool = False,
         google_reset_state: bool = False,
@@ -68,6 +69,7 @@ class SyncRunPreparationMixin:
             run.target_naf_codes = naf_filter
             run.linkedin_target_statuses = linkedin_statuses or None
             run.google_target_statuses = google_statuses or None
+            run.website_scrape_statuses = website_statuses or None
             run.target_client_ids = client_targets
             run.notify_admins = admin_notifications
             run.months_back = months_back
@@ -116,10 +118,11 @@ class SyncRunPreparationMixin:
                 mode=mode,
             )
         else:
+            run_type = "website_scrape" if mode == SyncMode.WEBSITE_SCRAPE else "google_sync"
             run = self._start_run(
                 session,
                 scope_key=scope_key,
-                run_type="google_sync",
+                run_type=run_type,
                 initial_status="pending",
                 mode=mode,
             )
@@ -130,6 +133,7 @@ class SyncRunPreparationMixin:
         run.target_naf_codes = naf_filter
         run.linkedin_target_statuses = linkedin_statuses or None
         run.google_target_statuses = google_statuses or None
+        run.website_scrape_statuses = website_statuses or None
         run.target_client_ids = None
         run.notify_admins = True
         if naf_filter:
@@ -301,6 +305,7 @@ class SyncRunPreparationMixin:
         target_naf_codes = list(run.target_naf_codes or [])
         linkedin_target_statuses = list(getattr(run, "linkedin_target_statuses", []) or [])
         google_target_statuses = list(getattr(run, "google_target_statuses", []) or [])
+        website_scrape_statuses = list(getattr(run, "website_scrape_statuses", []) or [])
         persist_state = mode.updates_state and not target_naf_codes
         raw_client_targets = list(run.target_client_ids or [])
         target_client_ids: list[UUID] = []
@@ -329,6 +334,7 @@ class SyncRunPreparationMixin:
             target_naf_codes=target_naf_codes or None,
             linkedin_target_statuses=linkedin_target_statuses or None,
             google_target_statuses=google_target_statuses or None,
+            website_scrape_statuses=website_scrape_statuses or None,
             target_client_ids=target_client_ids or None,
             force_google_replay=bool(getattr(run, "day_replay_force_google", False)),
             google_reset_state=bool(getattr(run, "google_reset_state", False)),

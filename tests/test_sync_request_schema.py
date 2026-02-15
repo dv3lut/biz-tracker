@@ -211,9 +211,9 @@ class SyncRequestSchemaTests(unittest.TestCase):
     def test_linkedin_statuses_dedupes_and_strips(self) -> None:
         payload = SyncRequest(
             mode=SyncMode.LINKEDIN_REFRESH,
-            linkedin_statuses=[" pending ", "PENDING", "found", "", "not_found"],
+            linkedin_statuses=[" pending ", "PENDING", "found", "", "not_found", "INSUFFICIENT"],
         )
-        self.assertEqual(payload.linkedin_statuses, ["pending", "found", "not_found"])
+        self.assertEqual(payload.linkedin_statuses, ["pending", "found", "not_found", "insufficient"])
 
 
 if __name__ == "__main__":

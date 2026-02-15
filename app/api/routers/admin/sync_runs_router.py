@@ -68,6 +68,7 @@ def trigger_sync_run(
         target_client_ids=payload.target_client_ids,
         linkedin_statuses=payload.linkedin_statuses,
         google_statuses=payload.google_statuses,
+        website_statuses=payload.website_statuses,
         notify_admins=payload.notify_admins,
         force_google_replay=payload.force_google_replay,
         google_reset_state=payload.reset_google_state,

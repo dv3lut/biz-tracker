@@ -561,5 +561,75 @@ def test_google_pending_flow_marks_insufficient_without_name(monkeypatch):
         assert refreshed.google_check_status == "insufficient"
 
 
+def test_google_pending_flow_marks_insufficient_for_non_diffusible_name(monkeypatch):
+    settings = _make_settings(google_enabled=True)
+    _patch_settings(monkeypatch, settings)
+    _patch_google_client(monkeypatch)
+
+    with _session_scope() as session:
+        _seed_google_retry_config(session)
+
+        departments = list_departments(session)
+        paris_department = next(department for department in departments if department.code == "75")
+        client = models.Client(
+            name="Client IDF",
+            start_date=date(2024, 1, 1),
+            listing_statuses=["recent_creation"],
+        )
+        session.add(client)
+        session.flush()
+        session.add(models.ClientDepartment(client_id=client.id, department_id=paris_department.id))
+        session.commit()
+
+        pending = models.Establishment(
+            siret="99999999999999",
+            siren="999999999",
+            nic="99999",
+            naf_code="56.10A",
+            etat_administratif="A",
+            name="[ND]",
+            code_postal="75001",
+            libelle_commune="Paris",
+            categorie_entreprise="ME",
+            categorie_juridique="1000",
+            google_check_status="pending",
+            google_last_checked_at=None,
+        )
+        session.add(pending)
+        session.commit()
+
+        _patch_sirene_client(monkeypatch, [])
+
+        service = SyncService()
+        run = service._start_run(
+            session,
+            scope_key=settings.sync.scope_key,
+            run_type="google_sync",
+            initial_status="running",
+            mode=SyncMode.GOOGLE_PENDING,
+        )
+        state = service._get_or_create_state(session, settings.sync.scope_key)
+        run.started_at = utcnow()
+        session.commit()
+
+        context = service._build_context(session, run, state)
+        result = service._collect_sync(context)
+        service._finish_run(
+            run,
+            state,
+            last_treated_max=result.last_treated,
+            last_creation_date=result.max_creation_date,
+            mode=result.mode,
+        )
+        session.commit()
+
+        refreshed = session.get(models.Establishment, "99999999999999")
+
+        assert run.status == "success"
+        assert run.google_queue_count == 0
+        assert run.google_matched_count == 0
+        assert refreshed.google_check_status == "insufficient"
+
+
 if __name__ == "__main__":  # pragma: no cover
     pytest.main([__file__])

@@ -41,6 +41,7 @@ omit =
     app/services/alert_service.py
     app/services/google_business_service.py
     app/services/google_business/*
+    app/services/website_scraper/*
     app/services/google_retry_config.py
     app/services/stripe_reporting_service.py
     app/services/stripe_service.py

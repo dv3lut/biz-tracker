@@ -25,6 +25,7 @@ from app.services.google_business.google_types import GoogleEnrichmentResult, Go
 from app.services.google.google_retry_config import GoogleRetryRuntimeConfig, load_runtime_google_retry_config
 from app.services.client_service import resolve_enabled_department_codes
 from app.services.rate_limiter import RateLimiter
+from app.services.website_scraper.scraper_service import WebsiteScrapingResult, scrape_website
 from app.utils.business_types import is_micro_company
 from app.utils.dates import utcnow
 from app.utils.diffusible import any_name_non_diffusible
@@ -167,6 +168,8 @@ class GoogleBusinessService:
         missing_contact_checked = 0
         missing_contact_updated = 0
         missing_contact_age_buckets: AgeBuckets | None = None
+        no_website_checked = 0
+        no_website_updated = 0
         lookup_targets = [
             est
             for est in queue
@@ -189,6 +192,8 @@ class GoogleBusinessService:
             progress_callback(queue_count, eligible_count, 0, matched_count, pending_count)
 
         processed_count = 0
+        website_scrape_count = 0
+        website_scrape_success_count = 0
         for establishment in lookup_targets:
             if reset_google_state:
                 # Important: on purge "biz-by-biz" juste avant le lookup, afin d'éviter
@@ -203,6 +208,12 @@ class GoogleBusinessService:
                 now,
                 newly_found=newly_found,
             )
+            # Website scraping — when a Google profile with a website was found.
+            if result and result.contact_website and not establishment.website_scraped_at:
+                ws_ok = self._scrape_establishment_website(establishment, result.contact_website, now)
+                website_scrape_count += 1
+                if ws_ok:
+                    website_scrape_success_count += 1
             processed_count += 1
             matched_count = len(newly_found)
             pending_count = max(queue_count - processed_count, 0)
@@ -219,6 +230,10 @@ class GoogleBusinessService:
                 missing_contact_updated,
                 missing_contact_age_buckets,
             ) = self._refresh_missing_contact_listings(now, allowed_departments=allowed_departments)
+            (
+                no_website_checked,
+                no_website_updated,
+            ) = self._refresh_no_website_listings(now, allowed_departments=allowed_departments)
         remaining = max(queue_count - processed_count, 0)
         return GoogleEnrichmentResult(
             matches=newly_found,
@@ -233,6 +248,10 @@ class GoogleBusinessService:
             retry_backlog_count=len(retry_backlog_targets),
             retry_backlog_age_buckets=retry_backlog_age_buckets,
             missing_contact_age_buckets=missing_contact_age_buckets,
+            website_scrape_count=website_scrape_count,
+            website_scrape_success_count=website_scrape_success_count,
+            no_website_checked_count=no_website_checked,
+            no_website_updated_count=no_website_updated,
         )
 
     def manual_check(self, establishment: models.Establishment) -> GoogleMatch | None:
@@ -249,8 +268,28 @@ class GoogleBusinessService:
         engine = self._get_lookup_engine()
         result = engine.lookup(establishment, now=now)
         engine.apply_lookup_result(establishment, result, now)
+        # Website scraping for manual checks.
+        if result and result.contact_website:
+            self._scrape_establishment_website(establishment, result.contact_website, now)
         self._session.flush()
         return result
+
+    def manual_scrape_website(
+        self,
+        establishment: models.Establishment,
+        *,
+        website_url: str | None = None,
+    ) -> bool:
+        """Scrape manuellement le site web d'un établissement.
+
+        Returns ``True`` when at least one information was found.
+        """
+
+        target_url = (website_url or establishment.google_contact_website or "").strip()
+        if not target_url:
+            return False
+        now = utcnow()
+        return self._scrape_establishment_website(establishment, target_url, now)
 
     def _filter_candidates(
         self,
@@ -270,6 +309,9 @@ class GoogleBusinessService:
                 establishment.legal_unit_name,
                 establishment.denomination_unite_legale,
             ):
+                if (establishment.google_check_status or "").lower() == "pending":
+                    establishment.google_check_status = "insufficient"
+                    establishment.google_last_checked_at = establishment.google_last_checked_at or now
                 continue
             if reset_google_state:
                 yield establishment
@@ -365,6 +407,9 @@ class GoogleBusinessService:
             establishment.google_contact_phone = contact_phone
             establishment.google_contact_email = contact_email
             establishment.google_contact_website = contact_website
+            # Website scraping — scrape the website if it just appeared and we haven't scraped yet.
+            if contact_website and not establishment.website_scraped_at:
+                self._scrape_establishment_website(establishment, contact_website, now)
             if normalize_listing_age_status(establishment.google_listing_age_status) == RECENT_NO_CONTACT_STATUS:
                 establishment.google_listing_age_status = "recent_creation"
             place_url = details.get("url") or contact_website
@@ -379,6 +424,92 @@ class GoogleBusinessService:
             self._session.flush()
 
         return checked_count, updated_count, age_buckets
+
+    def _refresh_no_website_listings(
+        self,
+        now: datetime,
+        *,
+        allowed_departments: set[str] | None,
+    ) -> tuple[int, int]:
+        """Re-check Google profiles that have no website and scrape if one appears.
+
+        Returns ``(checked_count, updated_count)``.
+        """
+
+        retry_config = self._retry_config
+        no_website_frequency = retry_config.retry_no_website_frequency_days
+        if no_website_frequency <= 0:
+            return 0, 0
+        if now.weekday() not in retry_config.retry_weekdays:
+            return 0, 0
+        if not self._client or not self._rate_limiter:
+            return 0, 0
+
+        stmt = (
+            select(models.Establishment)
+            .where(models.Establishment.google_check_status == "found")
+            .where(models.Establishment.google_place_id.is_not(None))
+            .where(
+                (models.Establishment.google_contact_website.is_(None))
+                | (models.Establishment.google_contact_website == "")
+            )
+            .order_by(models.Establishment.google_last_checked_at.asc().nullsfirst())
+        )
+        candidates = self._session.execute(stmt).scalars().all()
+        candidates = self._filter_establishments_for_departments(candidates, allowed_departments)
+
+        checked_count = 0
+        updated_count = 0
+
+        for establishment in candidates:
+            if establishment.google_last_checked_at:
+                age_days = (now - establishment.google_last_checked_at).days
+                if age_days < no_website_frequency:
+                    continue
+            place_id = establishment.google_place_id
+            if not place_id:
+                continue
+            checked_count += 1
+            try:
+                details = self._fetch_place_details(place_id)
+            except GooglePlacesError as exc:
+                self._record_api_error("place_details")
+                _LOGGER.warning(
+                    "Re-check site web échoué pour %s (place=%s): %s",
+                    establishment.siret,
+                    place_id,
+                    exc,
+                )
+                continue
+            contact_phone, contact_email, contact_website = self._extract_contact_details(details)
+            establishment.google_last_checked_at = now
+
+            # Update any contact info that appeared
+            if contact_phone:
+                establishment.google_contact_phone = contact_phone
+            if contact_email:
+                establishment.google_contact_email = contact_email
+            if contact_website:
+                establishment.google_contact_website = contact_website
+                # Website just appeared — scrape it
+                if not establishment.website_scraped_at:
+                    self._scrape_establishment_website(establishment, contact_website, now)
+                updated_count += 1
+                log_event(
+                    "sync.google.no_website_refresh.website_found",
+                    establishment=self._serialize_establishment(establishment),
+                    website_url=contact_website,
+                )
+
+        if checked_count:
+            self._session.flush()
+            log_event(
+                "sync.google.no_website_refresh.summary",
+                checked_count=checked_count,
+                updated_count=updated_count,
+            )
+
+        return checked_count, updated_count
 
     @staticmethod
     def _increment_bucket(buckets: AgeBuckets, last_checked_at: datetime | None, now: datetime) -> None:
@@ -498,6 +629,69 @@ class GoogleBusinessService:
         establishment.google_contact_phone = None
         establishment.google_contact_email = None
         establishment.google_contact_website = None
+        establishment.website_scraped_at = None
+        establishment.website_scraped_mobile_phones = None
+        establishment.website_scraped_national_phones = None
+        establishment.website_scraped_emails = None
+        establishment.website_scraped_facebook = None
+        establishment.website_scraped_instagram = None
+        establishment.website_scraped_twitter = None
+        establishment.website_scraped_linkedin = None
+
+    def _scrape_establishment_website(
+        self,
+        establishment: models.Establishment,
+        website_url: str,
+        now: datetime,
+    ) -> bool:
+        """Scrape *website_url* and persist the results on *establishment*.
+
+        Returns ``True`` when at least one piece of data was found.
+        """
+
+        label = establishment.name or establishment.siret or "Inconnu"
+        try:
+            result = scrape_website(website_url, label=label)
+        except Exception as exc:  # noqa: BLE001
+            _LOGGER.warning(
+                "Scraping échoué pour %s (%s): %s",
+                establishment.siret,
+                website_url,
+                exc,
+            )
+            log_event(
+                "sync.google.website_scrape.error",
+                establishment=self._serialize_establishment(establishment),
+                website_url=website_url,
+                error={"type": type(exc).__name__, "message": str(exc)},
+            )
+            return False
+
+        establishment.website_scraped_at = now
+        establishment.website_scraped_mobile_phones = result.mobile_phones_str
+        establishment.website_scraped_national_phones = result.national_phones_str
+        establishment.website_scraped_emails = result.emails_str
+        establishment.website_scraped_facebook = result.facebook
+        establishment.website_scraped_instagram = result.instagram
+        establishment.website_scraped_twitter = result.twitter
+        establishment.website_scraped_linkedin = result.linkedin
+        self._session.flush()
+
+        log_event(
+            "sync.google.website_scrape.done",
+            establishment=self._serialize_establishment(establishment),
+            website_url=website_url,
+            scraped={
+                "mobile_phones_count": len(result.mobile_phones),
+                "national_phones_count": len(result.national_phones),
+                "emails_count": len(result.emails),
+                "facebook": result.facebook is not None,
+                "instagram": result.instagram is not None,
+                "twitter": result.twitter is not None,
+                "linkedin": result.linkedin is not None,
+            },
+        )
+        return result.has_data
 
     @staticmethod
     def _filter_establishments_for_departments(

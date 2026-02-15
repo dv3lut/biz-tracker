@@ -40,6 +40,9 @@ class SyncRunOut(BaseModel):
     linkedin_found_count: int = 0
     linkedin_not_found_count: int = 0
     linkedin_error_count: int = 0
+    # Website scraping progress
+    website_scrape_count: int = 0
+    website_scrape_success_count: int = 0
     updated_records: int
     summary: dict[str, Any] | None = None
     last_cursor: str | None
@@ -161,7 +164,8 @@ class SyncRequest(BaseModel):
             "'google_refresh' relance Google sur les établissements filtrés par statuts, "
             "'linkedin_pending' relance uniquement les dirigeants jamais enrichis par LinkedIn, "
             "'linkedin_refresh' relance une détection LinkedIn sur tous les dirigeants, "
-            "'day_replay' rejoue une journée complète en limitant les alertes aux administrateurs."
+            "'day_replay' rejoue une journée complète en limitant les alertes aux administrateurs, "
+            "'website_scrape' scrape les sites web des fiches Google."
         ),
     )
     reset_google_state: bool = Field(
@@ -186,13 +190,20 @@ class SyncRequest(BaseModel):
     linkedin_statuses: list[str] | None = Field(
         default=None,
         description=(
-            "Statuts LinkedIn à relancer lors d'un run LinkedIn-only (pending, found, not_found, error)."
+            "Statuts LinkedIn à relancer lors d'un run LinkedIn-only (pending, found, not_found, error, insufficient)."
         ),
     )
     google_statuses: list[str] | None = Field(
         default=None,
         description=(
             "Statuts Google à relancer lors d'un run Google-only (ex: pending, found, not_found, insufficient, type_mismatch)."
+        ),
+    )
+    website_statuses: list[str] | None = Field(
+        default=None,
+        description=(
+            "Statuts de scraping site web à cibler (scraped, not_scraped). "
+            "Mode 'website_scrape' uniquement."
         ),
     )
     notify_admins: bool = Field(
@@ -225,7 +236,7 @@ class SyncRequest(BaseModel):
     def validate_linkedin_statuses(cls, value: list[str] | None) -> list[str] | None:
         if not value:
             return None
-        allowed = {"pending", "found", "not_found", "error"}
+        allowed = {"pending", "found", "not_found", "error", "insufficient"}
         normalized: list[str] = []
         seen: set[str] = set()
         for raw in value:
@@ -233,7 +244,7 @@ class SyncRequest(BaseModel):
             if not candidate:
                 continue
             if candidate not in allowed:
-                raise ValueError("Statuts LinkedIn acceptés: pending, found, not_found, error.")
+                raise ValueError("Statuts LinkedIn acceptés: pending, found, not_found, error, insufficient.")
             if candidate in seen:
                 continue
             seen.add(candidate)
@@ -251,6 +262,26 @@ class SyncRequest(BaseModel):
             candidate = (raw or "").strip().lower()
             if not candidate:
                 continue
+            if candidate in seen:
+                continue
+            seen.add(candidate)
+            normalized.append(candidate)
+        return normalized or None
+
+    @field_validator("website_statuses")
+    @classmethod
+    def validate_website_statuses(cls, value: list[str] | None) -> list[str] | None:
+        if not value:
+            return None
+        allowed = {"scraped", "not_scraped"}
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for raw in value:
+            candidate = (raw or "").strip().lower()
+            if not candidate:
+                continue
+            if candidate not in allowed:
+                raise ValueError("Statuts site web acceptés: scraped, not_scraped.")
             if candidate in seen:
                 continue
             seen.add(candidate)

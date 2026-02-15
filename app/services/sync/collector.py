@@ -30,6 +30,7 @@ from .persistence import SyncPersistenceMixin
 from .utils import append_run_note, format_target_naf_note, tag_google_error_rate
 from .annuaire_enrichment import enrich_establishments_from_annuaire
 from .linkedin_only import collect_linkedin_only, load_linkedin_resync_targets
+from .website_scrape_only import collect_website_scrape_only, load_website_scrape_targets
 
 
 class SyncCollectorMixin(SyncPersistenceMixin):
@@ -69,6 +70,8 @@ class SyncCollectorMixin(SyncPersistenceMixin):
         if not context.mode.requires_sirene_fetch:
             if context.mode.is_linkedin_only:
                 return self._collect_linkedin_only(context)
+            if context.mode.is_website_scrape_only:
+                return self._collect_website_scrape(context)
             return self._collect_google_only(context)
 
         state = context.state
@@ -684,6 +687,36 @@ class SyncCollectorMixin(SyncPersistenceMixin):
             run.notes = f"{run.notes + ' | ' if run.notes else ''}{note_prefix}: {target_count}"
 
         return collect_linkedin_only(
+            context=context,
+            targets=targets,
+            log_alerts=self._log_alerts_created,
+        )
+
+    def _collect_website_scrape(self, context: SyncContext) -> SyncResult:
+        run = context.run
+        if context.target_naf_codes:
+            append_run_note(run, format_target_naf_note(context.target_naf_codes))
+            log_event(
+                "sync.collection.naf_filter_applied",
+                run_id=str(run.id),
+                scope_key=run.scope_key,
+                target_naf_codes=context.target_naf_codes,
+            )
+
+        website_statuses = getattr(context, "website_scrape_statuses", None)
+        if website_statuses:
+            append_run_note(run, f"website_scrape_statuses: {', '.join(website_statuses)}")
+
+        targets = load_website_scrape_targets(
+            context.session,
+            context.target_naf_codes,
+            website_statuses=website_statuses,
+        )
+        target_count = len(targets)
+        if target_count:
+            run.notes = f"{run.notes + ' | ' if run.notes else ''}website_scrape_targets: {target_count}"
+
+        return collect_website_scrape_only(
             context=context,
             targets=targets,
             log_alerts=self._log_alerts_created,

@@ -14,18 +14,29 @@ class SyncMode(str, Enum):
     DAY_REPLAY = "day_replay"
     LINKEDIN_PENDING = "linkedin_pending"
     LINKEDIN_REFRESH = "linkedin_refresh"
+    WEBSITE_SCRAPE = "website_scrape"
 
     @property
     def google_enabled(self) -> bool:
         """Return True when Google enrichment must run."""
 
-        return self not in {SyncMode.SIRENE_ONLY, SyncMode.LINKEDIN_PENDING, SyncMode.LINKEDIN_REFRESH}
+        return self not in {
+            SyncMode.SIRENE_ONLY,
+            SyncMode.LINKEDIN_PENDING,
+            SyncMode.LINKEDIN_REFRESH,
+            SyncMode.WEBSITE_SCRAPE,
+        }
 
     @property
     def linkedin_enabled(self) -> bool:
         """Return True when LinkedIn enrichment must run."""
 
-        return self not in {SyncMode.SIRENE_ONLY, SyncMode.GOOGLE_PENDING, SyncMode.GOOGLE_REFRESH}
+        return self not in {
+            SyncMode.SIRENE_ONLY,
+            SyncMode.GOOGLE_PENDING,
+            SyncMode.GOOGLE_REFRESH,
+            SyncMode.WEBSITE_SCRAPE,
+        }
 
     @property
     def requires_sirene_fetch(self) -> bool:
@@ -36,6 +47,7 @@ class SyncMode(str, Enum):
             SyncMode.GOOGLE_REFRESH,
             SyncMode.LINKEDIN_PENDING,
             SyncMode.LINKEDIN_REFRESH,
+            SyncMode.WEBSITE_SCRAPE,
         }
 
     @property
@@ -51,10 +63,16 @@ class SyncMode(str, Enum):
         return self in {SyncMode.LINKEDIN_PENDING, SyncMode.LINKEDIN_REFRESH}
 
     @property
+    def is_website_scrape_only(self) -> bool:
+        """Return True when the run exclusively targets website scraping."""
+
+        return self is SyncMode.WEBSITE_SCRAPE
+
+    @property
     def is_enrichment_only(self) -> bool:
         """Return True when the run is purely enrichment (no Sirene fetch)."""
 
-        return self.is_google_only or self.is_linkedin_only
+        return self.is_google_only or self.is_linkedin_only or self.is_website_scrape_only
 
     @property
     def dispatch_alerts(self) -> bool:

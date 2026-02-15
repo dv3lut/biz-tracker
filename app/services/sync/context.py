@@ -31,6 +31,7 @@ class SyncContext:
     target_naf_codes: list[str] | None = None
     linkedin_target_statuses: list[str] | None = None
     google_target_statuses: list[str] | None = None
+    website_scrape_statuses: list[str] | None = None
     admin_notifications_enabled: bool = True
     target_client_ids: list[UUID] | None = None
     force_google_replay: bool = False

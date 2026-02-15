@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from io import BytesIO
 from types import SimpleNamespace
 from unittest import TestCase
@@ -8,6 +9,7 @@ from unittest.mock import MagicMock, patch, call
 from fastapi import HTTPException
 from app.api.routers.admin.google_router import (
     manual_google_check,
+    manual_website_scrape,
     export_google_places,
     debug_google_find_place,
     list_google_check_statuses,
@@ -94,6 +96,14 @@ class ManualGoogleCheckRouteTests(TestCase):
         establishment.google_contact_phone = None
         establishment.google_contact_email = None
         establishment.google_contact_website = None
+        establishment.website_scraped_at = None
+        establishment.website_scraped_mobile_phones = None
+        establishment.website_scraped_national_phones = None
+        establishment.website_scraped_emails = None
+        establishment.website_scraped_facebook = None
+        establishment.website_scraped_instagram = None
+        establishment.website_scraped_twitter = None
+        establishment.website_scraped_linkedin = None
         establishment.legal_unit_name = None
         establishment.directors = []
         
@@ -307,3 +317,77 @@ class GoogleCheckStatusesRouteTests(TestCase):
         self.assertIn("found", response.statuses)
         self.assertIn("not_found", response.statuses)
         self.assertIn("type_mismatch", response.statuses)
+
+
+class ManualWebsiteScrapeRouteTests(TestCase):
+    @patch("app.api.routers.admin.google_handlers.GoogleBusinessService")
+    def test_manual_website_scrape_returns_found_when_info_detected(
+        self,
+        mock_google_service_cls,
+    ) -> None:
+        now = datetime.now(timezone.utc)
+        establishment = SimpleNamespace(
+            siret="12345678901234",
+            siren="123456789",
+            name="Test",
+            naf_code="56.10A",
+            naf_libelle="Restauration",
+            etat_administratif="A",
+            code_postal="75001",
+            libelle_commune="Paris",
+            date_creation=None,
+            date_creation_current=None,
+            date_debut_activite=None,
+            first_seen_at=now,
+            last_seen_at=now,
+            updated_at=now,
+            created_run_id=None,
+            last_run_id=None,
+            google_place_id=None,
+            google_place_url=None,
+            google_last_checked_at=None,
+            google_last_found_at=None,
+            google_check_status="found",
+            google_match_confidence=None,
+            google_category_match_confidence=None,
+            google_listing_origin_at=None,
+            google_listing_origin_source=None,
+            google_listing_age_status=None,
+            google_contact_phone=None,
+            google_contact_email=None,
+            google_contact_website="https://example.com",
+            website_scraped_at=now,
+            website_scraped_mobile_phones="06 11 22 33 44",
+            website_scraped_national_phones=None,
+            website_scraped_emails=None,
+            website_scraped_facebook=None,
+            website_scraped_instagram=None,
+            website_scraped_twitter=None,
+            website_scraped_linkedin=None,
+            is_sole_proprietorship=False,
+            legal_unit_name=None,
+            directors=[],
+        )
+
+        session = MagicMock()
+        session.get.return_value = establishment
+
+        mock_google_service = MagicMock()
+        mock_google_service.manual_scrape_website.return_value = True
+        mock_google_service_cls.return_value = mock_google_service
+
+        response = manual_website_scrape("12345678901234", session=session)
+
+        self.assertTrue(response.scraped)
+        self.assertTrue(response.info_found)
+        self.assertEqual(response.scrape_status, "found")
+        self.assertEqual(response.website_url, "https://example.com")
+
+    def test_manual_website_scrape_not_found_establishment(self) -> None:
+        session = MagicMock()
+        session.get.return_value = None
+
+        with self.assertRaises(HTTPException) as ctx:
+            manual_website_scrape("99999999999999", session=session)
+
+        self.assertEqual(ctx.exception.status_code, 404)

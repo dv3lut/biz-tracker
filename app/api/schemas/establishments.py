@@ -59,6 +59,14 @@ class EstablishmentOut(BaseModel):
     google_contact_phone: str | None
     google_contact_email: str | None
     google_contact_website: str | None
+    website_scraped_at: datetime | None = None
+    website_scraped_mobile_phones: str | None = None
+    website_scraped_national_phones: str | None = None
+    website_scraped_emails: str | None = None
+    website_scraped_facebook: str | None = None
+    website_scraped_instagram: str | None = None
+    website_scraped_twitter: str | None = None
+    website_scraped_linkedin: str | None = None
     is_sole_proprietorship: bool
     legal_unit_name: str | None = None
     directors: list[DirectorOut] = []

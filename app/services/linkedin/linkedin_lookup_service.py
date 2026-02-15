@@ -200,7 +200,7 @@ class LinkedInLookupService:
 
         # Skip non-diffusible names (contains [ND] or NON DIFFUSIBLE)
         if any_name_non_diffusible(first_name, last_name, director.first_names):
-            director.linkedin_check_status = LINKEDIN_STATUS_SKIPPED_ND
+            director.linkedin_check_status = LINKEDIN_STATUS_INSUFFICIENT
             director.linkedin_last_checked_at = now
             result.skipped_nd_count += 1
             log_event(
@@ -429,7 +429,7 @@ class LinkedInLookupService:
         # Skip non-diffusible names
         if any_name_non_diffusible(first_name, last_name, director.first_names):
             return {
-                "status": LINKEDIN_STATUS_SKIPPED_ND,
+                "status": LINKEDIN_STATUS_INSUFFICIENT,
                 "reason": "non_diffusible",
                 "api_calls": 0,
             }
@@ -453,7 +453,7 @@ class LinkedInLookupService:
         # Skip non-diffusible company names
         if any_name_non_diffusible(company_name):
             return {
-                "status": LINKEDIN_STATUS_SKIPPED_ND,
+                "status": LINKEDIN_STATUS_INSUFFICIENT,
                 "reason": "non_diffusible_company",
                 "api_calls": 0,
             }
@@ -534,12 +534,15 @@ class LinkedInLookupService:
                 reason=outcome.get("reason", "non_diffusible"),
             )
         elif status == LINKEDIN_STATUS_INSUFFICIENT:
+            reason = outcome.get("reason", "insufficient")
+            if reason in {"non_diffusible", "non_diffusible_company"}:
+                result.skipped_nd_count += 1
             log_event(
                 "sync.linkedin.director.skipped",
                 run_id=str(run_id) if run_id else None,
                 director_id=str(director.id),
                 establishment_siret=establishment.siret,
-                reason=outcome.get("reason", "insufficient"),
+                reason=reason,
             )
         elif status == LINKEDIN_STATUS_ERROR:
             result.error_count += 1

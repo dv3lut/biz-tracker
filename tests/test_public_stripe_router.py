@@ -166,6 +166,7 @@ def test_get_public_stripe_settings_returns_trial_days(monkeypatch):
 @pytest.mark.anyio
 async def test_stripe_webhook_requires_secret(monkeypatch):
     monkeypatch.setattr(public, "get_settings", lambda: SimpleNamespace(stripe=SimpleNamespace(webhook_secret=None)))
+    monkeypatch.setattr(public, "notify_admins_of_stripe_webhook_failure", lambda _session, **_kwargs: None)
 
     class DummyRequest:
         headers = {}
@@ -181,6 +182,7 @@ async def test_stripe_webhook_requires_secret(monkeypatch):
 @pytest.mark.anyio
 async def test_stripe_webhook_requires_signature(monkeypatch):
     monkeypatch.setattr(public, "get_settings", lambda: SimpleNamespace(stripe=SimpleNamespace(webhook_secret="whsec")))
+    monkeypatch.setattr(public, "notify_admins_of_stripe_webhook_failure", lambda _session, **_kwargs: None)
 
     class DummyRequest:
         headers = {}
@@ -216,6 +218,7 @@ async def test_stripe_webhook_dispatches(monkeypatch):
 @pytest.mark.anyio
 async def test_stripe_webhook_rejects_invalid_signature(monkeypatch):
     monkeypatch.setattr(public, "get_settings", lambda: SimpleNamespace(stripe=SimpleNamespace(webhook_secret="whsec")))
+    notified = {}
 
     class DummyRequest:
         headers = {"stripe-signature": "sig"}
@@ -227,7 +230,50 @@ async def test_stripe_webhook_rejects_invalid_signature(monkeypatch):
         raise public.stripe.error.SignatureVerificationError("bad", "sig")
 
     monkeypatch.setattr(public.stripe.Webhook, "construct_event", _raise_signature)
+    monkeypatch.setattr(
+        public,
+        "notify_admins_of_stripe_webhook_failure",
+        lambda _session, **kwargs: notified.update(kwargs),
+    )
 
     with pytest.raises(HTTPException) as exc:
         await public.stripe_webhook(request=DummyRequest(), session=SimpleNamespace())
     assert exc.value.status_code == 400
+    assert notified.get("status_code") == 400
+    assert notified.get("detail") == "Signature Stripe invalide."
+
+
+@pytest.mark.anyio
+async def test_stripe_webhook_notifies_admins_on_processing_error(monkeypatch):
+    monkeypatch.setattr(public, "get_settings", lambda: SimpleNamespace(stripe=SimpleNamespace(webhook_secret="whsec")))
+    notified = {}
+
+    class DummyRequest:
+        headers = {"stripe-signature": "sig"}
+
+        async def body(self):
+            return b'{"id":"evt_123"}'
+
+    monkeypatch.setattr(
+        public.stripe.Webhook,
+        "construct_event",
+        lambda payload, sig, secret: {"type": "checkout.session.completed", "data": {"object": {}}},
+    )
+
+    def _raise_processing_error(*_args, **_kwargs):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(public, "handle_stripe_webhook", _raise_processing_error)
+    monkeypatch.setattr(
+        public,
+        "notify_admins_of_stripe_webhook_failure",
+        lambda _session, **kwargs: notified.update(kwargs),
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await public.stripe_webhook(request=DummyRequest(), session=SimpleNamespace())
+
+    assert exc.value.status_code == 500
+    assert notified.get("status_code") == 500
+    assert notified.get("detail") == "boom"
+    assert notified.get("event_type") == "checkout.session.completed"
