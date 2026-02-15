@@ -109,6 +109,7 @@ def collect_google_only(
             include_backlog=False,
             reset_google_state=context.google_reset_state,
             recheck_all=(mode == SyncMode.GOOGLE_REFRESH),
+            run=run,
             alert_service=alert_service if mode.dispatch_alerts else None,
             progress_callback=progress_callback,
         )

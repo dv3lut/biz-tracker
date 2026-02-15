@@ -23,7 +23,8 @@ from app.services.google_business.google_lookup_engine import GoogleLookupEngine
 from app.services.google_business.google_matching import matches_expected_google_category
 from app.services.google_business.google_types import GoogleEnrichmentResult, GoogleMatch
 from app.services.google.google_retry_config import GoogleRetryRuntimeConfig, load_runtime_google_retry_config
-from app.services.client_service import resolve_enabled_department_codes
+from app.services.client_service import get_admin_emails, resolve_enabled_department_codes
+from app.services.email_service import EmailService
 from app.services.rate_limiter import RateLimiter
 from app.services.website_scraper.scraper_service import ContactItem, WebsiteScrapingResult, scrape_website
 from app.utils.business_types import is_micro_company
@@ -74,6 +75,7 @@ class GoogleBusinessService:
         self._neutral_google_types = {"point_of_interest", "establishment"}
         self._naf_keyword_map = build_naf_keyword_map(self._session)
         self._lookup_engine: GoogleLookupEngine | None = None
+        self._google_api_error_summaries: dict[tuple[str, str, str], dict[str, object]] = {}
         if not self._settings.enabled:
             self._client: GooglePlacesClient | None = None
             self._rate_limiter = None
@@ -95,9 +97,25 @@ class GoogleBusinessService:
         self._api_call_count = 0
         self._api_error_count = 0
 
-    def _record_api_error(self, _operation: str) -> None:
+    def _record_api_error(self, operation: str, error: GooglePlacesError | None = None) -> None:
         current = getattr(self, "_api_error_count", 0)
         self._api_error_count = current + 1
+        if not error or not error.google_status:
+            return
+        message = (error.error_message or "").strip() or "(message indisponible)"
+        if len(message) > 240:
+            message = f"{message[:240]}…"
+        key = (operation, error.google_status, message)
+        entry = self._google_api_error_summaries.get(key)
+        if entry is None:
+            entry = {
+                "operation": operation,
+                "status": error.google_status,
+                "message": message,
+                "count": 0,
+            }
+            self._google_api_error_summaries[key] = entry
+        entry["count"] = int(entry.get("count", 0)) + 1
 
     def close(self) -> None:
         if self._client:
@@ -148,6 +166,7 @@ class GoogleBusinessService:
         include_backlog: bool = True,
         reset_google_state: bool = False,
         recheck_all: bool = False,
+        run: models.SyncRun | None = None,
     ) -> GoogleEnrichmentResult:
         if not self._client or not self._rate_limiter or not self._lookup_engine:
             return GoogleEnrichmentResult(
@@ -168,6 +187,7 @@ class GoogleBusinessService:
         now = utcnow()
         self._api_call_count = 0
         self._api_error_count = 0
+        self._google_api_error_summaries = {}
         allowed_departments = resolve_enabled_department_codes(self._session)
         if not include_backlog and allowed_departments is not None and not allowed_departments:
             allowed_departments = None
@@ -260,6 +280,7 @@ class GoogleBusinessService:
                 no_website_updated,
             ) = self._refresh_no_website_listings(now, allowed_departments=allowed_departments)
         remaining = max(queue_count - processed_count, 0)
+        self._notify_google_api_errors(run)
         return GoogleEnrichmentResult(
             matches=newly_found,
             queue_count=queue_count,
@@ -417,7 +438,7 @@ class GoogleBusinessService:
             try:
                 details = self._fetch_place_details(place_id)
             except GooglePlacesError as exc:
-                self._record_api_error("place_details")
+                self._record_api_error("place_details", exc)
                 _LOGGER.warning(
                     "Lecture des contacts Google Places échouée pour %s (place=%s): %s",
                     establishment.siret,
@@ -498,7 +519,7 @@ class GoogleBusinessService:
             try:
                 details = self._fetch_place_details(place_id)
             except GooglePlacesError as exc:
-                self._record_api_error("place_details")
+                self._record_api_error("place_details", exc)
                 _LOGGER.warning(
                     "Re-check site web échoué pour %s (place=%s): %s",
                     establishment.siret,
@@ -756,6 +777,79 @@ class GoogleBusinessService:
     def _record_api_call(self) -> None:
         current = getattr(self, "_api_call_count", 0)
         self._api_call_count = current + 1
+
+    def _notify_google_api_errors(self, run: models.SyncRun | None) -> None:
+        if not self._google_api_error_summaries:
+            return
+
+        email_service = EmailService()
+        recipients = get_admin_emails(self._session)
+        summary_list = sorted(
+            self._google_api_error_summaries.values(),
+            key=lambda item: int(item.get("count", 0)),
+            reverse=True,
+        )
+        total_errors = sum(int(item.get("count", 0)) for item in summary_list)
+
+        payload = {
+            "total": total_errors,
+            "errors": summary_list,
+        }
+        if run is not None:
+            payload["run_id"] = str(run.id)
+            payload["scope_key"] = run.scope_key
+
+        if not recipients:
+            log_event("sync.google.api_error.email.skipped", reason="no_recipients", **payload)
+            return
+        if not email_service.is_enabled():
+            log_event("sync.google.api_error.email.skipped", reason="email_disabled", **payload)
+            return
+        if not email_service.is_configured():
+            log_event("sync.google.api_error.email.skipped", reason="email_not_configured", **payload)
+            return
+
+        subject = "Business tracker · Erreurs Google Places détectées"
+        lines = [
+            "Des erreurs Google Places ont été détectées pendant le matching.",
+            "",
+        ]
+        if run is not None:
+            started_at = run.started_at.isoformat() if run.started_at else "inconnu"
+            lines.extend(
+                [
+                    f"Run: {run.id}",
+                    f"Scope: {run.scope_key}",
+                    f"Démarré: {started_at}",
+                    "",
+                ]
+            )
+        lines.append(f"Total erreurs: {total_errors}")
+        lines.append("")
+        lines.append("Détails:")
+        for item in summary_list[:10]:
+            lines.append(
+                "- {status} ({operation}): {count} — {message}".format(
+                    status=item.get("status"),
+                    operation=item.get("operation"),
+                    count=item.get("count"),
+                    message=item.get("message"),
+                )
+            )
+        if len(summary_list) > 10:
+            lines.append(f"… et {len(summary_list) - 10} autres entrées")
+
+        try:
+            email_service.send(subject, "\n".join(lines), recipients)
+        except Exception as exc:  # noqa: BLE001 - log and continue
+            log_event(
+                "sync.google.api_error.email.error",
+                error={"type": type(exc).__name__, "message": str(exc)},
+                **payload,
+            )
+            return
+
+        log_event("sync.google.api_error.email.sent", recipients=recipients, subject=subject, **payload)
 
     def _serialize_google_match(self, match: GoogleMatch) -> dict[str, object]:
         return {

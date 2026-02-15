@@ -47,7 +47,7 @@ class GoogleLookupEngine:
         neutral_google_types: set[str],
         category_similarity_threshold: float,
         api_call_hook: Callable[[], None],
-        api_error_hook: Callable[[str], None] | None = None,
+        api_error_hook: Callable[[str, GooglePlacesError | None], None] | None = None,
         category_matcher: CategoryMatcher | None = None,
     ) -> None:
         self._session = session
@@ -84,7 +84,7 @@ class GoogleLookupEngine:
             self._record_api_call()
             candidates = self._client.find_place(query, fields="place_id,name,formatted_address,geometry")
         except GooglePlacesError as exc:
-            self._record_api_error("find_place")
+            self._record_api_error("find_place", exc)
             _LOGGER.warning("Recherche Google Places échouée pour %s: %s", establishment.siret, exc)
             log_event(
                 "sync.google.find_place.error",
@@ -186,7 +186,7 @@ class GoogleLookupEngine:
             try:
                 details = self._fetch_details(place_id)
             except GooglePlacesError as exc:
-                self._record_api_error("place_details")
+                self._record_api_error("place_details", exc)
                 _LOGGER.warning(
                     "Lecture des détails Google Places échouée pour %s (place=%s): %s",
                     establishment.siret,
@@ -354,8 +354,8 @@ class GoogleLookupEngine:
             self._rate_limiter.acquire()
             self._record_api_call()
             candidates = self._client.find_place(query, fields="place_id,geometry")
-        except GooglePlacesError:
-            self._record_api_error("geocode")
+        except GooglePlacesError as exc:
+            self._record_api_error("geocode", exc)
             return None
         if not candidates:
             return None
@@ -443,10 +443,10 @@ class GoogleLookupEngine:
     def _record_api_call(self) -> None:
         self._api_call_hook()
 
-    def _record_api_error(self, operation: str) -> None:
+    def _record_api_error(self, operation: str, error: GooglePlacesError | None = None) -> None:
         if self._api_error_hook is None:
             return
-        self._api_error_hook(operation)
+        self._api_error_hook(operation, error)
 
     def _extract_contact_details(
         self, details: dict[str, object]

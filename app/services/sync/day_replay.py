@@ -83,6 +83,7 @@ def collect_day_replay_from_cache(
             include_backlog=False,
             reset_google_state=False,
             recheck_all=context.force_google_replay,
+            run=run,
             alert_service=alert_service,
             progress_callback=progress_callback,
         )

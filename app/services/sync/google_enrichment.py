@@ -67,6 +67,7 @@ def run_google_enrichment(
     include_backlog: bool,
     reset_google_state: bool,
     recheck_all: bool = False,
+    run: models.SyncRun | None = None,
     alert_service: AlertService | None = None,
     progress_callback: ProgressCallback = None,
 ) -> tuple[GoogleEnrichmentResult, list[models.Alert]]:
@@ -90,6 +91,7 @@ def run_google_enrichment(
             include_backlog=include_backlog,
             reset_google_state=reset_google_state,
             recheck_all=recheck_all,
+            run=run,
         )
     finally:
         google_service.close()

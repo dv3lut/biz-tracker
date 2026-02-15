@@ -24,9 +24,16 @@ _GOOGLE_OK_STATUSES = {"OK", "ZERO_RESULTS", "NOT_FOUND"}
 class GooglePlacesError(RuntimeError):
     """Erreur levée lors d'un appel Google Places."""
 
-    def __init__(self, message: str, *, google_status: str | None = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        *,
+        google_status: str | None = None,
+        error_message: str | None = None,
+    ) -> None:
         super().__init__(message)
         self.google_status = google_status
+        self.error_message = error_message
 
 
 class GooglePlacesClient:
@@ -126,6 +133,7 @@ class GooglePlacesClient:
                             f"(operation={operation}, status={google_status}, message={error_message_str[:200]})"
                             ,
                             google_status=google_status,
+                            error_message=error_message_str[:200],
                         )
 
                     self._record_external_call(

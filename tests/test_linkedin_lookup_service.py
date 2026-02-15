@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
+from uuid import uuid4
 
 from app.clients.apify_client import LinkedInProfileResult
 from app.services.linkedin.linkedin_lookup_service import (
@@ -192,6 +193,32 @@ class LinkedInLookupServiceTests(TestCase):
         self.assertEqual(result.not_found_count, 1)
         self.assertEqual(director.linkedin_check_status, "not_found")
         self.assertEqual(director.linkedin_last_checked_at, now)
+
+    def test_sends_admin_email_when_linkedin_errors_aggregated(self) -> None:
+        service = LinkedInLookupService.__new__(LinkedInLookupService)
+        service._session = MagicMock()
+        service._error_summaries = {
+            ("error", "Quota LinkedIn dépassé"): {
+                "status": "error",
+                "message": "Quota LinkedIn dépassé",
+                "count": 2,
+            }
+        }
+
+        email_service = MagicMock()
+        email_service.is_enabled.return_value = True
+        email_service.is_configured.return_value = True
+
+        with patch(
+            "app.services.linkedin.linkedin_lookup_service.EmailService",
+            return_value=email_service,
+        ), patch(
+            "app.services.linkedin.linkedin_lookup_service.get_admin_emails",
+            return_value=["admin@example.com"],
+        ):
+            service._notify_linkedin_errors(uuid4())
+
+        email_service.send.assert_called_once()
 
     @patch("app.services.linkedin.linkedin_lookup_service.utcnow")
     @patch("app.services.linkedin.linkedin_lookup_service.ApifyClient")

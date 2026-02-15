@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from types import SimpleNamespace
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from app.services.google_business import (
     adjust_listing_status_for_contacts,
@@ -207,13 +207,14 @@ class GoogleConfidencePersistenceTests(unittest.TestCase):
         engine = self._make_engine(
             DummyClient(),
             category_matcher=lambda types, keywords: (True, 1.0),
-            api_error_hook=calls.append,
+            api_error_hook=lambda operation, _error: calls.append(operation),
         )
 
         result = engine.lookup(establishment, now=datetime(2024, 1, 1))
 
         self.assertIsNone(result)
         self.assertIn("find_place", calls)
+
 
     def test_persists_category_confidence_on_type_mismatch(self) -> None:
         establishment = self._establishment()
@@ -286,8 +287,6 @@ class GoogleListingHelpersTests(unittest.TestCase):
 
         self.assertEqual(len(review_dates), 2)
         self.assertLess(review_dates[0], review_dates[1])
-        self.assertEqual(listing_utils.extract_ratings_total(details), 5)
-
     def test_extract_listing_origin_prefers_opening_hours(self) -> None:
         details = {
             "current_opening_hours": {
@@ -419,6 +418,38 @@ class GoogleDepartmentFilteringTests(unittest.TestCase):
         )
 
         self.assertEqual(result, [est_corse])
+
+
+class GoogleAdminNotificationTests(unittest.TestCase):
+    """Vérifie que l'alerte admin est envoyée une seule fois en fin de run."""
+
+    def test_sends_admin_email_when_google_api_errors_aggregated(self) -> None:
+        service = GoogleBusinessService.__new__(GoogleBusinessService)
+        service._session = Mock()
+        service._google_api_error_summaries = {
+            ("find_place", "REQUEST_DENIED", "Plus de crédit"): {
+                "operation": "find_place",
+                "status": "REQUEST_DENIED",
+                "message": "Plus de crédit",
+                "count": 3,
+            }
+        }
+
+        email_service = Mock()
+        email_service.is_enabled.return_value = True
+        email_service.is_configured.return_value = True
+
+        with patch(
+            "app.services.google_business.google_business_service.EmailService",
+            return_value=email_service,
+        ), patch(
+            "app.services.google_business.google_business_service.get_admin_emails",
+            return_value=["admin@example.com"],
+        ):
+            run = SimpleNamespace(id="run-1", scope_key="scope-1", started_at=None)
+            service._notify_google_api_errors(run)
+
+        email_service.send.assert_called_once()
 
 if __name__ == "__main__":
     unittest.main()

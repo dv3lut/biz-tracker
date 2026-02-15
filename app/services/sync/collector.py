@@ -234,6 +234,7 @@ class SyncCollectorMixin(SyncPersistenceMixin):
                     include_backlog=include_backlog,
                     reset_google_state=False,
                     recheck_all=force_refresh_google,
+                    run=context.run,
                     alert_service=alert_service,
                     progress_callback=progress_callback,
                 )

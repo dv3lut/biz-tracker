@@ -15,6 +15,8 @@ from app.clients.apify_client import ApifyClient, LinkedInSearchInput
 from app.config import get_settings
 from app.db import models
 from app.observability import log_event
+from app.services.client_service import get_admin_emails
+from app.services.email_service import EmailService
 from app.utils.dates import utcnow
 from app.utils.diffusible import any_name_non_diffusible
 
@@ -61,6 +63,7 @@ class LinkedInLookupService:
         if self._settings and self._settings.enabled:
             self._client = ApifyClient()
         self._api_call_count = 0
+        self._error_summaries: dict[tuple[str, str], dict[str, object]] = {}
 
     @property
     def enabled(self) -> bool:
@@ -182,6 +185,8 @@ class LinkedInLookupService:
             error_count=result.error_count,
             api_call_count=result.api_call_count,
         )
+
+        self._notify_linkedin_errors(run_id)
 
         return result
 
@@ -305,6 +310,7 @@ class LinkedInLookupService:
                 "error": search_result.error,
                 "message": search_result.error or "Erreur lors de la recherche",
             }
+            self._record_error(search_result.error)
             result.error_count += 1
             log_event(
                 "sync.linkedin.director.search.error",
@@ -545,6 +551,7 @@ class LinkedInLookupService:
                 reason=reason,
             )
         elif status == LINKEDIN_STATUS_ERROR:
+            self._record_error(outcome.get("error"))
             result.error_count += 1
             result.searched_count += 1
             log_event(
@@ -731,6 +738,7 @@ class LinkedInLookupService:
                     director.linkedin_check_status = LINKEDIN_STATUS_ERROR
                     director.linkedin_last_checked_at = now
                     total_result.error_count += 1
+                    self._record_error(str(exc))
                     log_event(
                         "sync.linkedin.director.search.error",
                         run_id=str(run_id) if run_id else None,
@@ -764,7 +772,89 @@ class LinkedInLookupService:
             api_call_count=total_result.api_call_count,
         )
 
+        self._notify_linkedin_errors(run_id)
+
         return total_result
+
+    def _record_error(self, error: str | None) -> None:
+        message = (error or "Erreur LinkedIn inconnue").strip()
+        if not message:
+            message = "Erreur LinkedIn inconnue"
+        if len(message) > 240:
+            message = f"{message[:240]}…"
+        key = ("error", message)
+        entry = self._error_summaries.get(key)
+        if entry is None:
+            entry = {
+                "status": "error",
+                "message": message,
+                "count": 0,
+            }
+            self._error_summaries[key] = entry
+        entry["count"] = int(entry.get("count", 0)) + 1
+
+    def _notify_linkedin_errors(self, run_id: UUID | None) -> None:
+        if run_id is None:
+            return
+        if not self._error_summaries:
+            return
+
+        email_service = EmailService()
+        recipients = get_admin_emails(self._session)
+        summary_list = sorted(
+            self._error_summaries.values(),
+            key=lambda item: int(item.get("count", 0)),
+            reverse=True,
+        )
+        total_errors = sum(int(item.get("count", 0)) for item in summary_list)
+
+        payload = {
+            "run_id": str(run_id),
+            "total": total_errors,
+            "errors": summary_list,
+        }
+
+        if not recipients:
+            log_event("sync.linkedin.api_error.email.skipped", reason="no_recipients", **payload)
+            return
+        if not email_service.is_enabled():
+            log_event("sync.linkedin.api_error.email.skipped", reason="email_disabled", **payload)
+            return
+        if not email_service.is_configured():
+            log_event("sync.linkedin.api_error.email.skipped", reason="email_not_configured", **payload)
+            return
+
+        subject = "Business tracker · Erreurs LinkedIn détectées"
+        lines = [
+            "Des erreurs LinkedIn ont été détectées pendant le matching.",
+            "",
+            f"Run: {run_id}",
+            "",
+            f"Total erreurs: {total_errors}",
+            "",
+            "Détails:",
+        ]
+        for item in summary_list[:10]:
+            lines.append(
+                "- {count} — {message}".format(
+                    count=item.get("count"),
+                    message=item.get("message"),
+                )
+            )
+        if len(summary_list) > 10:
+            lines.append(f"… et {len(summary_list) - 10} autres entrées")
+
+        try:
+            email_service.send(subject, "\n".join(lines), recipients)
+        except Exception as exc:  # noqa: BLE001 - log and continue
+            log_event(
+                "sync.linkedin.api_error.email.error",
+                error={"type": type(exc).__name__, "message": str(exc)},
+                **payload,
+            )
+            return
+
+        log_event("sync.linkedin.api_error.email.sent", recipients=recipients, subject=subject, **payload)
 
 
 __all__ = [
