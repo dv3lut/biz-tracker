@@ -492,5 +492,71 @@ class GoogleSerializationTests(unittest.TestCase):
 
         self.assertEqual(service_payload, engine_payload)
 
+
+class GoogleBacklogCountingTests(unittest.TestCase):
+    """Vérifie que les matches backlog sont bien comptés dans les résultats du run."""
+
+    def test_apply_lookup_result_appends_found_even_when_created_run_differs_from_last_run(self) -> None:
+        session = Mock()
+        session.flush = Mock()
+        engine = GoogleLookupEngine(
+            session,
+            client=Mock(),
+            rate_limiter=SimpleNamespace(acquire=lambda: None),
+            settings=SimpleNamespace(),
+            naf_keyword_map={},
+            neutral_google_types={"point_of_interest", "establishment"},
+            category_similarity_threshold=0.72,
+            api_call_hook=lambda: None,
+        )
+
+        establishment = SimpleNamespace(
+            siret="12345678901234",
+            created_run_id="older-run-id",
+            last_run_id="current-run-id",
+            google_place_id=None,
+            google_place_url=None,
+            google_check_status="pending",
+            google_last_checked_at=None,
+            google_last_found_at=None,
+            google_listing_origin_at=None,
+            google_listing_origin_source="unknown",
+            google_listing_age_status="unknown",
+            google_match_confidence=None,
+            google_category_match_confidence=None,
+            google_contact_phone=None,
+            google_contact_email=None,
+            google_contact_website=None,
+        )
+
+        match = SimpleNamespace(
+            place_id="place-1",
+            place_url="https://maps.google.com/?cid=1",
+            confidence=0.91,
+            category_confidence=0.88,
+            listing_origin_at=None,
+            listing_origin_source="reviews",
+            listing_age_status="recent_creation",
+            status_override=None,
+            contact_phone=None,
+            contact_email=None,
+            contact_website=None,
+        )
+
+        newly_found: list[object] = []
+        now = datetime(2026, 2, 16, 13, 30)
+
+        result = engine.apply_lookup_result(
+            establishment,
+            match,
+            now,
+            newly_found=newly_found,
+        )
+
+        self.assertIs(result, match)
+        self.assertEqual(establishment.google_check_status, "found")
+        self.assertEqual(len(newly_found), 1)
+        self.assertIs(newly_found[0], establishment)
+
 if __name__ == "__main__":
     unittest.main()

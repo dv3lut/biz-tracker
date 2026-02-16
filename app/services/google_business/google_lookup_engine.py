@@ -415,7 +415,10 @@ class GoogleLookupEngine:
             establishment.google_last_found_at = now
         self._session.flush()
 
-        if newly_found is not None and establishment.created_run_id == establishment.last_run_id:
+        if (
+            newly_found is not None
+            and (establishment.google_check_status or "").lower() == "found"
+        ):
             newly_found.append(establishment)
 
         return result
