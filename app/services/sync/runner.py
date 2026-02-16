@@ -79,6 +79,7 @@ class SyncRunnerMixin(SyncRunPreparationMixin):
                     run=serialize_sync_run(run),
                     error={"type": type(exc).__name__, "message": str(exc)},
                 )
+                self._send_run_failure_email(session, run, exc, triggered_by="cli")
                 raise
             finally:
                 context.client.close()
@@ -160,6 +161,7 @@ class SyncRunnerMixin(SyncRunPreparationMixin):
                             run=serialize_sync_run(run),
                             error={"type": type(exc).__name__, "message": str(exc)},
                         )
+                        self._send_run_failure_email(session, run, exc, triggered_by=triggered_by)
                         raise
                     finally:
                         context.client.close()

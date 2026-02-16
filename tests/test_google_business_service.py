@@ -451,5 +451,46 @@ class GoogleAdminNotificationTests(unittest.TestCase):
 
         email_service.send.assert_called_once()
 
+
+class GoogleSerializationTests(unittest.TestCase):
+    def test_serialize_establishment_returns_expected_payload(self) -> None:
+        establishment = SimpleNamespace(
+            siret="12345678901234",
+            siren="123456789",
+            name="Chez Paul",
+            naf_code="56.10A",
+            code_postal="75001",
+            libelle_commune="Paris",
+            libelle_commune_etranger=None,
+            google_check_status="found",
+            google_place_id="place-1",
+            google_place_url="https://maps.google.com/?cid=1",
+        )
+
+        payload = GoogleBusinessService._serialize_establishment(establishment)
+
+        self.assertEqual(payload["siret"], "12345678901234")
+        self.assertEqual(payload["siren"], "123456789")
+        self.assertEqual(payload["name"], "Chez Paul")
+        self.assertEqual(payload["naf_code"], "56.10A")
+        self.assertEqual(payload["code_postal"], "75001")
+        self.assertEqual(payload["libelle_commune"], "Paris")
+
+    def test_serialize_establishment_stays_aligned_with_lookup_engine(self) -> None:
+        establishment = SimpleNamespace(
+            siret="12345678901234",
+            siren="123456789",
+            name="Chez Paul",
+            naf_code="56.10A",
+            code_postal="75001",
+            libelle_commune="Paris",
+        )
+
+        service_payload = GoogleBusinessService._serialize_establishment(establishment)
+        engine = GoogleLookupEngine.__new__(GoogleLookupEngine)
+        engine_payload = GoogleLookupEngine._serialize_establishment(engine, establishment)
+
+        self.assertEqual(service_payload, engine_payload)
+
 if __name__ == "__main__":
     unittest.main()

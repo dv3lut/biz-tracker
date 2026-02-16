@@ -181,6 +181,22 @@ def serialize_alert(alert: "Any") -> dict[str, Any]:
     }
 
 
+def serialize_establishment_for_logging(establishment: "Any") -> dict[str, Any]:
+    """Serialize establishment for structured logging payloads (lightweight variant).
+
+    Used by Google lookup and enrichment services to include establishment context
+    in observability events. This is a minimal serialization suitable for log payloads.
+    """
+    return {
+        "siret": getattr(establishment, "siret", None),
+        "siren": getattr(establishment, "siren", None),
+        "name": getattr(establishment, "name", None),
+        "naf_code": getattr(establishment, "naf_code", None),
+        "code_postal": getattr(establishment, "code_postal", None),
+        "libelle_commune": getattr(establishment, "libelle_commune", None),
+    }
+
+
 def serialize_sync_run(run: "Any") -> dict[str, Any]:
     from app.db import models
 

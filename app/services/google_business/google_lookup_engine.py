@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.clients.google_places_client import GooglePlacesClient, GooglePlacesError
 from app.db import models
-from app.observability import log_event
+from app.observability import log_event, serialize_establishment_for_logging
 from app.services.google_business.google_constants import (
     PLACE_DETAILS_FIELDS,
     PLACEHOLDER_TOKENS,
@@ -431,14 +431,7 @@ class GoogleLookupEngine:
         return details_fetcher(place_id, fields=PLACE_DETAILS_FIELDS)
 
     def _serialize_establishment(self, establishment: models.Establishment) -> dict[str, object]:
-        return {
-            "siret": getattr(establishment, "siret", None),
-            "siren": getattr(establishment, "siren", None),
-            "name": getattr(establishment, "name", None),
-            "naf_code": getattr(establishment, "naf_code", None),
-            "code_postal": getattr(establishment, "code_postal", None),
-            "libelle_commune": getattr(establishment, "libelle_commune", None),
-        }
+        return serialize_establishment_for_logging(establishment)
 
     def _record_api_call(self) -> None:
         self._api_call_hook()

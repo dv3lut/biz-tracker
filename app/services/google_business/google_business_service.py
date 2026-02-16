@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.clients.google_places_client import GooglePlacesClient, GooglePlacesError
 from app.config import get_settings
 from app.db import models
-from app.observability import log_event
+from app.observability import log_event, serialize_establishment_for_logging
 from app.services.google_business.google_constants import (
     PLACE_DETAILS_FIELDS,
     PROGRESS_BATCH_SIZE,
@@ -864,6 +864,10 @@ class GoogleBusinessService:
             "contact_email": match.contact_email,
             "contact_website": match.contact_website,
         }
+
+    @staticmethod
+    def _serialize_establishment(establishment: models.Establishment) -> dict[str, object]:
+        return serialize_establishment_for_logging(establishment)
 
     def _format_progress(
         self,
