@@ -305,6 +305,30 @@ class AlertServiceFilteringTests(unittest.TestCase):
 
         deps.email_service.send.assert_not_called()
 
+    def test_client_copy_to_admins_kept_when_admin_summary_disabled(self) -> None:
+        establishment = self._make_establishment("recent_creation", suffix="90")
+        client = self._make_client(email="client@example.com")
+        client.include_admins_in_client_alerts = True
+
+        with self._patched_dependencies(
+            active_clients=[client],
+            admin_recipients=["admin@example.com"],
+            assignment_map={client.id: [establishment]},
+            client_emails=["client@example.com"],
+            dispatch_result=SimpleNamespace(delivered=[client], failed=[], sent_at=None),
+        ) as deps:
+            service = AlertService(
+                self.session,
+                self.run,
+                admin_notifications_enabled=False,
+            )
+            service.create_google_alerts([establishment])
+
+        deps.dispatch_mock.assert_called_once()
+        payloads = deps.dispatch_mock.call_args[0][1]
+        self.assertEqual(payloads[0].extra_recipients, ["admin@example.com"])
+        deps.email_service.send.assert_not_called()
+
     def test_client_notifications_skip_when_email_disabled(self) -> None:
         establishment = self._make_establishment("recent_creation", suffix="3")
 

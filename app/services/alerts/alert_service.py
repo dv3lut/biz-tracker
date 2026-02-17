@@ -115,7 +115,8 @@ class AlertService:
         email_enabled = self._email_service.is_enabled()
         email_configured = self._email_service.is_configured()
         has_previous_success = self._has_previous_successful_run()
-        admin_recipients = get_admin_emails(self._session) if self._admin_notifications_enabled else []
+        admin_recipients = get_admin_emails(self._session)
+        admin_summary_recipients = admin_recipients if self._admin_notifications_enabled else []
 
         if self._client_notifications_enabled:
             plan, client_skip_reason = self._prepare_client_dispatch(
@@ -131,7 +132,7 @@ class AlertService:
             plan = None
             client_skip_reason = "client_notifications_disabled"
         targeted_recipient_addresses = plan.targeted_recipient_addresses if plan else []
-        combined_recipient_addresses = plan.combined_recipient_addresses if plan else sorted(admin_recipients)
+        combined_recipient_addresses = plan.combined_recipient_addresses if plan else sorted(admin_summary_recipients)
         for alert in alerts:
             alert.recipients = combined_recipient_addresses
 
@@ -205,7 +206,7 @@ class AlertService:
 
             admin_skip_reason: str | None = None
             admin_sent_at: datetime | None = None
-            if not admin_recipients:
+            if not admin_summary_recipients:
                 admin_skip_reason = "no_admin_recipients"
             elif not email_enabled:
                 admin_skip_reason = "email_disabled"
@@ -228,7 +229,7 @@ class AlertService:
                     self._email_service.send(
                         admin_subject,
                         admin_text_body,
-                        admin_recipients,
+                        admin_summary_recipients,
                         html_body=admin_html_body,
                         attachments=attachments,
                     )
@@ -239,7 +240,7 @@ class AlertService:
                         "alerts.email.admin_error",
                         run_id=str(self._run.id),
                         scope_key=self._run.scope_key,
-                        recipients=admin_recipients,
+                        recipients=admin_summary_recipients,
                         error={"type": type(exc).__name__, "message": str(exc)},
                     )
                 else:
@@ -251,8 +252,8 @@ class AlertService:
                         "alerts.email.admin_sent",
                         run_id=str(self._run.id),
                         scope_key=self._run.scope_key,
-                        recipient_count=len(admin_recipients),
-                        recipients=admin_recipients,
+                        recipient_count=len(admin_summary_recipients),
+                        recipients=admin_summary_recipients,
                     )
 
             if admin_skip_reason and admin_skip_reason != "send_error":
@@ -261,8 +262,8 @@ class AlertService:
                     run_id=str(self._run.id),
                     scope_key=self._run.scope_key,
                     reason=admin_skip_reason,
-                    recipient_count=len(admin_recipients),
-                    recipients=admin_recipients,
+                    recipient_count=len(admin_summary_recipients),
+                    recipients=admin_summary_recipients,
                 )
 
         return alerts

@@ -185,7 +185,7 @@ class SyncRequest(BaseModel):
     )
     target_client_ids: list[UUID] | None = Field(
         default=None,
-        description="Limiter l'envoi des alertes à une liste précise de clients (mode 'day_replay').",
+        description="Limiter l'envoi des alertes à une liste précise de clients (modes 'full' et 'day_replay').",
     )
     linkedin_statuses: list[str] | None = Field(
         default=None,
@@ -345,8 +345,8 @@ class SyncRequest(BaseModel):
             raise ValueError("La date de rejeu n'est disponible qu'en mode 'day_replay'.")
         if self.replay_for_date and self.replay_for_date > utcnow().date():
             raise ValueError("Impossible de rejouer une journée future.")
-        if self.target_client_ids and self.mode is not SyncMode.DAY_REPLAY:
-            raise ValueError("Le ciblage de clients est disponible uniquement en mode 'day_replay'.")
+        if self.target_client_ids and self.mode not in {SyncMode.DAY_REPLAY, SyncMode.FULL}:
+            raise ValueError("Le ciblage de clients est disponible uniquement en modes 'full' et 'day_replay'.")
         if self.notify_admins is False and self.mode is not SyncMode.DAY_REPLAY:
             raise ValueError("La désactivation des notifications admin est réservée au mode 'day_replay'.")
         if self.force_google_replay and self.mode is not SyncMode.DAY_REPLAY:

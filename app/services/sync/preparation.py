@@ -134,7 +134,7 @@ class SyncRunPreparationMixin:
         run.linkedin_target_statuses = linkedin_statuses or None
         run.google_target_statuses = google_statuses or None
         run.website_scrape_statuses = website_statuses or None
-        run.target_client_ids = None
+        run.target_client_ids = client_targets if mode == SyncMode.FULL else None
         run.notify_admins = True
         if naf_filter:
             append_run_note(run, format_target_naf_note(naf_filter))
@@ -148,6 +148,7 @@ class SyncRunPreparationMixin:
             target_naf_codes=naf_filter,
             linkedin_statuses=linkedin_statuses,
             google_statuses=google_statuses,
+            target_client_ids=run.target_client_ids,
             notify_admins=run.notify_admins,
             months_back=months_back,
             run=serialize_sync_run(run),

@@ -107,9 +107,14 @@ class SyncRequestSchemaTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             SyncRequest(mode=SyncMode.FULL, naf_codes=[f"5610{chr(65 + (i % 26))}" for i in range(30)])
 
-    def test_target_clients_require_day_replay(self) -> None:
+    def test_target_clients_allowed_for_full(self) -> None:
+        client_id = uuid4()
+        payload = SyncRequest(mode=SyncMode.FULL, target_client_ids=[client_id, client_id])
+        self.assertEqual(payload.target_client_ids, [client_id])
+
+    def test_target_clients_restricted_to_supported_modes(self) -> None:
         with self.assertRaises(ValidationError):
-            SyncRequest(mode=SyncMode.FULL, target_client_ids=[uuid4()])
+            SyncRequest(mode=SyncMode.SIRENE_ONLY, target_client_ids=[uuid4()])
 
     def test_target_clients_deduplicated(self) -> None:
         client_id = uuid4()
