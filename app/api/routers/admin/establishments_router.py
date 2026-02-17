@@ -26,6 +26,8 @@ def _build_establishments_query(
     region_codes: list[str] | None,
     added_from: date | None,
     added_to: date | None,
+    creation_from: date | None,
+    creation_to: date | None,
     last_treatment_from: date | None,
     last_treatment_to: date | None,
     google_check_status: str | None,
@@ -106,6 +108,11 @@ def _build_establishments_query(
     if added_to is not None:
         end_exclusive = datetime.combine(added_to, time.min) + timedelta(days=1)
         query = query.filter(models.Establishment.first_seen_at < end_exclusive)
+
+    if creation_from is not None:
+        query = query.filter(models.Establishment.date_creation >= creation_from)
+    if creation_to is not None:
+        query = query.filter(models.Establishment.date_creation <= creation_to)
 
     if last_treatment_from is not None:
         start = datetime.combine(last_treatment_from, time.min)
@@ -254,6 +261,20 @@ def list_establishments(
             "Pour une date exacte, utiliser la même date pour added_from et added_to."
         ),
     ),
+    creation_from: date | None = Query(
+        None,
+        description=(
+            "Filtrer sur la date de création SIRENE à partir de cette date incluse (YYYY-MM-DD). "
+            "Peut être utilisé seul (borne ouverte) ou combiné avec creation_to."
+        ),
+    ),
+    creation_to: date | None = Query(
+        None,
+        description=(
+            "Filtrer sur la date de création SIRENE jusqu'à cette date incluse (YYYY-MM-DD). "
+            "Peut être utilisé seul (borne ouverte) ou combiné avec creation_from."
+        ),
+    ),
     last_treatment_from: date | None = Query(
         None,
         description=(
@@ -304,6 +325,8 @@ def list_establishments(
         region_codes=region_codes,
         added_from=added_from,
         added_to=added_to,
+        creation_from=creation_from,
+        creation_to=creation_to,
         last_treatment_from=last_treatment_from,
         last_treatment_to=last_treatment_to,
         google_check_status=google_check_status,

@@ -108,6 +108,34 @@ def test_list_establishments_applies_added_date_range():
     assert len([value for value in values if hasattr(value, "year")]) >= 2
 
 
+def test_list_establishments_applies_creation_date_range():
+    session = _FakeSession()
+
+    list_establishments(
+        limit=10,
+        offset=0,
+        search=None,
+        naf_code=None,
+        naf_codes=None,
+        department_codes=None,
+        region_codes=None,
+        added_from=None,
+        added_to=None,
+        creation_from=date(2024, 1, 10),
+        creation_to=date(2024, 1, 12),
+        google_check_status=None,
+        is_individual=None,
+        session=session,  # type: ignore[arg-type]
+    )
+
+    rendered = "\n".join(str(item) for item in session.query_obj.filters)
+    assert "date_creation" in rendered
+
+    values = _extract_filter_values(session.query_obj)
+    assert date(2024, 1, 10) in values
+    assert date(2024, 1, 12) in values
+
+
 def test_list_establishments_ignores_blank_naf_code():
     session = _FakeSession()
 
