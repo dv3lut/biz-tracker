@@ -1,6 +1,7 @@
 import { EstablishmentsSection } from "../EstablishmentsSection";
 import type {
   Establishment,
+  EstablishmentDateFilterType,
   EstablishmentIndividualFilter,
   GoogleFindPlaceDebugResult,
   LinkedInStatus,
@@ -24,10 +25,9 @@ type Props = {
   query: string;
   nafCodes: string[];
   departmentCodes: string[];
-  addedFrom: string;
-  addedTo: string;
-  lastTreatmentFrom: string;
-  lastTreatmentTo: string;
+  dateFilterType: EstablishmentDateFilterType;
+  dateFrom: string;
+  dateTo: string;
   individualFilter: EstablishmentIndividualFilter;
   googleCheckStatus: string;
   linkedinStatuses: LinkedInStatus[];
@@ -38,10 +38,9 @@ type Props = {
   onQueryChange: (query: string) => void;
   onNafCodesChange: (value: string[]) => void;
   onDepartmentCodesChange: (value: string[]) => void;
-  onAddedFromChange: (value: string) => void;
-  onAddedToChange: (value: string) => void;
-  onLastTreatmentFromChange: (value: string) => void;
-  onLastTreatmentToChange: (value: string) => void;
+  onDateFilterTypeChange: (value: EstablishmentDateFilterType) => void;
+  onDateFromChange: (value: string) => void;
+  onDateToChange: (value: string) => void;
   onApplyFilters: () => void;
   hasPendingFilters: boolean;
   onResetFilters: () => void;
@@ -81,10 +80,9 @@ export const EstablishmentsView = ({
   query,
   nafCodes,
   departmentCodes,
-  addedFrom,
-  addedTo,
-  lastTreatmentFrom,
-  lastTreatmentTo,
+  dateFilterType,
+  dateFrom,
+  dateTo,
   individualFilter,
   googleCheckStatus,
   linkedinStatuses,
@@ -95,10 +93,9 @@ export const EstablishmentsView = ({
   onQueryChange,
   onNafCodesChange,
   onDepartmentCodesChange,
-  onAddedFromChange,
-  onAddedToChange,
-  onLastTreatmentFromChange,
-  onLastTreatmentToChange,
+  onDateFilterTypeChange,
+  onDateFromChange,
+  onDateToChange,
   onApplyFilters,
   hasPendingFilters,
   onResetFilters,
@@ -146,10 +143,9 @@ export const EstablishmentsView = ({
           query={query}
           nafCodes={nafCodes}
           departmentCodes={departmentCodes}
-          addedFrom={addedFrom}
-          addedTo={addedTo}
-          lastTreatmentFrom={lastTreatmentFrom}
-          lastTreatmentTo={lastTreatmentTo}
+          dateFilterType={dateFilterType}
+          dateFrom={dateFrom}
+          dateTo={dateTo}
           individualFilter={individualFilter}
           googleCheckStatus={googleCheckStatus}
           linkedinStatuses={linkedinStatuses}
@@ -160,10 +156,9 @@ export const EstablishmentsView = ({
           onQueryChange={onQueryChange}
           onNafCodesChange={onNafCodesChange}
           onDepartmentCodesChange={onDepartmentCodesChange}
-          onAddedFromChange={onAddedFromChange}
-          onAddedToChange={onAddedToChange}
-          onLastTreatmentFromChange={onLastTreatmentFromChange}
-          onLastTreatmentToChange={onLastTreatmentToChange}
+          onDateFilterTypeChange={onDateFilterTypeChange}
+          onDateFromChange={onDateFromChange}
+          onDateToChange={onDateToChange}
           onApplyFilters={onApplyFilters}
           hasPendingFilters={hasPendingFilters}
           onResetFilters={onResetFilters}

@@ -29,10 +29,9 @@
   min-width: 240px;
 }
 
-.establishments-control--added-from,
-.establishments-control--added-to,
-.establishments-control--last-treatment-from,
-.establishments-control--last-treatment-to {
+.establishments-control--date-type,
+.establishments-control--date-from,
+.establishments-control--date-to {
   flex: 0 0 auto;
   min-width: 170px;
 }
@@ -123,10 +122,9 @@
 
   .establishments-control--search,
   .establishments-control--naf,
-  .establishments-control--added-from,
-  .establishments-control--added-to,
-  .establishments-control--last-treatment-from,
-  .establishments-control--last-treatment-to,
+  .establishments-control--date-type,
+  .establishments-control--date-from,
+  .establishments-control--date-to,
   .establishments-control--individual,
   .establishments-control--linkedin-status,
   .establishments-control--pagination {

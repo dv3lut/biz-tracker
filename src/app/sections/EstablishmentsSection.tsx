@@ -5,6 +5,7 @@ import toast from "react-hot-toast";
 import { ApiError, establishmentsApi, googleApi, nafApi, regionsApi } from "../../api";
 import type {
   Establishment,
+  EstablishmentDateFilterType,
   EstablishmentIndividualFilter,
   GoogleFindPlaceDebugResult,
   LinkedInStatus,
@@ -34,10 +35,9 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
   const [draftQuery, setDraftQuery] = useState("");
   const [draftNafCodes, setDraftNafCodes] = useState<string[]>([]);
   const [draftDepartmentCodes, setDraftDepartmentCodes] = useState<string[]>([]);
-  const [draftAddedFrom, setDraftAddedFrom] = useState("");
-  const [draftAddedTo, setDraftAddedTo] = useState("");
-  const [draftLastTreatmentFrom, setDraftLastTreatmentFrom] = useState("");
-  const [draftLastTreatmentTo, setDraftLastTreatmentTo] = useState("");
+  const [draftDateFilterType, setDraftDateFilterType] = useState<EstablishmentDateFilterType>("added");
+  const [draftDateFrom, setDraftDateFrom] = useState("");
+  const [draftDateTo, setDraftDateTo] = useState("");
   const [draftIndividualFilter, setDraftIndividualFilter] = useState<EstablishmentIndividualFilter>("all");
   const [draftGoogleCheckStatus, setDraftGoogleCheckStatus] = useState("");
   const [draftLinkedinStatuses, setDraftLinkedinStatuses] = useState<LinkedInStatus[]>([]);
@@ -46,10 +46,9 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
   const [query, setQuery] = useState("");
   const [nafCodes, setNafCodes] = useState<string[]>([]);
   const [departmentCodes, setDepartmentCodes] = useState<string[]>([]);
-  const [addedFrom, setAddedFrom] = useState("");
-  const [addedTo, setAddedTo] = useState("");
-  const [lastTreatmentFrom, setLastTreatmentFrom] = useState("");
-  const [lastTreatmentTo, setLastTreatmentTo] = useState("");
+  const [dateFilterType, setDateFilterType] = useState<EstablishmentDateFilterType>("added");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [individualFilter, setIndividualFilter] = useState<EstablishmentIndividualFilter>("all");
   const [googleCheckStatus, setGoogleCheckStatus] = useState("");
   const [linkedinStatuses, setLinkedinStatuses] = useState<LinkedInStatus[]>([]);
@@ -81,10 +80,9 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
       query,
       nafCodes,
       departmentCodes,
-      addedFrom,
-      addedTo,
-      lastTreatmentFrom,
-      lastTreatmentTo,
+      dateFilterType,
+      dateFrom,
+      dateTo,
       individualFilter,
       googleCheckStatus,
       linkedinStatuses,
@@ -97,10 +95,13 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
         q: query ? query : undefined,
         nafCodes: nafCodes.length > 0 ? nafCodes : undefined,
         departmentCodes: departmentCodes.length > 0 ? departmentCodes : undefined,
-        addedFrom: addedFrom ? addedFrom : undefined,
-        addedTo: addedTo ? addedTo : undefined,
-        lastTreatmentFrom: lastTreatmentFrom ? lastTreatmentFrom : undefined,
-        lastTreatmentTo: lastTreatmentTo ? lastTreatmentTo : undefined,
+        addedFrom: dateFilterType === "added" && dateFrom ? dateFrom : undefined,
+        addedTo: dateFilterType === "added" && dateTo ? dateTo : undefined,
+        creationFrom: dateFilterType === "sirene_creation" && dateFrom ? dateFrom : undefined,
+        creationTo: dateFilterType === "sirene_creation" && dateTo ? dateTo : undefined,
+        lastTreatmentFrom:
+          dateFilterType === "sirene_last_treatment" && dateFrom ? dateFrom : undefined,
+        lastTreatmentTo: dateFilterType === "sirene_last_treatment" && dateTo ? dateTo : undefined,
         googleCheckStatus: googleCheckStatus ? googleCheckStatus : undefined,
         isIndividual:
           individualFilter === "all" ? undefined : individualFilter === "individual",
@@ -253,20 +254,16 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     setDraftDepartmentCodes(value);
   }, []);
 
-  const handleAddedFromChange = useCallback((value: string) => {
-    setDraftAddedFrom(value);
+  const handleDateFilterTypeChange = useCallback((value: EstablishmentDateFilterType) => {
+    setDraftDateFilterType(value);
   }, []);
 
-  const handleAddedToChange = useCallback((value: string) => {
-    setDraftAddedTo(value);
+  const handleDateFromChange = useCallback((value: string) => {
+    setDraftDateFrom(value);
   }, []);
 
-  const handleLastTreatmentFromChange = useCallback((value: string) => {
-    setDraftLastTreatmentFrom(value);
-  }, []);
-
-  const handleLastTreatmentToChange = useCallback((value: string) => {
-    setDraftLastTreatmentTo(value);
+  const handleDateToChange = useCallback((value: string) => {
+    setDraftDateTo(value);
   }, []);
 
   const handleIndividualFilterChange = useCallback((value: EstablishmentIndividualFilter) => {
@@ -289,20 +286,18 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     setQuery(draftQuery);
     setNafCodes(draftNafCodes);
     setDepartmentCodes(draftDepartmentCodes);
-    setAddedFrom(draftAddedFrom);
-    setAddedTo(draftAddedTo);
-    setLastTreatmentFrom(draftLastTreatmentFrom);
-    setLastTreatmentTo(draftLastTreatmentTo);
+    setDateFilterType(draftDateFilterType);
+    setDateFrom(draftDateFrom);
+    setDateTo(draftDateTo);
     setIndividualFilter(draftIndividualFilter);
     setGoogleCheckStatus(draftGoogleCheckStatus);
     setLinkedinStatuses(draftLinkedinStatuses);
     setWebsiteScrapeStatuses(draftWebsiteScrapeStatuses);
     setPage(0);
   }, [
-    draftAddedFrom,
-    draftAddedTo,
-    draftLastTreatmentFrom,
-    draftLastTreatmentTo,
+    draftDateFilterType,
+    draftDateFrom,
+    draftDateTo,
     draftGoogleCheckStatus,
     draftIndividualFilter,
     draftNafCodes,
@@ -316,10 +311,9 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     setDraftQuery("");
     setDraftNafCodes([]);
     setDraftDepartmentCodes([]);
-    setDraftAddedFrom("");
-    setDraftAddedTo("");
-    setDraftLastTreatmentFrom("");
-    setDraftLastTreatmentTo("");
+    setDraftDateFilterType("added");
+    setDraftDateFrom("");
+    setDraftDateTo("");
     setDraftIndividualFilter("all");
     setDraftGoogleCheckStatus("");
     setDraftLinkedinStatuses([]);
@@ -328,10 +322,9 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     setQuery("");
     setNafCodes([]);
     setDepartmentCodes([]);
-    setAddedFrom("");
-    setAddedTo("");
-    setLastTreatmentFrom("");
-    setLastTreatmentTo("");
+    setDateFilterType("added");
+    setDateFrom("");
+    setDateTo("");
     setIndividualFilter("all");
     setGoogleCheckStatus("");
     setLinkedinStatuses([]);
@@ -343,16 +336,13 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     if (draftQuery !== query) {
       return true;
     }
-    if (draftAddedFrom !== addedFrom) {
+    if (draftDateFilterType !== dateFilterType) {
       return true;
     }
-    if (draftAddedTo !== addedTo) {
+    if (draftDateFrom !== dateFrom) {
       return true;
     }
-    if (draftLastTreatmentFrom !== lastTreatmentFrom) {
-      return true;
-    }
-    if (draftLastTreatmentTo !== lastTreatmentTo) {
+    if (draftDateTo !== dateTo) {
       return true;
     }
     if (draftIndividualFilter !== individualFilter) {
@@ -392,20 +382,18 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     const websiteB = [...websiteScrapeStatuses].sort().join(",");
     return websiteA !== websiteB;
   }, [
-    addedFrom,
-    addedTo,
-    draftAddedFrom,
-    draftAddedTo,
-    draftLastTreatmentFrom,
-    draftLastTreatmentTo,
+    dateFilterType,
+    dateFrom,
+    dateTo,
+    draftDateFilterType,
+    draftDateFrom,
+    draftDateTo,
     draftGoogleCheckStatus,
     draftIndividualFilter,
     draftNafCodes,
     draftQuery,
     googleCheckStatus,
     individualFilter,
-    lastTreatmentFrom,
-    lastTreatmentTo,
     nafCodes,
     query,
     draftDepartmentCodes,
@@ -443,10 +431,9 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
       query={draftQuery}
       nafCodes={draftNafCodes}
       departmentCodes={draftDepartmentCodes}
-      addedFrom={draftAddedFrom}
-      addedTo={draftAddedTo}
-      lastTreatmentFrom={draftLastTreatmentFrom}
-      lastTreatmentTo={draftLastTreatmentTo}
+      dateFilterType={draftDateFilterType}
+      dateFrom={draftDateFrom}
+      dateTo={draftDateTo}
       individualFilter={draftIndividualFilter}
       googleCheckStatus={draftGoogleCheckStatus}
       linkedinStatuses={draftLinkedinStatuses}
@@ -457,10 +444,9 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
       onQueryChange={handleQueryChange}
       onNafCodesChange={handleNafCodesChange}
       onDepartmentCodesChange={handleDepartmentCodesChange}
-      onAddedFromChange={handleAddedFromChange}
-      onAddedToChange={handleAddedToChange}
-      onLastTreatmentFromChange={handleLastTreatmentFromChange}
-      onLastTreatmentToChange={handleLastTreatmentToChange}
+      onDateFilterTypeChange={handleDateFilterTypeChange}
+      onDateFromChange={handleDateFromChange}
+      onDateToChange={handleDateToChange}
       onApplyFilters={handleApplyFilters}
       hasPendingFilters={hasPendingFilters}
       onResetFilters={handleResetFilters}

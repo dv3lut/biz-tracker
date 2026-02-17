@@ -2,6 +2,7 @@ import { ChangeEvent, useEffect, useRef, useState } from "react";
 
 import {
   Establishment,
+  EstablishmentDateFilterType,
   EstablishmentIndividualFilter,
   LinkedInStatus,
   NafCategory,
@@ -31,10 +32,9 @@ interface EstablishmentsSectionProps {
   query: string;
   nafCodes: string[];
   departmentCodes: string[];
-  addedFrom: string;
-  addedTo: string;
-  lastTreatmentFrom: string;
-  lastTreatmentTo: string;
+  dateFilterType: EstablishmentDateFilterType;
+  dateFrom: string;
+  dateTo: string;
   individualFilter: EstablishmentIndividualFilter;
   googleCheckStatus: string;
   linkedinStatuses: LinkedInStatus[];
@@ -45,10 +45,9 @@ interface EstablishmentsSectionProps {
   onQueryChange: (query: string) => void;
   onNafCodesChange: (value: string[]) => void;
   onDepartmentCodesChange: (value: string[]) => void;
-  onAddedFromChange: (value: string) => void;
-  onAddedToChange: (value: string) => void;
-  onLastTreatmentFromChange: (value: string) => void;
-  onLastTreatmentToChange: (value: string) => void;
+  onDateFilterTypeChange: (value: EstablishmentDateFilterType) => void;
+  onDateFromChange: (value: string) => void;
+  onDateToChange: (value: string) => void;
   onApplyFilters: () => void;
   hasPendingFilters: boolean;
   onResetFilters: () => void;
@@ -88,10 +87,9 @@ export const EstablishmentsSection = ({
   query,
   nafCodes,
   departmentCodes,
-  addedFrom,
-  addedTo,
-  lastTreatmentFrom,
-  lastTreatmentTo,
+  dateFilterType,
+  dateFrom,
+  dateTo,
   individualFilter,
   googleCheckStatus,
   linkedinStatuses,
@@ -102,10 +100,9 @@ export const EstablishmentsSection = ({
   onQueryChange,
   onNafCodesChange,
   onDepartmentCodesChange,
-  onAddedFromChange,
-  onAddedToChange,
-  onLastTreatmentFromChange,
-  onLastTreatmentToChange,
+  onDateFilterTypeChange,
+  onDateFromChange,
+  onDateToChange,
   onApplyFilters,
   hasPendingFilters,
   onResetFilters,
@@ -169,20 +166,16 @@ export const EstablishmentsSection = ({
     onQueryChange(event.target.value);
   };
 
-  const handleAddedFromChange = (event: ChangeEvent<HTMLInputElement>) => {
-    onAddedFromChange(event.target.value);
+  const handleDateFilterTypeChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    onDateFilterTypeChange(event.target.value as EstablishmentDateFilterType);
   };
 
-  const handleAddedToChange = (event: ChangeEvent<HTMLInputElement>) => {
-    onAddedToChange(event.target.value);
+  const handleDateFromChange = (event: ChangeEvent<HTMLInputElement>) => {
+    onDateFromChange(event.target.value);
   };
 
-  const handleLastTreatmentFromChange = (event: ChangeEvent<HTMLInputElement>) => {
-    onLastTreatmentFromChange(event.target.value);
-  };
-
-  const handleLastTreatmentToChange = (event: ChangeEvent<HTMLInputElement>) => {
-    onLastTreatmentToChange(event.target.value);
+  const handleDateToChange = (event: ChangeEvent<HTMLInputElement>) => {
+    onDateToChange(event.target.value);
   };
 
   const handleLimitChange = (event: ChangeEvent<HTMLSelectElement>) => {
@@ -427,49 +420,36 @@ export const EstablishmentsSection = ({
             </button>
           </div>
 
-          <div className="establishments-control establishments-control--added-from">
+          <div className="establishments-control establishments-control--date-type">
             <label className="muted small">
-              Ajouté du
+              Type de date
+              <select value={dateFilterType} onChange={handleDateFilterTypeChange}>
+                <option value="added">Date d'ajout en base</option>
+                <option value="sirene_creation">Date de création SIRENE</option>
+                <option value="sirene_last_treatment">Date de dernier traitement SIRENE</option>
+              </select>
+            </label>
+          </div>
+
+          <div className="establishments-control establishments-control--date-from">
+            <label className="muted small">
+              du
               <input
                 type="date"
-                value={addedFrom}
-                onChange={handleAddedFromChange}
+                value={dateFrom}
+                onChange={handleDateFromChange}
                 title="Pour une date exacte, mettre la même date dans 'du' et 'au'."
               />
             </label>
           </div>
 
-          <div className="establishments-control establishments-control--added-to">
+          <div className="establishments-control establishments-control--date-to">
             <label className="muted small">
               au
               <input
                 type="date"
-                value={addedTo}
-                onChange={handleAddedToChange}
-                title="Pour une date exacte, mettre la même date dans 'du' et 'au'."
-              />
-            </label>
-          </div>
-
-          <div className="establishments-control establishments-control--last-treatment-from">
-            <label className="muted small">
-              Dernier traitement du
-              <input
-                type="date"
-                value={lastTreatmentFrom}
-                onChange={handleLastTreatmentFromChange}
-                title="Pour une date exacte, mettre la même date dans 'du' et 'au'."
-              />
-            </label>
-          </div>
-
-          <div className="establishments-control establishments-control--last-treatment-to">
-            <label className="muted small">
-              au
-              <input
-                type="date"
-                value={lastTreatmentTo}
-                onChange={handleLastTreatmentToChange}
+                value={dateTo}
+                onChange={handleDateToChange}
                 title="Pour une date exacte, mettre la même date dans 'du' et 'au'."
               />
             </label>

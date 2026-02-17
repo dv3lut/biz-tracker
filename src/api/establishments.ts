@@ -224,6 +224,8 @@ interface ListEstablishmentsParams {
   departmentCodes?: string[];
   addedFrom?: string;
   addedTo?: string;
+  creationFrom?: string;
+  creationTo?: string;
   lastTreatmentFrom?: string;
   lastTreatmentTo?: string;
   googleCheckStatus?: string;
@@ -267,6 +269,12 @@ const buildEstablishmentsQuery = (params: ListEstablishmentsParams = {}): URLSea
   }
   if (params.addedTo) {
     query.set("added_to", params.addedTo);
+  }
+  if (params.creationFrom) {
+    query.set("creation_from", params.creationFrom);
+  }
+  if (params.creationTo) {
+    query.set("creation_to", params.creationTo);
   }
   if (params.lastTreatmentFrom) {
     query.set("last_treatment_from", params.lastTreatmentFrom);

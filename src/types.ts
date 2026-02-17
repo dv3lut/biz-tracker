@@ -3,6 +3,7 @@ export type DayReplayReference = "creation_date" | "insertion_date";
 export type LinkedInStatus = "pending" | "found" | "not_found" | "error" | "insufficient";
 export type WebsiteScrapeStatus = "pending" | "found" | "no_info" | "no_website";
 export type GoogleCheckStatus = string;
+export type EstablishmentDateFilterType = "added" | "sirene_creation" | "sirene_last_treatment";
 
 export type ListingStatus = "recent_creation" | "recent_creation_missing_contact" | "not_recent_creation";
 
