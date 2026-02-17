@@ -301,6 +301,7 @@ export const SyncModeModal = ({
   const [linkedinStatuses, setLinkedinStatuses] = useState<LinkedInStatus[]>(["pending"]);
   const [selectedGoogleStatuses, setSelectedGoogleStatuses] = useState<GoogleCheckStatus[]>([]);
   const [selectedWebsiteStatuses, setSelectedWebsiteStatuses] = useState<string[]>(["not_scraped"]);
+  const supportsClientTargeting = mode === "day_replay" || mode === "full";
 
   useEffect(() => {
     if (isOpen) {
@@ -347,7 +348,7 @@ export const SyncModeModal = ({
     if (!syncModeRequiresReplayDate(mode)) {
       setFormError(null);
     }
-    if (mode !== "day_replay") {
+    if (!supportsClientTargeting) {
       setRecipientError(null);
     }
     // Reset monthsBack si on passe sur un mode non-Sirene
@@ -364,15 +365,15 @@ export const SyncModeModal = ({
       const pending = availableGoogleStatuses.find((status) => status.toLowerCase() === "pending");
       setSelectedGoogleStatuses(pending ? [pending] : [availableGoogleStatuses[0]]);
     }
-  }, [mode, selectedGoogleStatuses, availableGoogleStatuses]);
+  }, [mode, selectedGoogleStatuses, availableGoogleStatuses, supportsClientTargeting]);
 
 
 
   useEffect(() => {
-    if (mode === "day_replay" && (notifyAdmins || selectedClientIds.length > 0)) {
+    if (supportsClientTargeting && (mode === "full" || notifyAdmins || selectedClientIds.length > 0)) {
       setRecipientError(null);
     }
-  }, [mode, notifyAdmins, selectedClientIds]);
+  }, [mode, notifyAdmins, selectedClientIds, supportsClientTargeting]);
 
   const googleStatusOptions = useMemo(
     () => buildGoogleStatusOptions(availableGoogleStatuses),
@@ -606,10 +607,11 @@ export const SyncModeModal = ({
       payload.monthsBack = monthsBack;
     }
 
+    if (supportsClientTargeting && selectedClientIds.length > 0) {
+      payload.targetClientIds = selectedClientIds;
+    }
+
     if (mode === "day_replay") {
-      if (selectedClientIds.length > 0) {
-        payload.targetClientIds = selectedClientIds;
-      }
       payload.notifyAdmins = notifyAdmins;
       payload.forceGoogleReplay = forceGoogleReplay;
       payload.replayReference = replayReference;
@@ -1015,13 +1017,15 @@ export const SyncModeModal = ({
             {formError ? <p className="muted small error">{formError}</p> : null}
           </section>
 
-          {mode === "day_replay" ? (
+          {supportsClientTargeting ? (
             <section className="recipient-target-panel">
               <header className="panel-header">
                 <div>
-                  <h3>Destinataires du rejeu</h3>
+                  <h3>{mode === "day_replay" ? "Destinataires du rejeu" : "Destinataires des alertes"}</h3>
                   <p className="muted small">
-                    Choisissez jusqu'à {MAX_TARGET_CLIENTS} clients et/ou les administrateurs pour recevoir les alertes.
+                    {mode === "day_replay"
+                      ? `Choisissez jusqu'à ${MAX_TARGET_CLIENTS} clients et/ou les administrateurs pour recevoir les alertes.`
+                      : `Choisissez jusqu'à ${MAX_TARGET_CLIENTS} clients à notifier. Sans sélection, tous les clients actifs seront notifiés.`}
                   </p>
                 </div>
                 <div className="selection-counter">
@@ -1032,20 +1036,22 @@ export const SyncModeModal = ({
               </header>
 
               <div className="recipient-card">
-                <label className="recipient-option admin">
-                  <div>
-                    <strong>Administrateurs</strong>
-                    <p className="muted small">
-                      Envoie un récapitulatif global de tous les établissements correspondant aux filtres ci-dessus.
-                    </p>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={notifyAdmins}
-                    onChange={(event) => setNotifyAdmins(event.target.checked)}
-                    disabled={isSubmitting}
-                  />
-                </label>
+                {mode === "day_replay" ? (
+                  <label className="recipient-option admin">
+                    <div>
+                      <strong>Administrateurs</strong>
+                      <p className="muted small">
+                        Envoie un récapitulatif global de tous les établissements correspondant aux filtres ci-dessus.
+                      </p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={notifyAdmins}
+                      onChange={(event) => setNotifyAdmins(event.target.checked)}
+                      disabled={isSubmitting}
+                    />
+                  </label>
+                ) : null}
 
                 <div className="recipient-list-header">
                   <div>
