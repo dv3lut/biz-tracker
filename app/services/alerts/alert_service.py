@@ -39,6 +39,19 @@ def _sanitize_filename_token(value: object | None) -> str:
     return token.strip("_-") or "export"
 
 
+def _ensure_directors_loaded(
+    session: Session, 
+    establishments: Sequence[models.Establishment],
+) -> None:
+    """Ensure directors relationship is loaded for all establishments."""
+    from sqlalchemy.orm import selectinload
+    
+    for est in establishments:
+        # If directors not already loaded, refresh to load them
+        if est in session and "directors" not in est.__dict__:
+            session.refresh(est, ["directors"])
+
+
 class AlertService:
     """Create alert records and dispatch notifications."""
 
@@ -363,6 +376,12 @@ class AlertService:
             previous_month_day_establishments: Sequence[models.Establishment] | None = None
             if previous_month_day_date is not None:
                 previous_month_day_establishments = previous_month_day_assignments.get(client.id, [])
+            
+            # Ensure directors are loaded for email rendering
+            _ensure_directors_loaded(self._session, client_establishments)
+            if previous_month_day_establishments:
+                _ensure_directors_loaded(self._session, previous_month_day_establishments)
+            
             text_body, html_body = render_client_email(
                 self._formatter,
                 client_establishments,

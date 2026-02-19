@@ -552,6 +552,33 @@ class AlertServiceFilteringTests(unittest.TestCase):
         events = [args[0] for args, _ in deps.log_mock.call_args_list]
         assert "alerts.email.skipped" in events
 
+    def test_linkedin_only_establishment_is_included_in_alerts(self) -> None:
+        """Test that establishments with LinkedIn profiles but no Google are included in alerts."""
+        # Create establishment with google_check_status = "not_found" (no Google)
+        establishment = self._make_establishment("not_recent_creation", suffix="20")
+        establishment.google_check_status = "not_found"
+        
+        # Add director with LinkedIn profile
+        director = SimpleNamespace(
+            is_physical_person=True,
+            linkedin_profile_url="https://linkedin.com/in/jane-doe",
+            linkedin_profile_data={"name": "Jane Doe"},
+        )
+        establishment.directors = [director]
+        
+        with self._patched_dependencies():
+            service = AlertService(self.session, self.run)
+            alerts = service.create_google_alerts([establishment])
+        
+        # Should create 1 alert (LinkedIn-only)
+        self.assertEqual(len(alerts), 1)
+        self.session.add.assert_called_once()
+        
+        # Alert should have has_linkedin=True and has_google=False
+        alert = alerts[0]
+        self.assertTrue(alert.payload["has_linkedin"])
+        self.assertFalse(alert.payload["has_google"])
+
 
 if __name__ == "__main__":
     unittest.main()

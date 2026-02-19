@@ -317,6 +317,104 @@ def test_full_sync_flow_with_google_and_alerts(monkeypatch):
         assert all(est.google_check_status == "found" for est in establishments)
 
 
+def test_full_sync_flow_includes_linkedin_profile_in_client_email(monkeypatch):
+    settings = _make_settings(google_enabled=True)
+    settings.email.enabled = True
+    settings.email.smtp_host = "localhost"
+    _patch_settings(monkeypatch, settings)
+    _patch_google_stack(monkeypatch)
+
+    sent_emails: list[dict[str, object]] = []
+
+    def _capture_send(self, subject, body, recipients, *, html_body=None, reply_to=None, attachments=None):
+        sent_emails.append(
+            {
+                "subject": subject,
+                "body": body,
+                "recipients": list(recipients),
+                "html_body": html_body,
+                "reply_to": reply_to,
+                "attachments": attachments,
+            }
+        )
+
+    import app.services.email_service as email_service
+
+    monkeypatch.setattr(email_service.EmailService, "send", _capture_send)
+
+    with _session_scope() as session:
+        subcategory = _seed_naf(session)
+        _seed_client(session, subcategory)
+        _seed_google_retry_config(session)
+
+        previous_success = models.SyncRun(
+            scope_key=settings.sync.scope_key,
+            run_type="sync",
+            status="success",
+            mode=SyncMode.FULL.value,
+            finished_at=utcnow(),
+        )
+        session.add(previous_success)
+
+        old_run_id = uuid4()
+        backlog = models.Establishment(
+            siret="12121212121212",
+            siren="121212121",
+            nic="21212",
+            naf_code="56.10A",
+            etat_administratif="A",
+            name="Backlog LinkedIn Cafe",
+            code_postal="75001",
+            libelle_commune="Paris",
+            categorie_entreprise="ME",
+            categorie_juridique="1000",
+            created_run_id=old_run_id,
+            last_run_id=old_run_id,
+            google_check_status="not_found",
+            google_last_checked_at=utcnow() - timedelta(days=30),
+        )
+        session.add(backlog)
+        session.flush()
+        session.add(
+            models.Director(
+                establishment_siret=backlog.siret,
+                type_dirigeant="personne physique",
+                first_names="Jane",
+                last_name="Doe",
+                linkedin_profile_url="https://linkedin.com/in/jane-doe",
+                linkedin_profile_data={"title": "Dirigeante"},
+            )
+        )
+        session.commit()
+
+        page_1 = {
+            "header": {"curseur": "*", "curseurSuivant": "next", "total": 1},
+            "etablissements": [
+                _make_establishment_payload(siret="23232323232323", name="Bistro Email", naf_code="56.10A"),
+            ],
+        }
+        page_2 = {
+            "header": {"curseur": "next", "curseurSuivant": None, "total": 1},
+            "etablissements": [],
+        }
+        _patch_sirene_client(monkeypatch, [page_1, page_2])
+
+        service = SyncService()
+        run = service.run_sync(session)
+
+        alerts = session.execute(select(models.Alert)).scalars().all()
+
+        assert run.status == "success"
+        assert len(alerts) == 2
+        assert sent_emails
+
+        client_emails = [
+            item for item in sent_emails if "client@example.com" in item["recipients"]
+        ]
+        assert client_emails
+        assert "https://linkedin.com/in/jane-doe" in (client_emails[0]["html_body"] or "")
+
+
 def test_sirene_only_flow_skips_google(monkeypatch):
     settings = _make_settings(google_enabled=True)
     _patch_settings(monkeypatch, settings)

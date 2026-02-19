@@ -363,10 +363,32 @@ def render_client_email(
             lines.append("")
 
     if match_count:
-        lines.append("Nous avons identifié de nouvelles fiches Google My Business :")
+        # Check if we have any establishments with Google found
+        has_google_establishments = any(
+            (est.google_check_status or "").lower() == "found"
+            for est in establishments
+        )
+        # Check if we have any establishments with LinkedIn-only (no Google)
+        has_linkedin_only_establishments = any(
+            (est.google_check_status or "").lower() != "found"
+            and any(
+                getattr(d, "is_physical_person", False) and getattr(d, "linkedin_profile_url", None)
+                for d in (getattr(est, "directors", None) or [])
+            )
+            for est in establishments
+        )
+        
+        if has_google_establishments and has_linkedin_only_establishments:
+            title = "Nous avons identifié de nouvelles fiches Google My Business et profils LinkedIn :"
+        elif has_linkedin_only_establishments:
+            title = "Nous avons identifié de nouveaux profils LinkedIn :"
+        else:
+            title = "Nous avons identifié de nouvelles fiches Google My Business :"
+        
+        lines.append(title)
         lines.append("")
         html_parts.append(
-            f"<p style=\"margin:0 0 18px;color:{theme['text_subtle']};font-size:14px;\">Nous avons identifié de nouvelles fiches Google My Business :</p>"
+            f"<p style=\"margin:0 0 18px;color:{theme['text_subtle']};font-size:14px;\">{escape(title)}</p>"
         )
     else:
         lines.extend([

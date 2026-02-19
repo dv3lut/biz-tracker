@@ -352,6 +352,44 @@ class EmailRendererTests(unittest.TestCase):
         self.assertIn("Catégorie : Restauration, Traiteur", text_body)
         self.assertIn("Catégorie :</span> Restauration, Traiteur", html_body)
 
+    def test_client_email_includes_linkedin_only_establishment(self) -> None:
+        """Test that establishments with LinkedIn but no Google are included in client email."""
+        # Create establishment with no Google
+        establishment = self._make_establishment(
+            name="LinkedIn Only Bistro",
+            status="not_recent_creation",
+            google_url=None,
+        )
+        establishment.google_check_status = "not_found"
+        
+        # Add director with LinkedIn profile
+        director = SimpleNamespace(
+            is_physical_person=True,
+            linkedin_profile_url="https://linkedin.com/in/john-smith",
+            linkedin_profile_data={"name": "John Smith"},
+            first_name="John",
+            last_name="Smith",
+            quality="P",
+        )
+        establishment.directors = [director]
+        
+        text_body, html_body = render_client_email(
+            self.formatter,
+            [establishment],
+            client=self._make_client(),
+        )
+        
+        # Should show the establishment
+        self.assertIn("LinkedIn Only Bistro", text_body)
+        # Should show that Google link is unavailable (in progress of being available)
+        self.assertIn("en cours de disponibilité", text_body)
+        # Should show LinkedIn link
+        self.assertIn("linkedin.com/in/john-smith", text_body)
+        # Should have adapted title for LinkedIn-only
+        self.assertIn("profils LinkedIn", text_body)
+        # HTML should also contain LinkedIn info
+        self.assertIn("linkedin.com/in/john-smith", html_body)
+
 
 if __name__ == "__main__":
     unittest.main()
