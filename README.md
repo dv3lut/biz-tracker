@@ -50,6 +50,10 @@ Solution de veille sur les nouveaux établissements de restauration (NAF 56.10A)
 
 ## Exporter / restaurer la base PostgreSQL
 
+### NEW METHOD
+`env_get(){ awk -F= -v key="$1" '$0 ~ "^[[:space:]]*" key "=" {sub(/^[^=]*=/,""); gsub(/\r$/,""); print; exit}' .env; }; OUT="sql/backups/deprod-$(date +%Y%m%d%H%M).sql.gz"; DB_PASSWORD="$(env_get DATABASE__PASSWORD)"; DB_NAME="$(env_get DATABASE__NAME)"; DB_USER="$(env_get DATABASE__USER)"; DB_HOST="$(env_get DATABASE__HOST)"; DB_PORT="$(env_get DATABASE__PORT)"; ssh root@145.223.118.21 'cd biz-tracker-back && B=$(./backup.sh) && cat "$B"' > "$OUT" && ./sql/restore.sh "$(basename "$OUT")" "$DB_PASSWORD" "$DB_NAME" "$DB_USER" "$DB_HOST" "$DB_PORT"`
+
+### OLD METHOD 
 1. **Générer un dump sur le serveur**
    1. Connectez-vous au serveur (`ssh user@host`) et placez-vous dans `biz-tracker-back/`.
    2. Assurez-vous que Docker Compose tourne (`docker compose ps`).
@@ -72,6 +76,8 @@ Solution de veille sur les nouveaux établissements de restauration (NAF 56.10A)
       ./sql/restore.sh biz_tracker_db-backup-202511221748.sql.gz password_here
       ```
    3. Terminez par `python -m app init-db` si nécessaire pour appliquer les migrations locales.
+
+
 
 ## Commandes disponibles
 

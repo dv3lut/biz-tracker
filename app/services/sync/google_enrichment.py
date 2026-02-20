@@ -1,14 +1,14 @@
 """Utilities to run Google enrichment consistently across sync workflows."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import time
 from typing import Callable, Sequence
 
 from sqlalchemy.orm import Session
 
 from app.db import models
-from app.observability import log_event
+from app.observability import log_event, serialize_establishment
 from app.services.alerts.alert_service import AlertService
 from app.services.google_business.google_business_service import GoogleBusinessService
 
@@ -141,3 +141,79 @@ def run_google_enrichment(
         missing_contact_age_buckets=enrichment.missing_contact_age_buckets,
     )
     return result, alerts
+
+
+# ---------------------------------------------------------------------------
+# Shared post-processing helpers used by collector, google_only, day_replay
+# ---------------------------------------------------------------------------
+
+
+@dataclass(slots=True)
+class GoogleMatchesSummary:
+    """Classified Google matches with serialized payloads."""
+
+    immediate_matches: list[models.Establishment] = field(default_factory=list)
+    late_matches: list[models.Establishment] = field(default_factory=list)
+    match_payloads: list[dict[str, object]] = field(default_factory=list)
+
+
+def update_run_google_counters(
+    run: models.SyncRun,
+    enrichment_result: GoogleEnrichmentResult,
+) -> None:
+    """Copy core Google enrichment counters onto the SyncRun record."""
+    run.google_queue_count = enrichment_result.queue_count
+    run.google_eligible_count = enrichment_result.eligible_count
+    run.google_matched_count = enrichment_result.matched_count
+    run.google_pending_count = enrichment_result.pending_count
+    run.google_api_call_count = enrichment_result.api_call_count
+
+
+def classify_google_matches(
+    run: models.SyncRun,
+    matches: Sequence[models.Establishment],
+) -> GoogleMatchesSummary:
+    """Split matches into immediate/late, update run counters, serialize and log.
+
+    This replaces the duplicated match-splitting and logging blocks that were
+    present in collector.py, google_only.py, and day_replay.py.
+    """
+    if not matches:
+        run.google_immediate_matched_count = 0
+        run.google_late_matched_count = 0
+        return GoogleMatchesSummary()
+
+    immediate: list[models.Establishment] = []
+    late: list[models.Establishment] = []
+    for match in matches:
+        if match.created_run_id == run.id:
+            immediate.append(match)
+        else:
+            late.append(match)
+
+    run.google_immediate_matched_count = len(immediate)
+    run.google_late_matched_count = len(late)
+
+    payloads = [serialize_establishment(item) for item in matches]
+    log_event(
+        "sync.google.enrichment",
+        run_id=str(run.id),
+        scope_key=run.scope_key,
+        matched_count=len(payloads),
+        immediate_matched_count=len(immediate),
+        late_matched_count=len(late),
+        establishments=payloads,
+    )
+    for payload in payloads:
+        log_event(
+            "sync.google.match",
+            run_id=str(run.id),
+            scope_key=run.scope_key,
+            establishment=payload,
+        )
+
+    return GoogleMatchesSummary(
+        immediate_matches=immediate,
+        late_matches=late,
+        match_payloads=payloads,
+    )

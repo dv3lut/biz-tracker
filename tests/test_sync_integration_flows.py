@@ -822,5 +822,269 @@ def test_google_pending_flow_marks_insufficient_for_non_diffusible_name(monkeypa
         assert refreshed.google_check_status == "insufficient"
 
 
+def test_day_replay_cached_admin_email_includes_linkedin_only_establishments(monkeypatch):
+    """Day replay with Google-found + LinkedIn-only establishments sends admin email with both.
+
+    Reproduces user scenario: replay on a date with some Google-found establishments
+    and some establishments where only LinkedIn profiles were found (no Google listing).
+    The admin email must contain both types.
+    """
+    settings = _make_settings(google_enabled=True)
+    settings.email.enabled = True
+    settings.email.smtp_host = "localhost"
+    _patch_settings(monkeypatch, settings)
+    _patch_sirene_client(monkeypatch, [])
+
+    sent_emails: list[dict[str, object]] = []
+
+    def _capture_send(self, subject, body, recipients, *, html_body=None, reply_to=None, attachments=None):
+        sent_emails.append(
+            {
+                "subject": subject,
+                "body": body,
+                "recipients": list(recipients),
+                "html_body": html_body,
+            }
+        )
+
+    import app.services.email_service as email_service
+
+    monkeypatch.setattr(email_service.EmailService, "send", _capture_send)
+
+    with _session_scope() as session:
+        replay_date = date(2026, 1, 15)
+
+        session.add(models.AdminRecipient(email="admin@example.com"))
+
+        # Establishment with Google listing found
+        google_found = models.Establishment(
+            siret="77777777777777",
+            siren="777777777",
+            nic="77777",
+            naf_code="56.10A",
+            etat_administratif="A",
+            name="Google Bistro",
+            code_postal="75001",
+            libelle_commune="Paris",
+            categorie_entreprise="ME",
+            categorie_juridique="1000",
+            date_creation=replay_date,
+            google_check_status="found",
+            google_place_url="https://maps.google.com/?q=77777777777777",
+            google_place_id="ChIJgoogle123",
+        )
+        # Establishment WITHOUT Google listing but WITH LinkedIn profile on director
+        linkedin_only = models.Establishment(
+            siret="78787878787878",
+            siren="787878787",
+            nic="87878",
+            naf_code="56.10A",
+            etat_administratif="A",
+            name="LinkedIn Bistro",
+            code_postal="75001",
+            libelle_commune="Paris",
+            categorie_entreprise="ME",
+            categorie_juridique="1000",
+            date_creation=replay_date,
+            google_check_status="not_found",
+        )
+        # Establishment without Google AND without LinkedIn (should NOT appear in email)
+        neither = models.Establishment(
+            siret="79797979797979",
+            siren="797979797",
+            nic="97979",
+            naf_code="56.10A",
+            etat_administratif="A",
+            name="Neither Bistro",
+            code_postal="75001",
+            libelle_commune="Paris",
+            categorie_entreprise="ME",
+            categorie_juridique="1000",
+            date_creation=replay_date,
+            google_check_status="not_found",
+        )
+        session.add_all([google_found, linkedin_only, neither])
+        session.flush()
+
+        # Add LinkedIn-found director to the linkedin_only establishment
+        session.add(
+            models.Director(
+                establishment_siret=linkedin_only.siret,
+                type_dirigeant="personne physique",
+                first_names="Jane",
+                last_name="Doe",
+                linkedin_profile_url="https://linkedin.com/in/jane-doe",
+                linkedin_profile_data={"title": "Dirigeante"},
+                linkedin_check_status="found",
+            )
+        )
+        # Add director WITHOUT linkedin to the "neither" establishment
+        session.add(
+            models.Director(
+                establishment_siret=neither.siret,
+                type_dirigeant="personne physique",
+                first_names="Jean",
+                last_name="Martin",
+                linkedin_check_status="not_found",
+            )
+        )
+        session.commit()
+
+        # --- Crucial: new service, fresh context (simulates background task) ---
+        service = SyncService()
+        run = service._start_run(
+            session,
+            scope_key=settings.sync.scope_key,
+            run_type="sync_replay",
+            initial_status="running",
+            mode=SyncMode.DAY_REPLAY,
+        )
+        run.replay_for_date = replay_date
+        run.day_replay_force_google = False
+        state = service._get_or_create_state(session, settings.sync.scope_key)
+        run.started_at = utcnow()
+        session.commit()  # Expire all objects (simulates background task session)
+
+        context = service._build_context(session, run, state)
+        result = service._collect_sync(context)
+        service._finish_run(
+            run,
+            state,
+            last_treated_max=result.last_treated,
+            last_creation_date=result.max_creation_date,
+            mode=result.mode,
+        )
+        session.commit()
+
+        assert run.status == "success"
+
+        # Verify alerts were created for Google-found AND LinkedIn-only (but NOT "neither")
+        alerts = session.execute(select(models.Alert).where(models.Alert.run_id == run.id)).scalars().all()
+        alert_sirets = {alert.siret for alert in alerts}
+        assert "77777777777777" in alert_sirets, "Google-found establishment must have an alert"
+        assert "78787878787878" in alert_sirets, "LinkedIn-only establishment must have an alert"
+        assert "79797979797979" not in alert_sirets, "Establishment without Google/LinkedIn must NOT have an alert"
+
+        # Verify admin email was sent and contains both Google and LinkedIn info
+        assert sent_emails, "At least one email must be sent"
+        admin_mails = [email for email in sent_emails if "admin@example.com" in email["recipients"]]
+        assert admin_mails, "Admin email must be sent"
+        html_body = admin_mails[0]["html_body"] or ""
+        assert "Google Bistro" in html_body, "Google establishment name must appear in admin email"
+        assert "LinkedIn Bistro" in html_body, "LinkedIn establishment name must appear in admin email"
+        assert "https://linkedin.com/in/jane-doe" in html_body, "LinkedIn profile URL must appear in admin email"
+        assert "Neither Bistro" not in html_body, "Establishment without Google/LinkedIn must NOT appear"
+
+
+def test_day_replay_insertion_date_reference_includes_linkedin(monkeypatch):
+    """Day replay with INSERTION_DATE reference correctly loads LinkedIn-only establishments."""
+    settings = _make_settings(google_enabled=True)
+    settings.email.enabled = True
+    settings.email.smtp_host = "localhost"
+    _patch_settings(monkeypatch, settings)
+    _patch_sirene_client(monkeypatch, [])
+
+    sent_emails: list[dict[str, object]] = []
+
+    def _capture_send(self, subject, body, recipients, *, html_body=None, reply_to=None, attachments=None):
+        sent_emails.append({"recipients": list(recipients), "html_body": html_body})
+
+    import app.services.email_service as email_service
+
+    monkeypatch.setattr(email_service.EmailService, "send", _capture_send)
+
+    from datetime import datetime as dt
+
+    with _session_scope() as session:
+        insertion_datetime = dt(2026, 1, 15, 10, 30, 0)
+        replay_date = date(2026, 1, 15)
+
+        session.add(models.AdminRecipient(email="admin@example.com"))
+
+        google_found = models.Establishment(
+            siret="80808080808080",
+            siren="808080808",
+            nic="08080",
+            naf_code="56.10A",
+            etat_administratif="A",
+            name="Insertion Google",
+            code_postal="75001",
+            libelle_commune="Paris",
+            categorie_entreprise="ME",
+            categorie_juridique="1000",
+            date_creation=date(2025, 12, 1),
+            first_seen_at=insertion_datetime,
+            google_check_status="found",
+            google_place_url="https://maps.google.com/?q=80808080808080",
+        )
+        linkedin_only = models.Establishment(
+            siret="81818181818181",
+            siren="818181818",
+            nic="18181",
+            naf_code="56.10A",
+            etat_administratif="A",
+            name="Insertion LinkedIn",
+            code_postal="75002",
+            libelle_commune="Paris",
+            categorie_entreprise="ME",
+            categorie_juridique="1000",
+            date_creation=date(2025, 12, 1),
+            first_seen_at=insertion_datetime,
+            google_check_status="not_found",
+        )
+        session.add_all([google_found, linkedin_only])
+        session.flush()
+        session.add(
+            models.Director(
+                establishment_siret=linkedin_only.siret,
+                type_dirigeant="personne physique",
+                first_names="Alice",
+                last_name="Durand",
+                linkedin_profile_url="https://linkedin.com/in/alice-durand",
+                linkedin_profile_data={"title": "CEO"},
+                linkedin_check_status="found",
+            )
+        )
+        session.commit()
+
+        service = SyncService()
+        run = service._start_run(
+            session,
+            scope_key=settings.sync.scope_key,
+            run_type="sync_replay",
+            initial_status="running",
+            mode=SyncMode.DAY_REPLAY,
+        )
+        run.replay_for_date = replay_date
+        run.day_replay_reference = "insertion_date"
+        run.day_replay_force_google = False
+        state = service._get_or_create_state(session, settings.sync.scope_key)
+        run.started_at = utcnow()
+        session.commit()
+
+        context = service._build_context(session, run, state)
+        result = service._collect_sync(context)
+        service._finish_run(
+            run,
+            state,
+            last_treated_max=result.last_treated,
+            last_creation_date=result.max_creation_date,
+            mode=result.mode,
+        )
+        session.commit()
+
+        assert run.status == "success"
+
+        alerts = session.execute(select(models.Alert).where(models.Alert.run_id == run.id)).scalars().all()
+        alert_sirets = {alert.siret for alert in alerts}
+        assert "80808080808080" in alert_sirets
+        assert "81818181818181" in alert_sirets
+
+        admin_mails = [email for email in sent_emails if "admin@example.com" in email["recipients"]]
+        assert admin_mails
+        html_body = admin_mails[0]["html_body"] or ""
+        assert "https://linkedin.com/in/alice-durand" in html_body
+
+
 if __name__ == "__main__":  # pragma: no cover
     pytest.main([__file__])

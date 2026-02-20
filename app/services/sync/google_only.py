@@ -8,11 +8,16 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.db import models
-from app.observability import log_event, serialize_establishment
+from app.observability import log_event
 from app.services.alerts.alert_service import AlertService
 
 from .context import SyncContext, SyncResult
-from .google_enrichment import create_google_progress_callback, run_google_enrichment
+from .google_enrichment import (
+    classify_google_matches,
+    create_google_progress_callback,
+    run_google_enrichment,
+    update_run_google_counters,
+)
 from .mode import SyncMode
 from .utils import tag_google_error_rate
 
@@ -74,15 +79,8 @@ def collect_google_only(
     )
     progress_callback = create_google_progress_callback(session, run)
 
-    google_queue_count = 0
-    google_eligible_count = 0
-    google_matched_count = 0
-    google_pending_count = 0
-    google_api_call_count = 0
     google_api_error_count = 0
-    google_immediate_matches: list[models.Establishment] = []
-    google_late_matches: list[models.Establishment] = []
-    google_matches_payload: list[dict[str, object]] = []
+    matches_summary = None
     alerts_created: list[models.Alert] = []
 
     if not targets:
@@ -114,23 +112,8 @@ def collect_google_only(
             progress_callback=progress_callback,
         )
 
-        google_queue_count = enrichment_result.queue_count
-        google_eligible_count = enrichment_result.eligible_count
-        google_matched_count = enrichment_result.matched_count
-        google_pending_count = enrichment_result.pending_count
-        google_api_call_count = enrichment_result.api_call_count
+        update_run_google_counters(run, enrichment_result)
         google_api_error_count = enrichment_result.api_error_count
-        missing_contact_checked_count = enrichment_result.missing_contact_checked_count
-        missing_contact_updated_count = enrichment_result.missing_contact_updated_count
-        retry_backlog_count = enrichment_result.retry_backlog_count
-        retry_backlog_age_buckets = enrichment_result.retry_backlog_age_buckets
-        missing_contact_age_buckets = enrichment_result.missing_contact_age_buckets
-
-        run.google_queue_count = google_queue_count
-        run.google_eligible_count = google_eligible_count
-        run.google_matched_count = google_matched_count
-        run.google_pending_count = google_pending_count
-        run.google_api_call_count = google_api_call_count
 
         log_event(
             "sync.google_only.summary",
@@ -138,20 +121,20 @@ def collect_google_only(
             scope_key=run.scope_key,
             mode=mode.value,
             google_statuses=google_statuses,
-            queue_count=google_queue_count,
-            eligible_count=google_eligible_count,
-            matched_count=google_matched_count,
-            remaining_count=google_pending_count,
-            api_call_count=google_api_call_count,
+            queue_count=enrichment_result.queue_count,
+            eligible_count=enrichment_result.eligible_count,
+            matched_count=enrichment_result.matched_count,
+            remaining_count=enrichment_result.pending_count,
+            api_call_count=enrichment_result.api_call_count,
             api_error_count=google_api_error_count,
-            missing_contact_checked_count=missing_contact_checked_count,
-            missing_contact_updated_count=missing_contact_updated_count,
-            retry_backlog_count=retry_backlog_count,
-            retry_backlog_age_buckets=retry_backlog_age_buckets,
-            missing_contact_age_buckets=missing_contact_age_buckets,
+            missing_contact_checked_count=enrichment_result.missing_contact_checked_count,
+            missing_contact_updated_count=enrichment_result.missing_contact_updated_count,
+            retry_backlog_count=enrichment_result.retry_backlog_count,
+            retry_backlog_age_buckets=enrichment_result.retry_backlog_age_buckets,
+            missing_contact_age_buckets=enrichment_result.missing_contact_age_buckets,
             error_rate=(
-                round(google_api_error_count / google_api_call_count, 4)
-                if google_api_call_count > 0
+                round(google_api_error_count / enrichment_result.api_call_count, 4)
+                if enrichment_result.api_call_count > 0
                 else 0.0
             ),
             target_count=len(targets),
@@ -159,47 +142,22 @@ def collect_google_only(
 
         tag_google_error_rate(
             run,
-            api_call_count=google_api_call_count,
+            api_call_count=enrichment_result.api_call_count,
             api_error_count=google_api_error_count,
             threshold=0.10,
             event_name="sync.google_only.error_rate.high",
         )
 
-        if enrichment_result.matches:
-            for match in enrichment_result.matches:
-                if match.created_run_id == run.id:
-                    google_immediate_matches.append(match)
-                else:
-                    google_late_matches.append(match)
-            run.google_immediate_matched_count = len(google_immediate_matches)
-            run.google_late_matched_count = len(google_late_matches)
-
-            google_matches_payload = [serialize_establishment(item) for item in enrichment_result.matches]
-            log_event(
-                "sync.google.enrichment",
-                run_id=str(run.id),
-                scope_key=run.scope_key,
-                matched_count=len(google_matches_payload),
-                immediate_matched_count=run.google_immediate_matched_count,
-                late_matched_count=run.google_late_matched_count,
-                establishments=google_matches_payload,
-            )
-            for match_payload in google_matches_payload:
-                log_event(
-                    "sync.google.match",
-                    run_id=str(run.id),
-                    scope_key=run.scope_key,
-                    establishment=match_payload,
-                )
-        else:
-            run.google_immediate_matched_count = 0
-            run.google_late_matched_count = 0
-
+        matches_summary = classify_google_matches(run, enrichment_result.matches)
         session.commit()
 
     alerts_payload = log_alerts(run, alerts_created)
     alerts_sent_count = sum(1 for alert in alerts_created if alert.sent_at)
     duration = time.perf_counter() - started_at
+
+    immediate = matches_summary.immediate_matches if matches_summary else []
+    late = matches_summary.late_matches if matches_summary else []
+    payloads = matches_summary.match_payloads if matches_summary else []
 
     return SyncResult(
         mode=mode,
@@ -208,19 +166,19 @@ def collect_google_only(
         new_establishment_payloads=[],
         updated_establishments=[],
         updated_payloads=[],
-        google_immediate_matches=google_immediate_matches,
-        google_late_matches=google_late_matches,
-        google_match_payloads=google_matches_payload,
+        google_immediate_matches=immediate,
+        google_late_matches=late,
+        google_match_payloads=payloads,
         alerts=alerts_created,
         alert_payloads=alerts_payload,
         page_count=0,
         duration_seconds=duration,
         max_creation_date=None,
-        google_queue_count=google_queue_count,
-        google_eligible_count=google_eligible_count,
-        google_matched_count=google_matched_count,
-        google_pending_count=google_pending_count,
-        google_api_call_count=google_api_call_count,
+        google_queue_count=run.google_queue_count or 0,
+        google_eligible_count=run.google_eligible_count or 0,
+        google_matched_count=run.google_matched_count or 0,
+        google_pending_count=run.google_pending_count or 0,
+        google_api_call_count=run.google_api_call_count or 0,
         google_api_error_count=google_api_error_count,
         alerts_sent_count=alerts_sent_count,
     )

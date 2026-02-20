@@ -73,6 +73,9 @@ class AlertService:
         self._target_client_ids = tuple(str(value) for value in (target_client_ids or []))
 
     def create_google_alerts(self, establishments: Sequence[models.Establishment]) -> list[models.Alert]:
+        # Ensure directors are loaded for LinkedIn detection
+        _ensure_directors_loaded(self._session, establishments)
+
         # Include establishments with Google found OR with LinkedIn profiles
         def _has_linkedin_profile(est: models.Establishment) -> bool:
             directors = getattr(est, "directors", None) or []

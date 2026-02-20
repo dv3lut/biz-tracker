@@ -10,14 +10,19 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.db import models
 from app.db.session import session_scope
-from app.observability import log_event, serialize_alert, serialize_establishment
+from app.observability import log_event, serialize_alert
 from app.services.alerts.alert_service import AlertService
 from app.services.sync.day_replay import (
     collect_day_replay_from_cache,
     filter_ready_google_matches,
     load_replay_establishments,
 )
-from app.services.sync.google_enrichment import create_google_progress_callback, run_google_enrichment
+from app.services.sync.google_enrichment import (
+    classify_google_matches,
+    create_google_progress_callback,
+    run_google_enrichment,
+    update_run_google_counters,
+)
 from app.services.sync.google_only import collect_google_only, load_google_resync_targets
 from app.services.sync.mode import SyncMode
 from app.services.sync.replay_reference import DEFAULT_DAY_REPLAY_REFERENCE, DayReplayReference
@@ -288,23 +293,13 @@ class SyncCollectorMixin(SyncPersistenceMixin):
                     progress_callback=progress_callback,
                 )
 
+                update_run_google_counters(context.run, enrichment_result)
                 google_queue_count = enrichment_result.queue_count
                 google_eligible_count = enrichment_result.eligible_count
                 google_matched_count = enrichment_result.matched_count
                 google_pending_count = enrichment_result.pending_count
                 google_api_call_count = enrichment_result.api_call_count
                 google_api_error_count = enrichment_result.api_error_count
-                missing_contact_checked_count = enrichment_result.missing_contact_checked_count
-                missing_contact_updated_count = enrichment_result.missing_contact_updated_count
-                retry_backlog_count = enrichment_result.retry_backlog_count
-                retry_backlog_age_buckets = enrichment_result.retry_backlog_age_buckets
-                missing_contact_age_buckets = enrichment_result.missing_contact_age_buckets
-
-                context.run.google_queue_count = google_queue_count
-                context.run.google_eligible_count = google_eligible_count
-                context.run.google_matched_count = google_matched_count
-                context.run.google_pending_count = google_pending_count
-                context.run.google_api_call_count = google_api_call_count
 
                 google_error_rate = (
                     round(google_api_error_count / google_api_call_count, 4)
@@ -323,11 +318,11 @@ class SyncCollectorMixin(SyncPersistenceMixin):
                     api_call_count=google_api_call_count,
                     api_error_count=google_api_error_count,
                     error_rate=google_error_rate,
-                    missing_contact_checked_count=missing_contact_checked_count,
-                    missing_contact_updated_count=missing_contact_updated_count,
-                    retry_backlog_count=retry_backlog_count,
-                    retry_backlog_age_buckets=retry_backlog_age_buckets,
-                    missing_contact_age_buckets=missing_contact_age_buckets,
+                    missing_contact_checked_count=enrichment_result.missing_contact_checked_count,
+                    missing_contact_updated_count=enrichment_result.missing_contact_updated_count,
+                    retry_backlog_count=enrichment_result.retry_backlog_count,
+                    retry_backlog_age_buckets=enrichment_result.retry_backlog_age_buckets,
+                    missing_contact_age_buckets=enrichment_result.missing_contact_age_buckets,
                     new_establishment_count=len(new_entities_total),
                     google_candidate_count=len(google_candidates),
                     force_refresh=force_refresh_google,
@@ -344,32 +339,10 @@ class SyncCollectorMixin(SyncPersistenceMixin):
                     event_name="sync.google.error_rate.high",
                 )
 
-                if enrichment_result.matches:
-                    for match in enrichment_result.matches:
-                        if match.created_run_id == context.run.id:
-                            google_immediate_matches.append(match)
-                        else:
-                            google_late_matches.append(match)
-                    context.run.google_immediate_matched_count = len(google_immediate_matches)
-                    context.run.google_late_matched_count = len(google_late_matches)
-
-                    google_matches_payload = [serialize_establishment(item) for item in enrichment_result.matches]
-                    log_event(
-                        "sync.google.enrichment",
-                        run_id=str(context.run.id),
-                        scope_key=context.run.scope_key,
-                        matched_count=len(google_matches_payload),
-                        immediate_matched_count=context.run.google_immediate_matched_count,
-                        late_matched_count=context.run.google_late_matched_count,
-                        establishments=google_matches_payload,
-                    )
-                    for match_payload in google_matches_payload:
-                        log_event(
-                            "sync.google.match",
-                            run_id=str(context.run.id),
-                            scope_key=context.run.scope_key,
-                            establishment=match_payload,
-                        )
+                matches_summary = classify_google_matches(context.run, enrichment_result.matches)
+                google_immediate_matches = matches_summary.immediate_matches
+                google_late_matches = matches_summary.late_matches
+                google_matches_payload = matches_summary.match_payloads
 
                 alerts_payload = self._log_alerts_created(context.run, alerts_created)
             else:

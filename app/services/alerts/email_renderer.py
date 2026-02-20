@@ -16,12 +16,14 @@ def _get_linkedin_title_for_director(director: models.Director) -> str:
 
     Priority: profileData.title > director.quality > "Dirigeant"
     """
-    if director.linkedin_profile_data:
-        title = director.linkedin_profile_data.get("title")
+    profile_data = getattr(director, "linkedin_profile_data", None)
+    if profile_data:
+        title = profile_data.get("title")
         if title and isinstance(title, str) and title.strip():
             return title.strip()
-    if director.quality and director.quality.strip():
-        return director.quality.strip()
+    quality = getattr(director, "quality", None)
+    if quality and isinstance(quality, str) and quality.strip():
+        return quality.strip()
     return "Dirigeant"
 
 
@@ -487,10 +489,31 @@ def render_admin_email(
     formatter: EstablishmentFormatter,
     establishments: Sequence[models.Establishment],
 ) -> tuple[str, str]:
+    has_google_establishments = any(
+        (getattr(establishment, "google_check_status", "") or "").lower() == "found"
+        for establishment in establishments
+    )
+    has_linkedin_only_establishments = any(
+        (getattr(establishment, "google_check_status", "") or "").lower() != "found"
+        and any(
+            getattr(director, "is_physical_person", False)
+            and getattr(director, "linkedin_profile_url", None)
+            for director in (getattr(establishment, "directors", None) or [])
+        )
+        for establishment in establishments
+    )
+
+    if has_google_establishments and has_linkedin_only_establishments:
+        intro = "Résumé détaillé des fiches Google et profils LinkedIn détectés :"
+    elif has_linkedin_only_establishments and not has_google_establishments:
+        intro = "Résumé détaillé des profils LinkedIn détectés :"
+    else:
+        intro = "Résumé détaillé des fiches Google détectées :"
+
     lines: list[str] = [
         "Bonjour,",
         "",
-        "Résumé détaillé des fiches Google détectées :",
+        intro,
         "",
     ]
 
@@ -498,7 +521,7 @@ def render_admin_email(
         "<html>",
         "<body style=\"font-family:'Helvetica Neue',Arial,sans-serif;color:#111827;line-height:1.5;\">",
         "<p>Bonjour,</p>",
-        "<p>Résumé détaillé des fiches Google détectées :</p>",
+        f"<p>{escape(intro)}</p>",
         "<table style=\"width:100%;border-collapse:collapse;margin-top:8px;\">",
         "<thead>",
         "<tr>",
@@ -512,6 +535,9 @@ def render_admin_email(
 
     for establishment in establishments:
         lines.extend(formatter.format_lines(establishment, include_google=True))
+        linkedin_text_lines, linkedin_html = _build_linkedin_buttons_html(establishment, CLIENT_EMAIL_THEME)
+        if linkedin_text_lines:
+            lines.extend(linkedin_text_lines)
         lines.append("")
 
         name = establishment.name or "(nom indisponible)"
@@ -560,6 +586,8 @@ def render_admin_email(
         status_label, _ = formatter.describe_listing_age(establishment)
         status_line = f"Statut&nbsp;: {escape(status_label)}"
         google_section.append(status_line)
+        if linkedin_html:
+            google_section.append(linkedin_html)
 
         html_parts.append(
             "<tr>"
