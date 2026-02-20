@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import models
+from app.observability import log_event
 from app.services.establishment_mapper import extract_fields
 from app.utils.dates import utcnow
 from app.utils.naf import normalize_naf_code
@@ -113,6 +114,7 @@ class SyncPersistenceMixin:
         session: Session,
         etablissements: Sequence[dict[str, object]],
         run_id: UUID,
+        scope_key: str | None,
     ) -> tuple[
         list[models.Establishment],
         list[UpdatedEstablishmentInfo],
@@ -127,11 +129,32 @@ class SyncPersistenceMixin:
             fields = extract_fields(payload)
             siret = fields.get("siret")
             if not siret:
+                log_event(
+                    "sync.debug.exit.001_missing_siret",
+                    run_id=str(run_id),
+                    scope_key=scope_key,
+                    reason="missing_siret",
+                )
                 continue
             if fields.get("etat_administratif") != "A":
                 existing = session.get(models.Establishment, siret)
                 if existing:
                     session.delete(existing)
+                    log_event(
+                        "sync.debug.exit.002_inactive_deleted",
+                        run_id=str(run_id),
+                        scope_key=scope_key,
+                        siret=siret,
+                        reason="inactive_establishment_deleted",
+                    )
+                else:
+                    log_event(
+                        "sync.debug.exit.003_inactive_ignored",
+                        run_id=str(run_id),
+                        scope_key=scope_key,
+                        siret=siret,
+                        reason="inactive_establishment_not_found",
+                    )
                 continue
             entity = session.get(models.Establishment, siret)
             if entity:
@@ -147,9 +170,31 @@ class SyncPersistenceMixin:
                 entity.last_run_id = run_id
                 if changed_fields:
                     updated_entities.append(UpdatedEstablishmentInfo(entity, changed_fields))
+                    log_event(
+                        "sync.debug.path.004_existing_updated",
+                        run_id=str(run_id),
+                        scope_key=scope_key,
+                        siret=siret,
+                        changed_fields=changed_fields,
+                    )
                 elif self._needs_annuaire_enrichment(session, entity) and siret not in annuaire_candidate_sirets:
                     annuaire_candidates.append(entity)
                     annuaire_candidate_sirets.add(siret)
+                    log_event(
+                        "sync.debug.path.005_existing_annuaire_candidate",
+                        run_id=str(run_id),
+                        scope_key=scope_key,
+                        siret=siret,
+                        reason="existing_without_changes_but_annuaire_needed",
+                    )
+                else:
+                    log_event(
+                        "sync.debug.exit.006_existing_no_change",
+                        run_id=str(run_id),
+                        scope_key=scope_key,
+                        siret=siret,
+                        reason="existing_no_field_change",
+                    )
             else:
                 fields["created_run_id"] = run_id
                 fields["last_run_id"] = run_id
@@ -158,6 +203,12 @@ class SyncPersistenceMixin:
                 entity.last_seen_at = now
                 session.add(entity)
                 new_entities.append(entity)
+                log_event(
+                    "sync.debug.path.007_new_establishment_added",
+                    run_id=str(run_id),
+                    scope_key=scope_key,
+                    siret=siret,
+                )
         session.flush()
         return new_entities, updated_entities, annuaire_candidates
 

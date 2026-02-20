@@ -92,6 +92,7 @@ def collect_pages(
             context.session,
             etablissements,
             context.run.id,
+            context.run.scope_key,
         )
         context.run.created_records += len(new_entities)
         context.run.updated_records += len(updated_batch)
@@ -173,7 +174,40 @@ def collect_pages(
             duration_seconds=page_duration,
         )
 
-        if not etablissements or not next_cursor or next_cursor == header.get("curseur"):
+        if not etablissements:
+            log_event(
+                "sync.debug.exit.101_stop_pagination_empty_page",
+                run_id=str(context.run.id),
+                scope_key=context.run.scope_key,
+                page=page_count,
+                reason="empty_page",
+            )
+            if persist_state:
+                state.cursor_completed = True
+            break
+
+        if not next_cursor:
+            log_event(
+                "sync.debug.exit.102_stop_pagination_no_next_cursor",
+                run_id=str(context.run.id),
+                scope_key=context.run.scope_key,
+                page=page_count,
+                reason="missing_next_cursor",
+            )
+            if persist_state:
+                state.cursor_completed = True
+            break
+
+        if next_cursor == header.get("curseur"):
+            log_event(
+                "sync.debug.exit.103_stop_pagination_stuck_cursor",
+                run_id=str(context.run.id),
+                scope_key=context.run.scope_key,
+                page=page_count,
+                cursor=current_cursor,
+                next_cursor=next_cursor,
+                reason="next_cursor_equals_current",
+            )
             if persist_state:
                 state.cursor_completed = True
             break

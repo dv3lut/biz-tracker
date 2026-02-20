@@ -192,9 +192,23 @@ class SyncRunnerMixin(SyncRunPreparationMixin):
             resolved_mode = DEFAULT_SYNC_MODE
 
         if not resolved_mode.updates_state:
+            log_event(
+                "sync.debug.exit.301_skip_state_update_mode",
+                run_id=str(run.id),
+                scope_key=run.scope_key,
+                mode=resolved_mode.value,
+                reason="mode_does_not_update_state",
+            )
             return
 
         if run.target_naf_codes:
+            log_event(
+                "sync.debug.exit.302_skip_state_update_target_naf",
+                run_id=str(run.id),
+                scope_key=run.scope_key,
+                target_naf_codes=run.target_naf_codes,
+                reason="target_naf_scope_run",
+            )
             return
 
         state.last_successful_run_id = run.id

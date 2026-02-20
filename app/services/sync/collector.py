@@ -54,6 +54,14 @@ class SyncCollectorMixin(SyncPersistenceMixin):
                     force_google=context.force_google_replay,
                     reference=context.replay_reference.value,
                 )
+                log_event(
+                    "sync.debug.exit.201_day_replay_return_cache",
+                    run_id=str(context.run.id),
+                    scope_key=context.run.scope_key,
+                    reason="day_replay_cache_hit",
+                    target_date=context.replay_for_date.isoformat(),
+                    cached_establishment_count=len(cached),
+                )
                 return collect_day_replay_from_cache(
                     context,
                     cached,
@@ -69,9 +77,30 @@ class SyncCollectorMixin(SyncPersistenceMixin):
 
         if not context.mode.requires_sirene_fetch:
             if context.mode.is_linkedin_only:
+                log_event(
+                    "sync.debug.exit.202_mode_linkedin_only",
+                    run_id=str(context.run.id),
+                    scope_key=context.run.scope_key,
+                    reason="mode_without_sirene_fetch",
+                    mode=context.mode.value,
+                )
                 return self._collect_linkedin_only(context)
             if context.mode.is_website_scrape_only:
+                log_event(
+                    "sync.debug.exit.203_mode_website_scrape_only",
+                    run_id=str(context.run.id),
+                    scope_key=context.run.scope_key,
+                    reason="mode_without_sirene_fetch",
+                    mode=context.mode.value,
+                )
                 return self._collect_website_scrape(context)
+            log_event(
+                "sync.debug.exit.204_mode_google_only",
+                run_id=str(context.run.id),
+                scope_key=context.run.scope_key,
+                reason="mode_without_sirene_fetch",
+                mode=context.mode.value,
+            )
             return self._collect_google_only(context)
 
         state = context.state
