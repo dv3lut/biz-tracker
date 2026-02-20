@@ -115,6 +115,7 @@ class SyncScheduler:
             run = self._service.prepare_sync_run(
                 session,
                 check_informations=True,
+                run_type="sync_auto",
                 mode=DEFAULT_SYNC_MODE,
             )
             if not run:

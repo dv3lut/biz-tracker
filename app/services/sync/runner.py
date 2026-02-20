@@ -211,6 +211,26 @@ class SyncRunnerMixin(SyncRunPreparationMixin):
             )
             return
 
+        if (
+            run.run_type == "sync_auto"
+            and resolved_mode == SyncMode.FULL
+            and run.created_records == 0
+            and run.updated_records == 0
+        ):
+            log_event(
+                "sync.debug.exit.303_skip_state_update_empty_auto_full",
+                run_id=str(run.id),
+                scope_key=run.scope_key,
+                reason="empty_auto_full_no_sirene_delta",
+                run_type=run.run_type,
+                mode=resolved_mode.value,
+                fetched_records=run.fetched_records,
+                created_records=run.created_records,
+                updated_records=run.updated_records,
+                last_treated_max=last_treated_max,
+            )
+            return
+
         state.last_successful_run_id = run.id
         if last_treated_max:
             state.last_treated_max = last_treated_max

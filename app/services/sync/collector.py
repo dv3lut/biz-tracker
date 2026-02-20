@@ -238,6 +238,24 @@ class SyncCollectorMixin(SyncPersistenceMixin):
             new_entities_total,
             naf_codes,
         )
+        skip_client_alerts_empty_auto_full = (
+            context.run.run_type == "sync_auto"
+            and context.mode == SyncMode.FULL
+            and not new_entities_total
+            and not updated_entities
+        )
+        if skip_client_alerts_empty_auto_full:
+            log_event(
+                "sync.alerts.client_skipped",
+                run_id=str(context.run.id),
+                scope_key=context.run.scope_key,
+                reason="empty_auto_full_no_sirene_delta",
+                run_type=context.run.run_type,
+                mode=context.mode.value,
+                fetched_records=context.run.fetched_records,
+                created_records=context.run.created_records,
+                updated_records=context.run.updated_records,
+            )
 
         try:
             if context.mode.google_enabled:
@@ -248,7 +266,9 @@ class SyncCollectorMixin(SyncPersistenceMixin):
                     AlertService(
                         context.session,
                         context.run,
-                        client_notifications_enabled=context.client_notifications_enabled,
+                        client_notifications_enabled=(
+                            context.client_notifications_enabled and not skip_client_alerts_empty_auto_full
+                        ),
                         admin_notifications_enabled=context.admin_notifications_enabled,
                         target_client_ids=context.target_client_ids,
                     )

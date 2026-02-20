@@ -29,6 +29,7 @@ class SyncRunPreparationMixin:
         session: Session,
         *,
         check_informations: bool = False,
+        run_type: str = "sync",
         mode: SyncMode = DEFAULT_SYNC_MODE,
         replay_for_date: date | None = None,
         replay_reference: DayReplayReference = DEFAULT_DAY_REPLAY_REFERENCE,
@@ -115,6 +116,7 @@ class SyncRunPreparationMixin:
                 session,
                 status="pending",
                 state=state,
+                run_type=run_type,
                 mode=mode,
             )
         else:
@@ -188,6 +190,7 @@ class SyncRunPreparationMixin:
         *,
         status: str,
         state: Optional[models.SyncState] = None,
+        run_type: str = "sync",
         mode: SyncMode = DEFAULT_SYNC_MODE,
     ) -> tuple[models.SyncRun, models.SyncState]:
         scope_key = self._settings.sync.scope_key
@@ -207,7 +210,7 @@ class SyncRunPreparationMixin:
         run = self._start_run(
             session,
             scope_key=scope_key,
-            run_type="sync",
+            run_type=run_type,
             initial_status=status,
             mode=mode,
         )

@@ -85,6 +85,28 @@ def collect_pages(
         )
         header = payload.get("header", {})
         etablissements = payload.get("etablissements", [])
+        sirets = [item.get("siret") for item in etablissements if item.get("siret")]
+        unique_sirets_count = len(set(sirets))
+        duplicate_sirets_count = len(sirets) - unique_sirets_count
+        last_treatment_values = [
+            item.get("dateDernierTraitementEtablissement")
+            for item in etablissements
+            if item.get("dateDernierTraitementEtablissement")
+        ]
+        last_treatment_min = min(last_treatment_values) if last_treatment_values else None
+        last_treatment_max = max(last_treatment_values) if last_treatment_values else None
+        log_event(
+            "sync.debug.page.104_payload_profile",
+            run_id=str(context.run.id),
+            scope_key=context.run.scope_key,
+            page=page_count,
+            fetched=len(etablissements),
+            unique_sirets_count=unique_sirets_count,
+            duplicate_sirets_count=duplicate_sirets_count,
+            last_treatment_min=last_treatment_min,
+            last_treatment_max=last_treatment_max,
+            sample_sirets=sirets[:5],
+        )
         context.run.api_call_count += 1
         context.run.fetched_records += len(etablissements)
 

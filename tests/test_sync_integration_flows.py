@@ -317,6 +317,99 @@ def test_full_sync_flow_with_google_and_alerts(monkeypatch):
         assert all(est.google_check_status == "found" for est in establishments)
 
 
+def test_auto_full_empty_sirene_skips_client_zero_alerts_and_keeps_retry_checkpoint(monkeypatch):
+    settings = _make_settings(google_enabled=True)
+    settings.email.enabled = True
+    settings.email.smtp_host = "localhost"
+    _patch_settings(monkeypatch, settings)
+    _patch_google_client(monkeypatch)
+
+    sent_emails: list[dict[str, object]] = []
+
+    def _capture_send(self, subject, body, recipients, *, html_body=None, reply_to=None, attachments=None):
+        sent_emails.append(
+            {
+                "subject": subject,
+                "body": body,
+                "recipients": list(recipients),
+                "html_body": html_body,
+                "reply_to": reply_to,
+                "attachments": attachments,
+            }
+        )
+
+    import app.services.email_service as email_service
+
+    monkeypatch.setattr(email_service.EmailService, "send", _capture_send)
+
+    with _session_scope() as session:
+        subcategory = _seed_naf(session)
+        _seed_client(session, subcategory)
+        _seed_google_retry_config(session)
+
+        previous_success = models.SyncRun(
+            scope_key=settings.sync.scope_key,
+            run_type="sync",
+            status="success",
+            mode=SyncMode.FULL.value,
+            finished_at=utcnow(),
+        )
+        session.add(previous_success)
+        session.commit()
+
+        _patch_sirene_client(
+            monkeypatch,
+            [
+                {
+                    "header": {"curseur": "*", "curseurSuivant": None, "total": 0},
+                    "etablissements": [],
+                }
+            ],
+            informations={
+                "datesDernieresMisesAJourDesDonnees": [
+                    {
+                        "collection": "etablissements",
+                        "dateDernierTraitementMaximum": "2026-02-20T00:00:00Z",
+                    }
+                ]
+            },
+        )
+
+        service = SyncService()
+        run = service._start_run(
+            session,
+            scope_key=settings.sync.scope_key,
+            run_type="sync_auto",
+            initial_status="running",
+            mode=SyncMode.FULL,
+        )
+        state = service._get_or_create_state(session, settings.sync.scope_key)
+        run.started_at = utcnow()
+        session.commit()
+
+        context = service._build_context(session, run, state)
+        result = service._collect_sync(context)
+        service._finish_run(
+            run,
+            state,
+            last_treated_max=result.last_treated,
+            last_creation_date=result.max_creation_date,
+            mode=result.mode,
+        )
+        session.commit()
+
+        session.refresh(state)
+        assert run.status == "success"
+        assert run.fetched_records == 0
+        assert run.created_records == 0
+        assert run.updated_records == 0
+        assert result.last_treated is not None
+        assert state.last_treated_max is None
+
+        client_emails = [item for item in sent_emails if "client@example.com" in item["recipients"]]
+        assert client_emails == []
+
+
 def test_full_sync_flow_includes_linkedin_profile_in_client_email(monkeypatch):
     settings = _make_settings(google_enabled=True)
     settings.email.enabled = True

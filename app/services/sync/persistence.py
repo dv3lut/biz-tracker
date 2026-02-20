@@ -128,12 +128,18 @@ class SyncPersistenceMixin:
         for payload in etablissements:
             fields = extract_fields(payload)
             siret = fields.get("siret")
+            source_last_treatment = fields.get("date_dernier_traitement_etablissement")
+            source_last_treatment_raw = payload.get("dateDernierTraitementEtablissement")
+            source_creation_date = fields.get("date_creation")
             if not siret:
                 log_event(
                     "sync.debug.exit.001_missing_siret",
                     run_id=str(run_id),
                     scope_key=scope_key,
                     reason="missing_siret",
+                    source_last_treatment=source_last_treatment,
+                    source_last_treatment_raw=source_last_treatment_raw,
+                    source_creation_date=source_creation_date,
                 )
                 continue
             if fields.get("etat_administratif") != "A":
@@ -146,6 +152,11 @@ class SyncPersistenceMixin:
                         scope_key=scope_key,
                         siret=siret,
                         reason="inactive_establishment_deleted",
+                        source_last_treatment=source_last_treatment,
+                        source_last_treatment_raw=source_last_treatment_raw,
+                        source_creation_date=source_creation_date,
+                        db_last_treatment=existing.date_dernier_traitement_etablissement,
+                        db_creation_date=existing.date_creation,
                     )
                 else:
                     log_event(
@@ -154,10 +165,24 @@ class SyncPersistenceMixin:
                         scope_key=scope_key,
                         siret=siret,
                         reason="inactive_establishment_not_found",
+                        source_last_treatment=source_last_treatment,
+                        source_last_treatment_raw=source_last_treatment_raw,
+                        source_creation_date=source_creation_date,
                     )
                 continue
             entity = session.get(models.Establishment, siret)
             if entity:
+                ignored_diff_fields: list[str] = []
+                ignored_field_values: dict[str, dict[str, object | None]] = {}
+                for ignored_key in {"date_creation", "date_dernier_traitement_etablissement"}:
+                    incoming_ignored_value = fields.get(ignored_key)
+                    current_ignored_value = getattr(entity, ignored_key)
+                    if current_ignored_value != incoming_ignored_value:
+                        ignored_diff_fields.append(ignored_key)
+                        ignored_field_values[ignored_key] = {
+                            "db": current_ignored_value,
+                            "incoming": incoming_ignored_value,
+                        }
                 changed_fields: list[str] = []
                 for key, value in fields.items():
                     if key in {"date_creation", "date_dernier_traitement_etablissement"}:
@@ -176,6 +201,12 @@ class SyncPersistenceMixin:
                         scope_key=scope_key,
                         siret=siret,
                         changed_fields=changed_fields,
+                        source_last_treatment=source_last_treatment,
+                        source_last_treatment_raw=source_last_treatment_raw,
+                        source_creation_date=source_creation_date,
+                        db_last_treatment=entity.date_dernier_traitement_etablissement,
+                        db_creation_date=entity.date_creation,
+                        ignored_diff_fields=ignored_diff_fields,
                     )
                 elif self._needs_annuaire_enrichment(session, entity) and siret not in annuaire_candidate_sirets:
                     annuaire_candidates.append(entity)
@@ -186,6 +217,13 @@ class SyncPersistenceMixin:
                         scope_key=scope_key,
                         siret=siret,
                         reason="existing_without_changes_but_annuaire_needed",
+                        source_last_treatment=source_last_treatment,
+                        source_last_treatment_raw=source_last_treatment_raw,
+                        source_creation_date=source_creation_date,
+                        db_last_treatment=entity.date_dernier_traitement_etablissement,
+                        db_creation_date=entity.date_creation,
+                        ignored_diff_fields=ignored_diff_fields,
+                        ignored_field_values=ignored_field_values,
                     )
                 else:
                     log_event(
@@ -194,6 +232,13 @@ class SyncPersistenceMixin:
                         scope_key=scope_key,
                         siret=siret,
                         reason="existing_no_field_change",
+                        source_last_treatment=source_last_treatment,
+                        source_last_treatment_raw=source_last_treatment_raw,
+                        source_creation_date=source_creation_date,
+                        db_last_treatment=entity.date_dernier_traitement_etablissement,
+                        db_creation_date=entity.date_creation,
+                        ignored_diff_fields=ignored_diff_fields,
+                        ignored_field_values=ignored_field_values,
                     )
             else:
                 fields["created_run_id"] = run_id
@@ -208,6 +253,9 @@ class SyncPersistenceMixin:
                     run_id=str(run_id),
                     scope_key=scope_key,
                     siret=siret,
+                    source_last_treatment=source_last_treatment,
+                    source_last_treatment_raw=source_last_treatment_raw,
+                    source_creation_date=source_creation_date,
                 )
         session.flush()
         return new_entities, updated_entities, annuaire_candidates
