@@ -58,7 +58,7 @@ def create_app() -> FastAPI:
     # Global inbound throttling.
     # Keep public endpoints stricter (anti-spam), and keep the rest permissive
     # to avoid impacting admin usage.
-    app.add_middleware(AccessLogMiddleware)
+    app.add_middleware(AccessLogMiddleware, log_admin_requests=settings.api.log_admin_requests)
     app.add_middleware(
         RateLimitMiddleware,
         default_policy=RateLimitPolicy(max_per_second=50, max_per_minute=1200),

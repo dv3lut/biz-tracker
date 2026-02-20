@@ -45,6 +45,15 @@ def _serialize_exception(exc: BaseException) -> dict[str, Any]:
 
 
 class AccessLogMiddleware(BaseHTTPMiddleware):
+    def __init__(self, app, *, log_admin_requests: bool = False) -> None:
+        super().__init__(app)
+        self._log_admin_requests = log_admin_requests
+
+    def _should_log_request(self, path: str) -> bool:
+        if path.startswith("/admin") and not self._log_admin_requests:
+            return False
+        return True
+
     async def dispatch(self, request: Request, call_next) -> Response:
         started_at = time.perf_counter()
         method = request.method
@@ -71,7 +80,8 @@ class AccessLogMiddleware(BaseHTTPMiddleware):
                 payload["user_agent"] = user_agent
             if request_id:
                 payload["request_id"] = request_id
-            log_event("api.request", **payload)
+            if self._should_log_request(path):
+                log_event("api.request", **payload)
             raise
         except BaseExceptionGroup as exc:  # pragma: no cover
             duration_ms = round((time.perf_counter() - started_at) * 1000.0, 2)
@@ -87,7 +97,8 @@ class AccessLogMiddleware(BaseHTTPMiddleware):
                 payload["user_agent"] = user_agent
             if request_id:
                 payload["request_id"] = request_id
-            log_event("api.request", level=40, **payload)
+            if self._should_log_request(path):
+                log_event("api.request", level=40, **payload)
             raise
         except Exception as exc:  # pragma: no cover
             duration_ms = round((time.perf_counter() - started_at) * 1000.0, 2)
@@ -103,7 +114,8 @@ class AccessLogMiddleware(BaseHTTPMiddleware):
                 payload["user_agent"] = user_agent
             if request_id:
                 payload["request_id"] = request_id
-            log_event("api.request", level=40, **payload)
+            if self._should_log_request(path):
+                log_event("api.request", level=40, **payload)
             raise
 
         duration_ms = round((time.perf_counter() - started_at) * 1000.0, 2)
@@ -119,5 +131,6 @@ class AccessLogMiddleware(BaseHTTPMiddleware):
         if request_id:
             payload["request_id"] = request_id
 
-        log_event("api.request", **payload)
+        if self._should_log_request(path):
+            log_event("api.request", **payload)
         return response

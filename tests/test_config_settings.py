@@ -156,6 +156,14 @@ def test_api_settings_allows_none_and_empty_values():
     assert config.ApiSettings._split_allowed_origins(123) == 123
 
 
+def test_api_settings_log_admin_requests_defaults_to_false_and_is_overridable():
+    default_settings = config.ApiSettings()
+    assert default_settings.log_admin_requests is False
+
+    enabled = config.ApiSettings(log_admin_requests=True)
+    assert enabled.log_admin_requests is True
+
+
 def test_apify_settings_normalizes_token_and_enabled_flag():
     settings = config.ApifySettings(api_token="  token ")
     assert settings.api_token == "token"

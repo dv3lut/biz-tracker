@@ -242,6 +242,10 @@ class ApiSettings(BaseModel):
     admin_token: str = Field(default="change-me", min_length=8)
     admin_header_name: str = Field(default="X-Admin-Token")
     docs_enabled: bool = Field(default=False)
+    log_admin_requests: bool = Field(
+        default=False,
+        description="Active les logs `api.request` pour les endpoints `/admin/*`.",
+    )
     allowed_origins: List[str] = Field(default_factory=lambda: ["http://localhost:5173", "http://localhost:5174", "http://localhost:8082"])
 
     @field_validator("allowed_origins", mode="before")

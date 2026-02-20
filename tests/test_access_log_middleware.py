@@ -66,7 +66,7 @@ def test_access_log_emits_api_request_event(monkeypatch) -> None:
 
     middleware = AccessLogMiddleware(app=_dummy_app)
 
-    request = _make_request("/admin/health", method="GET", query_string="a=1")
+    request = _make_request("/health", method="GET", query_string="a=1")
 
     response = asyncio.run(middleware.dispatch(request, _ok_call_next))
 
@@ -77,7 +77,7 @@ def test_access_log_emits_api_request_event(monkeypatch) -> None:
     assert args[0] == "api.request"
     assert kwargs["http"]["method"] == "GET"
     assert kwargs["http"]["status_code"] == 200
-    assert kwargs["url"]["path"] == "/admin/health"
+    assert kwargs["url"]["path"] == "/health"
     assert kwargs["url"]["query"] == "a=1"
     assert kwargs["client"]["ip"] == "127.0.0.1"
     assert kwargs["outcome"] == "success"
@@ -142,7 +142,7 @@ def test_access_log_logs_and_reraises_http_exception(monkeypatch) -> None:
 
     monkeypatch.setattr("app.api.middlewares.access_log_middleware.log_event", _fake_log_event)
 
-    middleware = AccessLogMiddleware(app=_dummy_app)
+    middleware = AccessLogMiddleware(app=_dummy_app, log_admin_requests=True)
 
     request = _make_request("/admin/secret", method="GET")
 
@@ -155,3 +155,80 @@ def test_access_log_logs_and_reraises_http_exception(monkeypatch) -> None:
     assert args[0] == "api.request"
     assert kwargs["http"]["status_code"] == 403
     assert kwargs["outcome"] == "client_error"
+
+
+def test_access_log_skips_admin_requests_when_disabled(monkeypatch) -> None:
+    captured: list[tuple[tuple, dict]] = []
+
+    def _fake_log_event(*args, **kwargs) -> None:
+        captured.append((args, kwargs))
+
+    monkeypatch.setattr("app.api.middlewares.access_log_middleware.log_event", _fake_log_event)
+
+    middleware = AccessLogMiddleware(app=_dummy_app)
+    request = _make_request("/admin/stats/summary", method="GET")
+
+    response = asyncio.run(middleware.dispatch(request, _ok_call_next))
+
+    assert response.status_code == 200
+    assert captured == []
+
+
+def test_access_log_keeps_public_requests_when_admin_disabled(monkeypatch) -> None:
+    captured: list[tuple[tuple, dict]] = []
+
+    def _fake_log_event(*args, **kwargs) -> None:
+        captured.append((args, kwargs))
+
+    monkeypatch.setattr("app.api.middlewares.access_log_middleware.log_event", _fake_log_event)
+
+    middleware = AccessLogMiddleware(app=_dummy_app)
+    request = _make_request("/public/contact", method="POST")
+
+    response = asyncio.run(middleware.dispatch(request, _ok_call_next))
+
+    assert response.status_code == 200
+    assert len(captured) == 1
+    (args, kwargs) = captured[0]
+    assert args[0] == "api.request"
+    assert kwargs["url"]["path"] == "/public/contact"
+
+
+def test_access_log_keeps_health_requests_when_admin_disabled(monkeypatch) -> None:
+    captured: list[tuple[tuple, dict]] = []
+
+    def _fake_log_event(*args, **kwargs) -> None:
+        captured.append((args, kwargs))
+
+    monkeypatch.setattr("app.api.middlewares.access_log_middleware.log_event", _fake_log_event)
+
+    middleware = AccessLogMiddleware(app=_dummy_app)
+    request = _make_request("/health", method="GET")
+
+    response = asyncio.run(middleware.dispatch(request, _ok_call_next))
+
+    assert response.status_code == 200
+    assert len(captured) == 1
+    (args, kwargs) = captured[0]
+    assert args[0] == "api.request"
+    assert kwargs["url"]["path"] == "/health"
+
+
+def test_access_log_can_enable_admin_requests(monkeypatch) -> None:
+    captured: list[tuple[tuple, dict]] = []
+
+    def _fake_log_event(*args, **kwargs) -> None:
+        captured.append((args, kwargs))
+
+    monkeypatch.setattr("app.api.middlewares.access_log_middleware.log_event", _fake_log_event)
+
+    middleware = AccessLogMiddleware(app=_dummy_app, log_admin_requests=True)
+    request = _make_request("/admin/stats/summary", method="GET")
+
+    response = asyncio.run(middleware.dispatch(request, _ok_call_next))
+
+    assert response.status_code == 200
+    assert len(captured) == 1
+    (args, kwargs) = captured[0]
+    assert args[0] == "api.request"
+    assert kwargs["url"]["path"] == "/admin/stats/summary"
