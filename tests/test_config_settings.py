@@ -169,6 +169,9 @@ def test_apify_settings_normalizes_token_and_enabled_flag():
     assert settings.api_token == "token"
     assert settings.enabled is True
 
+    toggled_off = config.ApifySettings(api_token="token", linkedin_enrichment_enabled=False)
+    assert toggled_off.enabled is False
+
     disabled = config.ApifySettings(api_token=" none ")
     assert disabled.api_token is None
     assert disabled.enabled is False

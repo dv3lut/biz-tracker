@@ -227,6 +227,9 @@ class SyncCollectorMixin(SyncPersistenceMixin):
         linkedin_summary: dict[str, object] = {}
         linkedin_future = None
         linkedin_executor: ThreadPoolExecutor | None = None
+        enrichment_result = None
+        alerts_enabled = False
+        alert_service: AlertService | None = None
         should_parallelize_linkedin = bool(context.mode.google_enabled and context.mode.linkedin_enabled)
         establishment_ids: list[object] = []
         if should_parallelize_linkedin and new_entities_total:
@@ -289,7 +292,7 @@ class SyncCollectorMixin(SyncPersistenceMixin):
                     reset_google_state=False,
                     recheck_all=force_refresh_google,
                     run=context.run,
-                    alert_service=alert_service,
+                    alert_service=None,
                     progress_callback=progress_callback,
                 )
 
@@ -343,8 +346,6 @@ class SyncCollectorMixin(SyncPersistenceMixin):
                 google_immediate_matches = matches_summary.immediate_matches
                 google_late_matches = matches_summary.late_matches
                 google_matches_payload = matches_summary.match_payloads
-
-                alerts_payload = self._log_alerts_created(context.run, alerts_created)
             else:
                 log_event(
                     "sync.google.skipped",
@@ -373,6 +374,16 @@ class SyncCollectorMixin(SyncPersistenceMixin):
                 context,
                 new_entities_total,
             )
+
+        if context.mode.google_enabled and alerts_enabled and alert_service is not None and enrichment_result is not None:
+            alert_candidates_by_siret: dict[str, models.Establishment] = {}
+            for establishment in enrichment_result.matches:
+                if establishment.siret:
+                    alert_candidates_by_siret[establishment.siret] = establishment
+            for establishment in new_entities_total:
+                if establishment.siret:
+                    alert_candidates_by_siret[establishment.siret] = establishment
+            alerts_created = alert_service.create_google_alerts(list(alert_candidates_by_siret.values()))
 
         context.session.commit()
 

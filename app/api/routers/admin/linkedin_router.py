@@ -18,6 +18,14 @@ from app.utils.diffusible import any_name_non_diffusible
 router = APIRouter(tags=["admin"])
 
 
+def _is_apify_enabled(apify_settings: object) -> bool:
+    api_token = getattr(apify_settings, "api_token", None)
+    enabled_flag = getattr(apify_settings, "enabled", None)
+    if enabled_flag is None:
+        return bool(api_token)
+    return bool(enabled_flag)
+
+
 def _get_company_name(establishment: models.Establishment) -> str:
     """Resolve company name from establishment."""
     return (
@@ -59,10 +67,10 @@ def check_director_linkedin(
         raise HTTPException(status_code=404, detail="Établissement associé non trouvé")
 
     settings = get_settings()
-    if not settings.apify.api_token:
+    if not _is_apify_enabled(settings.apify):
         raise HTTPException(
             status_code=503,
-            detail="API Apify non configurée (APIFY__API_TOKEN manquant)"
+            detail="API Apify désactivée ou non configurée"
         )
 
     company_name = _get_company_name(establishment)
@@ -218,10 +226,10 @@ def debug_director_linkedin(
         raise HTTPException(status_code=404, detail="Établissement associé non trouvé")
 
     settings = get_settings()
-    if not settings.apify.api_token:
+    if not _is_apify_enabled(settings.apify):
         raise HTTPException(
             status_code=503,
-            detail="API Apify non configurée (APIFY__API_TOKEN manquant)"
+            detail="API Apify désactivée ou non configurée"
         )
 
     company_name = _get_company_name(establishment)

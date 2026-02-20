@@ -202,8 +202,15 @@ def filter_ready_google_matches(
 
 def _has_ready_google_listing(establishment: models.Establishment) -> bool:
     status = (getattr(establishment, "google_check_status", "") or "").lower()
-    if status != "found":
-        return False
-    has_url = bool(getattr(establishment, "google_place_url", None))
-    has_place_id = bool(getattr(establishment, "google_place_id", None))
-    return has_url or has_place_id
+    if status == "found":
+        has_url = bool(getattr(establishment, "google_place_url", None))
+        has_place_id = bool(getattr(establishment, "google_place_id", None))
+        if has_url or has_place_id:
+            return True
+
+    directors = getattr(establishment, "directors", None) or []
+    return any(
+        getattr(director, "is_physical_person", False)
+        and bool(getattr(director, "linkedin_profile_url", None))
+        for director in directors
+    )

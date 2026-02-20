@@ -41,6 +41,37 @@ class LinkedInAdminRoutesTests(TestCase):
         self.assertEqual(ctx.exception.status_code, 400)
 
     @patch("app.api.routers.admin.linkedin_router.get_settings")
+    def test_check_director_linkedin_returns_503_when_apify_feature_disabled(self, mock_get_settings) -> None:
+        mock_get_settings.return_value = SimpleNamespace(
+            apify=SimpleNamespace(api_token="token", enabled=False)
+        )
+
+        director_id = uuid4()
+        director = SimpleNamespace(
+            id=director_id,
+            is_physical_person=True,
+            first_name_for_search="Jane",
+            first_names="Jane",
+            last_name="Doe",
+            quality="CEO",
+            linkedin_check_status=None,
+            linkedin_last_checked_at=None,
+        )
+        establishment = SimpleNamespace(
+            siret="000",
+            name="Acme",
+            enseigne1=None,
+            legal_unit_name=None,
+        )
+        director.establishment = establishment
+        session = self._session_with_director(director)
+
+        with self.assertRaises(HTTPException) as ctx:
+            check_director_linkedin(director_id=director_id, session=session)
+
+        self.assertEqual(ctx.exception.status_code, 503)
+
+    @patch("app.api.routers.admin.linkedin_router.get_settings")
     def test_check_director_linkedin_marks_insufficient(self, mock_get_settings) -> None:
         mock_get_settings.return_value = SimpleNamespace(
             apify=SimpleNamespace(api_token="token")

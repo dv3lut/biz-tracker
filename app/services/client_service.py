@@ -397,6 +397,15 @@ def _establishment_matches_listing_status(
     (phone, email, or website) are treated as valid matches,
     similar to 'recent_creation' establishments.
     """
+    directors = getattr(establishment, "directors", None) or []
+    has_linkedin_profile = any(
+        getattr(director, "is_physical_person", False)
+        and bool(getattr(director, "linkedin_profile_url", None))
+        for director in directors
+    )
+    if has_linkedin_profile:
+        return True
+
     normalized = normalize_listing_age_status(getattr(establishment, "google_listing_age_status", None))
     if not allowed_statuses:
         return normalized in FILTERABLE_LISTING_STATUSES

@@ -307,6 +307,10 @@ class StripeSettings(BaseModel):
 
 class ApifySettings(BaseModel):
     api_token: Optional[str] = Field(default=None, description="Token API pour Apify.")
+    linkedin_enrichment_enabled: bool = Field(
+        default=True,
+        description="Active/désactive l'enrichissement LinkedIn (aucun appel Apify si false).",
+    )
     linkedin_actor_id: str = Field(
         default="FbqC9BRstFBddhUqj",
         description="ID de l'Actor Apify pour la recherche LinkedIn.",
@@ -321,7 +325,7 @@ class ApifySettings(BaseModel):
 
     @property
     def enabled(self) -> bool:
-        return bool(self.api_token)
+        return bool(self.api_token) and bool(self.linkedin_enrichment_enabled)
 
     @field_validator("api_token", mode="before")
     @classmethod

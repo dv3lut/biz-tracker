@@ -188,19 +188,35 @@ class ResolveGoogleCandidatesTests(unittest.TestCase):
 
 
 class DayReplayPolicyTests(unittest.TestCase):
-    def test_filter_ready_google_matches_requires_found_status_and_link(self) -> None:
+    def test_filter_ready_google_matches_includes_google_and_linkedin_ready(self) -> None:
         collector = _ReplayAwareCollector([], current_date=date(2025, 11, 15))
         establishments = [
             SimpleNamespace(google_check_status="found", google_place_url="https://example.com", google_place_id=None),
             SimpleNamespace(google_check_status="found", google_place_url=None, google_place_id="place123"),
             SimpleNamespace(google_check_status="found", google_place_url=None, google_place_id=None),
             SimpleNamespace(google_check_status="pending", google_place_url="https://example.com", google_place_id="place456"),
+            SimpleNamespace(
+                google_check_status="not_found",
+                google_place_url=None,
+                google_place_id=None,
+                directors=[
+                    SimpleNamespace(is_physical_person=True, linkedin_profile_url="https://linkedin.com/in/test")
+                ],
+            ),
         ]
 
         ready = collector._filter_ready_google_matches(establishments)
 
-        self.assertEqual(len(ready), 2)
-        self.assertTrue(all(getattr(item, "google_check_status", "").lower() == "found" for item in ready))
+        self.assertEqual(len(ready), 3)
+        ready_sources = {
+            (
+                getattr(item, "google_check_status", ""),
+                bool(getattr(item, "google_place_url", None) or getattr(item, "google_place_id", None)),
+            )
+            for item in ready
+        }
+        self.assertIn(("found", True), ready_sources)
+        self.assertIn(("not_found", False), ready_sources)
 
 
 if __name__ == "__main__":

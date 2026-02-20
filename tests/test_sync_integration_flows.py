@@ -508,6 +508,115 @@ def test_full_sync_flow_includes_linkedin_profile_in_client_email(monkeypatch):
         assert "https://linkedin.com/in/jane-doe" in (client_emails[0]["html_body"] or "")
 
 
+def test_full_sync_alerts_include_linkedin_only_found_during_run(monkeypatch):
+    settings = _make_settings(google_enabled=True)
+    settings.email.enabled = True
+    settings.email.smtp_host = "localhost"
+    _patch_settings(monkeypatch, settings)
+    _patch_google_client(monkeypatch)
+
+    import app.services.sync.collector as collector_module
+    import app.services.google_business.google_lookup_engine as lookup_engine
+    import app.services.email_service as email_service
+
+    monkeypatch.setattr(
+        lookup_engine.GoogleLookupEngine,
+        "lookup",
+        lambda self, establishment, *, now=None: None,
+    )
+
+    def _fake_linkedin_enrichment(self, context, establishments, *, session_override=None, update_run_counters=True):
+        session = session_override or context.session
+        for establishment in establishments:
+            session.add(
+                models.Director(
+                    establishment_siret=establishment.siret,
+                    type_dirigeant="personne physique",
+                    first_names="Alice",
+                    last_name="Durand",
+                    linkedin_profile_url=f"https://linkedin.com/in/{establishment.siret}",
+                    linkedin_profile_data={"title": "CEO"},
+                    linkedin_check_status="found",
+                )
+            )
+        session.flush()
+        return {
+            "total_directors": len(establishments),
+            "searched_count": len(establishments),
+            "found_count": len(establishments),
+            "not_found_count": 0,
+            "error_count": 0,
+        }
+
+    monkeypatch.setattr(
+        collector_module.SyncCollectorMixin,
+        "_run_linkedin_enrichment",
+        _fake_linkedin_enrichment,
+    )
+
+    sent_emails: list[dict[str, object]] = []
+
+    def _capture_send(self, subject, body, recipients, *, html_body=None, reply_to=None, attachments=None):
+        sent_emails.append(
+            {
+                "subject": subject,
+                "body": body,
+                "recipients": list(recipients),
+                "html_body": html_body,
+            }
+        )
+
+    monkeypatch.setattr(email_service.EmailService, "send", _capture_send)
+
+    with _session_scope() as session:
+        subcategory = _seed_naf(session)
+        _seed_client(session, subcategory)
+        _seed_google_retry_config(session)
+        previous_success = models.SyncRun(
+            scope_key=settings.sync.scope_key,
+            run_type="sync",
+            status="success",
+            mode=SyncMode.FULL.value,
+            finished_at=utcnow(),
+        )
+        session.add(previous_success)
+        session.add(models.AdminRecipient(email="admin@example.com"))
+        session.commit()
+
+        page_1 = {
+            "header": {"curseur": "*", "curseurSuivant": None, "total": 1},
+            "etablissements": [
+                _make_establishment_payload(
+                    siret="24242424242424",
+                    name="LinkedIn Sans Google",
+                    naf_code="56.10A",
+                ),
+            ],
+        }
+        _patch_sirene_client(monkeypatch, [page_1])
+
+        service = SyncService()
+        run = service.run_sync(session)
+
+        assert run.status == "success"
+
+        alerts = session.execute(select(models.Alert)).scalars().all()
+        assert len(alerts) == 1
+        assert alerts[0].siret == "24242424242424"
+
+        establishment = session.get(models.Establishment, "24242424242424")
+        assert establishment is not None
+        assert establishment.google_check_status != "found"
+
+        admin_emails = [item for item in sent_emails if "admin@example.com" in item["recipients"]]
+        assert admin_emails
+        assert "https://linkedin.com/in/24242424242424" in (admin_emails[0]["html_body"] or "")
+
+        client_emails = [item for item in sent_emails if "client@example.com" in item["recipients"]]
+        assert client_emails
+        assert "https://linkedin.com/in/24242424242424" in (client_emails[0]["html_body"] or "")
+
+
 def test_sirene_only_flow_skips_google(monkeypatch):
     settings = _make_settings(google_enabled=True)
     _patch_settings(monkeypatch, settings)
