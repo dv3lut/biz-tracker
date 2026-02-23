@@ -5,6 +5,8 @@ import logging
 import threading
 from datetime import datetime, timedelta
 
+from sqlalchemy import and_, func, or_, select
+
 from app.config import get_settings
 from app.db import models
 from app.db.session import session_scope
@@ -15,6 +17,35 @@ from app.observability import log_event
 from app.utils.dates import utcnow
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def count_retryable_auto_runs_today(session, *, scope_key: str, now: datetime | None = None) -> int:
+    """Count today's automatic runs that qualify as retry attempts.
+
+    A run is considered retryable when:
+    - it failed technically (`status=failed`), or
+    - it succeeded but produced no Sirene delta (`created_records=0` and `updated_records=0`).
+    """
+
+    current = now or utcnow()
+    day_start = datetime.combine(current.date(), datetime.min.time())
+    retryable_condition = or_(
+        models.SyncRun.status == "failed",
+        and_(
+            models.SyncRun.status == "success",
+            models.SyncRun.mode == DEFAULT_SYNC_MODE.value,
+            models.SyncRun.created_records == 0,
+            models.SyncRun.updated_records == 0,
+        ),
+    )
+    stmt = select(func.count(models.SyncRun.id)).where(
+        models.SyncRun.scope_key == scope_key,
+        models.SyncRun.run_type == "sync_auto",
+        models.SyncRun.started_at >= day_start,
+        retryable_condition,
+    )
+    count = session.execute(stmt).scalar_one()
+    return int(count)
 
 
 class SyncScheduler:
@@ -86,6 +117,7 @@ class SyncScheduler:
     def _tick(self) -> None:
         scope_key = self._service.settings.sync.scope_key
         minimum_delay = timedelta(minutes=self._service.settings.sync.minimum_delay_minutes)
+        retry_limit = self._service.settings.sync.auto_retry_max_attempts
 
         with session_scope() as session:
             send_weekly_stripe_summary_if_due(session, self._service.settings)
@@ -111,6 +143,25 @@ class SyncScheduler:
                         next_allowed=next_allowed,
                     )
                     return
+
+            retry_attempts_today = count_retryable_auto_runs_today(session, scope_key=scope_key)
+            if retry_attempts_today >= retry_limit:
+                _LOGGER.info(
+                    "Automatic sync retry limit reached for scope '%s' (%s/%s).",
+                    scope_key,
+                    retry_attempts_today,
+                    retry_limit,
+                )
+                log_event(
+                    "scheduler.skip",
+                    reason="retry_limit_reached",
+                    scope_key=scope_key,
+                    retry_attempts_today=retry_attempts_today,
+                    retry_limit=retry_limit,
+                    run_type="sync_auto",
+                    mode=DEFAULT_SYNC_MODE.value,
+                )
+                return
 
             run = self._service.prepare_sync_run(
                 session,

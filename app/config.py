@@ -172,6 +172,11 @@ class SyncSettings(BaseModel):
         validation_alias=AliasChoices("auto_poll_minutes", "auto_incremental_poll_minutes"),
         description="Polling interval (in minutes) for the background sync scheduler.",
     )
+    auto_retry_max_attempts: int = Field(
+        default=4,
+        ge=1,
+        description="Nombre maximum de tentatives automatiques (échec technique ou run vide) par journée.",
+    )
     incremental_lookback_months: int = Field(
         default=3,
         ge=0,

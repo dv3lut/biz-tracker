@@ -164,6 +164,14 @@ def test_api_settings_log_admin_requests_defaults_to_false_and_is_overridable():
     assert enabled.log_admin_requests is True
 
 
+def test_sync_settings_auto_retry_max_attempts_defaults_and_override():
+    default_sync = config.SyncSettings()
+    assert default_sync.auto_retry_max_attempts == 4
+
+    overridden = config.SyncSettings(auto_retry_max_attempts=7)
+    assert overridden.auto_retry_max_attempts == 7
+
+
 def test_apify_settings_normalizes_token_and_enabled_flag():
     settings = config.ApifySettings(api_token="  token ")
     assert settings.api_token == "token"
