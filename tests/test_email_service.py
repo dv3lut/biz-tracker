@@ -93,3 +93,10 @@ def test_email_service_send_uses_smtp(monkeypatch):
     assert sent_messages == [("Hello", ["ops@example.com"])]
     assert sent_reply_to == ["contact@business-tracker.fr"]
     assert sent_attachments == [[("alertes.csv", "text/csv")]]
+
+
+def test_email_service_provider_property(monkeypatch):
+    """La propriété provider doit refléter la valeur du settings."""
+    monkeypatch.setattr(email_service, "get_settings", lambda: SimpleNamespace(email=_settings(provider="mailjet")))
+    service = email_service.EmailService()
+    assert service.provider == "mailjet"

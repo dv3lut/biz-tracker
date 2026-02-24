@@ -274,33 +274,22 @@ def _build_client_scope_summary(
         for region_name in sorted_regions:
             depts = region_groups[region_name]
             count = len(depts)
-            dept_pills_html = "".join(
-                f'<span style="display:inline-block;margin:2px 4px 2px 0;padding:2px 8px;'
-                f'background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;'
-                f'border-radius:10px;font-size:10px;font-weight:500;">'
-                f'{escape(code)}&thinsp;<span style="font-weight:400;">{escape(name)}</span></span>'
-                for code, name in depts
+            dept_names_short = ", ".join(
+                f"{code}" for code, _name in depts
             )
             details_parts.append(
-                f'<details style="display:inline-block;margin:2px 5px 4px 0;vertical-align:top;">'
-                f'<summary style="'
-                f'cursor:pointer;list-style:none;-webkit-appearance:none;'
-                f'display:inline-flex;align-items:center;gap:5px;'
+                f'<span style="display:inline-block;margin:2px 5px 4px 0;vertical-align:top;'
                 f'padding:3px 8px 3px 10px;'
                 f'background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;'
                 f'border-radius:12px;font-size:11px;font-weight:500;'
-                f'user-select:none;outline:none;'
                 f'">'
                 f'{escape(region_name)}'
                 f'<span style="background:#1d4ed8;color:#fff;border-radius:10px;'
-                f'padding:1px 6px;font-size:10px;font-weight:700;line-height:1.4;">'
-                f'{count}</span>'
-                f'</summary>'
-                f'<div style="margin-top:5px;padding:8px 10px;background:#f0f7ff;'
-                f'border:1px solid #dbeafe;border-radius:6px;line-height:2;">'
-                f'{dept_pills_html}'
-                f'</div>'
-                f'</details>'
+                f'padding:1px 6px;font-size:10px;font-weight:700;line-height:1.4;'
+                f'margin-left:5px;">{count}</span>'
+                f'<span style="display:block;font-size:10px;font-weight:400;'
+                f'color:#3b82f6;margin-top:1px;">{escape(dept_names_short)}</span>'
+                f'</span>'
             )
         html_rows.append(
             f'<div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:6px;">'

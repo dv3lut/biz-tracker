@@ -351,6 +351,23 @@ def build_alerts_csv(
     return buffer.getvalue().encode("utf-8-sig")
 
 
+MONTH_LABELS_FR_EXPORT: dict[int, str] = {
+    1: "janvier", 2: "février", 3: "mars", 4: "avril", 5: "mai", 6: "juin",
+    7: "juillet", 8: "août", 9: "septembre", 10: "octobre", 11: "novembre", 12: "décembre",
+}
+
+
+def _format_month_year(value: object | None) -> str | None:
+    """Return 'Mois YYYY' string for a date-like value."""
+    if not value:
+        return None
+    month = getattr(value, "month", None)
+    year = getattr(value, "year", None)
+    if month and year:
+        return f"{MONTH_LABELS_FR_EXPORT[month].capitalize()} {year}"
+    return None
+
+
 def build_alerts_client_csv(
     alerts: Iterable[models.Alert],
     *,
@@ -363,14 +380,18 @@ def build_alerts_client_csv(
     """
 
     headers = [
-        "Date création",
+        "Mois/Année création",
         "Date alerte",
         "Nom",
-        "Adresse",
+        "Adresse complète",
         "Code postal",
         "Commune",
         "Pays",
         "Catégorie",
+        "Statut fiche Google",
+        "Fiche Google",
+        "Entreprise individuelle",
+        "Dirigeant(s)",
     ]
 
     def normalize(value: object | None) -> str:
@@ -391,16 +412,56 @@ def build_alerts_client_csv(
         if establishment is None:
             continue
 
+        # Entreprise individuelle
+        sole = getattr(establishment, "is_sole_proprietorship", None)
+        if sole is True:
+            sole_str = "Oui"
+        elif sole is False:
+            sole_str = "Non"
+        else:
+            # Fallback via categorie_juridique si la propriété n'est pas disponible
+            from app.utils.business_types import is_individual_company  # local to avoid circular
+            cj = getattr(establishment, "categorie_juridique", None)
+            sole_str = "Oui" if is_individual_company(cj) else "Non"
+
+        # Dirigeants (personnes physiques uniquement)
+        directors = getattr(establishment, "directors", None) or []
+        physical_directors = [d for d in directors if getattr(d, "is_physical_person", False)]
+        directors_parts: list[str] = []
+        for d in physical_directors:
+            first_names = (getattr(d, "first_names", None) or "").strip()
+            last_name = (getattr(d, "last_name", None) or "").strip()
+            quality = (getattr(d, "quality", None) or "").strip()
+            if first_names and last_name:
+                name_str = f"{first_names} {last_name.upper()}"
+            elif last_name:
+                name_str = last_name.upper()
+            elif first_names:
+                name_str = first_names
+            else:
+                name_str = quality
+            directors_parts.append(f"{name_str} ({quality})" if quality and quality != name_str else name_str)
+        directors_str = " | ".join(directors_parts)
+
+        # Statut fiche Google (label client)
+        listing_status = get_client_listing_status_label(
+            getattr(establishment, "google_listing_age_status", None)
+        )
+
         writer.writerow(
             [
-                normalize(_format_date(getattr(establishment, "date_creation", None))),
+                normalize(_format_month_year(getattr(establishment, "date_creation", None))),
                 normalize(_format_datetime(getattr(alert, "created_at", None))),
                 normalize(getattr(establishment, "name", None)),
-                normalize(_compose_address(establishment)),
+                normalize(_compose_full_address(establishment)),
                 normalize(getattr(establishment, "code_postal", None)),
                 normalize(getattr(establishment, "libelle_commune", None) or getattr(establishment, "libelle_commune_etranger", None)),
                 normalize(getattr(establishment, "code_pays", None)),
                 normalize(getattr(establishment, "naf_libelle", None)),
+                normalize(listing_status),
+                normalize(getattr(establishment, "google_place_url", None)),
+                sole_str,
+                normalize(directors_str),
             ]
         )
 

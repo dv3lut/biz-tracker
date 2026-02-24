@@ -159,7 +159,18 @@ def test_build_alerts_csv_includes_headers_and_payload():
 
 
 def test_build_alerts_client_csv_is_minimal_and_safe():
+    from types import SimpleNamespace as SN
+
+    region = SN(name="Île-de-France")
+    director = SN(
+        is_physical_person=True,
+        first_names="Jean",
+        last_name="Dupont",
+        quality="Gérant",
+    )
     establishment = _make_establishment()
+    establishment.is_sole_proprietorship = False
+    establishment.directors = [director]
     alert = SimpleNamespace(
         establishment=establishment,
         created_at=datetime(2024, 1, 5, 8, 0, 0),
@@ -173,9 +184,24 @@ def test_build_alerts_client_csv_is_minimal_and_safe():
     content = export_service.build_alerts_client_csv([alert]).decode("utf-8-sig")
     header, row = [line for line in content.splitlines() if line][:2]
 
-    assert header == "Date création;Date alerte;Nom;Adresse;Code postal;Commune;Pays;Catégorie"
+    expected_header = (
+        "Mois/Année création;Date alerte;Nom;Adresse complète;"
+        "Code postal;Commune;Pays;Catégorie;Statut fiche Google;"
+        "Fiche Google;Entreprise individuelle;Dirigeant(s)"
+    )
+    assert header == expected_header
     assert "ops@example.com" not in row
     assert "secret" not in row
+    # Mois/Année et non date précise
+    assert "Janvier 2024" in row
+    assert "2024-01-01" not in row
+    # Dirigeant format
+    assert "Jean DUPONT" in row
+    assert "Gérant" in row
+    # Entreprise individuelle
+    assert "Non" in row
+    # Statut Google
+    assert "récente" in row.lower() or "création" in row.lower()
 
 
 def test_export_helpers_normalize_values():
@@ -203,3 +229,156 @@ def test_compose_full_address_handles_missing_segments():
     )
 
     assert export_service._compose_full_address(establishment) is None
+
+
+# ---------------------------------------------------------------------------
+# Branches supplémentaires pour monter la couverture
+# ---------------------------------------------------------------------------
+
+
+def test_format_date_fallback_to_str():
+    """_format_date doit retourner str(value) quand la valeur n'a pas d'isoformat."""
+    assert export_service._format_date(20240101) == "20240101"
+
+
+def test_resolve_category_columns_whitespace_naf_code():
+    """_resolve_category_columns renvoie (naf_label, None) quand le code NAF est vide après strip."""
+    result = export_service._resolve_category_columns("   ", "Fallback", {"X": ("Cat", "Sub")})
+    assert result == ("Fallback", None)
+
+
+def test_apply_hyperlink_skips_none_url():
+    """build_google_places_workbook avec google_place_url=None ne doit pas lever d'exception."""
+    establishment = _make_establishment(google_place_url=None, google_place_id=None)
+    buffer = export_service.build_google_places_workbook([establishment])
+    sheet, rows = _load_rows(buffer)
+    # La ligne doit exister mais sans hyperlien sur la colonne URL
+    assert rows[1][8] is None
+
+
+def test_build_alerts_workbook_skips_alert_without_establishment():
+    """Un alerte avec establishment=None est ignorée silencieusement dans le workbook."""
+    alert_no_estab = SimpleNamespace(
+        establishment=None,
+        created_at=datetime(2024, 1, 5, 8, 0, 0),
+        sent_at=None,
+        run_id=uuid4(),
+        recipients=[],
+        payload={},
+        run=SimpleNamespace(scope_key="test"),
+    )
+    buffer = export_service.build_alerts_workbook([alert_no_estab])
+    _, rows = _load_rows(buffer)
+    assert len(rows) == 1  # en-tête uniquement
+
+
+def test_build_alerts_csv_establishments_by_siret_fallback():
+    """build_alerts_csv utilise establishments_by_siret quand alert.establishment est None."""
+    establishment = _make_establishment()
+    alert = SimpleNamespace(
+        establishment=None,
+        siret="12345678901234",
+        created_at=datetime(2024, 1, 5, 8, 0, 0),
+        sent_at=None,
+        run_id=uuid4(),
+        recipients=["ops@example.com"],
+        payload={},
+        run=SimpleNamespace(scope_key="test"),
+    )
+    content = export_service.build_alerts_csv(
+        [alert],
+        establishments_by_siret={"12345678901234": establishment},
+    ).decode("utf-8-sig")
+    lines = [line for line in content.splitlines() if line]
+    assert len(lines) == 2
+    assert "Chez Test" in lines[1]
+
+
+def test_build_alerts_csv_skips_alert_without_establishment():
+    """build_alerts_csv ignore un alerte sans établissement ni fallback map."""
+    alert = SimpleNamespace(
+        establishment=None,
+        siret="99999999999999",
+        created_at=datetime(2024, 1, 5, 8, 0, 0),
+        sent_at=None,
+        run_id=uuid4(),
+        recipients=[],
+        payload={},
+        run=None,
+    )
+    content = export_service.build_alerts_csv([alert]).decode("utf-8-sig")
+    lines = [line for line in content.splitlines() if line]
+    assert len(lines) == 1  # en-tête uniquement
+
+
+def test_format_month_year_returns_none_without_month_attr():
+    """_format_month_year renvoie None si la valeur n'a pas d'attribut month/year."""
+    assert export_service._format_month_year("not-a-date") is None
+    assert export_service._format_month_year(None) is None
+
+
+def test_build_alerts_client_csv_skips_alert_without_establishment():
+    """build_alerts_client_csv ignore un alerte sans établissement."""
+    alert = SimpleNamespace(
+        establishment=None,
+        siret="99999999999999",
+        created_at=datetime(2024, 1, 5, 8, 0, 0),
+        sent_at=None,
+        run_id=uuid4(),
+        recipients=[],
+        payload={},
+        run=None,
+    )
+    content = export_service.build_alerts_client_csv([alert]).decode("utf-8-sig")
+    lines = [line for line in content.splitlines() if line]
+    assert len(lines) == 1  # en-tête uniquement
+
+
+def test_build_alerts_client_csv_sole_proprietorship_true():
+    """build_alerts_client_csv affiche 'Oui' pour une entreprise individuelle."""
+    from types import SimpleNamespace as SN
+
+    establishment = _make_establishment()
+    establishment.is_sole_proprietorship = True
+    establishment.directors = []
+    alert = SimpleNamespace(
+        establishment=establishment,
+        created_at=datetime(2024, 1, 5, 8, 0, 0),
+        sent_at=None,
+        run_id=uuid4(),
+        recipients=[],
+        payload={},
+        run=None,
+    )
+    content = export_service.build_alerts_client_csv([alert]).decode("utf-8-sig")
+    _header, row = [line for line in content.splitlines() if line][:2]
+    assert "Oui" in row
+
+
+def test_build_alerts_client_csv_director_name_variants():
+    """Formatage du nom du dirigeant : nom seul, prénom seul, ni l'un ni l'autre."""
+    from types import SimpleNamespace as SN
+
+    establishment = _make_establishment()
+    establishment.is_sole_proprietorship = False
+    establishment.directors = [
+        SN(is_physical_person=True, first_names="", last_name="MARTIN", quality="Gérant"),
+        SN(is_physical_person=True, first_names="Sophie", last_name="", quality="DG"),
+        SN(is_physical_person=True, first_names="", last_name="", quality="Associé"),
+        SN(is_physical_person=False, first_names="Corp SA", last_name="", quality=""),
+    ]
+    alert = SimpleNamespace(
+        establishment=establishment,
+        created_at=datetime(2024, 1, 5, 8, 0, 0),
+        sent_at=None,
+        run_id=uuid4(),
+        recipients=[],
+        payload={},
+        run=None,
+    )
+    content = export_service.build_alerts_client_csv([alert]).decode("utf-8-sig")
+    _header, row = [line for line in content.splitlines() if line][:2]
+    assert "MARTIN" in row
+    assert "Sophie" in row
+    assert "Associé" in row
+    assert "Corp SA" not in row  # personne morale exclue

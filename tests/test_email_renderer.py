@@ -280,8 +280,8 @@ class EmailRendererTests(unittest.TestCase):
         # HTML : les <details> avec les noms de région
         self.assertIn("Île-de-France", html_body)
         self.assertIn("Bretagne", html_body)
-        self.assertIn("<details", html_body)
-        self.assertIn("<summary", html_body)
+        self.assertNotIn("<details", html_body)
+        self.assertNotIn("<summary", html_body)
         self.assertIn("Périmètre surveillé", html_body)
         self.assertNotIn("France entière", html_body)
 
