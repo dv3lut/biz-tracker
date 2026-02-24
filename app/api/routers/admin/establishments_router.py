@@ -31,6 +31,7 @@ def _build_establishments_query(
     last_treatment_from: date | None,
     last_treatment_to: date | None,
     google_check_status: str | None,
+    google_check_statuses: list[str] | None,
     is_individual: bool | None,
     has_linkedin: bool | None,
     linkedin_statuses: list[str] | None,
@@ -44,6 +45,8 @@ def _build_establishments_query(
         linkedin_statuses = None
     if isinstance(website_scrape_statuses, QueryParam):
         website_scrape_statuses = None
+    if isinstance(google_check_statuses, QueryParam):
+        google_check_statuses = None
     if isinstance(last_treatment_from, QueryParam):
         last_treatment_from = None
     if isinstance(last_treatment_to, QueryParam):
@@ -121,25 +124,34 @@ def _build_establishments_query(
         end_exclusive = datetime.combine(last_treatment_to, time.min) + timedelta(days=1)
         query = query.filter(models.Establishment.date_dernier_traitement_etablissement < end_exclusive)
 
-    if google_check_status:
-        cleaned_status = google_check_status.strip().lower()
-        normalized_status = func.lower(func.trim(models.Establishment.google_check_status))
+    normalized_status = func.lower(func.trim(models.Establishment.google_check_status))
+
+    def _google_status_condition(cleaned_status: str):
         if cleaned_status == "other":
-            query = query.filter(
-                or_(
-                    models.Establishment.google_check_status.is_(None),
-                    normalized_status.notin_(["found", "not_found", "insufficient", "pending"]),
-                )
+            return or_(
+                models.Establishment.google_check_status.is_(None),
+                normalized_status.notin_(["found", "not_found", "insufficient", "pending"]),
             )
-        elif cleaned_status == "pending":
-            query = query.filter(
-                or_(
-                    models.Establishment.google_check_status.is_(None),
-                    normalized_status == "pending",
-                )
+        if cleaned_status == "pending":
+            return or_(
+                models.Establishment.google_check_status.is_(None),
+                normalized_status == "pending",
             )
-        else:
-            query = query.filter(normalized_status == cleaned_status)
+        return normalized_status == cleaned_status
+
+    cleaned_google_statuses: list[str] = []
+    if google_check_statuses:
+        for raw_status in google_check_statuses:
+            cleaned = (raw_status or "").strip().lower()
+            if cleaned and cleaned not in cleaned_google_statuses:
+                cleaned_google_statuses.append(cleaned)
+    elif google_check_status:
+        cleaned = google_check_status.strip().lower()
+        if cleaned:
+            cleaned_google_statuses.append(cleaned)
+
+    if cleaned_google_statuses:
+        query = query.filter(or_(*[_google_status_condition(status) for status in cleaned_google_statuses]))
 
     if is_individual is not None:
         normalized_filter = models.Establishment.categorie_juridique.ilike("1%")
@@ -296,6 +308,13 @@ def list_establishments(
             "Aucun filtre si vide."
         ),
     ),
+    google_check_statuses: list[str] | None = Query(
+        None,
+        description=(
+            "Filtrer par plusieurs statuts Google (répéter google_check_statuses=found&google_check_statuses=pending). "
+            "Si présent, ce paramètre prend le dessus sur google_check_status."
+        ),
+    ),
     is_individual: bool | None = Query(None, description="Filtrer par entreprise individuelle (true/false)."),
     has_linkedin: bool | None = Query(
         None,
@@ -330,6 +349,7 @@ def list_establishments(
         last_treatment_from=last_treatment_from,
         last_treatment_to=last_treatment_to,
         google_check_status=google_check_status,
+        google_check_statuses=google_check_statuses,
         is_individual=is_individual,
         has_linkedin=has_linkedin,
         linkedin_statuses=linkedin_statuses,

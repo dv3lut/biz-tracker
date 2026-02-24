@@ -192,7 +192,7 @@ class AlertServiceFilteringTests(unittest.TestCase):
         deps.dispatch_mock.assert_called_once()
         payloads = deps.dispatch_mock.call_args[0][1]
         self.assertEqual(len(payloads), 1)
-        self.assertEqual(payloads[0].subject, "Business tracker · 0 fiche Google détectée")
+        self.assertEqual(payloads[0].subject, "Business tracker · Rapport quotidien")
 
     def test_targeted_clients_receive_zero_digest(self) -> None:
         client_a = SimpleNamespace(
@@ -578,6 +578,67 @@ class AlertServiceFilteringTests(unittest.TestCase):
         alert = alerts[0]
         self.assertTrue(alert.payload["has_linkedin"])
         self.assertFalse(alert.payload["has_google"])
+
+    def test_not_found_included_and_mismatch_pending_excluded_from_dispatch(self) -> None:
+        """Verify not_found goes to no_google section, mismatch/pending are excluded."""
+        found_est = self._make_establishment("recent_creation", suffix="30")
+        found_est.google_check_status = "found"
+
+        not_found_est = self._make_establishment("recent_creation", suffix="31")
+        not_found_est.google_check_status = "not_found"
+        not_found_est.google_listing_age_status = None
+        not_found_est.google_place_url = None
+        not_found_est.google_place_id = None
+
+        mismatch_est = self._make_establishment("recent_creation", suffix="32")
+        mismatch_est.google_check_status = "type_mismatch"
+
+        pending_est = self._make_establishment("recent_creation", suffix="33")
+        pending_est.google_check_status = "pending"
+
+        insufficient_est = self._make_establishment("recent_creation", suffix="34")
+        insufficient_est.google_check_status = "insufficient"
+
+        all_ests = [found_est, not_found_est, mismatch_est, pending_est, insufficient_est]
+
+        client = self._make_client(email="client@example.com")
+        client.subscriptions = []
+        client.listing_statuses = None
+        client.departments = []
+
+        # We don't mock assign_establishments_to_clients here; we mock the
+        # entire _prepare_client_dispatch to capture arguments.
+        with ExitStack() as stack:
+            email_service = MagicMock()
+            email_service.is_enabled.return_value = True
+            email_service.is_configured.return_value = True
+            stack.enter_context(patch("app.services.alerts.alert_service.EmailService", return_value=email_service))
+            stack.enter_context(patch("app.services.alerts.alert_service.get_admin_emails", return_value=[]))
+            stack.enter_context(patch("app.services.alerts.alert_service.log_event"))
+
+            prepare_mock = MagicMock(return_value=(None, "no_clients"))
+            stack.enter_context(
+                patch.object(AlertService, "_prepare_client_dispatch", prepare_mock)
+            )
+
+            service = AlertService(self.session, self.run)
+            service.create_google_alerts(all_ests)
+
+        # _prepare_client_dispatch should have been called
+        prepare_mock.assert_called_once()
+        _, kwargs = prepare_mock.call_args
+        all_establishments_arg = kwargs.get("all_establishments", [])
+
+        # all_establishments should include found + not_found only
+        dispatched_statuses = {
+            (getattr(e, "google_check_status", "") or "").lower()
+            for e in all_establishments_arg
+        }
+        self.assertIn("found", dispatched_statuses)
+        self.assertIn("not_found", dispatched_statuses)
+        self.assertNotIn("type_mismatch", dispatched_statuses)
+        self.assertNotIn("pending", dispatched_statuses)
+        self.assertNotIn("insufficient", dispatched_statuses)
 
 
 if __name__ == "__main__":

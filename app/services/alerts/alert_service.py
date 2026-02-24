@@ -119,13 +119,13 @@ class AlertService:
 
             alerts_by_siret: dict[str, models.Alert] = {alert.siret: alert for alert in alerts}
 
-            message_lines = ["Pages Google My Business / LinkedIn associées détectées:", ""]
+            message_lines = ["Pages Google My Business associées détectées:", ""]
             for establishment in filtered_establishments:
                 message_lines.extend(self._formatter.format_lines(establishment, include_google=True))
                 message_lines.append("")
             _ALERT_LOGGER.info("\n".join(message_lines).strip())
         else:
-            _ALERT_LOGGER.info("Aucune fiche Google ou LinkedIn détectée pour le run %s", self._run.id)
+            _ALERT_LOGGER.info("Aucune fiche Google détectée pour le run %s", self._run.id)
             alerts_by_siret = {}
 
         email_enabled = self._email_service.is_enabled()
@@ -134,11 +134,20 @@ class AlertService:
         admin_recipients = get_admin_emails(self._session)
         admin_summary_recipients = admin_recipients if self._admin_notifications_enabled else []
 
+        # For client dispatch, exclude statuses that should not appear in emails.
+        # Only "found" (Google section) and "not_found" (no-Google section) are relevant.
+        _excluded = {"type_mismatch", "mismatch", "pending", "insufficient"}
+        email_eligible_establishments = [
+            item for item in establishments
+            if (item.google_check_status or "").lower() not in _excluded
+        ]
+
         if self._client_notifications_enabled:
             plan, client_skip_reason = self._prepare_client_dispatch(
                 filtered_establishments,
                 alerts_by_siret,
                 admin_recipients,
+                all_establishments=email_eligible_establishments,
                 email_enabled=email_enabled,
                 email_configured=email_configured,
                 has_previous_success=has_previous_success,
@@ -290,6 +299,7 @@ class AlertService:
         alerts_by_siret: Mapping[str, models.Alert],
         admin_recipients: Sequence[str],
         *,
+        all_establishments: Sequence[models.Establishment] | None = None,
         email_enabled: bool,
         email_configured: bool,
         has_previous_success: bool,
@@ -322,16 +332,29 @@ class AlertService:
             return None, "no_active_recipients"
 
         assignments: dict[object, list[models.Establishment]] = {}
+        all_assignments: dict[object, list[models.Establishment]] = {}
         filters_configured = False
         if establishments:
             assignments, filters_configured = assign_establishments_to_clients(clients, establishments)
-            if not assignments:
-                if filters_configured and not target_client_ids:
+        if all_establishments:
+            all_assignments, _ = assign_establishments_to_clients(clients, all_establishments)
+
+        # Vérifier s'il y a au moins une correspondance pour un client (Google ou non)
+        has_any_assignments = bool(assignments) or bool(all_assignments)
+        if not has_any_assignments:
+            if (establishments or all_establishments) and not target_client_ids:
+                if filters_configured:
                     return None, "no_matching_filters"
-                if not filters_configured and not target_client_ids:
-                    return None, "no_assignments"
-        else:
+                return None, "no_assignments"
+        if not establishments and not all_establishments:
+            # Aucun établissement de la journée : on envoie quand même un email vide à tous
             assignments = {client.id: [] for client in clients}
+            all_assignments = {client.id: [] for client in clients}
+        elif not establishments:
+            assignments = {client.id: [] for client in clients}
+        if not all_assignments:
+            # Fallback : si all_establishments non fourni, on se base sur assignments
+            all_assignments = {k: list(v) for k, v in assignments.items()}
 
         previous_month_day_assignments: dict[object, list[models.Establishment]] = {}
         previous_month_day_date: date | None = None
@@ -362,29 +385,46 @@ class AlertService:
         payloads: list[ClientEmailPayload] = []
         unique_recipients = set(admin_recipients)
         outside_department_counts: dict[object, int] = {}
+        outside_no_google_department_counts: dict[object, int] = {}
+        google_sirets_global = {e.siret for e in establishments} if establishments else set()
+        no_google_items_global = [
+            e for e in (all_establishments or []) if e.siret not in google_sirets_global
+        ]
         if establishments:
             for client in clients:
                 outside_count = count_establishments_outside_client_departments(client, establishments)
                 if outside_count:
                     outside_department_counts[client.id] = outside_count
+        if no_google_items_global:
+            for client in clients:
+                outside_no_google = count_establishments_outside_client_departments(client, no_google_items_global)
+                if outside_no_google:
+                    outside_no_google_department_counts[client.id] = outside_no_google
         for client in clients:
             client_establishments = assignments.get(client.id, [])
+            all_client_establishments = all_assignments.get(client.id, [])
+            google_sirets = {e.siret for e in client_establishments}
+            no_google_client_establishments = [
+                e for e in all_client_establishments if e.siret not in google_sirets
+            ]
             client_alerts = [
                 alerts_by_siret[item.siret]
                 for item in client_establishments
                 if item.siret in alerts_by_siret
             ]
-            subject = self._build_client_subject(len(client_establishments))
+            total_client_count = len(client_establishments) + len(no_google_client_establishments)
+            subject = self._build_client_subject(len(client_establishments), total_client_count)
             filters = summarize_client_filters(client)
             previous_month_day_establishments: Sequence[models.Establishment] | None = None
             if previous_month_day_date is not None:
                 previous_month_day_establishments = previous_month_day_assignments.get(client.id, [])
-            
+
             # Ensure directors are loaded for email rendering
             _ensure_directors_loaded(self._session, client_establishments)
+            _ensure_directors_loaded(self._session, no_google_client_establishments)
             if previous_month_day_establishments:
                 _ensure_directors_loaded(self._session, previous_month_day_establishments)
-            
+
             text_body, html_body = render_client_email(
                 self._formatter,
                 client_establishments,
@@ -392,7 +432,9 @@ class AlertService:
                 filters=filters,
                 previous_month_day_establishments=previous_month_day_establishments,
                 previous_month_day_date=previous_month_day_date,
-                outside_departments_alert_count=outside_department_counts.get(client.id),
+                outside_google_count=outside_department_counts.get(client.id),
+                outside_no_google_count=outside_no_google_department_counts.get(client.id),
+                no_google_establishments=no_google_client_establishments,
             )
             payloads.append(
                 ClientEmailPayload(
@@ -439,10 +481,21 @@ class AlertService:
         )
 
     @staticmethod
-    def _build_client_subject(match_count: int) -> str:
-        fiche_plural = "fiches" if match_count > 1 else "fiche"
-        suffix = "s" if match_count > 1 else ""
-        return f"Business tracker · {match_count} {fiche_plural} Google détectée{suffix}"
+    def _build_client_subject(google_count: int, total_count: int) -> str:
+        if total_count == 0:
+            return "Business tracker · Rapport quotidien"
+        if google_count > 0 and total_count > google_count:
+            pl_total = "s" if total_count > 1 else ""
+            return (
+                f"Business tracker · {total_count} établissement{pl_total} détecté{pl_total} "
+                f"dont {google_count} avec fiche Google"
+            )
+        if google_count > 0:
+            fiche_plural = "fiches" if google_count > 1 else "fiche"
+            suffix = "s" if google_count > 1 else ""
+            return f"Business tracker · {google_count} {fiche_plural} Google détectée{suffix}"
+        pl = "s" if total_count > 1 else ""
+        return f"Business tracker · {total_count} établissement{pl} détecté{pl}"
 
     def _has_previous_successful_run(self) -> bool:
         stmt = (
