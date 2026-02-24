@@ -11,7 +11,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.db import models
 from app.db.base import Base
-from app.services.sync_scheduler import count_retryable_auto_runs_today
+from app.services.sync_scheduler import count_retryable_auto_runs_for_latest_treated
 from app.utils.dates import utcnow
 
 
@@ -37,9 +37,12 @@ def _session_scope():
         engine.dispose()
 
 
-def test_count_retryable_auto_runs_today_counts_failed_and_empty_success():
+def test_count_retryable_auto_runs_for_latest_treated_counts_failed_and_empty_success():
     now = utcnow()
-    yesterday = now - timedelta(days=1)
+    latest_treated = datetime(2026, 2, 24, 6, 0, 0)
+    previous_treated = datetime(2026, 2, 23, 6, 0, 0)
+    notes_for_current_cycle = f"dateDernierTraitementMaximum: {latest_treated.isoformat()}"
+    notes_for_previous_cycle = f"dateDernierTraitementMaximum: {previous_treated.isoformat()}"
 
     with _session_scope() as session:
         session.add_all(
@@ -50,6 +53,7 @@ def test_count_retryable_auto_runs_today_counts_failed_and_empty_success():
                     status="failed",
                     mode="full",
                     started_at=now,
+                    notes=notes_for_current_cycle,
                 ),
                 models.SyncRun(
                     scope_key="default",
@@ -59,6 +63,7 @@ def test_count_retryable_auto_runs_today_counts_failed_and_empty_success():
                     started_at=now,
                     created_records=0,
                     updated_records=0,
+                    notes=notes_for_current_cycle,
                 ),
                 models.SyncRun(
                     scope_key="default",
@@ -68,6 +73,7 @@ def test_count_retryable_auto_runs_today_counts_failed_and_empty_success():
                     started_at=now,
                     created_records=1,
                     updated_records=0,
+                    notes=notes_for_current_cycle,
                 ),
                 models.SyncRun(
                     scope_key="default",
@@ -75,19 +81,25 @@ def test_count_retryable_auto_runs_today_counts_failed_and_empty_success():
                     status="failed",
                     mode="full",
                     started_at=now,
+                    notes=notes_for_current_cycle,
                 ),
                 models.SyncRun(
                     scope_key="default",
                     run_type="sync_auto",
                     status="failed",
                     mode="full",
-                    started_at=yesterday,
+                    started_at=now - timedelta(days=1),
+                    notes=notes_for_previous_cycle,
                 ),
             ]
         )
         session.commit()
 
-        counted = count_retryable_auto_runs_today(session, scope_key="default", now=now)
+        counted = count_retryable_auto_runs_for_latest_treated(
+            session,
+            scope_key="default",
+            latest_treated=latest_treated,
+        )
 
     assert counted == 2
 
@@ -104,6 +116,7 @@ def test_scheduler_tick_skips_when_retry_limit_reached(monkeypatch):
                     status="failed",
                     mode="full",
                     started_at=utcnow(),
+                    notes="dateDernierTraitementMaximum: 2026-02-24T06:00:00",
                 )
             )
         session.commit()
@@ -126,6 +139,9 @@ def test_scheduler_tick_skips_when_retry_limit_reached(monkeypatch):
 
             def has_active_run(self, _session, _scope_key):
                 return False
+
+            def _fetch_latest_treated(self):
+                return datetime(2026, 2, 24, 6, 0, 0)
 
             def prepare_sync_run(self, *_args, **_kwargs):
                 self.prepare_called = True
@@ -183,6 +199,7 @@ def test_scheduler_tick_allows_run_when_retry_limit_not_reached(monkeypatch):
                     status="failed",
                     mode="full",
                     started_at=utcnow(),
+                    notes="dateDernierTraitementMaximum: 2026-02-24T06:00:00",
                 )
             )
         session.commit()
@@ -205,6 +222,9 @@ def test_scheduler_tick_allows_run_when_retry_limit_not_reached(monkeypatch):
 
             def has_active_run(self, _session, _scope_key):
                 return False
+
+            def _fetch_latest_treated(self):
+                return datetime(2026, 2, 24, 6, 0, 0)
 
             def prepare_sync_run(self, *_args, **_kwargs):
                 self.prepare_called = True
