@@ -51,11 +51,13 @@
   min-width: 200px;
 }
 
-.establishments-control--linkedin-status .linkedin-status-multiselect {
+.establishments-control--linkedin-status .linkedin-status-multiselect,
+.establishments-control--google-status .linkedin-status-multiselect {
   position: relative;
 }
 
-.establishments-control--linkedin-status summary {
+.establishments-control--linkedin-status summary,
+.establishments-control--google-status summary {
   list-style: none;
   cursor: pointer;
   padding: 0.45rem 0.75rem;
@@ -67,7 +69,8 @@
   text-overflow: ellipsis;
 }
 
-.establishments-control--linkedin-status summary::-webkit-details-marker {
+.establishments-control--linkedin-status summary::-webkit-details-marker,
+.establishments-control--google-status summary::-webkit-details-marker {
   display: none;
 }
 

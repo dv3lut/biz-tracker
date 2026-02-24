@@ -1,5 +1,6 @@
 import { EstablishmentsSection } from "../EstablishmentsSection";
 import type {
+  Client,
   Establishment,
   EstablishmentDateFilterType,
   EstablishmentIndividualFilter,
@@ -18,6 +19,8 @@ type Props = {
   error: Error | null;
   nafCategories: NafCategory[] | undefined;
   isLoadingNafCategories: boolean;
+  clients: Client[] | undefined;
+  isLoadingClients: boolean;
   regions: Region[] | undefined;
   isLoadingRegions: boolean;
   limit: number;
@@ -29,7 +32,8 @@ type Props = {
   dateFrom: string;
   dateTo: string;
   individualFilter: EstablishmentIndividualFilter;
-  googleCheckStatus: string;
+  googleCheckStatuses: string[];
+  selectedClientId: string;
   linkedinStatuses: LinkedInStatus[];
   websiteScrapeStatuses: WebsiteScrapeStatus[];
   hasNextPage: boolean;
@@ -45,7 +49,8 @@ type Props = {
   hasPendingFilters: boolean;
   onResetFilters: () => void;
   onIndividualFilterChange: (value: EstablishmentIndividualFilter) => void;
-  onGoogleCheckStatusChange: (value: string) => void;
+  onGoogleCheckStatusesChange: (value: string[]) => void;
+  onSelectedClientIdChange: (value: string) => void;
   onLinkedinStatusesChange: (value: LinkedInStatus[]) => void;
   onWebsiteScrapeStatusesChange: (value: WebsiteScrapeStatus[]) => void;
   onRefresh: () => void;
@@ -73,6 +78,8 @@ export const EstablishmentsView = ({
   error,
   nafCategories,
   isLoadingNafCategories,
+  clients,
+  isLoadingClients,
   regions,
   isLoadingRegions,
   limit,
@@ -84,7 +91,8 @@ export const EstablishmentsView = ({
   dateFrom,
   dateTo,
   individualFilter,
-  googleCheckStatus,
+  googleCheckStatuses,
+  selectedClientId,
   linkedinStatuses,
   websiteScrapeStatuses,
   hasNextPage,
@@ -100,7 +108,8 @@ export const EstablishmentsView = ({
   hasPendingFilters,
   onResetFilters,
   onIndividualFilterChange,
-  onGoogleCheckStatusChange,
+  onGoogleCheckStatusesChange,
+  onSelectedClientIdChange,
   onLinkedinStatusesChange,
   onWebsiteScrapeStatusesChange,
   onRefresh,
@@ -136,6 +145,8 @@ export const EstablishmentsView = ({
           error={error}
           nafCategories={nafCategories}
           isLoadingNafCategories={isLoadingNafCategories}
+          clients={clients}
+          isLoadingClients={isLoadingClients}
           regions={regions}
           isLoadingRegions={isLoadingRegions}
           limit={limit}
@@ -147,7 +158,8 @@ export const EstablishmentsView = ({
           dateFrom={dateFrom}
           dateTo={dateTo}
           individualFilter={individualFilter}
-          googleCheckStatus={googleCheckStatus}
+          googleCheckStatuses={googleCheckStatuses}
+          selectedClientId={selectedClientId}
           linkedinStatuses={linkedinStatuses}
           websiteScrapeStatuses={websiteScrapeStatuses}
           hasNextPage={hasNextPage}
@@ -163,7 +175,8 @@ export const EstablishmentsView = ({
           hasPendingFilters={hasPendingFilters}
           onResetFilters={onResetFilters}
           onIndividualFilterChange={onIndividualFilterChange}
-          onGoogleCheckStatusChange={onGoogleCheckStatusChange}
+          onGoogleCheckStatusesChange={onGoogleCheckStatusesChange}
+          onSelectedClientIdChange={onSelectedClientIdChange}
           onLinkedinStatusesChange={onLinkedinStatusesChange}
           onWebsiteScrapeStatusesChange={onWebsiteScrapeStatusesChange}
           onRefresh={onRefresh}

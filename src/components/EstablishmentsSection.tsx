@@ -1,6 +1,7 @@
 import { ChangeEvent, useEffect, useRef, useState } from "react";
 
 import {
+  Client,
   Establishment,
   EstablishmentDateFilterType,
   EstablishmentIndividualFilter,
@@ -25,6 +26,8 @@ interface EstablishmentsSectionProps {
   error: Error | null;
   nafCategories: NafCategory[] | undefined;
   isLoadingNafCategories: boolean;
+  clients: Client[] | undefined;
+  isLoadingClients: boolean;
   regions: Region[] | undefined;
   isLoadingRegions: boolean;
   limit: number;
@@ -36,7 +39,8 @@ interface EstablishmentsSectionProps {
   dateFrom: string;
   dateTo: string;
   individualFilter: EstablishmentIndividualFilter;
-  googleCheckStatus: string;
+  googleCheckStatuses: string[];
+  selectedClientId: string;
   linkedinStatuses: LinkedInStatus[];
   websiteScrapeStatuses: WebsiteScrapeStatus[];
   hasNextPage: boolean;
@@ -52,7 +56,8 @@ interface EstablishmentsSectionProps {
   hasPendingFilters: boolean;
   onResetFilters: () => void;
   onIndividualFilterChange: (value: EstablishmentIndividualFilter) => void;
-  onGoogleCheckStatusChange: (value: string) => void;
+  onGoogleCheckStatusesChange: (value: string[]) => void;
+  onSelectedClientIdChange: (value: string) => void;
   onLinkedinStatusesChange: (value: LinkedInStatus[]) => void;
   onWebsiteScrapeStatusesChange: (value: WebsiteScrapeStatus[]) => void;
   onRefresh: () => void;
@@ -80,6 +85,8 @@ export const EstablishmentsSection = ({
   error,
   nafCategories,
   isLoadingNafCategories,
+  clients,
+  isLoadingClients,
   regions,
   isLoadingRegions,
   limit,
@@ -91,7 +98,8 @@ export const EstablishmentsSection = ({
   dateFrom,
   dateTo,
   individualFilter,
-  googleCheckStatus,
+  googleCheckStatuses,
+  selectedClientId,
   linkedinStatuses,
   websiteScrapeStatuses,
   hasNextPage,
@@ -107,7 +115,8 @@ export const EstablishmentsSection = ({
   hasPendingFilters,
   onResetFilters,
   onIndividualFilterChange,
-  onGoogleCheckStatusChange,
+  onGoogleCheckStatusesChange,
+  onSelectedClientIdChange,
   onLinkedinStatusesChange,
   onWebsiteScrapeStatusesChange,
   onRefresh,
@@ -186,8 +195,20 @@ export const EstablishmentsSection = ({
     onIndividualFilterChange(event.target.value as EstablishmentIndividualFilter);
   };
 
-  const handleGoogleCheckStatusChange = (event: ChangeEvent<HTMLSelectElement>) => {
-    onGoogleCheckStatusChange(event.target.value);
+  const handleGoogleCheckStatusToggle = (status: string, checked: boolean) => {
+    if (checked) {
+      onGoogleCheckStatusesChange(
+        googleCheckStatuses.includes(status)
+          ? googleCheckStatuses
+          : [...googleCheckStatuses, status],
+      );
+      return;
+    }
+    onGoogleCheckStatusesChange(googleCheckStatuses.filter((value) => value !== status));
+  };
+
+  const handleClientFilterChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    onSelectedClientIdChange(event.target.value);
   };
 
   const handleLinkedinStatusToggle = (status: LinkedInStatus, checked: boolean) => {
@@ -230,6 +251,24 @@ export const EstablishmentsSection = ({
       return websiteScrapeStatuses[0];
     }
     return `${websiteScrapeStatuses.length} sélectionnés`;
+  };
+
+  const googleStatusLabel = () => {
+    if (!googleCheckStatuses.length) {
+      return "Tous";
+    }
+    if (googleCheckStatuses.length === 1) {
+      return googleCheckStatuses[0];
+    }
+    return `${googleCheckStatuses.length} sélectionnés`;
+  };
+
+  const selectedClientLabel = () => {
+    if (!selectedClientId) {
+      return "Aucun";
+    }
+    const client = (clients ?? []).find((item) => item.id === selectedClientId);
+    return client?.name ?? "Client inconnu";
   };
 
   const computeWebsiteScrapeStatus = (establishment: Establishment): WebsiteScrapeStatus => {
@@ -359,6 +398,23 @@ export const EstablishmentsSection = ({
           </div>
 
           <div className="establishments-control establishments-control--naf">
+            <label className="muted small">
+              Filtre client
+              <select value={selectedClientId} onChange={handleClientFilterChange} disabled={isLoadingClients}>
+                <option value="">Aucun (manuel)</option>
+                {(clients ?? []).map((client) => (
+                  <option key={client.id} value={client.id}>
+                    {client.name}
+                  </option>
+                ))}
+              </select>
+              {selectedClientId ? (
+                <span className="small muted">Client actif : {selectedClientLabel()}</span>
+              ) : null}
+            </label>
+          </div>
+
+          <div className="establishments-control establishments-control--naf">
             <details
               ref={nafDetailsRef}
               className="naf-multiselect"
@@ -469,14 +525,31 @@ export const EstablishmentsSection = ({
           <div className="establishments-control establishments-control--google-status">
             <label className="muted small">
               Statut business (Google)
-              <select value={googleCheckStatus} onChange={handleGoogleCheckStatusChange}>
-                <option value="">Tous</option>
-                <option value="found">Trouvées (found)</option>
-                <option value="not_found">Sans résultat (not_found)</option>
-                <option value="insufficient">Identité insuffisante (insufficient)</option>
-                <option value="pending">En attente (pending)</option>
-                <option value="other">Autres statuts</option>
-              </select>
+              <details className="linkedin-status-multiselect">
+                <summary>{googleStatusLabel()}</summary>
+                <div className="linkedin-status-panel">
+                  {(["found", "not_found", "insufficient", "pending", "other"] as string[]).map((status) => (
+                    <label key={status} className="linkedin-status-option">
+                      <input
+                        type="checkbox"
+                        checked={googleCheckStatuses.includes(status)}
+                        onChange={(event) => handleGoogleCheckStatusToggle(status, event.target.checked)}
+                      />
+                      <span>
+                        {status === "found"
+                          ? "Trouvée"
+                          : status === "not_found"
+                            ? "Sans résultat"
+                            : status === "insufficient"
+                              ? "Identité insuffisante"
+                              : status === "pending"
+                                ? "En attente"
+                                : "Autres statuts"}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </details>
             </label>
           </div>
 

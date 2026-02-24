@@ -229,6 +229,7 @@ interface ListEstablishmentsParams {
   lastTreatmentFrom?: string;
   lastTreatmentTo?: string;
   googleCheckStatus?: string;
+  googleCheckStatuses?: string[];
   isIndividual?: boolean;
   hasLinkedin?: boolean;
   linkedinStatuses?: import("../types").LinkedInStatus[];
@@ -284,6 +285,13 @@ const buildEstablishmentsQuery = (params: ListEstablishmentsParams = {}): URLSea
   }
   if (params.googleCheckStatus) {
     query.set("google_check_status", params.googleCheckStatus);
+  }
+  if (params.googleCheckStatuses && params.googleCheckStatuses.length > 0) {
+    params.googleCheckStatuses
+      .filter((status) => Boolean(status && status.trim()))
+      .forEach((status) => {
+        query.append("google_check_statuses", status.trim());
+      });
   }
   if (typeof params.isIndividual === "boolean") {
     query.set("is_individual", String(params.isIndividual));

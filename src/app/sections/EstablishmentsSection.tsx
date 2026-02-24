@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 
-import { ApiError, establishmentsApi, googleApi, nafApi, regionsApi } from "../../api";
+import { ApiError, clientsApi, establishmentsApi, googleApi, nafApi, regionsApi } from "../../api";
 import type {
+  Client,
   Establishment,
   EstablishmentDateFilterType,
   EstablishmentIndividualFilter,
@@ -39,7 +40,8 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
   const [draftDateFrom, setDraftDateFrom] = useState("");
   const [draftDateTo, setDraftDateTo] = useState("");
   const [draftIndividualFilter, setDraftIndividualFilter] = useState<EstablishmentIndividualFilter>("all");
-  const [draftGoogleCheckStatus, setDraftGoogleCheckStatus] = useState("");
+  const [draftGoogleCheckStatuses, setDraftGoogleCheckStatuses] = useState<string[]>([]);
+  const [draftSelectedClientId, setDraftSelectedClientId] = useState("");
   const [draftLinkedinStatuses, setDraftLinkedinStatuses] = useState<LinkedInStatus[]>([]);
   const [draftWebsiteScrapeStatuses, setDraftWebsiteScrapeStatuses] = useState<WebsiteScrapeStatus[]>([]);
 
@@ -50,7 +52,8 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [individualFilter, setIndividualFilter] = useState<EstablishmentIndividualFilter>("all");
-  const [googleCheckStatus, setGoogleCheckStatus] = useState("");
+  const [googleCheckStatuses, setGoogleCheckStatuses] = useState<string[]>([]);
+  const [selectedClientId, setSelectedClientId] = useState("");
   const [linkedinStatuses, setLinkedinStatuses] = useState<LinkedInStatus[]>([]);
   const [websiteScrapeStatuses, setWebsiteScrapeStatuses] = useState<WebsiteScrapeStatus[]>([]);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
@@ -72,6 +75,12 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     staleTime: 5 * 60 * 1000,
   });
 
+  const clientsQuery = useQuery<Client[]>({
+    queryKey: ["clients"],
+    queryFn: () => clientsApi.list(),
+    staleTime: 5 * 60 * 1000,
+  });
+
   const establishmentsQuery = useQuery<{ total: number; items: Establishment[] }>({
     queryKey: [
       "establishments",
@@ -84,7 +93,8 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
       dateFrom,
       dateTo,
       individualFilter,
-      googleCheckStatus,
+      googleCheckStatuses,
+      selectedClientId,
       linkedinStatuses,
       websiteScrapeStatuses,
     ],
@@ -102,7 +112,7 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
         lastTreatmentFrom:
           dateFilterType === "sirene_last_treatment" && dateFrom ? dateFrom : undefined,
         lastTreatmentTo: dateFilterType === "sirene_last_treatment" && dateTo ? dateTo : undefined,
-        googleCheckStatus: googleCheckStatus ? googleCheckStatus : undefined,
+        googleCheckStatuses: googleCheckStatuses.length > 0 ? googleCheckStatuses : undefined,
         isIndividual:
           individualFilter === "all" ? undefined : individualFilter === "individual",
         linkedinStatuses: linkedinStatuses.length > 0 ? linkedinStatuses : undefined,
@@ -155,6 +165,13 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     }
     showError(regionsQuery.error);
   }, [regionsQuery.error, showError]);
+
+  useEffect(() => {
+    if (!clientsQuery.error) {
+      return;
+    }
+    showError(clientsQuery.error);
+  }, [clientsQuery.error, showError]);
 
 
   const invalidateEstablishments = useCallback(() => {
@@ -270,9 +287,48 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     setDraftIndividualFilter(value);
   }, []);
 
-  const handleGoogleCheckStatusChange = useCallback((value: string) => {
-    setDraftGoogleCheckStatus(value);
+  const handleGoogleCheckStatusesChange = useCallback((value: string[]) => {
+    setDraftGoogleCheckStatuses(value);
   }, []);
+
+  const handleSelectedClientIdChange = useCallback(
+    (value: string) => {
+      setDraftSelectedClientId(value);
+
+      if (!value) {
+        setDraftNafCodes([]);
+        setDraftDepartmentCodes([]);
+        return;
+      }
+
+      const client = (clientsQuery.data ?? []).find((item) => item.id === value);
+      if (!client) {
+        return;
+      }
+
+      const nextNafCodes = Array.from(
+        new Set(
+          client.subscriptions
+            .map((subscription) => subscription.subcategory.nafCode)
+            .map((code) => (code || "").trim())
+            .filter((code) => Boolean(code)),
+        ),
+      );
+
+      const nextDepartmentCodes = Array.from(
+        new Set(
+          client.departments
+            .map((department) => department.code)
+            .map((code) => (code || "").trim())
+            .filter((code) => Boolean(code)),
+        ),
+      );
+
+      setDraftNafCodes(nextNafCodes);
+      setDraftDepartmentCodes(nextDepartmentCodes);
+    },
+    [clientsQuery.data],
+  );
 
   const handleLinkedinStatusesChange = useCallback((value: LinkedInStatus[]) => {
     setDraftLinkedinStatuses(value);
@@ -290,7 +346,8 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     setDateFrom(draftDateFrom);
     setDateTo(draftDateTo);
     setIndividualFilter(draftIndividualFilter);
-    setGoogleCheckStatus(draftGoogleCheckStatus);
+    setGoogleCheckStatuses(draftGoogleCheckStatuses);
+    setSelectedClientId(draftSelectedClientId);
     setLinkedinStatuses(draftLinkedinStatuses);
     setWebsiteScrapeStatuses(draftWebsiteScrapeStatuses);
     setPage(0);
@@ -298,10 +355,11 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     draftDateFilterType,
     draftDateFrom,
     draftDateTo,
-    draftGoogleCheckStatus,
+    draftGoogleCheckStatuses,
     draftIndividualFilter,
     draftNafCodes,
     draftQuery,
+    draftSelectedClientId,
     draftDepartmentCodes,
     draftLinkedinStatuses,
     draftWebsiteScrapeStatuses,
@@ -315,7 +373,8 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     setDraftDateFrom("");
     setDraftDateTo("");
     setDraftIndividualFilter("all");
-    setDraftGoogleCheckStatus("");
+    setDraftGoogleCheckStatuses([]);
+    setDraftSelectedClientId("");
     setDraftLinkedinStatuses([]);
     setDraftWebsiteScrapeStatuses([]);
 
@@ -326,7 +385,8 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     setDateFrom("");
     setDateTo("");
     setIndividualFilter("all");
-    setGoogleCheckStatus("");
+    setGoogleCheckStatuses([]);
+    setSelectedClientId("");
     setLinkedinStatuses([]);
     setWebsiteScrapeStatuses([]);
     setPage(0);
@@ -348,7 +408,10 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     if (draftIndividualFilter !== individualFilter) {
       return true;
     }
-    if (draftGoogleCheckStatus !== googleCheckStatus) {
+    if (draftSelectedClientId !== selectedClientId) {
+      return true;
+    }
+    if (draftGoogleCheckStatuses.length !== googleCheckStatuses.length) {
       return true;
     }
     if (draftLinkedinStatuses.length !== linkedinStatuses.length) {
@@ -373,6 +436,11 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     if (departmentA !== departmentB) {
       return true;
     }
+    const googleStatusA = [...draftGoogleCheckStatuses].sort().join(",");
+    const googleStatusB = [...googleCheckStatuses].sort().join(",");
+    if (googleStatusA !== googleStatusB) {
+      return true;
+    }
     const linkedinA = [...draftLinkedinStatuses].sort().join(",");
     const linkedinB = [...linkedinStatuses].sort().join(",");
     if (linkedinA !== linkedinB) {
@@ -388,16 +456,18 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
     draftDateFilterType,
     draftDateFrom,
     draftDateTo,
-    draftGoogleCheckStatus,
+    draftGoogleCheckStatuses,
     draftIndividualFilter,
     draftNafCodes,
     draftQuery,
-    googleCheckStatus,
+    draftSelectedClientId,
+    googleCheckStatuses,
     individualFilter,
     nafCodes,
     query,
     draftDepartmentCodes,
     departmentCodes,
+    selectedClientId,
     draftLinkedinStatuses,
     linkedinStatuses,
     draftWebsiteScrapeStatuses,
@@ -424,6 +494,8 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
       error={establishmentsError}
       nafCategories={nafCategoriesQuery.data}
       isLoadingNafCategories={nafCategoriesQuery.isLoading}
+      clients={clientsQuery.data}
+      isLoadingClients={clientsQuery.isLoading}
       regions={regionsQuery.data}
       isLoadingRegions={regionsQuery.isLoading}
       limit={limit}
@@ -435,7 +507,8 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
       dateFrom={draftDateFrom}
       dateTo={draftDateTo}
       individualFilter={draftIndividualFilter}
-      googleCheckStatus={draftGoogleCheckStatus}
+      googleCheckStatuses={draftGoogleCheckStatuses}
+      selectedClientId={draftSelectedClientId}
       linkedinStatuses={draftLinkedinStatuses}
       websiteScrapeStatuses={draftWebsiteScrapeStatuses}
       hasNextPage={hasNextPage}
@@ -451,7 +524,8 @@ export const EstablishmentsSection = ({ onUnauthorized, onOpenEstablishmentDetai
       hasPendingFilters={hasPendingFilters}
       onResetFilters={handleResetFilters}
       onIndividualFilterChange={handleIndividualFilterChange}
-      onGoogleCheckStatusChange={handleGoogleCheckStatusChange}
+      onGoogleCheckStatusesChange={handleGoogleCheckStatusesChange}
+      onSelectedClientIdChange={handleSelectedClientIdChange}
       onLinkedinStatusesChange={handleLinkedinStatusesChange}
       onWebsiteScrapeStatusesChange={handleWebsiteScrapeStatusesChange}
       onRefresh={() => establishmentsQuery.refetch()}
