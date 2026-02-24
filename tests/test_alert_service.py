@@ -192,7 +192,7 @@ class AlertServiceFilteringTests(unittest.TestCase):
         deps.dispatch_mock.assert_called_once()
         payloads = deps.dispatch_mock.call_args[0][1]
         self.assertEqual(len(payloads), 1)
-        self.assertEqual(payloads[0].subject, "Business tracker · 0 fiche Google détectée")
+        self.assertEqual(payloads[0].subject, "Business tracker · Rapport quotidien")
 
     def test_targeted_clients_receive_zero_digest(self) -> None:
         client_a = SimpleNamespace(

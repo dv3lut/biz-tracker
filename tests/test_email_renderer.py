@@ -134,7 +134,6 @@ class EmailRendererTests(unittest.TestCase):
         self.assertIn("Lien Google indisponible", html_body)
         self.assertNotIn("Statut fiche Google", text_body)
         self.assertNotIn("Statut fiche Google", html_body)
-        self.assertNotIn("<h3", html_body)
         self.assertNotIn("5610A", text_body)
         self.assertNotIn("Statuts Google surveillés", html_body)
 
@@ -218,9 +217,11 @@ class EmailRendererTests(unittest.TestCase):
     def test_client_email_zero_matches_prompts_future_notification(self) -> None:
         text_body, html_body = render_client_email(self.formatter, [], client=self._make_client())
 
-        self.assertIn("0 nouvel établissement détecté", text_body)
+        self.assertIn("Aucun nouvel établissement", text_body)
         self.assertIn("Nous vous notifierons", text_body)
-        self.assertIn("0 nouvel établissement détecté", html_body)
+        self.assertIn("Aucun nouvel établissement", html_body)
+        self.assertNotIn("0 nouvel établissement détecté", text_body)
+        self.assertNotIn("0 nouvel établissement détecté", html_body)
 
     def test_client_email_mentions_alerts_outside_departments(self) -> None:
         establishment = self._make_establishment(
@@ -352,6 +353,137 @@ class EmailRendererTests(unittest.TestCase):
         self.assertIn("Catégorie : Restauration, Traiteur", text_body)
         self.assertIn("Catégorie :</span> Restauration, Traiteur", html_body)
 
+    def test_client_email_shows_directors_info(self) -> None:
+        """Les dirigeants personnes physiques doivent apparaître dans la carte."""
+        establishment = self._make_establishment(
+            name="Bistrot des Dirigeants",
+            status="recent_creation",
+            google_url="https://maps.google.com/?cid=100",
+        )
+        establishment.directors = [
+            SimpleNamespace(
+                is_physical_person=True,
+                first_names="Jean",
+                last_name="Martin",
+                quality="Gérant",
+                birth_month=3,
+                birth_year=1978,
+                linkedin_profile_url=None,
+                linkedin_profile_data=None,
+            ),
+            SimpleNamespace(
+                is_physical_person=False,
+                first_names=None,
+                last_name=None,
+                quality="SAS",
+                birth_month=None,
+                birth_year=None,
+                linkedin_profile_url=None,
+                linkedin_profile_data=None,
+            ),
+        ]
+
+        text_body, html_body = render_client_email(
+            self.formatter,
+            [establishment],
+            client=self._make_client(),
+        )
+
+        self.assertIn("Jean Martin", text_body)
+        self.assertIn("(Gérant)", text_body)
+        self.assertIn("né(e) en mars 1978", text_body)
+        self.assertIn("Jean Martin", html_body)
+        self.assertIn("Dirigeant(s)", html_body)
+        # Le dirigeant personne morale ne doit pas apparaître
+        self.assertNotIn("SAS", text_body)
+
+    def test_client_email_shows_sole_proprietorship_badge(self) -> None:
+        """Un badge 'Entreprise individuelle' doit s'afficher si applicable."""
+        establishment = self._make_establishment(
+            name="Auto-entrepreneur Express",
+            status="recent_creation",
+            google_url="https://maps.google.com/?cid=101",
+        )
+        establishment.is_sole_proprietorship = True
+
+        text_body, html_body = render_client_email(
+            self.formatter,
+            [establishment],
+            client=self._make_client(),
+        )
+
+        self.assertIn("Entreprise individuelle", text_body)
+        self.assertIn("Entreprise individuelle", html_body)
+
+    def test_client_email_shows_no_google_section(self) -> None:
+        """Les établissements sans fiche Google doivent apparaître dans une section dédiée violet."""
+        google_est = self._make_establishment(
+            name="Avec Google",
+            status="recent_creation",
+            google_url="https://maps.google.com/?cid=200",
+        )
+        no_google_est = self._make_establishment(
+            name="Sans Google",
+            status="recent_creation",
+            google_url=None,
+        )
+
+        text_body, html_body = render_client_email(
+            self.formatter,
+            [google_est],
+            client=self._make_client(),
+            no_google_establishments=[no_google_est],
+        )
+
+        # Doit afficher les deux établissements
+        self.assertIn("Avec Google", text_body)
+        self.assertIn("Sans Google", text_body)
+        # Section sans Google avec bon libellé
+        self.assertIn("Modification administrative récente", text_body)
+        # Le statut violet doit apparaître dans le HTML
+        self.assertIn("8b5cf6", html_body)
+        # Total dans l'intro
+        self.assertIn("2", text_body)
+
+    def test_client_email_no_google_only_shows_total(self) -> None:
+        """Quand il n'y a que des établissements sans Google, le total doit être mis en avant."""
+        no_google_est = self._make_establishment(
+            name="Administratif Seulement",
+            status="recent_creation",
+            google_url=None,
+        )
+
+        text_body, html_body = render_client_email(
+            self.formatter,
+            [],
+            client=self._make_client(),
+            no_google_establishments=[no_google_est],
+        )
+
+        self.assertIn("Administratif Seulement", text_body)
+        self.assertIn("Modification administrative récente", text_body)
+        self.assertIn("identifié", text_body)
+        # Pas de message "Aucun établissement"
+        self.assertNotIn("Aucun nouvel établissement n'a été détecté", text_body)
+
+    def test_client_email_intro_has_bold_total(self) -> None:
+        """Le total doit apparaître en gras dans le HTML."""
+        establishment = self._make_establishment(
+            name="Bistrot Test",
+            status="recent_creation",
+            google_url="https://maps.google.com/?cid=300",
+        )
+
+        _, html_body = render_client_email(
+            self.formatter,
+            [establishment],
+            client=self._make_client(),
+        )
+
+        # Le total doit être dans un tag <strong>
+        self.assertIn("<strong", html_body)
+        self.assertIn("identifi", html_body)
+
     def test_client_email_includes_linkedin_only_establishment(self) -> None:
         """Test that establishments with LinkedIn but no Google are included in client email."""
         # Create establishment with no Google
@@ -385,8 +517,8 @@ class EmailRendererTests(unittest.TestCase):
         self.assertIn("en cours de disponibilité", text_body)
         # Should show LinkedIn link
         self.assertIn("linkedin.com/in/john-smith", text_body)
-        # Should have adapted title for LinkedIn-only
-        self.assertIn("profils LinkedIn", text_body)
+        # Nouvelle intro avec emoji et total
+        self.assertIn("identifié", text_body)
         # HTML should also contain LinkedIn info
         self.assertIn("linkedin.com/in/john-smith", html_body)
 

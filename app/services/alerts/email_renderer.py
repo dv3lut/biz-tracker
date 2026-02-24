@@ -113,7 +113,12 @@ STATUS_COLORS: Final[dict[str, dict[str, str]]] = {
     "not_recent_creation": {"bg": "#dbeafe", "text": "#1e40af", "border": "#93c5fd"},
     "unknown": {"bg": "#f3f4f6", "text": "#6b7280", "border": "#d1d5db"},
 }
-
+# Couleur pour les établissements sans fiche Google (violet/indigo — distinct des autres)
+NO_GOOGLE_CARD_COLOR: Final[dict[str, str]] = {
+    "bg": "#f5f3ff",
+    "border": "#8b5cf6",
+    "text": "#5b21b6",
+}
 MONTH_LABELS_FR: Final[dict[int, str]] = {
     1: "janvier",
     2: "février",
@@ -201,8 +206,12 @@ def render_client_email(
     previous_month_day_establishments: Sequence[models.Establishment] | None = None,
     previous_month_day_date: date | None = None,
     outside_departments_alert_count: int | None = None,
+    no_google_establishments: Sequence[models.Establishment] | None = None,
 ) -> tuple[str, str]:
     match_count = len(establishments)
+    no_google_count = len(no_google_establishments or [])
+    total_count = match_count + no_google_count
+
     selected_statuses = list(filters.listing_statuses) if filters and filters.listing_statuses else list(STATUS_SECTION_ORDER)
     section_statuses = [status for status in STATUS_SECTION_ORDER if status in selected_statuses]
     if not section_statuses:
@@ -225,7 +234,7 @@ def render_client_email(
             f"border-radius:12px;box-shadow:{theme['card_shadow']};padding:28px;\">"
         ),
         "<div style=\"display:flex;align-items:center;gap:10px;margin-bottom:18px;\">",
-        f"<h2 style=\"margin:0;color:{theme['text']};font-size:20px;font-weight:800;letter-spacing:-0.01em;\">Business tracker</h2>",
+        f"<h2 style=\"margin:0;color:{theme['brand']};font-size:22px;font-weight:800;letter-spacing:-0.01em;\">📊 Business tracker</h2>",
         "</div>",
         f"<p style=\"margin:0 0 14px;font-size:14px;color:{theme['text']};\">Bonjour,</p>",
     ]
@@ -233,11 +242,13 @@ def render_client_email(
     # Note: on n'affiche pas les filtres surveillés (NAF/statuts) dans le mail client.
 
     ordered_establishments = _order_establishments_by_status(establishments, ordered_statuses=section_statuses)
+    ordered_no_google = list(no_google_establishments or [])
 
     def _build_item_blocks(
         establishment: models.Establishment,
         *,
         context_label: str | None = None,
+        is_no_google_card: bool = False,
     ) -> tuple[list[str], str]:
         name = establishment.name or "(nom indisponible)"
         full_address = formatter.format_full_address(establishment)
@@ -258,34 +269,64 @@ def render_client_email(
             if label:
                 category_name = f"{label} ({naf_code_label})" if naf_code_label else label
         normalized_status = normalize_listing_age_status(establishment.google_listing_age_status)
-        border_color = STATUS_COLORS.get(normalized_status, STATUS_COLORS["unknown"])["border"]
-        item_bg = theme["item_bg"]
-        if context_label:
+        if is_no_google_card:
+            item_bg = NO_GOOGLE_CARD_COLOR["bg"]
+            border_color = NO_GOOGLE_CARD_COLOR["border"]
+        elif context_label:
             item_bg = "#eef2f7"
             border_color = "#94a3b8"
+        else:
+            border_color = STATUS_COLORS.get(normalized_status, STATUS_COLORS["unknown"])["border"]
+            item_bg = theme["item_bg"]
         google_url = establishment.google_place_url
 
+        # --- Dirigeants (personnes physiques uniquement) ---
+        directors = getattr(establishment, "directors", None) or []
+        physical_directors = [d for d in directors if getattr(d, "is_physical_person", False)]
+
+        # ── Lignes texte ──────────────────────────────────
         prefix = f"[{context_label}] " if context_label else ""
         item_lines = [f"- {prefix}{name}"]
         if full_address:
             item_lines.append(f"  {full_address}")
         if category_name:
             item_lines.append(f"  Catégorie : {category_name}")
+        if getattr(establishment, "is_sole_proprietorship", False):
+            item_lines.append("  Type : Entreprise individuelle")
+        for director in physical_directors:
+            first_names = (getattr(director, "first_names", None) or "").strip()
+            last_name = (getattr(director, "last_name", None) or "").strip()
+            quality = (getattr(director, "quality", None) or "Dirigeant").strip()
+            name_parts = [p for p in [first_names, last_name] if p]
+            director_name = " ".join(name_parts) if name_parts else quality
+            birth_month = getattr(director, "birth_month", None)
+            birth_year = getattr(director, "birth_year", None)
+            birth_info = ""
+            if birth_month and birth_year:
+                month_label = MONTH_LABELS_FR.get(birth_month, str(birth_month))
+                birth_info = f" — né(e) en {month_label} {birth_year}"
+            elif birth_year:
+                birth_info = f" — né(e) en {birth_year}"
+            item_lines.append(f"  👤 {director_name} ({quality}){birth_info}")
         if establishment.date_creation:
             item_lines.append(
                 f"  Création administrative : {_format_month_year_fr(establishment.date_creation)}"
             )
         else:
             item_lines.append("  Création administrative : N/A")
-        if google_url:
-            item_lines.append(f"  Fiche Google : {google_url}")
+        if is_no_google_card:
+            item_lines.append("  Statut : Modification administrative récente")
         else:
-            item_lines.append("  Fiche Google : en cours de disponibilité")
-        if multi_status_selection:
-            status_label, _ = formatter.describe_listing_age(establishment)
-            client_label = CLIENT_STATUS_LABELS.get(normalized_status, status_label)
-            item_lines.append(f"  Statut fiche Google : {client_label}")
+            if google_url:
+                item_lines.append(f"  Fiche Google : {google_url}")
+            else:
+                item_lines.append("  Fiche Google : en cours de disponibilité")
+            if multi_status_selection:
+                status_label, _ = formatter.describe_listing_age(establishment)
+                client_label = CLIENT_STATUS_LABELS.get(normalized_status, status_label)
+                item_lines.append(f"  Statut fiche Google : {client_label}")
 
+        # ── HTML ──────────────────────────────────────────
         item_html_parts: list[str] = []
         if context_label:
             item_html_parts.append(
@@ -297,40 +338,86 @@ def render_client_email(
         )
         if full_address:
             item_html_parts.append(
-                f"<div style=\"margin-top:4px;color:{theme['text_muted']};font-size:13px;\">{escape(full_address)}</div>"
+                f"<div style=\"margin-top:4px;color:{theme['text_muted']};font-size:13px;\">📍 {escape(full_address)}</div>"
             )
         if category_name:
             item_html_parts.append(
-                f"<div style=\"margin-top:8px;font-size:13px;\"><span style=\"color:{theme['text_muted']};\">Catégorie :</span> {escape(category_name)}</div>"
+                f"<div style=\"margin-top:8px;font-size:13px;\"><span style=\"color:{theme['text_muted']};\">🏢 Catégorie :</span> {escape(category_name)}</div>"
             )
+        if getattr(establishment, "is_sole_proprietorship", False):
+            item_html_parts.append(
+                f"<div style=\"margin-top:6px;\">"
+                f"<span style=\"display:inline-block;padding:2px 8px;border-radius:5px;"
+                f"background:#ede9fe;color:#5b21b6;border:1px solid #a78bfa;"
+                f"font-size:11px;font-weight:600;\">✦ Entreprise individuelle</span>"
+                f"</div>"
+            )
+        if physical_directors:
+            item_html_parts.append(
+                f"<div style=\"margin-top:10px;padding-top:8px;border-top:1px dashed {theme['border']};\">"
+                f"<div style=\"font-size:11px;text-transform:uppercase;letter-spacing:0.08em;"
+                f"color:{theme['text_muted']};margin-bottom:4px;\">👥 Dirigeant(s)</div>"
+            )
+            for director in physical_directors:
+                first_names = (getattr(director, "first_names", None) or "").strip()
+                last_name = (getattr(director, "last_name", None) or "").strip()
+                quality = (getattr(director, "quality", None) or "Dirigeant").strip()
+                name_parts = [p for p in [first_names, last_name] if p]
+                director_name = " ".join(name_parts) if name_parts else quality
+                birth_month = getattr(director, "birth_month", None)
+                birth_year = getattr(director, "birth_year", None)
+                birth_info = ""
+                if birth_month and birth_year:
+                    month_label = MONTH_LABELS_FR.get(birth_month, str(birth_month))
+                    birth_info = f" — né(e) en {month_label} {birth_year}"
+                elif birth_year:
+                    birth_info = f" — né(e) en {birth_year}"
+                quality_display = f" ({escape(quality)})" if quality and quality != director_name else ""
+                birth_display = escape(birth_info) if birth_info else ""
+                item_html_parts.append(
+                    f"<div style=\"font-size:12px;color:{theme['text_subtle']};margin-top:3px;\">"
+                    f"<strong>{escape(director_name)}</strong>"
+                    f"<span style=\"color:{theme['text_muted']};\">{quality_display}{birth_display}</span>"
+                    f"</div>"
+                )
+            item_html_parts.append("</div>")
         creation_label = (
             _format_month_year_fr(establishment.date_creation)
             if establishment.date_creation
             else "N/A"
         )
         item_html_parts.append(
-            f"<div style=\"margin-top:8px;font-size:13px;\"><span style=\"color:{theme['text_muted']};\">Création administrative :</span> {escape(creation_label)}</div>"
+            f"<div style=\"margin-top:8px;font-size:13px;\"><span style=\"color:{theme['text_muted']};\">📅 Création :</span> {escape(creation_label)}</div>"
         )
-        if google_url:
-            link = escape(google_url)
-            item_html_parts.append(
-                (
-                    f"<div style=\"margin-top:10px;\">"
-                    f"<a href=\"{link}\" style=\"display:inline-block;padding:6px 12px;"
-                    f"background:{theme['brand']};color:#ffffff;text-decoration:none;border-radius:6px;"
-                    f"font-weight:600;font-size:12px;\">Voir la fiche Google</a>"
-                    f"</div>"
-                )
+        if is_no_google_card:
+            badge_html = (
+                f'<span style="display:inline-block;padding:3px 10px;border-radius:10px;'
+                f'background:{NO_GOOGLE_CARD_COLOR["bg"]};color:{NO_GOOGLE_CARD_COLOR["text"]};'
+                f'border:1px solid {NO_GOOGLE_CARD_COLOR["border"]};'
+                f'font-size:12px;font-weight:500;">📋 Modification administrative récente</span>'
             )
+            item_html_parts.append(f"<div style=\"margin-top:10px;\">Statut : {badge_html}</div>")
         else:
-            item_html_parts.append(
-                f"<div style=\"margin-top:12px;color:{theme['link_muted']};font-style:italic;font-size:12px;\">Lien Google indisponible pour le moment</div>"
-            )
-        if multi_status_selection:
-            status_label, _ = formatter.describe_listing_age(establishment)
-            client_label = CLIENT_STATUS_LABELS.get(normalized_status, status_label)
-            badge = _get_status_badge_html(normalized_status, client_label)
-            item_html_parts.append(f"<div style=\"margin-top:10px;\">Statut : {badge}</div>")
+            if google_url:
+                link = escape(google_url)
+                item_html_parts.append(
+                    (
+                        f"<div style=\"margin-top:10px;\">"
+                        f"<a href=\"{link}\" style=\"display:inline-block;padding:6px 12px;"
+                        f"background:{theme['brand']};color:#ffffff;text-decoration:none;border-radius:6px;"
+                        f"font-weight:600;font-size:12px;\">🗺️ Voir la fiche Google</a>"
+                        f"</div>"
+                    )
+                )
+            else:
+                item_html_parts.append(
+                    f"<div style=\"margin-top:12px;color:{theme['link_muted']};font-style:italic;font-size:12px;\">Lien Google indisponible pour le moment</div>"
+                )
+            if multi_status_selection:
+                status_label, _ = formatter.describe_listing_age(establishment)
+                client_label = CLIENT_STATUS_LABELS.get(normalized_status, status_label)
+                badge = _get_status_badge_html(normalized_status, client_label)
+                item_html_parts.append(f"<div style=\"margin-top:10px;\">Statut : {badge}</div>")
 
         # Add LinkedIn buttons for directors with profiles
         linkedin_text_lines, linkedin_html = _build_linkedin_buttons_html(establishment, theme)
@@ -352,11 +439,16 @@ def render_client_email(
         *,
         show_empty_placeholder: bool,
         context_label: str | None = None,
+        is_no_google_card: bool = False,
     ) -> None:
         if items:
             html_parts.append("<ul style=\"list-style:none;padding:0;margin:0;\">")
             for establishment in items:
-                item_lines, item_html = _build_item_blocks(establishment, context_label=context_label)
+                item_lines, item_html = _build_item_blocks(
+                    establishment,
+                    context_label=context_label,
+                    is_no_google_card=is_no_google_card,
+                )
                 lines.extend(item_lines)
                 lines.append("")
                 html_parts.append(item_html)
@@ -364,45 +456,80 @@ def render_client_email(
         if items:
             lines.append("")
 
-    if match_count:
-        # Check if we have any establishments with Google found
-        has_google_establishments = any(
-            (est.google_check_status or "").lower() == "found"
-            for est in establishments
+    if total_count > 0:
+        # Résumé introductif avec chiffres en gras et emojis
+        etab_pl = "s" if total_count > 1 else ""
+        etab_word = f"établissement{etab_pl}"
+        verb = "ont" if total_count > 1 else "a"
+        intro_line = (
+            f"🎯 {total_count} nouvel{etab_pl} {etab_word} {verb} été identifié{etab_pl} "
+            f"dans votre périmètre aujourd'hui."
         )
-        # Check if we have any establishments with LinkedIn-only (no Google)
-        has_linkedin_only_establishments = any(
-            (est.google_check_status or "").lower() != "found"
-            and any(
-                getattr(d, "is_physical_person", False) and getattr(d, "linkedin_profile_url", None)
-                for d in (getattr(est, "directors", None) or [])
-            )
-            for est in establishments
-        )
-        
-        if has_google_establishments and has_linkedin_only_establishments:
-            title = "Nous avons identifié de nouvelles fiches Google My Business et profils LinkedIn :"
-        elif has_linkedin_only_establishments:
-            title = "Nous avons identifié de nouveaux profils LinkedIn :"
-        else:
-            title = "Nous avons identifié de nouvelles fiches Google My Business :"
-        
-        lines.append(title)
+        lines.append(intro_line)
+        if match_count > 0 and no_google_count > 0:
+            fiche_pl = "s" if match_count > 1 else ""
+            no_g_pl = "s" if no_google_count > 1 else ""
+            lines.append(f"  • 🗺️ {match_count} fiche{fiche_pl} Google My Business / LinkedIn")
+            lines.append(f"  • 📋 {no_google_count} établissement{no_g_pl} sans fiche Google")
         lines.append("")
-        html_parts.append(
-            f"<p style=\"margin:0 0 18px;color:{theme['text_subtle']};font-size:14px;\">{escape(title)}</p>"
+
+        # Bloc HTML d'intro
+        count_html = f"<strong style=\"color:{theme['brand']};font-size:20px;\">{total_count}</strong>"
+        intro_suffix = (
+            f" nouvel{etab_pl} {etab_word} {verb} été identifié{etab_pl} dans votre périmètre aujourd'hui."
         )
+        if match_count > 0 and no_google_count > 0:
+            fiche_pl = "s" if match_count > 1 else ""
+            no_g_pl = "s" if no_google_count > 1 else ""
+            detail_html = (
+                f"<ul style=\"margin:8px 0 0;padding-left:18px;font-size:13px;color:{theme['text_subtle']};\">"
+                f"<li>🗺️ <strong>{match_count}</strong> fiche{fiche_pl} Google My Business / LinkedIn</li>"
+                f"<li>📋 <strong>{no_google_count}</strong> établissement{no_g_pl} sans fiche Google</li>"
+                f"</ul>"
+            )
+        elif match_count > 0:
+            fiche_pl = "s" if match_count > 1 else ""
+            detail_html = (
+                f"<p style=\"margin:6px 0 0;font-size:13px;color:{theme['text_subtle']};\">"
+                f"🗺️ <strong>{match_count}</strong> fiche{fiche_pl} Google My Business identifiée{fiche_pl}</p>"
+            )
+        else:
+            no_g_pl = "s" if no_google_count > 1 else ""
+            detail_html = (
+                f"<p style=\"margin:6px 0 0;font-size:13px;color:{theme['text_subtle']};\">"
+                f"📋 <strong>{no_google_count}</strong> établissement{no_g_pl} sans fiche Google détecté{no_g_pl}</p>"
+            )
+        html_parts.append(
+            f"<div style=\"margin:0 0 20px;padding:16px;background:#f0f9ff;"
+            f"border-radius:10px;border-left:4px solid {theme['brand']};\">"
+            f"<p style=\"margin:0;font-size:15px;color:{theme['text']};\">"
+            f"🎯 {count_html}{escape(intro_suffix)}"
+            f"</p>"
+            f"{detail_html}"
+            f"</div>"
+        )
+        # En-tête de section Google/LinkedIn
+        if match_count > 0:
+            fiche_pl = "s" if match_count > 1 else ""
+            det_pl = "s" if match_count > 1 else ""
+            section_title = (
+                f"🗺️ {match_count} fiche{fiche_pl} Google My Business / LinkedIn "
+                f"identifiée{det_pl}"
+            )
+            lines.append(section_title)
+            lines.append("")
+            html_parts.append(
+                f"<h3 style=\"margin:0 0 12px;font-size:15px;color:{theme['text']};font-weight:700;\">"
+                f"{escape(section_title)}"
+                f"</h3>"
+            )
     else:
         lines.extend([
             "Aucun nouvel établissement n'a été détecté aujourd'hui dans votre périmètre.",
-            "Synthèse : 0 nouvel établissement détecté.",
             "",
         ])
         html_parts.append(
             f"<p style=\"margin:0 0 16px;color:{theme['text_subtle']};\">Aucun nouvel établissement n'a été détecté aujourd'hui dans votre périmètre.</p>"
-        )
-        html_parts.append(
-            f"<p style=\"margin:0 0 16px;color:{theme['text_muted']};\">Synthèse : 0 nouvel établissement détecté.</p>"
         )
 
     if outside_departments_alert_count and outside_departments_alert_count > 0:
@@ -419,13 +546,35 @@ def render_client_email(
             "</p>"
         )
 
-    if not match_count:
+    _append_establishments(ordered_establishments, show_empty_placeholder=False)
+
+    # Section pour les établissements sans fiche Google
+    if no_google_count > 0:
+        no_g_pl = "s" if no_google_count > 1 else ""
+        no_g_word = f"établissement{no_g_pl}"
+        no_google_section_title = (
+            f"📋 {no_google_count} nouvel{no_g_pl} {no_g_word} — Modification administrative récente"
+        )
+        lines.append("")
+        lines.append(no_google_section_title)
+        lines.append("")
+        html_parts.append(
+            f"<div style=\"margin-top:28px;margin-bottom:14px;padding-bottom:10px;"
+            f"border-bottom:2px solid {theme['border']};\">"
+            f"<h3 style=\"margin:0 0 4px;font-size:15px;color:{theme['text']};font-weight:700;\">"
+            f"📋 <strong>{no_google_count}</strong> nouvel{no_g_pl} {no_g_word}"
+            f"</h3>"
+            f"<p style=\"margin:0;font-size:12px;color:{theme['text_muted']};\">Fiche Google non identifiée à ce jour · "
+            f"Modification administrative récente</p>"
+            f"</div>"
+        )
+        _append_establishments(ordered_no_google, show_empty_placeholder=False, is_no_google_card=True)
+
+    if total_count == 0:
         lines.append("Nous vous notifierons dès qu'un nouvel établissement correspondra à ces critères.")
         lines.append("")
 
-    _append_establishments(ordered_establishments, show_empty_placeholder=False)
-
-    if not match_count:
+    if total_count == 0:
         html_parts.append(
             f"<p style=\"margin-top:24px;color:{theme['text_subtle']};\">Nous vous notifierons dès qu'un nouvel établissement correspondra à ces critères.</p>"
         )
