@@ -406,6 +406,13 @@ def _establishment_matches_listing_status(
     if has_linkedin_profile:
         return True
 
+    # Listing age status only describes a *found* Google listing.
+    # Non-found establishments (not_found, etc.) bypass this check
+    # so they can appear in the "no Google" section of client emails.
+    google_check = (getattr(establishment, "google_check_status", None) or "").lower()
+    if google_check and google_check != "found":
+        return True
+
     normalized = normalize_listing_age_status(getattr(establishment, "google_listing_age_status", None))
     if not allowed_statuses:
         return normalized in FILTERABLE_LISTING_STATUSES

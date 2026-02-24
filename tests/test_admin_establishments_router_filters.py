@@ -231,6 +231,30 @@ def test_list_establishments_applies_google_check_status_other_filter():
     assert "not in" in rendered.lower()
 
 
+def test_list_establishments_applies_multi_google_check_status_filter():
+    session = _FakeSession()
+
+    list_establishments(
+        limit=10,
+        offset=0,
+        search=None,
+        naf_code=None,
+        naf_codes=None,
+        department_codes=None,
+        region_codes=None,
+        added_from=None,
+        added_to=None,
+        google_check_status=None,
+        google_check_statuses=["found", "pending"],
+        is_individual=None,
+        session=session,  # type: ignore[arg-type]
+    )
+
+    rendered = "\n".join(str(item) for item in session.query_obj.filters)
+    assert "google_check_status" in rendered
+    assert " or " in rendered.lower()
+
+
 def test_list_establishments_applies_department_filter():
     session = _FakeSession()
 

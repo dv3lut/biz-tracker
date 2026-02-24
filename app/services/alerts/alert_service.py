@@ -119,13 +119,13 @@ class AlertService:
 
             alerts_by_siret: dict[str, models.Alert] = {alert.siret: alert for alert in alerts}
 
-            message_lines = ["Pages Google My Business / LinkedIn associées détectées:", ""]
+            message_lines = ["Pages Google My Business associées détectées:", ""]
             for establishment in filtered_establishments:
                 message_lines.extend(self._formatter.format_lines(establishment, include_google=True))
                 message_lines.append("")
             _ALERT_LOGGER.info("\n".join(message_lines).strip())
         else:
-            _ALERT_LOGGER.info("Aucune fiche Google ou LinkedIn détectée pour le run %s", self._run.id)
+            _ALERT_LOGGER.info("Aucune fiche Google détectée pour le run %s", self._run.id)
             alerts_by_siret = {}
 
         email_enabled = self._email_service.is_enabled()
@@ -134,12 +134,20 @@ class AlertService:
         admin_recipients = get_admin_emails(self._session)
         admin_summary_recipients = admin_recipients if self._admin_notifications_enabled else []
 
+        # For client dispatch, exclude statuses that should not appear in emails.
+        # Only "found" (Google section) and "not_found" (no-Google section) are relevant.
+        _excluded = {"type_mismatch", "mismatch", "pending", "insufficient"}
+        email_eligible_establishments = [
+            item for item in establishments
+            if (item.google_check_status or "").lower() not in _excluded
+        ]
+
         if self._client_notifications_enabled:
             plan, client_skip_reason = self._prepare_client_dispatch(
                 filtered_establishments,
                 alerts_by_siret,
                 admin_recipients,
-                all_establishments=establishments,
+                all_establishments=email_eligible_establishments,
                 email_enabled=email_enabled,
                 email_configured=email_configured,
                 has_previous_success=has_previous_success,
@@ -377,11 +385,21 @@ class AlertService:
         payloads: list[ClientEmailPayload] = []
         unique_recipients = set(admin_recipients)
         outside_department_counts: dict[object, int] = {}
+        outside_no_google_department_counts: dict[object, int] = {}
+        google_sirets_global = {e.siret for e in establishments} if establishments else set()
+        no_google_items_global = [
+            e for e in (all_establishments or []) if e.siret not in google_sirets_global
+        ]
         if establishments:
             for client in clients:
                 outside_count = count_establishments_outside_client_departments(client, establishments)
                 if outside_count:
                     outside_department_counts[client.id] = outside_count
+        if no_google_items_global:
+            for client in clients:
+                outside_no_google = count_establishments_outside_client_departments(client, no_google_items_global)
+                if outside_no_google:
+                    outside_no_google_department_counts[client.id] = outside_no_google
         for client in clients:
             client_establishments = assignments.get(client.id, [])
             all_client_establishments = all_assignments.get(client.id, [])
@@ -414,7 +432,8 @@ class AlertService:
                 filters=filters,
                 previous_month_day_establishments=previous_month_day_establishments,
                 previous_month_day_date=previous_month_day_date,
-                outside_departments_alert_count=outside_department_counts.get(client.id),
+                outside_google_count=outside_department_counts.get(client.id),
+                outside_no_google_count=outside_no_google_department_counts.get(client.id),
                 no_google_establishments=no_google_client_establishments,
             )
             payloads.append(

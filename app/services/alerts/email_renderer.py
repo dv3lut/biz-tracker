@@ -197,6 +197,149 @@ def get_client_listing_status_label(status: str | None) -> str:
     return CLIENT_STATUS_LABELS.get(normalized, CLIENT_STATUS_LABELS["unknown"])
 
 
+def _build_client_scope_summary(
+    client: models.Client,
+    theme: dict[str, str],
+) -> tuple[list[str], str]:
+    """Construit un résumé texte + HTML du périmètre surveillé (départements + catégories)."""
+    # France a 101 depts (96 métro + 5 DOM). Seuil conservateur pour détecter "tous sélectionnés".
+    _FRANCE_DEPT_THRESHOLD = 95
+    client_depts = getattr(client, "departments", []) or []
+    all_france = len(client_depts) == 0 or len(client_depts) >= _FRANCE_DEPT_THRESHOLD
+
+    # Groupement par région (si périmètre spécifique)
+    region_groups: dict[str, list[tuple[str, str]]] = {}
+    if not all_france:
+        for dept in client_depts:
+            region = getattr(dept, "region", None)
+            region_name = getattr(region, "name", "Autres") if region else "Autres"
+            region_groups.setdefault(region_name, []).append((dept.code, dept.name))
+        for key in region_groups:
+            region_groups[key].sort(key=lambda x: x[0].zfill(3))
+
+    # Catégories (via abonnements)
+    seen_cats: set[str] = set()
+    category_labels: list[str] = []
+    client_category_ids = {str(v) for v in getattr(client, "category_ids", []) or []}
+    for subscription in getattr(client, "subscriptions", []) or []:
+        subcategory = getattr(subscription, "subcategory", None)
+        if not subcategory or not getattr(subcategory, "is_active", True):
+            continue
+        for category in getattr(subcategory, "categories", []) or []:
+            cat_id = getattr(category, "id", None)
+            if client_category_ids and cat_id is not None and str(cat_id) not in client_category_ids:
+                continue
+            cat_name = getattr(category, "name", None)
+            if cat_name and cat_name not in seen_cats:
+                seen_cats.add(cat_name)
+                category_labels.append(cat_name)
+    category_labels.sort()
+
+    if all_france and not category_labels:
+        return [], ""
+
+    sorted_regions = sorted(region_groups.keys())
+
+    # --- Version texte ---
+    text_lines: list[str] = []
+    if all_france:
+        text_lines.append("🌍 Couverture : France entière")
+    else:
+        region_text_parts = []
+        for region_name in sorted_regions:
+            depts = region_groups[region_name]
+            dept_str = ", ".join(f"{code} {name}" for code, name in depts)
+            region_text_parts.append(f"{region_name} ({len(depts)}) : {dept_str}")
+        text_lines.append("📍 Périmètre : " + " | ".join(region_text_parts))
+    if category_labels:
+        text_lines.append(f"🏷️ Catégories : {' · '.join(category_labels)}")
+    text_lines.append("")
+
+    # --- Version HTML ---
+    html_rows: list[str] = []
+
+    # Ligne départements
+    if all_france:
+        html_rows.append(
+            f'<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">'
+            f'<span style="font-size:15px;line-height:1;">🌍</span>'
+            f'<span style="font-size:13px;color:{theme["text_subtle"]};font-weight:600;">'
+            f'France entière</span>'
+            f'<span style="font-size:11px;color:{theme["text_muted"]};">'
+            f'— tous les départements sont surveillés</span>'
+            f'</div>'
+        )
+    else:
+        details_parts: list[str] = []
+        for region_name in sorted_regions:
+            depts = region_groups[region_name]
+            count = len(depts)
+            dept_pills_html = "".join(
+                f'<span style="display:inline-block;margin:2px 4px 2px 0;padding:2px 8px;'
+                f'background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;'
+                f'border-radius:10px;font-size:10px;font-weight:500;">'
+                f'{escape(code)}&thinsp;<span style="font-weight:400;">{escape(name)}</span></span>'
+                for code, name in depts
+            )
+            details_parts.append(
+                f'<details style="display:inline-block;margin:2px 5px 4px 0;vertical-align:top;">'
+                f'<summary style="'
+                f'cursor:pointer;list-style:none;-webkit-appearance:none;'
+                f'display:inline-flex;align-items:center;gap:5px;'
+                f'padding:3px 8px 3px 10px;'
+                f'background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;'
+                f'border-radius:12px;font-size:11px;font-weight:500;'
+                f'user-select:none;outline:none;'
+                f'">'
+                f'{escape(region_name)}'
+                f'<span style="background:#1d4ed8;color:#fff;border-radius:10px;'
+                f'padding:1px 6px;font-size:10px;font-weight:700;line-height:1.4;">'
+                f'{count}</span>'
+                f'</summary>'
+                f'<div style="margin-top:5px;padding:8px 10px;background:#f0f7ff;'
+                f'border:1px solid #dbeafe;border-radius:6px;line-height:2;">'
+                f'{dept_pills_html}'
+                f'</div>'
+                f'</details>'
+            )
+        html_rows.append(
+            f'<div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:6px;">'
+            f'<span style="font-size:11px;text-transform:uppercase;letter-spacing:0.07em;'
+            f'color:{theme["text_muted"]};white-space:nowrap;padding-top:5px;min-width:84px;">'
+            f'📍 Périmètre</span>'
+            f'<div style="flex:1;">{"".join(details_parts)}</div>'
+            f'</div>'
+        )
+
+    # Ligne catégories
+    if category_labels:
+        cat_pills = "".join(
+            f'<span style="display:inline-block;margin:2px 4px 2px 0;padding:2px 9px;'
+            f'background:#f5f3ff;color:#5b21b6;border:1px solid #c4b5fd;'
+            f'border-radius:12px;font-size:11px;font-weight:500;">{escape(cat)}</span>'
+            for cat in category_labels
+        )
+        html_rows.append(
+            f'<div style="display:flex;align-items:flex-start;gap:10px;">'
+            f'<span style="font-size:11px;text-transform:uppercase;letter-spacing:0.07em;'
+            f'color:{theme["text_muted"]};white-space:nowrap;padding-top:3px;min-width:84px;">'
+            f'🏷️ Catégories</span>'
+            f'<div style="flex:1;line-height:2;">{cat_pills}</div>'
+            f'</div>'
+        )
+
+    html_block = (
+        f'<div style="margin-bottom:20px;padding:12px 14px;background:#f9fafb;'
+        f'border-radius:8px;border:1px solid #e5e7eb;">'
+        f'<div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;'
+        f'color:{theme["text_muted"]};font-weight:600;margin-bottom:8px;">'
+        f'🔍 Périmètre surveillé</div>'
+        + "".join(html_rows)
+        + '</div>'
+    )
+    return text_lines, html_block
+
+
 def render_client_email(
     formatter: EstablishmentFormatter,
     establishments: Sequence[models.Establishment],
@@ -205,7 +348,8 @@ def render_client_email(
     filters: ClientFilterSummary | None = None,
     previous_month_day_establishments: Sequence[models.Establishment] | None = None,
     previous_month_day_date: date | None = None,
-    outside_departments_alert_count: int | None = None,
+    outside_google_count: int | None = None,
+    outside_no_google_count: int | None = None,
     no_google_establishments: Sequence[models.Establishment] | None = None,
 ) -> tuple[str, str]:
     match_count = len(establishments)
@@ -239,7 +383,7 @@ def render_client_email(
         f"<p style=\"margin:0 0 14px;font-size:14px;color:{theme['text']};\">Bonjour,</p>",
     ]
 
-    # Note: on n'affiche pas les filtres surveillés (NAF/statuts) dans le mail client.
+    # Note: filtres NAF/statuts affichés dans le bloc périmètre ci-dessous.
 
     ordered_establishments = _order_establishments_by_status(establishments, ordered_statuses=section_statuses)
     ordered_no_google = list(no_google_establishments or [])
@@ -297,8 +441,15 @@ def render_client_email(
             first_names = (getattr(director, "first_names", None) or "").strip()
             last_name = (getattr(director, "last_name", None) or "").strip()
             quality = (getattr(director, "quality", None) or "Dirigeant").strip()
-            name_parts = [p for p in [first_names, last_name] if p]
-            director_name = " ".join(name_parts) if name_parts else quality
+            # Texte : prénom(s) en casse normale, NOM en majuscules
+            if first_names and last_name:
+                director_name_text = f"{first_names} {last_name.upper()}"
+            elif last_name:
+                director_name_text = last_name.upper()
+            elif first_names:
+                director_name_text = first_names
+            else:
+                director_name_text = quality
             birth_month = getattr(director, "birth_month", None)
             birth_year = getattr(director, "birth_year", None)
             birth_info = ""
@@ -307,7 +458,7 @@ def render_client_email(
                 birth_info = f" — né(e) en {month_label} {birth_year}"
             elif birth_year:
                 birth_info = f" — né(e) en {birth_year}"
-            item_lines.append(f"  👤 {director_name} ({quality}){birth_info}")
+            item_lines.append(f"  👤 {director_name_text} ({quality}){birth_info}")
         if establishment.date_creation:
             item_lines.append(
                 f"  Création administrative : {_format_month_year_fr(establishment.date_creation)}"
@@ -362,8 +513,22 @@ def render_client_email(
                 first_names = (getattr(director, "first_names", None) or "").strip()
                 last_name = (getattr(director, "last_name", None) or "").strip()
                 quality = (getattr(director, "quality", None) or "Dirigeant").strip()
-                name_parts = [p for p in [first_names, last_name] if p]
-                director_name = " ".join(name_parts) if name_parts else quality
+                # HTML : prénom(s) en poids normal, NOM en gras majuscules
+                if first_names and last_name:
+                    name_html = (
+                        f"{escape(first_names)} "
+                        f"<strong style=\"letter-spacing:0.02em;\">{escape(last_name.upper())}</strong>"
+                    )
+                    director_name = f"{first_names} {last_name.upper()}"  # pour quality_display check
+                elif last_name:
+                    name_html = f"<strong style=\"letter-spacing:0.02em;\">{escape(last_name.upper())}</strong>"
+                    director_name = last_name.upper()
+                elif first_names:
+                    name_html = escape(first_names)
+                    director_name = first_names
+                else:
+                    name_html = escape(quality)
+                    director_name = quality
                 birth_month = getattr(director, "birth_month", None)
                 birth_year = getattr(director, "birth_year", None)
                 birth_info = ""
@@ -376,7 +541,7 @@ def render_client_email(
                 birth_display = escape(birth_info) if birth_info else ""
                 item_html_parts.append(
                     f"<div style=\"font-size:12px;color:{theme['text_subtle']};margin-top:3px;\">"
-                    f"<strong>{escape(director_name)}</strong>"
+                    f"{name_html}"
                     f"<span style=\"color:{theme['text_muted']};\">{quality_display}{birth_display}</span>"
                     f"</div>"
                 )
@@ -456,34 +621,52 @@ def render_client_email(
         if items:
             lines.append("")
 
+    # --- Bloc périmètre surveillé (départements + catégories) ---
+    scope_text_lines, scope_html = _build_client_scope_summary(client, theme)
+    if scope_text_lines:
+        lines.extend(scope_text_lines)
+    if scope_html:
+        html_parts.append(scope_html)
+
     if total_count > 0:
         # Résumé introductif avec chiffres en gras et emojis
         etab_pl = "s" if total_count > 1 else ""
+        etab_new = "nouveaux" if total_count > 1 else "nouvel"
         etab_word = f"établissement{etab_pl}"
         verb = "ont" if total_count > 1 else "a"
         intro_line = (
-            f"🎯 {total_count} nouvel{etab_pl} {etab_word} {verb} été identifié{etab_pl} "
+            f"🎯 {total_count} {etab_new} {etab_word} {verb} été identifié{etab_pl} "
             f"dans votre périmètre aujourd'hui."
         )
         lines.append(intro_line)
         if match_count > 0 and no_google_count > 0:
             fiche_pl = "s" if match_count > 1 else ""
             no_g_pl = "s" if no_google_count > 1 else ""
-            lines.append(f"  • 🗺️ {match_count} fiche{fiche_pl} Google My Business / LinkedIn")
+            lines.append(f"  • 🗺️ {match_count} fiche{fiche_pl} Google My Business")
             lines.append(f"  • 📋 {no_google_count} établissement{no_g_pl} sans fiche Google")
+        outside_total = (outside_google_count or 0) + (outside_no_google_count or 0)
+        if outside_total > 0:
+            out_text_parts: list[str] = []
+            if outside_google_count:
+                fiche_out_pl = "s" if outside_google_count > 1 else ""
+                out_text_parts.append(f"🗺️ {outside_google_count} fiche{fiche_out_pl} Google")
+            if outside_no_google_count:
+                no_g_out_pl = "s" if outside_no_google_count > 1 else ""
+                out_text_parts.append(f"📋 {outside_no_google_count} sans fiche Google")
+            lines.append(f"  🌍 Hors périmètre — territoire entier : {' · '.join(out_text_parts)}")
         lines.append("")
 
         # Bloc HTML d'intro
         count_html = f"<strong style=\"color:{theme['brand']};font-size:20px;\">{total_count}</strong>"
         intro_suffix = (
-            f" nouvel{etab_pl} {etab_word} {verb} été identifié{etab_pl} dans votre périmètre aujourd'hui."
+            f" {etab_new} {etab_word} {verb} été identifié{etab_pl} dans votre périmètre aujourd'hui."
         )
         if match_count > 0 and no_google_count > 0:
             fiche_pl = "s" if match_count > 1 else ""
             no_g_pl = "s" if no_google_count > 1 else ""
             detail_html = (
                 f"<ul style=\"margin:8px 0 0;padding-left:18px;font-size:13px;color:{theme['text_subtle']};\">"
-                f"<li>🗺️ <strong>{match_count}</strong> fiche{fiche_pl} Google My Business / LinkedIn</li>"
+                f"<li>🗺️ <strong>{match_count}</strong> fiche{fiche_pl} Google My Business</li>"
                 f"<li>📋 <strong>{no_google_count}</strong> établissement{no_g_pl} sans fiche Google</li>"
                 f"</ul>"
             )
@@ -499,6 +682,27 @@ def render_client_email(
                 f"<p style=\"margin:6px 0 0;font-size:13px;color:{theme['text_subtle']};\">"
                 f"📋 <strong>{no_google_count}</strong> établissement{no_g_pl} sans fiche Google détecté{no_g_pl}</p>"
             )
+        _outside_total = (outside_google_count or 0) + (outside_no_google_count or 0)
+        _outside_card_html = ""
+        if _outside_total > 0:
+            _out_html_parts: list[str] = []
+            if outside_google_count:
+                _fiche_out_pl = "s" if outside_google_count > 1 else ""
+                _out_html_parts.append(
+                    f"🗺️&nbsp;<strong>{outside_google_count}</strong>&nbsp;fiche{_fiche_out_pl} Google My Business"
+                )
+            if outside_no_google_count:
+                _no_g_out_pl = "s" if outside_no_google_count > 1 else ""
+                _out_html_parts.append(
+                    f"📋&nbsp;<strong>{outside_no_google_count}</strong>&nbsp;établissement{_no_g_out_pl} sans fiche Google"
+                )
+            _out_items_html = "&nbsp;&nbsp;·&nbsp;&nbsp;".join(_out_html_parts)
+            _outside_card_html = (
+                f"<div style=\"margin-top:12px;padding-top:10px;border-top:1px dashed #cbd5e1;\">"
+                f"<div style=\"font-size:12px;color:#64748b;font-weight:600;margin-bottom:3px;\">🌍 Sur l'ensemble du territoire français ce jour :</div>"
+                f"<div style=\"font-size:12px;color:#475569;\">{_out_items_html}</div>"
+                f"</div>"
+            )
         html_parts.append(
             f"<div style=\"margin:0 0 20px;padding:16px;background:#f0f9ff;"
             f"border-radius:10px;border-left:4px solid {theme['brand']};\">"
@@ -506,14 +710,15 @@ def render_client_email(
             f"🎯 {count_html}{escape(intro_suffix)}"
             f"</p>"
             f"{detail_html}"
+            f"{_outside_card_html}"
             f"</div>"
         )
-        # En-tête de section Google/LinkedIn
+        # En-tête de section Google
         if match_count > 0:
             fiche_pl = "s" if match_count > 1 else ""
             det_pl = "s" if match_count > 1 else ""
             section_title = (
-                f"🗺️ {match_count} fiche{fiche_pl} Google My Business / LinkedIn "
+                f"🗺️ {match_count} fiche{fiche_pl} Google My Business "
                 f"identifiée{det_pl}"
             )
             lines.append(section_title)
@@ -532,28 +737,15 @@ def render_client_email(
             f"<p style=\"margin:0 0 16px;color:{theme['text_subtle']};\">Aucun nouvel établissement n'a été détecté aujourd'hui dans votre périmètre.</p>"
         )
 
-    if outside_departments_alert_count and outside_departments_alert_count > 0:
-        plural = "s" if outside_departments_alert_count > 1 else ""
-        lines.append(
-            "En dehors de vos départements sélectionnés, nous avons également émis "
-            f"{outside_departments_alert_count} alerte{plural} aujourd'hui sur le territoire français."
-        )
-        lines.append("")
-        html_parts.append(
-            f"<p style=\"margin:0 0 16px;color:{theme['text_muted']};\">"
-            f"En dehors de vos départements sélectionnés, nous avons également émis "
-            f"{outside_departments_alert_count} alerte{plural} aujourd'hui sur le territoire français."
-            "</p>"
-        )
-
     _append_establishments(ordered_establishments, show_empty_placeholder=False)
 
     # Section pour les établissements sans fiche Google
     if no_google_count > 0:
         no_g_pl = "s" if no_google_count > 1 else ""
+        no_g_new = "nouveaux" if no_google_count > 1 else "nouvel"
         no_g_word = f"établissement{no_g_pl}"
         no_google_section_title = (
-            f"📋 {no_google_count} nouvel{no_g_pl} {no_g_word} — Modification administrative récente"
+            f"📋 {no_google_count} {no_g_new} {no_g_word} — Modification administrative récente"
         )
         lines.append("")
         lines.append(no_google_section_title)
@@ -562,7 +754,7 @@ def render_client_email(
             f"<div style=\"margin-top:28px;margin-bottom:14px;padding-bottom:10px;"
             f"border-bottom:2px solid {theme['border']};\">"
             f"<h3 style=\"margin:0 0 4px;font-size:15px;color:{theme['text']};font-weight:700;\">"
-            f"📋 <strong>{no_google_count}</strong> nouvel{no_g_pl} {no_g_word}"
+            f"📋 <strong>{no_google_count}</strong> {no_g_new} {no_g_word}"
             f"</h3>"
             f"<p style=\"margin:0;font-size:12px;color:{theme['text_muted']};\">Fiche Google non identifiée à ce jour · "
             f"Modification administrative récente</p>"

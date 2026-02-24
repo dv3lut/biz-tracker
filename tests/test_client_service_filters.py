@@ -48,6 +48,7 @@ def _establishment(naf_code: str, *, status: str = "recent_creation", **kwargs) 
         "siret": str(uuid4().int)[:14],
         "naf_code": naf_code,
         "google_listing_age_status": status,
+        "google_check_status": "found",
         "google_contact_phone": None,
         "google_contact_email": None,
         "google_contact_website": None,
@@ -219,6 +220,68 @@ def test_assign_establishments_to_clients_handles_empty_payload():
 
     assert assignments == {}
     assert filters_enabled is False
+
+
+def test_assign_not_found_establishments_bypass_listing_status():
+    """not_found establishments pass through listing status filter (listing age is N/A)."""
+    client = _client(
+        subscriptions=[_subscription("5610A")],
+        listing_statuses=["recent_creation"],
+    )
+    establishments = [
+        # found + recent_creation : inclus normalement
+        _establishment("5610A", status="recent_creation", google_check_status="found"),
+        # not_found : listing_age_status=None → doit quand même passer
+        _establishment(
+            "5610A",
+            status=None,
+            google_check_status="not_found",
+            google_listing_age_status=None,
+        ),
+        # pending : bypass aussi (mais sera exclu plus haut dans alert_service)
+        _establishment("5610A", status=None, google_check_status="pending"),
+    ]
+
+    assignments, _ = client_service.assign_establishments_to_clients([client], establishments)
+
+    assert client.id in assignments
+    assigned_sirets = {est.siret for est in assignments[client.id]}
+    # found et not_found doivent être inclus
+    assert establishments[0].siret in assigned_sirets
+    assert establishments[1].siret in assigned_sirets
+    # pending bypass aussi la vérification listing_age
+    assert establishments[2].siret in assigned_sirets
+
+
+def test_assign_not_found_with_department_filter():
+    """not_found establishments respect department filter even though listing age is bypassed."""
+    client = _client(
+        subscriptions=[_subscription("5610A")],
+        departments=[SimpleNamespace(code="13")],
+        listing_statuses=["recent_creation"],
+    )
+    establishments = [
+        _establishment(
+            "5610A",
+            status=None,
+            google_check_status="not_found",
+            code_postal="13001",
+            code_commune="13201",
+        ),
+        _establishment(
+            "5610A",
+            status=None,
+            google_check_status="not_found",
+            code_postal="75001",
+            code_commune="75101",
+        ),
+    ]
+
+    assignments, _ = client_service.assign_establishments_to_clients([client], establishments)
+
+    assert client.id in assignments
+    assert len(assignments[client.id]) == 1
+    assert assignments[client.id][0].siret == establishments[0].siret
 
 
 def test_count_establishments_outside_client_departments():

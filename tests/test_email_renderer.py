@@ -234,12 +234,119 @@ class EmailRendererTests(unittest.TestCase):
             self.formatter,
             [establishment],
             client=self._make_client(),
-            outside_departments_alert_count=19,
+            outside_google_count=19,
+            outside_no_google_count=5,
         )
 
-        self.assertIn("En dehors de vos départements sélectionnés", text_body)
-        self.assertIn("19 alerte", text_body)
-        self.assertIn("En dehors de vos départements sélectionnés", html_body)
+        self.assertIn("territoire", text_body)
+        self.assertIn("19", text_body)
+        self.assertIn("5", text_body)
+        self.assertIn("territoire", html_body)
+        self.assertIn("19", html_body)
+        self.assertIn("5", html_body)
+
+    def test_client_email_scope_summary_shows_region_groups(self) -> None:
+        """Le bloc périmètre regroupe les départements par région avec accordéon <details>."""
+        establishment = self._make_establishment(
+            name="Bistrot Régional",
+            status="recent_creation",
+            google_url="https://maps.google.com/?cid=42",
+        )
+        region_idf = SimpleNamespace(name="Île-de-France", code="11")
+        region_bretagne = SimpleNamespace(name="Bretagne", code="53")
+        dept_75 = SimpleNamespace(code="75", name="Paris", region=region_idf)
+        dept_77 = SimpleNamespace(code="77", name="Seine-et-Marne", region=region_idf)
+        dept_29 = SimpleNamespace(code="29", name="Finistère", region=region_bretagne)
+
+        client = SimpleNamespace(
+            use_subcategory_label_in_client_alerts=False,
+            departments=[dept_75, dept_77, dept_29],
+            subscriptions=[],
+            category_ids=[],
+        )
+
+        text_body, html_body = render_client_email(
+            self.formatter,
+            [establishment],
+            client=client,
+        )
+
+        # Texte : les régions et le nombre de depts
+        self.assertIn("Île-de-France (2)", text_body)
+        self.assertIn("Bretagne (1)", text_body)
+        self.assertIn("75 Paris", text_body)
+        self.assertIn("29 Finistère", text_body)
+        self.assertIn("Périmètre :", text_body)
+        # HTML : les <details> avec les noms de région
+        self.assertIn("Île-de-France", html_body)
+        self.assertIn("Bretagne", html_body)
+        self.assertIn("<details", html_body)
+        self.assertIn("<summary", html_body)
+        self.assertIn("Périmètre surveillé", html_body)
+        self.assertNotIn("France entière", html_body)
+
+    def test_client_email_scope_summary_all_france(self) -> None:
+        """Si aucun département sélectionné → pas de bloc périmètre (sans catégories)."""
+        establishment = self._make_establishment(
+            name="Bistrot National",
+            status="recent_creation",
+            google_url="https://maps.google.com/?cid=99",
+        )
+        client = SimpleNamespace(
+            use_subcategory_label_in_client_alerts=False,
+            departments=[],  # vide = France entière
+            subscriptions=[],
+            category_ids=[],
+        )
+
+        text_body, html_body = render_client_email(
+            self.formatter,
+            [establishment],
+            client=client,
+        )
+
+        # Sans catégories ni depts → pas de bloc périmètre
+        self.assertNotIn("Périmètre surveillé", text_body)
+        self.assertNotIn("Périmètre surveillé", html_body)
+
+    def test_client_email_scope_summary_all_depts_explicit(self) -> None:
+        """Si 95+ départements configurés → affiche 'France entière' sans liste de régions."""
+        establishment = self._make_establishment(
+            name="Bistrot Ubiquitaire",
+            status="recent_creation",
+            google_url="https://maps.google.com/?cid=200",
+        )
+        # Simuler 95 départements
+        region_all = SimpleNamespace(name="France", code="00")
+        many_depts = [
+            SimpleNamespace(code=str(i).zfill(2), name=f"Dept {i}", region=region_all)
+            for i in range(1, 96)
+        ]
+        # Ajouter une catégorie pour que le bloc s'affiche
+        subcategory = SimpleNamespace(
+            is_active=True,
+            naf_code="5610A",
+            categories=[SimpleNamespace(id="cat-1", name="Restauration")],
+        )
+        subscription = SimpleNamespace(subcategory=subcategory)
+        client = SimpleNamespace(
+            use_subcategory_label_in_client_alerts=False,
+            departments=many_depts,
+            subscriptions=[subscription],
+            category_ids=[],
+        )
+
+        text_body, html_body = render_client_email(
+            self.formatter,
+            [establishment],
+            client=client,
+        )
+
+        self.assertIn("France entière", text_body)
+        self.assertIn("France entière", html_body)
+        # Pas de liste de régions individuelles
+        self.assertNotIn("<details", html_body)
+        self.assertNotIn("Périmètre :", text_body)
 
     def test_client_email_includes_previous_month_day_section(self) -> None:
         establishment = self._make_establishment(
@@ -389,10 +496,11 @@ class EmailRendererTests(unittest.TestCase):
             client=self._make_client(),
         )
 
-        self.assertIn("Jean Martin", text_body)
+        self.assertIn("Jean MARTIN", text_body)
         self.assertIn("(Gérant)", text_body)
         self.assertIn("né(e) en mars 1978", text_body)
-        self.assertIn("Jean Martin", html_body)
+        self.assertIn("Jean", html_body)  # prénoms en casse normale
+        self.assertIn("MARTIN", html_body)  # NOM en majuscules/gras
         self.assertIn("Dirigeant(s)", html_body)
         # Le dirigeant personne morale ne doit pas apparaître
         self.assertNotIn("SAS", text_body)
