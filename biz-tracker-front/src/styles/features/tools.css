@@ -1,0 +1,37 @@
+.tools-form-compact {
+  gap: 0.5rem;
+}
+
+.tools-form-compact .form-field {
+  gap: 0.3rem;
+}
+
+.tools-naf-row {
+  display: grid;
+  gap: 0.65rem;
+}
+
+@media (min-width: 900px) {
+  .tools-naf-row {
+    grid-template-columns: minmax(220px, 1fr) minmax(240px, 1fr) minmax(240px, 1fr);
+    align-items: start;
+  }
+}
+
+.tools-naf-select .establishments-controls {
+  margin: 0;
+}
+
+.tools-naf-input textarea {
+  min-height: 88px;
+}
+
+.tools-region-select {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.tools-region-select .establishments-controls {
+  margin: 0;
+}

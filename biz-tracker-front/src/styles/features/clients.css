@@ -1,0 +1,45 @@
+.region-selection {
+  margin-top: 0.5rem;
+}
+
+.region-multiselect {
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 0.5rem 0.75rem;
+  background: var(--color-surface);
+}
+
+.region-multiselect summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.region-multiselect summary::-webkit-details-marker {
+  display: none;
+}
+
+.region-multiselect-panel {
+  margin-top: 0.75rem;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.region-multiselect-options {
+  display: grid;
+  gap: 0.4rem 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+
+.region-multiselect-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  line-height: 1.3;
+}
+
+.region-multiselect-option input[type="checkbox"] {
+  width: auto;
+  margin-top: 0.1rem;
+  accent-color: var(--color-primary);
+}

@@ -1,0 +1,241 @@
+.manual-google-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.manual-google-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.manual-google-form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.manual-google-form-row--actions {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.manual-google-form-note {
+  margin: 0;
+}
+
+.manual-google-input {
+  flex: 1;
+  min-width: 220px;
+}
+
+.manual-google-check-card .feedback {
+  margin: 0;
+}
+
+.manual-google-result {
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 1rem;
+  background: var(--color-surface);
+  display: grid;
+  gap: 1rem;
+}
+
+.manual-google-result-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.manual-google-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.75rem;
+}
+
+.manual-google-meta-value {
+  margin: 0;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.manual-google-data-grid {
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.65rem 1.5rem;
+}
+
+.manual-google-links {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.manual-google-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-secondary-orange);
+  color: var(--color-secondary-orange);
+  text-decoration: none;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.manual-google-link:hover {
+  background: var(--color-secondary-orange-active);
+  color: var(--color-secondary-white);
+}
+
+.export-google-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: flex-end;
+}
+
+.export-google-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 180px;
+}
+
+.export-google-form input[type="date"] {
+  padding: 0.45rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  font-size: 0.95rem;
+}
+
+.export-google-form .muted {
+  margin: 0;
+  flex: 1 1 100%;
+}
+
+.google-retry-card {
+  display: grid;
+  gap: 1rem;
+}
+
+.google-retry-form {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.google-retry-fieldset {
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 1rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.google-retry-fieldset legend {
+  font-weight: 600;
+}
+
+.weekday-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.weekday-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  font-size: 0.9rem;
+}
+
+.weekday-toggle input {
+  margin: 0;
+}
+
+.switch-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.5rem;
+}
+
+.switch-row__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.switch-row__checkbox {
+  margin: 0;
+  width: auto;
+  flex: 0 0 auto;
+}
+
+.switch-row__input {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 200px;
+}
+
+.switch-row__input input {
+  padding: 0.45rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+}
+
+.rule-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.rule-row {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  align-items: end;
+}
+
+.rule-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.rule-row input {
+  padding: 0.45rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+}
+
+.rule-actions {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+}
+
+.google-retry-categories {
+  display: grid;
+  gap: 1rem;
+}
+
+.google-retry-categories label {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.google-retry-categories input {
+  padding: 0.45rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+}

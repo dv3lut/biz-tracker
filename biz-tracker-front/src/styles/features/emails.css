@@ -1,0 +1,17 @@
+.email-test-form {
+  display: grid;
+  gap: 1rem;
+}
+
+.email-test-form input,
+.email-test-form textarea {
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  font-size: 1rem;
+  font-family: inherit;
+}
+
+.email-test-form textarea {
+  resize: vertical;
+}

@@ -1,0 +1,235 @@
+.establishments-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.establishments-results {
+  margin: 0.5rem 0 0.25rem;
+}
+
+.establishments-controls-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: flex-end;
+}
+
+.establishments-control {
+  min-width: 0;
+}
+
+.establishments-control--search {
+  flex: 1 1 320px;
+  min-width: 260px;
+}
+
+.establishments-control--naf {
+  flex: 1 1 200px;
+  min-width: 240px;
+}
+
+.establishments-control--date-type,
+.establishments-control--date-from,
+.establishments-control--date-to {
+  flex: 0 0 auto;
+  min-width: 170px;
+}
+
+.establishments-control--individual {
+  flex: 0 1 240px;
+  min-width: 220px;
+}
+
+.establishments-control--google-status {
+  flex: 0 1 260px;
+  min-width: 240px;
+}
+
+.establishments-control--linkedin-status {
+  flex: 0 1 220px;
+  min-width: 200px;
+}
+
+.establishments-control--linkedin-status .linkedin-status-multiselect,
+.establishments-control--google-status .linkedin-status-multiselect {
+  position: relative;
+}
+
+.establishments-control--linkedin-status summary,
+.establishments-control--google-status summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 0.45rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  user-select: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.establishments-control--linkedin-status summary::-webkit-details-marker,
+.establishments-control--google-status summary::-webkit-details-marker {
+  display: none;
+}
+
+.linkedin-status-panel {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 0.5rem);
+  width: min(260px, 80vw);
+  padding: 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-alt);
+  display: grid;
+  gap: 0.5rem;
+  z-index: 20;
+}
+
+.linkedin-status-option {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.9rem;
+}
+
+.linkedin-status-option input[type="checkbox"] {
+  width: 1.05rem;
+  height: 1.05rem;
+  flex-shrink: 0;
+}
+
+.establishments-control--limit {
+  flex: 0 0 auto;
+}
+
+.establishments-control--pagination {
+  flex: 1 1 320px;
+}
+
+.establishments-controls-actions {
+  margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+@media (max-width: 980px) {
+  .establishments-controls-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .establishments-control--search,
+  .establishments-control--naf,
+  .establishments-control--date-type,
+  .establishments-control--date-from,
+  .establishments-control--date-to,
+  .establishments-control--individual,
+  .establishments-control--linkedin-status,
+  .establishments-control--pagination {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .establishments-controls-actions {
+    margin-left: 0;
+    justify-content: flex-start;
+  }
+}
+
+.establishments-controls input[type="search"] {
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  font-size: 1rem;
+}
+
+.establishments-controls input[type="text"],
+.establishments-controls input[type="date"] {
+  padding: 0.45rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  font-size: 0.95rem;
+  font-family: inherit;
+}
+
+.establishments-controls .naf-multiselect {
+  position: relative;
+}
+
+.establishments-controls .naf-multiselect summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 0.45rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  user-select: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.establishments-controls .naf-multiselect summary::-webkit-details-marker {
+  display: none;
+}
+
+.establishments-controls .naf-multiselect-panel {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 0.5rem);
+  width: min(440px, 80vw);
+  padding: 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-alt);
+  max-height: 260px;
+  overflow: auto;
+  z-index: 20;
+}
+
+.establishments-controls .naf-multiselect-group {
+  display: grid;
+  gap: 0.35rem;
+  margin-bottom: 0.75rem;
+}
+
+.establishments-controls .naf-multiselect-group:last-child {
+  margin-bottom: 0;
+}
+
+.establishments-controls .naf-multiselect-options {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.establishments-controls .naf-multiselect-option {
+  display: grid;
+  grid-template-columns: 16px 1fr;
+  column-gap: 0.5rem;
+  align-items: flex-start;
+  width: 100%;
+}
+
+.establishments-controls .naf-multiselect-option input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0.15rem 0 0;
+}
+
+.establishments-controls .naf-multiselect-option span {
+  min-width: 0;
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: break-word;
+  hyphens: manual;
+}
+
+.establishments-pagination {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+}

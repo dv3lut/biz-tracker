@@ -1,0 +1,141 @@
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.status-chip--success {
+  background-color: var(--color-status-success-bg);
+  color: var(--color-status-success-text);
+  border: 1px solid var(--color-status-success-border);
+}
+
+.status-chip--danger {
+  background-color: var(--color-status-error-bg);
+  color: var(--color-status-error-text);
+  border: 1px solid var(--color-status-error-border);
+}
+
+.status-chip--warning {
+  background-color: var(--color-status-warning-bg);
+  color: var(--color-status-warning-text);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+}
+
+.status-chip--info {
+  background-color: var(--color-status-info-bg);
+  color: var(--color-status-info-text);
+  border: 1px solid rgba(125, 211, 252, 0.35);
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 56px;
+  padding: 0.08rem 0.3rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.status-pill--success {
+  color: #4ade80;
+  border-color: rgba(74, 222, 128, 0.35);
+  background: rgba(22, 163, 74, 0.12);
+}
+
+.status-pill--warning {
+  color: #facc15;
+  border-color: rgba(250, 204, 21, 0.4);
+  background: rgba(234, 179, 8, 0.12);
+}
+
+.status-pill--danger {
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.4);
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.status-pill--pending {
+  color: #f97316;
+  border-color: rgba(249, 115, 22, 0.4);
+  background: rgba(249, 115, 22, 0.12);
+}
+
+.status-pill--muted {
+  color: #cbd5f5;
+  border-color: rgba(148, 163, 184, 0.45);
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.run-mode-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.35rem 0;
+}
+
+.badge-replay {
+  background-color: var(--color-status-warning-bg);
+  color: var(--color-status-warning-text);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+}
+
+.badge-naf {
+  background-color: var(--color-status-info-bg);
+  color: var(--color-status-info-text);
+  border: 1px solid rgba(125, 211, 252, 0.35);
+}
+
+.badge-clients {
+  background-color: var(--color-status-success-bg);
+  color: var(--color-status-success-text);
+  border: 1px solid rgba(74, 222, 128, 0.35);
+}
+
+.badge-admins {
+  background-color: var(--color-surface);
+  color: var(--color-muted);
+  border: 1px dashed var(--color-border);
+}
+
+.status-running {
+  background-color: var(--color-status-warning-bg);
+  color: var(--color-status-warning-text);
+}
+
+.status-failed,
+.status-error {
+  background-color: var(--color-status-error-bg);
+  color: var(--color-status-error-text);
+}
+
+.status-success,
+.status-done {
+  background-color: var(--color-status-success-bg);
+  color: var(--color-status-success-text);
+}
+
+.status-pending {
+  background-color: var(--color-status-info-bg);
+  color: var(--color-status-info-text);
+}
