@@ -1,0 +1,40 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run API (uvicorn)",
+      "type": "debugpy",
+      "request": "launch",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "module": "uvicorn",
+      "args": [
+        "app.api:create_app",
+        "--factory",
+        "--reload",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8080"
+      ],
+      "cwd": "${workspaceFolder}/biz-tracker-back",
+      "envFile": "${workspaceFolder}/biz-tracker-back/.env",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "preLaunchTask": "init-db-before-api"
+    },
+    {
+      "name": "Frontend: npm start",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm install && npm start",
+      "cwd": "${workspaceFolder}/biz-tracker-front"
+    },
+    {
+      "name": "Landing Page: npm start",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm install && npm start",
+      "cwd": "${workspaceFolder}/biz-tracker-landing-page"
+    }
+  ]
+}

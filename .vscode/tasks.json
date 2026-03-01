@@ -1,0 +1,15 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "init-db-before-api",
+      "type": "shell",
+      "command": "cd ${workspaceFolder}/biz-tracker-back && ${workspaceFolder}/.venv/bin/python -m app init-db",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    }
+  ]
+}
