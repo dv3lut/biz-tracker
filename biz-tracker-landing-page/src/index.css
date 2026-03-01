@@ -1,0 +1,139 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    /* Brand Colors - Blue & Green Theme */
+    --background: 0 0% 100%;
+    --foreground: 222 47% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    /* Primary - Deep Professional Blue */
+    --primary: 217 91% 18%;
+    --primary-foreground: 0 0% 100%;
+    --primary-light: 217 91% 35%;
+    
+    /* Secondary - Fresh Green */
+    --secondary: 142 71% 45%;
+    --secondary-foreground: 0 0% 100%;
+    --secondary-light: 142 71% 60%;
+
+    /* Muted backgrounds */
+    --muted: 214 32% 95%;
+    --muted-foreground: 215 16% 47%;
+
+    /* Accent - Vibrant Green */
+    --accent: 142 76% 36%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 217 91% 18%;
+
+    --radius: 0.75rem;
+    
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(217 91% 18%) 0%, hsl(217 91% 35%) 100%);
+    --gradient-secondary: linear-gradient(135deg, hsl(142 71% 45%) 0%, hsl(142 71% 60%) 100%);
+    --gradient-hero: linear-gradient(135deg, hsl(217 91% 18%) 0%, hsl(217 91% 28%) 50%, hsl(142 71% 45%) 100%);
+    
+    /* Shadows */
+    --shadow-sm: 0 2px 8px hsla(217, 91%, 18%, 0.08);
+    --shadow-md: 0 4px 16px hsla(217, 91%, 18%, 0.12);
+    --shadow-lg: 0 8px 32px hsla(217, 91%, 18%, 0.16);
+    
+    /* Transitions */
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+    --radius: 0.75rem;
+
+    --sidebar-background: 0 0% 98%;
+
+    --sidebar-foreground: 240 5.3% 26.1%;
+
+    --sidebar-primary: 240 5.9% 10%;
+
+    --sidebar-primary-foreground: 0 0% 98%;
+
+    --sidebar-accent: 240 4.8% 95.9%;
+
+    --sidebar-accent-foreground: 240 5.9% 10%;
+
+    --sidebar-border: 220 13% 91%;
+
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  .dark {
+    --background: 222 47% 11%;
+    --foreground: 0 0% 98%;
+
+    --card: 217 91% 15%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 217 91% 15%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 217 91% 60%;
+    --primary-foreground: 222 47% 11%;
+    --primary-light: 217 91% 45%;
+
+    --secondary: 142 71% 55%;
+    --secondary-foreground: 222 47% 11%;
+    --secondary-light: 142 71% 65%;
+
+    --muted: 217 32% 17%;
+    --muted-foreground: 215 20% 65%;
+
+    --accent: 142 76% 50%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 217 32% 25%;
+    --input: 217 32% 25%;
+    --ring: 217 91% 60%;
+    
+    --gradient-primary: linear-gradient(135deg, hsl(217 91% 25%) 0%, hsl(217 91% 35%) 100%);
+    --gradient-secondary: linear-gradient(135deg, hsl(142 71% 50%) 0%, hsl(142 71% 65%) 100%);
+    --gradient-hero: linear-gradient(135deg, hsl(217 91% 20%) 0%, hsl(217 91% 30%) 50%, hsl(142 71% 45%) 100%);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+@keyframes bt-ring-blink {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 hsl(var(--secondary) / 0);
+  }
+  50% {
+    box-shadow: 0 0 0 3px hsl(var(--secondary) / 0.8);
+  }
+}
+
+.bt-ring-blink {
+  animation: bt-ring-blink 0.9s ease-in-out 4;
+}
