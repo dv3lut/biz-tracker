@@ -29,7 +29,7 @@ Si vous utilisez un task dans `.vscode/tasks.json` pour lancer la build, assurez
   "label": "build frontend",
   "type": "shell",
   "command": "source ~/.nvm/nvm.sh && npm run build",
-  "cwd": "${workspaceFolder}/biz-tracker-front"
+  "cwd": "${workspaceFolder}/biz-tracker-admin"
 }
 ```
 

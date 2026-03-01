@@ -23,11 +23,11 @@
       "preLaunchTask": "init-db-before-api"
     },
     {
-      "name": "Frontend: npm start",
+      "name": "Admin: npm start",
       "type": "node-terminal",
       "request": "launch",
       "command": "npm install && npm start",
-      "cwd": "${workspaceFolder}/biz-tracker-front"
+      "cwd": "${workspaceFolder}/biz-tracker-admin"
     },
     {
       "name": "Landing Page: npm start",

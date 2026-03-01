@@ -2,11 +2,9 @@ name: Deploy biz-tracker Landing Page to VPS
 
 on:
   push:
-    branches:
-      - main
-    paths:
-      - 'biz-tracker-landing-page/**'
-      - '.github/workflows/landing-deploy.yml'
+    tags:
+      - 'v*'           # Release globale : déploie tous les services
+      - 'landing/v*'   # Release ciblée landing uniquement
   workflow_dispatch:
 
 jobs:
@@ -32,7 +30,9 @@ jobs:
           context: ./biz-tracker-landing-page
           file: ./biz-tracker-landing-page/Dockerfile
           push: true
-          tags: ${{ secrets.DOCKER_HUB_USERNAME }}/biz-tracker-landing-page:latest
+          tags: |
+            ${{ secrets.DOCKER_HUB_USERNAME }}/biz-tracker-landing-page:${{ github.ref_name }}
+            ${{ secrets.DOCKER_HUB_USERNAME }}/biz-tracker-landing-page:latest
           build-args: |
             VITE_APP_API_BASE_URL=${{ secrets.VITE_APP_API_BASE_URL }}
 

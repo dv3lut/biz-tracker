@@ -18,7 +18,7 @@ Quand un bug est remonté, appliquer systématiquement la séquence suivante :
 4. **Reporter** explicitement ces étapes dans le compte rendu de la tâche.
 
 - `biz-tracker-back/` : backend FastAPI + Typer. La documentation detaillee pour les agents se trouve dans `biz-tracker-back/docs/AGENTS_CONTEXT.md`, `AGENTS_TECH.md` et `AGENTS_OPERATIONS.md`.
-- `biz-tracker-front/` : interface React de pilotage. Elle consomme l'API admin exposee par le backend et s'aligne sur son schema HTTP.
+- `biz-tracker-admin/` : interface React de pilotage. Elle consomme l'API admin exposee par le backend et s'aligne sur son schema HTTP.
 - `biz-tracker-landing-page/` : landing page marketing (Vite + React). Le formulaire appelle l'API publique du backend et declenche l'envoi d'un email vers `contact@business-tracker.fr`.
 - `docs/postman_collection.json` (backend) : reference commune pour les appels API. Le front doit rester synchronise avec cette definition (variables `baseUrl`, entete `X-Admin-Token`).
 
@@ -37,7 +37,7 @@ Quand un bug est remonté, appliquer systématiquement la séquence suivante :
 | Tests | `tests/test_*.py` couvrent Google (`test_google_business_service.py`), alertes, scheduler et API admin. |
 | Scripts & SQL | `scripts/deploy.sh`, `scripts/extract_pdf_text.py` et `sql/restore.sh`/`sql/backups` pour l’exploitation.
 
-### Frontend (`biz-tracker-front/`)
+### Admin (`biz-tracker-admin/`)
 
 | Zone | Fichiers / responsabilité |
 | --- | --- |
@@ -63,7 +63,7 @@ Quand un bug est remonté, appliquer systématiquement la séquence suivante :
 ## Demarrage rapide
 
 1. Backend : consulter `biz-tracker-back/README.md`, creer `.env`, lancer `docker compose up -d db`, puis `python -m app serve` (config `Backend: FastAPI serve` dans `.vscode/launch.json`).
-2. Front : consulter `biz-tracker-front/README.md`, creer `.env`, executer `npm run dev` depuis le dossier front.
+2. Admin : consulter `biz-tracker-admin/README.md`, creer `.env`, executer `npm run dev` depuis le dossier admin.
 3. Postman : importer `biz-tracker-back/docs/postman_collection.json` pour explorer et valider les endpoints admin.
 
 ## Bases solides pour les prochaines missions

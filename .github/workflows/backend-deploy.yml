@@ -2,12 +2,15 @@ name: Deploy biz-tracker Backend to VPS
 
 on:
   push:
-    branches:
-      - main
-    paths:
-      - 'biz-tracker-back/**'
-      - '.github/workflows/backend-deploy.yml'
+    tags:
+      - 'v*'        # Release globale : déploie tous les services
+      - 'back/v*'   # Release ciblée backend uniquement
   workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Tag Docker à déployer (laisser vide pour latest)'
+        required: false
+        default: 'latest'
 
 jobs:
   deploy:
@@ -52,7 +55,7 @@ jobs:
           file: ./biz-tracker-back/Dockerfile
           push: true
           tags: |
-            ${{ secrets.DOCKER_HUB_USERNAME }}/biz-tracker-back-api:${{ github.sha }}
+            ${{ secrets.DOCKER_HUB_USERNAME }}/biz-tracker-back-api:${{ github.ref_name }}
             ${{ secrets.DOCKER_HUB_USERNAME }}/biz-tracker-back-api:latest
 
       - name: Deploy to VPS

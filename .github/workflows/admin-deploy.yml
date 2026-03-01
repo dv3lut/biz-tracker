@@ -1,12 +1,10 @@
-name: Deploy biz-tracker Frontend to VPS
+name: Deploy biz-tracker Admin to VPS
 
 on:
   push:
-    branches:
-      - main
-    paths:
-      - 'biz-tracker-front/**'
-      - '.github/workflows/frontend-deploy.yml'
+    tags:
+      - 'v*'          # Release globale : déploie tous les services
+      - 'admin/v*'    # Release ciblée admin uniquement
   workflow_dispatch:
 
 jobs:
@@ -29,10 +27,12 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
-          context: ./biz-tracker-front
-          file: ./biz-tracker-front/Dockerfile
+          context: ./biz-tracker-admin
+          file: ./biz-tracker-admin/Dockerfile
           push: true
-          tags: ${{ secrets.DOCKER_HUB_USERNAME }}/biz-tracker-front:latest
+          tags: |
+            ${{ secrets.DOCKER_HUB_USERNAME }}/biz-tracker-admin:${{ github.ref_name }}
+            ${{ secrets.DOCKER_HUB_USERNAME }}/biz-tracker-admin:latest
           build-args: |
             VITE_APP_API_BASE_URL=${{ secrets.VITE_APP_API_BASE_URL }}
 
@@ -49,7 +49,7 @@ jobs:
               sudo curl -L "https://github.com/docker/compose/releases/download/v2.29.6/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
               sudo chmod +x /usr/local/bin/docker-compose
             fi
-            cd ~/biz-tracker-front
+            cd ~/biz-tracker-admin
             docker-compose pull
             docker-compose down
             docker-compose up -d
