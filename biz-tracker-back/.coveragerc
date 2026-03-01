@@ -1,0 +1,57 @@
+[run]
+branch = True
+source = app
+omit =
+    app/__main__.py
+    app/cli.py
+    app/api/__init__.py
+    app/api/dependencies.py
+    app/api/routers/admin.py
+    app/api/routers/admin_router.py
+    app/api/routers/admin/admin_router.py
+    app/api/routers/admin/alerts.py
+    app/api/routers/admin/alerts_router.py
+    app/api/routers/admin/email.py
+    app/api/routers/admin/email_router.py
+    app/api/routers/admin/establishments.py
+    app/api/routers/admin/establishments_router.py
+    app/api/routers/admin/google.py
+    app/api/routers/admin/google_router.py
+    app/api/routers/admin/google_handlers.py
+    app/api/routers/admin/client_handlers.py
+    app/api/routers/admin/clients.py
+    app/api/routers/admin/common.py
+    app/api/routers/admin/naf_categories.py
+    app/api/routers/admin/naf_categories_router.py
+    app/api/routers/admin/stats.py
+    app/api/routers/admin/stats_router.py
+    app/api/routers/admin/stats_builder.py
+    app/api/routers/admin/sync_runs.py
+    app/api/routers/admin/sync_runs_router.py
+    app/api/routers/admin/linkedin_router.py
+    app/api/routers/admin/stripe.py
+    app/api/routers/health.py
+    app/api/routers/health_router.py
+    app/api/routers/public.py
+    app/clients/*
+    app/db/*
+    app/logging_config.py
+    app/logging_handlers.py
+    app/observability.py
+    app/services/alert_service.py
+    app/services/google_business_service.py
+    app/services/google_business/*
+    app/services/website_scraper/*
+    app/services/google_retry_config.py
+    app/services/stripe_reporting_service.py
+    app/services/stripe_service.py
+    app/services/stripe_settings_service.py
+    app/services/stripe_subscription_history.py
+    app/services/sync_scheduler.py
+    app/services/incremental_scheduler.py
+    app/services/sync/*
+
+[report]
+fail_under = 95
+skip_covered = True
+show_missing = True

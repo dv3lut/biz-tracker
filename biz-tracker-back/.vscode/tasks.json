@@ -1,0 +1,43 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "docker: up api (debug)",
+      "type": "shell",
+      "command": "docker compose up --build -d api",
+      "options": {
+        "env": {
+          "COMPOSE_ENABLE_DEBUGPY": "1",
+          "COMPOSE_DEBUGPY_PORT": "5678"
+        }
+      },
+      "group": "build",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "docker: stop api (debug)",
+      "type": "shell",
+      "command": "docker compose stop api && docker compose rm -f api",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "docker: logs api",
+      "type": "shell",
+      "command": "docker compose logs -f api",
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    }
+  ]
+}

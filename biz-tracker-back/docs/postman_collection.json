@@ -1,0 +1,887 @@
+{
+  "info": {
+    "name": "Business tracker Admin API",
+    "description": "Collection Postman pour piloter et monitorer l'API d'administration Business tracker.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": {
+      "major": 1,
+      "minor": 2,
+      "patch": 0
+    }
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "adminToken",
+      "value": "replace-with-admin-token"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "GET Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Example 200",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/health",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "health"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"status\": \"ok\",\n  \"timestamp\": \"2025-10-31T08:42:10.123456Z\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "description": "Endpoints réservés aux administrateurs via jeton `X-Admin-Token`.",
+      "item": [
+        {
+          "name": "GET Stats Summary",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Admin-Token",
+                "value": "{{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/stats/summary",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "stats",
+                "summary"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Example 200",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Admin-Token",
+                    "value": "{{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/stats/summary",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "stats",
+                    "summary"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"total_establishments\": 4235,\n  \"total_alerts\": 12,\n  \"database_size_pretty\": \"512 MB\",\n  \"last_full_run\": {\n    \"id\": \"d2719c1c-86f2-41aa-82c8-1b6bc2fe9efb\",\n    \"scope_key\": \"restaurants_full\",\n    \"run_type\": \"full\",\n    \"status\": \"success\",\n    \"started_at\": \"2025-10-30T01:15:42.502345Z\",\n    \"finished_at\": \"2025-10-30T03:47:08.112233Z\",\n    \"api_call_count\": 178,\n    \"fetched_records\": 4235,\n    \"created_records\": 387,\n    \"last_cursor\": \"OEFHSlpTPT0=\",\n    \"query_checksum\": \"cf657aa9c5be06c098628c1cf75d3a76\",\n    \"resumed_from_run_id\": null,\n    \"notes\": null,\n    \"total_expected_records\": 4235,\n    \"progress\": 1.0,\n    \"estimated_remaining_seconds\": 0.0,\n    \"estimated_completion_at\": \"2025-10-30T03:47:08.112233Z\"\n  },\n  \"last_incremental_run\": {\n    \"id\": \"9a4e6a4b-57a0-4221-a00c-7b7b9529f2fd\",\n    \"scope_key\": \"restaurants_incremental\",\n    \"run_type\": \"incremental\",\n    \"status\": \"running\",\n    \"started_at\": \"2025-10-31T05:00:01.104400Z\",\n    \"finished_at\": null,\n    \"api_call_count\": 14,\n    \"fetched_records\": 260,\n    \"created_records\": 42,\n    \"last_cursor\": \"S1dKSU5saz0=\",\n    \"query_checksum\": \"7b41f6100026b0d9b73d95245bb59aec\",\n    \"resumed_from_run_id\": null,\n    \"notes\": \"Reprise depuis lot 2025-10-30\",\n    \"total_expected_records\": 640,\n    \"progress\": 0.41,\n    \"estimated_remaining_seconds\": 320.5,\n    \"estimated_completion_at\": \"2025-10-31T05:05:21.604400Z\"\n  },\n  \"last_alert\": {\n    \"id\": \"2358abe8-4c7b-46cf-9f42-94b65c7f38df\",\n    \"run_id\": \"9a4e6a4b-57a0-4221-a00c-7b7b9529f2fd\",\n    \"siret\": \"12345678900011\",\n    \"recipients\": [\n      \"ops@example.com\",\n      \"marketing@example.com\"\n    ],\n    \"payload\": {\n      \"nom\": \"Bistrot du Centre\",\n      \"code_postal\": \"75002\",\n      \"ville\": \"Paris\",\n      \"date_creation\": \"2025-10-29\"\n    },\n    \"created_at\": \"2025-10-31T05:01:44.502300Z\",\n    \"sent_at\": \"2025-10-31T05:01:59.114400Z\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "GET Sync Runs",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Admin-Token",
+                "value": "{{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/sync-runs?limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "sync-runs"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "description": "Nombre maximum d'exécutions à retourner (1-200)."
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Example 200",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Admin-Token",
+                    "value": "{{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/sync-runs?limit=20",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "sync-runs"
+                  ],
+                  "query": [
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    }
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "[\n  {\n    \"id\": \"9a4e6a4b-57a0-4221-a00c-7b7b9529f2fd\",\n    \"scope_key\": \"restaurants_incremental\",\n    \"run_type\": \"incremental\",\n    \"status\": \"running\",\n    \"started_at\": \"2025-10-31T05:00:01.104400Z\",\n    \"finished_at\": null,\n    \"api_call_count\": 14,\n    \"fetched_records\": 260,\n    \"created_records\": 42,\n    \"last_cursor\": \"S1dKSU5saz0=\",\n    \"query_checksum\": \"7b41f6100026b0d9b73d95245bb59aec\",\n    \"resumed_from_run_id\": null,\n    \"notes\": \"Reprise depuis lot 2025-10-30\",\n    \"total_expected_records\": 640,\n    \"progress\": 0.41,\n    \"estimated_remaining_seconds\": 320.5,\n    \"estimated_completion_at\": \"2025-10-31T05:05:21.604400Z\"\n  },\n  {\n    \"id\": \"d2719c1c-86f2-41aa-82c8-1b6bc2fe9efb\",\n    \"scope_key\": \"restaurants_full\",\n    \"run_type\": \"full\",\n    \"status\": \"success\",\n    \"started_at\": \"2025-10-30T01:15:42.502345Z\",\n    \"finished_at\": \"2025-10-30T03:47:08.112233Z\",\n    \"api_call_count\": 178,\n    \"fetched_records\": 4235,\n    \"created_records\": 387,\n    \"last_cursor\": \"OEFHSlpTPT0=\",\n    \"query_checksum\": \"cf657aa9c5be06c098628c1cf75d3a76\",\n    \"resumed_from_run_id\": null,\n    \"notes\": null,\n    \"total_expected_records\": 4235,\n    \"progress\": 1.0,\n    \"estimated_remaining_seconds\": 0.0,\n    \"estimated_completion_at\": \"2025-10-30T03:47:08.112233Z\"\n  }\n]"
+            }
+          ]
+        },
+        {
+          "name": "GET Sync State",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Admin-Token",
+                "value": "{{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/sync-state",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "sync-state"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Example 200",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Admin-Token",
+                    "value": "{{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/sync-state",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "sync-state"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "[\n  {\n    \"scope_key\": \"restaurants_incremental\",\n    \"last_successful_run_id\": \"1c34c3b3-ff16-4f6d-8b80-7ef58a4a1bf9\",\n    \"last_cursor\": \"S1dKSU5saz0=\",\n    \"cursor_completed\": false,\n    \"last_synced_at\": \"2025-10-31T05:01:01.700000Z\",\n    \"last_total\": 640,\n    \"last_treated_max\": \"2025-10-30T23:59:59Z\",\n    \"query_checksum\": \"7b41f6100026b0d9b73d95245bb59aec\",\n    \"updated_at\": \"2025-10-31T05:01:01.900000Z\"\n  },\n  {\n    \"scope_key\": \"restaurants_full\",\n    \"last_successful_run_id\": \"d2719c1c-86f2-41aa-82c8-1b6bc2fe9efb\",\n    \"last_cursor\": \"OEFHSlpTPT0=\",\n    \"cursor_completed\": true,\n    \"last_synced_at\": \"2025-10-30T03:47:08.000000Z\",\n    \"last_total\": 4235,\n    \"last_treated_max\": null,\n    \"query_checksum\": \"cf657aa9c5be06c098628c1cf75d3a76\",\n    \"updated_at\": \"2025-10-30T03:47:08.500000Z\"\n  }\n]"
+            }
+          ]
+        },
+        {
+          "name": "GET Recent Alerts",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Admin-Token",
+                "value": "{{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/alerts/recent?limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "alerts",
+                "recent"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "description": "Nombre maximum d'alertes à retourner (1-200)."
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Example 200",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Admin-Token",
+                    "value": "{{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/alerts/recent?limit=20",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "alerts",
+                    "recent"
+                  ],
+                  "query": [
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    }
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "[\n  {\n    \"id\": \"2358abe8-4c7b-46cf-9f42-94b65c7f38df\",\n    \"run_id\": \"9a4e6a4b-57a0-4221-a00c-7b7b9529f2fd\",\n    \"siret\": \"12345678900011\",\n    \"recipients\": [\n      \"ops@example.com\",\n      \"marketing@example.com\"\n    ],\n    \"payload\": {\n      \"nom\": \"Bistrot du Centre\",\n      \"code_postal\": \"75002\",\n      \"ville\": \"Paris\",\n      \"date_creation\": \"2025-10-29\"\n    },\n    \"created_at\": \"2025-10-31T05:01:44.502300Z\",\n    \"sent_at\": \"2025-10-31T05:01:59.114400Z\"\n  },\n  {\n    \"id\": \"1ae4760f-c091-4f73-b938-36cfab047d07\",\n    \"run_id\": \"d2719c1c-86f2-41aa-82c8-1b6bc2fe9efb\",\n    \"siret\": \"98765432100022\",\n    \"recipients\": [\n      \"ops@example.com\"\n    ],\n    \"payload\": {\n      \"nom\": \"Chez Jeanne\",\n      \"code_postal\": \"69001\",\n      \"ville\": \"Lyon\",\n      \"date_creation\": \"2025-10-28\"\n    },\n    \"created_at\": \"2025-10-30T04:02:18.764500Z\",\n    \"sent_at\": null\n  }\n]"
+            }
+          ]
+        },
+        {
+          "name": "GET Alerts Export",
+          "request": {
+            "method": "GET",
+            "description": "Export Excel des alertes filtrées sur la date de création d'établissement.",
+            "header": [
+              {
+                "key": "X-Admin-Token",
+                "value": "{{adminToken}}"
+              },
+              {
+                "key": "Accept",
+                "value": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/alerts/export?days=30",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "alerts",
+                "export"
+              ],
+              "query": [
+                {
+                  "key": "days",
+                  "value": "30",
+                  "description": "Fenêtre glissante basée sur `date_creation` (1-365)."
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Example 200",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Admin-Token",
+                    "value": "{{adminToken}}"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/alerts/export?days=30",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "alerts",
+                    "export"
+                  ],
+                  "query": [
+                    {
+                      "key": "days",
+                      "value": "30"
+                    }
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "plain",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                }
+              ],
+              "body": ""
+            }
+          ]
+        },
+        {
+          "name": "GET Establishments",
+          "request": {
+            "method": "GET",
+            "description": "Liste les établissements actifs triés par date de création décroissante.",
+            "header": [
+              {
+                "key": "X-Admin-Token",
+                "value": "{{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/establishments?limit=20&offset=0&q=750",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "establishments"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "description": "Nombre maximum de lignes (1-200)."
+                },
+                {
+                  "key": "offset",
+                  "value": "0",
+                  "description": "Décalage de pagination."
+                },
+                {
+                  "key": "q",
+                  "value": "750",
+                  "description": "Filtre partiel sur SIRET, nom ou code postal."
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Example 200",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Admin-Token",
+                    "value": "{{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/establishments?limit=20&offset=0&q=750",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "establishments"
+                  ],
+                  "query": [
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    },
+                    {
+                      "key": "offset",
+                      "value": "0"
+                    },
+                    {
+                      "key": "q",
+                      "value": "750"
+                    }
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "[\n  {\n    \"siret\": \"12345678900011\",\n    \"siren\": \"123456789\",\n    \"name\": \"Bistrot du Centre\",\n    \"naf_code\": \"56.10A\",\n    \"naf_libelle\": \"Restauration traditionnelle\",\n    \"etat_administratif\": \"A\",\n    \"code_postal\": \"75002\",\n    \"libelle_commune\": \"PARIS\",\n    \"date_creation\": \"2018-04-12\",\n    \"date_debut_activite\": \"2018-04-12\",\n    \"first_seen_at\": \"2025-10-29T08:15:10.000000Z\",\n    \"last_seen_at\": \"2025-10-31T05:01:01.000000Z\",\n    \"updated_at\": \"2025-10-31T05:01:01.000000Z\"\n  },\n  {\n    \"siret\": \"98765432100022\",\n    \"siren\": \"987654321\",\n    \"name\": \"Chez Jeanne\",\n    \"naf_code\": \"56.10A\",\n    \"naf_libelle\": \"Restauration traditionnelle\",\n    \"etat_administratif\": \"A\",\n    \"code_postal\": \"75011\",\n    \"libelle_commune\": \"PARIS\",\n    \"date_creation\": \"2019-01-08\",\n    \"date_debut_activite\": \"2019-01-08\",\n    \"first_seen_at\": \"2025-10-30T04:02:18.000000Z\",\n    \"last_seen_at\": \"2025-10-31T05:00:44.000000Z\",\n    \"updated_at\": \"2025-10-31T05:00:44.000000Z\"\n  }\n]"
+            }
+          ]
+        },
+        {
+          "name": "DELETE Establishment",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Admin-Token",
+                "value": "{{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/establishments/{{siret}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "establishments",
+                "{{siret}}"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Example 204",
+              "originalRequest": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "X-Admin-Token",
+                    "value": "{{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/establishments/12345678900011",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "establishments",
+                    "12345678900011"
+                  ]
+                }
+              },
+              "status": "No Content",
+              "code": 204,
+              "_postman_previewlanguage": "plain",
+              "header": []
+            },
+            {
+              "name": "Example 404",
+              "originalRequest": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "X-Admin-Token",
+                    "value": "{{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/establishments/00000000000000",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "establishments",
+                    "00000000000000"
+                  ]
+                }
+              },
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"detail\": \"Établissement introuvable.\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "DELETE All Establishments",
+          "request": {
+            "method": "DELETE",
+            "description": "Supprime tous les établissements actifs après validation exacte de la phrase de confirmation `DELETE ALL ESTABLISHMENTS`.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Admin-Token",
+                "value": "{{adminToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"confirm_phrase\": \"DELETE ALL ESTABLISHMENTS\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/establishments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "establishments"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Example 200",
+              "originalRequest": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Admin-Token",
+                    "value": "{{adminToken}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"confirm_phrase\": \"DELETE ALL ESTABLISHMENTS\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/admin/establishments",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "establishments"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"deleted\": 4235\n}"
+            },
+            {
+              "name": "Example 400",
+              "originalRequest": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Admin-Token",
+                    "value": "{{adminToken}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"confirm_phrase\": \"WRONG VALUE\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/admin/establishments",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "establishments"
+                  ]
+                }
+              },
+              "status": "Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"detail\": \"Phrase de confirmation invalide.\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "POST Sirene New Establishments",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Admin-Token",
+                "value": "{{adminToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"start_date\": \"2025-10-30\",\n  \"end_date\": \"2025-10-31\",\n  \"naf_codes\": [\"56.10A\"],\n  \"limit\": 50\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/tools/sirene/new-establishments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "tools",
+                "sirene",
+                "new-establishments"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Example 200",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Admin-Token",
+                    "value": "{{adminToken}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"start_date\": \"2025-10-30\",\n  \"end_date\": \"2025-10-31\",\n  \"naf_codes\": [\"56.10A\"],\n  \"limit\": 50\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/admin/tools/sirene/new-establishments",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "tools",
+                    "sirene",
+                    "new-establishments"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"total\": 2,\n  \"returned\": 2,\n  \"establishments\": [\n    {\n      \"siret\": \"12345678900011\",\n      \"siren\": \"123456789\",\n      \"nic\": \"00011\",\n      \"name\": \"Bistrot du Centre\",\n      \"naf_code\": \"5610A\",\n      \"naf_label\": \"Restauration traditionnelle\",\n      \"date_creation\": \"2025-10-30\",\n      \"is_individual\": true,\n      \"leader_name\": \"Jeanne Dupont\",\n      \"denomination_unite_legale\": \"Bistrot du Centre\",\n      \"denomination_usuelle_unite_legale\": null,\n      \"denomination_usuelle_etablissement\": \"Bistrot du Centre\",\n      \"enseigne1\": \"Bistrot du Centre\",\n      \"enseigne2\": null,\n      \"enseigne3\": null,\n      \"complement_adresse\": null,\n      \"numero_voie\": \"12\",\n      \"indice_repetition\": null,\n      \"type_voie\": \"RUE\",\n      \"libelle_voie\": \"de la Paix\",\n      \"code_postal\": \"75002\",\n      \"libelle_commune\": \"Paris\",\n      \"libelle_commune_etranger\": null\n    }\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "POST Sync",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Admin-Token",
+                "value": "{{adminToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"check_for_updates\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/sync",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "sync"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Example 202",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Admin-Token",
+                    "value": "{{adminToken}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"check_for_updates\": true\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/admin/sync",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "sync"
+                  ]
+                }
+              },
+              "status": "Accepted",
+              "code": 202,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"id\": \"f409b1ac-0883-4f1d-92cf-7df2f10a2c9d\",\n  \"scope_key\": \"restaurants\",\n  \"run_type\": \"sync\",\n  \"status\": \"pending\",\n  \"started_at\": \"2025-10-31T06:00:00.000000Z\",\n  \"finished_at\": null,\n  \"api_call_count\": 0,\n  \"fetched_records\": 0,\n  \"created_records\": 0,\n  \"last_cursor\": null,\n  \"query_checksum\": \"a4f2c0895c0dd64d3f1f2dc02d6aab6c\",\n  \"resumed_from_run_id\": null,\n  \"notes\": \"dateDernierTraitementMaximum: 2025-10-30T22:00:00+00:00\",\n  \"total_expected_records\": null,\n  \"progress\": null,\n  \"estimated_remaining_seconds\": null,\n  \"estimated_completion_at\": null\n}"
+            },
+            {
+              "name": "Example 202 - No update",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Admin-Token",
+                    "value": "{{adminToken}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"check_for_updates\": true\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/admin/sync",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "sync"
+                  ]
+                }
+              },
+              "status": "Accepted",
+              "code": 202,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"detail\": \"Aucune mise à jour disponible.\"\n}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

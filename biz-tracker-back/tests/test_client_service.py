@@ -1,0 +1,179 @@
+"""Tests for helpers in client_service handling listing status filters."""
+from __future__ import annotations
+
+import unittest
+from types import SimpleNamespace
+from uuid import UUID, uuid4
+
+from app.services import client_service
+from app.services.client_service import assign_establishments_to_clients, filter_clients_by_listing_status
+
+
+def _make_client(
+    *,
+    listing_statuses: list[str] | None = None,
+    subscriptions: list[object] | None = None,
+    departments: list[object] | None = None,
+    identifier: UUID | None = None,
+) -> SimpleNamespace:
+    return SimpleNamespace(
+        id=identifier or uuid4(),
+        listing_statuses=listing_statuses if listing_statuses is not None else ["recent_creation"],
+        subscriptions=subscriptions or [],
+        recipients=[],
+        departments=departments or [],
+    )
+
+
+def _make_subscription(naf_code: str, *, is_active: bool = True) -> SimpleNamespace:
+    return SimpleNamespace(subcategory=SimpleNamespace(naf_code=naf_code, is_active=is_active))
+
+
+def _make_establishment(
+    naf_code: str,
+    status: str,
+    *,
+    siret: str,
+    code_postal: str | None = None,
+    code_commune: str | None = None,
+) -> SimpleNamespace:
+    return SimpleNamespace(
+        naf_code=naf_code,
+        google_listing_age_status=status,
+        siret=siret,
+        code_postal=code_postal,
+        code_commune=code_commune,
+    )
+
+
+class ClientServiceListingStatusTests(unittest.TestCase):
+    def test_get_active_clients_and_all_clients_query_session(self) -> None:
+        client = _make_client()
+
+        class DummyResult:
+            def __init__(self, values):
+                self._values = values
+
+            def scalars(self):
+                return iter(self._values)
+
+        class DummySession:
+            def __init__(self):
+                self.calls = 0
+
+            def execute(self, stmt):  # noqa: ARG002 - we only count invocations
+                self.calls += 1
+                return DummyResult([client])
+
+        session = DummySession()
+
+        active_clients = client_service.get_active_clients(session)
+        all_clients = client_service.get_all_clients(session)
+
+        self.assertEqual(active_clients, [client])
+        self.assertEqual(all_clients, [client])
+        self.assertEqual(session.calls, 2)
+
+    def test_get_admin_emails_filters_empty_values(self) -> None:
+        class DummyResult:
+            def __init__(self, values):
+                self._values = values
+
+            def scalars(self):
+                return iter(self._values)
+
+        class DummySession:
+            def execute(self, stmt):  # noqa: ARG002
+                return DummyResult(["alerts@example.com", "", None])
+
+        emails = client_service.get_admin_emails(DummySession())
+
+        self.assertEqual(emails, ["alerts@example.com"])
+
+    def test_assignments_filter_by_status_without_subscriptions(self) -> None:
+        clients = [
+            _make_client(listing_statuses=["recent_creation"], identifier=uuid4()),
+            _make_client(listing_statuses=["not_recent_creation"], identifier=uuid4()),
+        ]
+        establishments = [
+            _make_establishment("56.10A", "recent_creation", siret="00000000000001"),
+            _make_establishment("56.10A", "not_recent_creation", siret="00000000000002"),
+        ]
+
+        assignments, filters_enabled = assign_establishments_to_clients(clients, establishments)
+
+        self.assertTrue(filters_enabled)
+        self.assertEqual({est.siret for est in assignments[clients[0].id]}, {"00000000000001"})
+        self.assertEqual({est.siret for est in assignments[clients[1].id]}, {"00000000000002"})
+
+    def test_assignments_honor_status_with_subscriptions(self) -> None:
+        client_recent = _make_client(
+            listing_statuses=["recent_creation"],
+            subscriptions=[_make_subscription("5610A")],
+            identifier=uuid4(),
+        )
+        client_not_recent = _make_client(
+            listing_statuses=["not_recent_creation"],
+            subscriptions=[_make_subscription("5610B")],
+            identifier=uuid4(),
+        )
+        establishments = [
+            _make_establishment("5610A", "recent_creation", siret="10000000000000"),
+            _make_establishment("5610B", "not_recent_creation", siret="20000000000000"),
+            _make_establishment("5610A", "not_recent_creation", siret="30000000000000"),
+        ]
+
+        assignments, filters_enabled = assign_establishments_to_clients(
+            [client_recent, client_not_recent],
+            establishments,
+        )
+
+        self.assertTrue(filters_enabled)
+        self.assertEqual({est.siret for est in assignments[client_recent.id]}, {"10000000000000"})
+        self.assertEqual({est.siret for est in assignments[client_not_recent.id]}, {"20000000000000"})
+
+    def test_filter_clients_by_listing_status(self) -> None:
+        clients = [
+            _make_client(listing_statuses=["recent_creation", "not_recent_creation"], identifier=uuid4()),
+            _make_client(listing_statuses=["not_recent_creation"], identifier=uuid4()),
+        ]
+
+        filtered, applied = filter_clients_by_listing_status(clients, "recent_creation")
+
+        self.assertTrue(applied)
+        self.assertEqual(len(filtered), 1)
+        self.assertIn("recent_creation", filtered[0].listing_statuses)
+
+        def test_assignments_filter_by_department(self) -> None:
+            client_paris = _make_client(
+                listing_statuses=["recent_creation"],
+                subscriptions=[_make_subscription("5610A")],
+                departments=[SimpleNamespace(code="75")],
+                identifier=uuid4(),
+            )
+            client_all = _make_client(
+                listing_statuses=["recent_creation"],
+                subscriptions=[_make_subscription("5610A")],
+                departments=[],
+                identifier=uuid4(),
+            )
+            establishments = [
+                _make_establishment("5610A", "recent_creation", siret="40000000000000", code_postal="75001"),
+                _make_establishment("5610A", "recent_creation", siret="50000000000000", code_postal="33000"),
+            ]
+
+            assignments, filters_enabled = assign_establishments_to_clients(
+                [client_paris, client_all],
+                establishments,
+            )
+
+            self.assertTrue(filters_enabled)
+            self.assertEqual({est.siret for est in assignments[client_paris.id]}, {"40000000000000"})
+            self.assertEqual(
+                {est.siret for est in assignments[client_all.id]},
+                {"40000000000000", "50000000000000"},
+            )
+
+
+if __name__ == "__main__":
+    unittest.main()

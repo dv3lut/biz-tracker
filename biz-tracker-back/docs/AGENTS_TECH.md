@@ -1,0 +1,61 @@
+# Choix techniques
+
+- **Langage & runtime** : Python 3.11+, organisation modulaire (`app/clients`, `app/services`, `app/db`).
+- **Hygiène code** : gardez chaque fichier de service en dessous d’environ 300–400 lignes. Dès que la logique devient volumineuse (multiples blocs `if`, helpers internes, constantes), scindez-la dans des modules dédiés (`app/services/<feature>/...`) en réutilisant les mêmes conventions d’import que `google_business/google_business_service`.
+- **Config** : Pydantic Settings (v2) + `.env` avec séparateur `__` pour les sous-structures (ex. `SIRENE__API_TOKEN`). Paramètres API disponibles via `API__*` (host, port, header, admin token, activation des docs). Le flag historique `GOOGLE__ALERTS_ONLY_RECENT_CREATIONS` a été retiré : le filtrage se fait désormais côté clients et exports via les statuts sélectionnés.
+- **HTTP** : `requests` + `RateLimiter` logiciel + retry sur statuts 429/5xx (back-off exponentiel).
+- **Persistence** : PostgreSQL (Docker Compose) + SQLAlchemy 2.0 (ORM classique).
+  - Tables principales : `establishments`, `sync_runs`, `sync_state`, `alerts`.
+  - Les objets sont créés via `app/db/models.py`; exécution des migrations simplifiée via `Base.metadata.create_all`.
+- **Transformation** : `app/services/establishment_mapper.extract_fields` applique les règles métiers (fallbacks de nom, parsing dates/ISO).
+- **Synchronisation** : `SyncService`
+  - Collecte unifiée utilisant le curseur Sirene (`nombre=1000`), avec une fenêtre de création configurable par run via le paramètre `months_back` (nombre de mois dans le passé). Si non fourni, la synchro est incrémentale et regarde au moins `sync.incremental_lookback_months` mois en arrière (tri `dateCreationEtablissement desc`).
+  - Déclenchements API exécutés en tâche de fond (FastAPI `BackgroundTasks`) avec un statut `pending` renvoyé immédiatement au front.
+  - Possibilité de vérifier le `service informations` avant de lancer (`check_for_updates`) afin d’éviter un run s’il n’y a pas de nouveautés.
+  - Scheduler interne (`SyncScheduler`) démarré avec l’API : scrute périodiquement les mises à jour (`sync.auto_poll_minutes`) et respecte un délai minimum `sync.minimum_delay_minutes` avant de relancer.
+  - Reprise via `SyncState.last_cursor`, suivi des traitements via `SyncState.last_treated_max` et fenêtre incrémentale via `SyncState.last_creation_date`.
+  - Le périmètre métier découle des entrées actives dans `naf_subcategories` : `_load_active_naf_codes` lit tous les codes (`is_active=true`) et les applique au builder de requête Sirene. Plus aucun code NAF n’est défini dans `.env`, ce qui garantit que le front/back restent alignés sur la même table de référence.
+  - Chaque sous-catégorie possède désormais un champ `description` (facultatif) pour enrichir les infos clients et alimenter les mots-clés utilisés par Google. Le back le sérialise dans `NafSubCategoryOut` et le front l’expose dans la modale de configuration.
+  - Les catégories NAF disposent en plus d’un champ `keywords` (JSON) éditable dans la modale front : ces expressions sont ajoutées à `_resolve_expected_keywords` afin d’améliorer l’appariement Google sans dépendre uniquement des libellés officiels.
+  - `_collect_sync` journalise chaque page, incrémente `api_call_count`, `fetched_records`, `created_records`, met à jour `SyncState` après commit partiel et sécurise la reprise même en cas de plantage intermédiaire.
+  - Les mises à jour de SIRET existants sont détectées (diff des champs) puis comptabilisées dans `sync_runs.updated_records` avec log structuré `sync.updated_establishments.batch`.
+  - Les correspondances Google sont catégorisées : `google_immediate_matched_count` pour les créations du run, `google_late_matched_count` pour le backlog.
+  - Chaque run conserve un résumé (`sync_runs.summary`) incluant statistiques, échantillons (top 10) et statut d’envoi e-mail.
+- **Alertes** :
+  - Logging dédié (`logging_config` définit un logger `alerts` -> `logs/alerts.log`).
+  - Envoi SMTP optionnel (classe `EmailService`, désactivée si `EMAIL__ENABLED=false`) avec presets `EMAIL__PROVIDER` (`mailhog`, `mailjet`, `custom`) et endpoint de validation `POST /admin/email/test`.
+  - Les destinataires sont pilotés depuis la base (`client_recipients` pour les alertes, `admin_recipients` pour les synthèses) et le tout premier run supprime les envois pour éviter un afflux massif.
+  - Export Excel ciblé via `GET /admin/alerts/export?days=X` (filtre sur `establishments.date_creation`) pour suivre les créations récentes indépendamment de la date d’alerte.
+  - Chaque client dispose du champ JSONB `listing_statuses`. `ClientService.resolve_client_listing_statuses` applique par défaut la liste entière (`recent_creation`, `recent_creation_missing_contact`, `not_recent_creation`) et rejette toute tentative d'enregistrer une sélection vide. Les alertes, exports clients et e-mails se basent exclusivement sur ces statuts autorisés.
+- **Rapport e-mail** : `_send_run_summary_email` diffuse une synthèse quotidienne aux entrées `admin_recipients` (si SMTP actif/configuré), avec fallback silencieux en cas d’absence de destinataires.
+- **Enrichissement Google Places** :
+  - Service `GoogleBusinessService` + `GooglePlacesClient` activé lorsque `GOOGLE__API_KEY` est défini (Places API + Geocoding API requis côté Google Cloud).
+  - Paramètres ajustables via `.env` (`GOOGLE__*`). Sans clé, aucune requête n’est émise et les colonnes Google restent à `pending`.
+  - Chaque run enregistre les compteurs Google (file totale, éligibles, correspondances, backlog) dans `sync_runs` pour exploitation API/UI.
+  - Export XLSX disponible via `build_google_places_workbook` et l’endpoint `GET /admin/google/places-export` (paramètres obligatoires `start_date` et `end_date` au format ISO `YYYY-MM-DD`, filtrage + tri sur `establishments.date_creation`). Le paramètre `mode` permet de choisir `admin` (tous les champs techniques, défaut) ou `client` (mêmes informations que l’e-mail client : nom, adresse, Catégorie, lien Google). `listing_statuses` est une nouvelle query optionnelle acceptant 1 à 3 valeurs ; l’API normalise la sélection et refuse toute requête vide afin de rester alignée avec la configuration des clients.
+  - La logique Google est fragmentée dans `app/services/google_business/` : `google_constants.py` (tokens/fields partagés), `google_types.py` (dataclasses), `google_keywords.py` (mots-clés NAF) et `google_lookup_engine.py` (orchestrateur de requêtes). `GoogleBusinessService` orchestre uniquement la sélection et la planification, ce qui garde le fichier principal sous la barre des 400 lignes.
+  - Statuts persistés dans `establishments.google_check_status` : `pending`, `found`, `not_found`, `insufficient`, `type_mismatch` (fiches rejetées car la catégorie Google ne correspond pas au NAF attendu), plus `other` comme garde-fou lors des agrégations.
+  - Les contrôles de cohérence ne s’appuient plus sur une liste statique de types Google. `_resolve_expected_keywords` extrait des mots-clés depuis `naf_subcategories`/`naf_categories` (noms + descriptions) ainsi que depuis le libellé NAF stocké sur l’établissement, puis `_matches_expected_google_category` compare ces mots-clés aux `types` remontés par Google (tokenisation + `SequenceMatcher`).
+  - Même en cas de `type_mismatch`, la fiche la plus pertinente est désormais persistée (`google_place_id`, `google_place_url`, `google_listing_origin_*`, `google_listing_age_status`, confiances) pour faciliter l’audit.
+  - Les types génériques (`point_of_interest`, `store`, `food`, etc.) sont ignorés, ce qui réduit les faux positifs. Le seuil de similarité est piloté par `GOOGLE__CATEGORY_SIMILARITY_THRESHOLD` (par défaut `0.72`), valeur à ajuster si l’on détecte des rejets injustifiés ou, au contraire, des correspondances trop permissives.
+- **Observabilité** :
+  - Les logs sont sérialisés en JSON (service `observability.log_event`) et peuvent être expédiés directement vers Elasticsearch (`LOGGING__ELASTICSEARCH__*`).
+  - Les événements suivent la convention `event.name` (`sync.run.*`, `sync.new_establishment`, `sync.google.*`, `sync.updated_establishment*`, `sync.alert.created`, `alerts.email.*`, `sync.summary.email.*`, `scheduler.*`, `email.test_sent`) pour alimenter Kibana.
+- **Analytics API** : `GET /admin/stats/dashboard` centralise les agrégations (séries journalières, répartition Google globale et du dernier run, alertes envoyées, états administratifs). Les schémas Pydantic `DashboardMetrics` et `DashboardRunBreakdown` décrivent ces payloads.
+  - Le payload inclut également `naf_category_breakdown` (par catégorie et sous-catégorie NAF actives) pour suivre l’équilibre des établissements suivis côté back-office.
+  - Chaque entrée de `naf_category_breakdown` expose maintenant les statistiques Google détaillées (trouvées, sans résultat, insuffisantes, en attente, autres) ainsi que l’ancienneté des fiches (création récente/ancienne/inconnue) pour chaque sous-catégorie. Le front les affiche sous forme de tableau de monitoring.
+- **API** : FastAPI (`app/api`) exposant des routes d’admin sécurisées par jeton (`X-Admin-Token` configurable). Les dépendances gèrent les sessions SQLAlchemy et les contrôles d’accès.
+  - Nouveaux endpoints : `GET /admin/google/places-export` (XLSX), `GET /admin/stats/dashboard` (agrégations journalières) et journalisation `sync.google.summary`.
+- **CORS** : middleware FastAPI activé. La liste des origines autorisées est configurable via `API__ALLOWED_ORIGINS` (liste JSON ou chaîne séparée par des virgules, valeur par défaut `http://localhost:5173`).
+- **CLI** : Typer (`python -m app …`). Commandes `init-db`, `sync`, `serve` (lance Uvicorn). Aliases historiques `sync-full` et `sync-incremental` redirigent vers `sync`.
+- **Tests & QA** : exécuter systématiquement `python -m pytest -W error` depuis `biz-tracker-back/` (le `pytest.ini` ajoute `--cov=app --cov-report=term-missing --cov-report=xml --cov-config=.coveragerc`). La CI locale doit rester à ≥95 % de couverture et sans aucun warning ; si des scripts automatisés sont ajoutés (`make test`, `tox`, etc.), ils doivent appeler cette commande en interne.
+
+## UI d’administration
+
+- Projet React + Vite (`biz-tracker-admin-ui`) placé hors du dépôt backend (dossier parent). S’appuie sur React Query pour appeler les endpoints `/admin/*`.
+- Configuration via `.env` côté UI (`VITE_APP_API_BASE_URL`). Build `npm run build`, dev `npm run dev` (port 5173).
+  - `StatsSummaryCard`, `SyncRunsTable`, `SyncStateTable`, `AlertsList`, `EstablishmentsSection` consomment les endpoints historiques (`/stats/summary`, `/sync-runs`, `/sync-state`, `/alerts/recent`, `/establishments`).
+  - La section établissements affiche désormais un indicateur "Entreprise individuelle" et permet de filtrer la liste sur ce critère (paramètre `is_individual`).
+  - `DashboardInsights` exploite `GET /admin/stats/dashboard` (30 jours par défaut, fenêtre réduite à 14 jours sur les graphiques) et s’appuie sur un composant `BarChart` CSS-only (pas de librairie externe) pour afficher les séries.
+  - Les métriques sont formatées via `utils/format.ts`; les footnotes (nombre de runs par jour) sont calculées côté front pour garder le payload compact.
+  - `ClientModal` et `GoogleExportModal` exposent des cases à cocher « Statuts de fiches Google » synchronisées avec l’API (`listing_statuses`). `ClientModal` exige qu’au moins un statut soit coché avant de valider, tandis que `GoogleExportModal` reprend la sélection globale et la transmet à `GET /admin/google/places-export`.
