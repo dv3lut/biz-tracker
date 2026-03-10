@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from app.clients.apify_client import ApifyClient, LinkedInSearchInput
 from app.config import get_settings
 from app.db import models
-from app.observability import log_event
+from app.observability import log_event, serialize_exception
 from app.services.client_service import get_admin_emails
 from app.services.email_service import EmailService
 from app.utils.dates import utcnow
@@ -61,7 +61,7 @@ class LinkedInLookupService:
         self._settings = getattr(settings, "apify", None)
         self._client: ApifyClient | None = None
         if self._settings and self._settings.enabled:
-            self._client = ApifyClient()
+            self._client = ApifyClient(settings=self._settings)
         self._api_call_count = 0
         self._error_summaries: dict[tuple[str, str], dict[str, object]] = {}
 
@@ -744,7 +744,7 @@ class LinkedInLookupService:
                         run_id=str(run_id) if run_id else None,
                         director_id=str(director.id),
                         establishment_siret=establishment.siret,
-                        error=str(exc),
+                        error=serialize_exception(exc),
                     )
 
                 # Update progress callback
@@ -849,7 +849,7 @@ class LinkedInLookupService:
         except Exception as exc:  # noqa: BLE001 - log and continue
             log_event(
                 "sync.linkedin.api_error.email.error",
-                error={"type": type(exc).__name__, "message": str(exc)},
+                error=serialize_exception(exc),
                 **payload,
             )
             return

@@ -158,3 +158,38 @@ def test_parse_int_handles_invalid_values():
     assert mapper._parse_int(None) is None
     assert mapper._parse_int("invalid") is None
     assert mapper._parse_int("12") == 12
+
+
+# --- Regression: Sirene may return null for optional objects (not just absent keys)
+
+
+def test_extract_name_with_null_unite_legale():
+    """Sirene peut renvoyer uniteLegale: null — ne doit pas lever AttributeError."""
+    payload = _build_payload(uniteLegale=None)
+    result = mapper.extract_name(payload)
+    # Le nom "Nom public" vient de denominationUsuelleEtablissement de la période courante
+    assert result == "Nom public"
+
+
+def test_extract_fields_with_null_unite_legale():
+    """extract_fields doit survivre à uniteLegale: null."""
+    payload = _build_payload(uniteLegale=None)
+    fields = mapper.extract_fields(payload)
+    assert fields["siret"] == "12345678901234"
+    assert fields["denomination_unite_legale"] is None
+    assert fields["categorie_juridique"] is None
+
+
+def test_extract_fields_with_null_periodes_etablissement():
+    """extract_fields doit survivre à periodesEtablissement: null."""
+    payload = _build_payload(periodesEtablissement=None)
+    fields = mapper.extract_fields(payload)
+    assert fields["siret"] == "12345678901234"
+    assert fields["naf_code"] is None
+
+
+def test_extract_fields_with_null_adresse():
+    """extract_fields doit survivre à adresseEtablissement: null (repli sur payload racine)."""
+    payload = _build_payload(adresseEtablissement=None)
+    fields = mapper.extract_fields(payload)
+    assert fields["siret"] == "12345678901234"

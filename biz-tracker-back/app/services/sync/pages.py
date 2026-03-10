@@ -9,7 +9,7 @@ from datetime import date
 from typing import TYPE_CHECKING
 
 from app.db import models
-from app.observability import log_event, serialize_establishment
+from app.observability import log_event, serialize_establishment, serialize_exception
 from app.services.client_service import get_admin_emails
 from app.services.email_service import EmailService
 from app.utils.dates import utcnow
@@ -82,10 +82,10 @@ def _notify_admins_payload_issue(
             "sync.collection.payload.alert.error",
             level=logging.ERROR,
             reason="send_error",
-            send_error={"type": type(exc).__name__, "message": str(exc)},
+            send_error=serialize_exception(exc),
             **payload,
         )
-        _LOGGER.warning("Échec d'envoi de l'alerte email payload Sirene: %s", exc)
+        _LOGGER.warning("Échec d'envoi de l'alerte email payload Sirene: %s", exc, exc_info=True)
         return
 
     log_event("sync.collection.payload.alert.sent", recipients=recipients, subject=subject, **payload)

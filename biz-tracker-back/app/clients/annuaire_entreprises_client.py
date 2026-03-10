@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional, Sequence
 import requests
 from requests import Session
 
-from app.config import get_settings
+from app.config import AnnuaireSettings, get_settings
 from app.observability import log_event
 from app.services.rate_limiter import RateLimiter
 
@@ -69,6 +69,8 @@ def _extract_directors(dirigeants: list[dict[str, Any]]) -> list[DirectorInfo]:
     """Extract all directors from the dirigeants list."""
     result: list[DirectorInfo] = []
     for d in dirigeants:
+        if not isinstance(d, dict):
+            continue
         type_dir = d.get("type_dirigeant", "")
         quality = d.get("qualite")
         nationality = d.get("nationalite")
@@ -86,6 +88,9 @@ def _extract_directors(dirigeants: list[dict[str, Any]]) -> list[DirectorInfo]:
                 nationality=nationality.strip() if nationality else None,
             ))
         elif type_dir == "personne morale":
+            raw_siren = d.get("siren")
+            # Truncate to 9 chars max (DB column is varchar(9))
+            siren_val = raw_siren[:9] if raw_siren else None
             result.append(DirectorInfo(
                 first_names=None,
                 last_name=None,
@@ -93,7 +98,7 @@ def _extract_directors(dirigeants: list[dict[str, Any]]) -> list[DirectorInfo]:
                 birth_year=None,
                 quality=quality.strip() if quality else None,
                 type_dirigeant="personne morale",
-                siren=d.get("siren"),
+                siren=siren_val,
                 denomination=(d.get("denomination") or "").strip() or None,
                 nationality=nationality.strip() if nationality else None,
             ))
@@ -103,8 +108,13 @@ def _extract_directors(dirigeants: list[dict[str, Any]]) -> list[DirectorInfo]:
 class AnnuaireEntreprisesClient:
     """HTTP client for the Recherche Entreprises API with retry logic."""
 
-    def __init__(self) -> None:
-        settings = get_settings().annuaire
+    def __init__(self, settings: AnnuaireSettings | Any | None = None) -> None:
+        if settings is None:
+            try:
+                settings = get_settings().annuaire
+            except Exception as exc:  # pragma: no cover - defensive fallback
+                _LOGGER.debug("Falling back to disabled annuaire settings: %s", exc)
+                settings = AnnuaireSettings(enabled=False)
         self._base_url = settings.api_base_url.rstrip("/")
         self._timeout = settings.request_timeout_seconds
         self._max_retries = settings.max_retries
@@ -386,6 +396,12 @@ class AnnuaireEntreprisesClient:
                 success=False, error="invalid JSON",
             )
 
+        if not isinstance(data, dict):
+            return AnnuaireResult(
+                siren=siren, legal_unit_name=None, directors=[],
+                success=False, error="unexpected JSON body (not an object)",
+            )
+
         results_list = data.get("results", [])
         if not results_list:
             return AnnuaireResult(
@@ -394,6 +410,11 @@ class AnnuaireEntreprisesClient:
             )
 
         entry = results_list[0]
+        if not isinstance(entry, dict):
+            return AnnuaireResult(
+                siren=siren, legal_unit_name=None, directors=[],
+                success=False, error="unexpected result entry (not an object)",
+            )
         legal_unit_name = entry.get("nom_complet") or entry.get("nom_raison_sociale")
         dirigeants = entry.get("dirigeants", [])
         directors = _extract_directors(dirigeants)

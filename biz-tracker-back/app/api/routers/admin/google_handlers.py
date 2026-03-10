@@ -20,7 +20,7 @@ from app.api.schemas import (
 )
 from app.config import get_settings
 from app.db import models
-from app.observability import log_event
+from app.observability import log_event, serialize_exception
 from app.clients.google_places_client import GooglePlacesClient, GooglePlacesError
 from app.services.google_business.google_constants import PLACEHOLDER_TOKENS
 from app.services.google_business.google_match_rules import evaluate_candidate_match
@@ -381,7 +381,7 @@ def debug_google_find_place_action(*, siret: str, session: Session) -> GoogleFin
             "manual_google.find_place.error",
             establishment={"siret": siret, "name": establishment.name},
             query=query,
-            error={"type": type(exc).__name__, "message": str(exc)},
+            error=serialize_exception(exc),
         )
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,

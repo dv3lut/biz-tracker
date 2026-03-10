@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.db import models
 from app.db.session import session_scope
-from app.observability import log_event, run_context, serialize_sync_run
+from app.observability import log_event, run_context, serialize_exception, serialize_sync_run
 from app.services.sync.context import SyncContext, SyncResult
 from app.services.sync.mode import DEFAULT_SYNC_MODE, SyncMode
 from app.utils.dates import utcnow
@@ -77,7 +77,7 @@ class SyncRunnerMixin(SyncRunPreparationMixin):
                     run_id=str(run.id),
                     scope_key=run.scope_key,
                     run=serialize_sync_run(run),
-                    error={"type": type(exc).__name__, "message": str(exc)},
+                    error=serialize_exception(exc),
                 )
                 self._send_run_failure_email(session, run, exc, triggered_by="cli")
                 raise
@@ -159,7 +159,7 @@ class SyncRunnerMixin(SyncRunPreparationMixin):
                             scope_key=run.scope_key,
                             triggered_by=triggered_by,
                             run=serialize_sync_run(run),
-                            error={"type": type(exc).__name__, "message": str(exc)},
+                            error=serialize_exception(exc),
                         )
                         self._send_run_failure_email(session, run, exc, triggered_by=triggered_by)
                         raise

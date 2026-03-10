@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+import traceback as _traceback
 from contextlib import contextmanager
 from contextvars import ContextVar
 from datetime import date, datetime
@@ -14,6 +15,7 @@ from app.utils.dates import utcnow
 
 _OBSERVABILITY_LOGGER = logging.getLogger("observability")
 _RUN_CONTEXT: ContextVar[dict[str, Any] | None] = ContextVar("run_context", default=None)
+_DEFAULT_SERVICE_NAME = "biz-tracker-back"
 
 
 def get_run_context() -> Mapping[str, Any] | None:
@@ -55,12 +57,45 @@ def _normalize(value: Any) -> Any:
     return value
 
 
+def serialize_exception(exc: BaseException) -> dict[str, Any]:
+    """Return a structured dict for an exception, suitable for log_event error fields.
+
+    Always prefix log messages with a catch-site label so that the event name
+    (e.g. ``sync.run.failed``) uniquely identifies the location in the code that
+    caught the exception. Never log ``str(exc)`` alone as the top-level message.
+
+    Usage::
+
+        log_event("my.event.error", error=serialize_exception(exc))
+    """
+    return {
+        "type": type(exc).__name__,
+        "message": str(exc),
+        "traceback": "".join(_traceback.format_exception(type(exc), exc, exc.__traceback__)),
+    }
+
+
+def _resolve_service_name() -> str:
+    """Return the configured service name, with a safe fallback for tests/CI.
+
+    Observability must never break business logic. Some unit tests intentionally
+    exercise handlers without a fully configured environment, so reading full
+    settings can fail with validation errors.
+    """
+
+    try:
+        return get_settings().logging.service_name
+    except Exception as exc:  # pragma: no cover - defensive fallback
+        _OBSERVABILITY_LOGGER.debug("Falling back to default observability service name: %s", exc)
+        return _DEFAULT_SERVICE_NAME
+
+
 def log_event(event_name: str, *, level: int = logging.INFO, message: str | None = None, **fields: Any) -> None:
-    settings = get_settings()
+    service_name = _resolve_service_name()
     payload: MutableMapping[str, Any] = {
         "@timestamp": utcnow().isoformat(timespec="milliseconds") + "Z",
         "event": {"name": event_name},
-        "service": {"name": settings.logging.service_name},
+        "service": {"name": service_name},
     }
     if message:
         payload["message"] = message
@@ -77,7 +112,7 @@ def log_event(event_name: str, *, level: int = logging.INFO, message: str | None
         serialized,
         extra={
             "elastic_doc": payload,
-            "service_name": settings.logging.service_name,
+            "service_name": service_name,
         },
     )
 

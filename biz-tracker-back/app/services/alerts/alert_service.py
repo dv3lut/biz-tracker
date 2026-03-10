@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import models
-from app.observability import log_event
+from app.observability import log_event, serialize_exception
 from app.services.alerts.alert_email_settings import get_alert_email_settings
 from app.services.alerts.email_renderer import render_admin_email, render_client_email
 from app.services.alerts.formatter import EstablishmentFormatter
@@ -169,13 +169,13 @@ class AlertService:
                     for alert in alerts:
                         alert.sent_at = dispatch_result.sent_at
                 for client, exc in dispatch_result.failed:
-                    _ALERT_LOGGER.warning("Échec de l'envoi pour le client %s: %s", client.name, exc)
+                    _ALERT_LOGGER.warning("Échec de l'envoi pour le client %s: %s", client.name, exc, exc_info=True)
                     log_event(
                         "alerts.email.error",
                         run_id=str(self._run.id),
                         scope_key=self._run.scope_key,
                         client_id=str(client.id),
-                        error={"type": type(exc).__name__, "message": str(exc)},
+                        error=serialize_exception(exc),
                     )
                 log_event(
                     "alerts.email.sent",
@@ -191,13 +191,13 @@ class AlertService:
             else:
                 client_skip_reason = "send_error"
                 for client, exc in dispatch_result.failed:
-                    _ALERT_LOGGER.warning("Échec de l'envoi pour le client %s: %s", client.name, exc)
+                    _ALERT_LOGGER.warning("Échec de l'envoi pour le client %s: %s", client.name, exc, exc_info=True)
                     log_event(
                         "alerts.email.error",
                         run_id=str(self._run.id),
                         scope_key=self._run.scope_key,
                         client_id=str(client.id),
-                        error={"type": type(exc).__name__, "message": str(exc)},
+                        error=serialize_exception(exc),
                     )
                 log_event(
                     "alerts.email.skipped",
@@ -260,13 +260,13 @@ class AlertService:
                     )
                 except Exception as exc:  # noqa: BLE001
                     admin_skip_reason = "send_error"
-                    _ALERT_LOGGER.warning("Échec de l'envoi des alertes admin: %s", exc)
+                    _ALERT_LOGGER.warning("Échec de l'envoi des alertes admin: %s", exc, exc_info=True)
                     log_event(
                         "alerts.email.admin_error",
                         run_id=str(self._run.id),
                         scope_key=self._run.scope_key,
                         recipients=admin_summary_recipients,
-                        error={"type": type(exc).__name__, "message": str(exc)},
+                        error=serialize_exception(exc),
                     )
                 else:
                     admin_sent_at = utcnow()

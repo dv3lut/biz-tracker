@@ -7,7 +7,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.db import models
-from app.observability import log_event
+from app.observability import log_event, serialize_exception
 from app.services.client_service import get_admin_emails
 from app.services.email_service import EmailService
 from app.services.sync.mode import SyncMode
@@ -36,7 +36,7 @@ class SyncSummaryMixin:
             "run_id": str(run.id),
             "scope_key": run.scope_key,
             "triggered_by": triggered_by,
-            "error": {"type": type(error).__name__, "message": str(error)},
+            "error": serialize_exception(error),
         }
 
         if not recipients:
@@ -61,11 +61,11 @@ class SyncSummaryMixin:
         try:
             email_service.send(subject, body, recipients)
         except Exception as exc:  # noqa: BLE001 - log and continue
-            _LOGGER.warning("Échec de l'envoi de l'email d'erreur du run %s: %s", run.id, exc)
+            _LOGGER.warning("Échec de l'envoi de l'email d'erreur du run %s: %s", run.id, exc, exc_info=True)
             log_event(
                 "sync.failure.email.error",
                 reason="send_error",
-                send_error={"type": type(exc).__name__, "message": str(exc)},
+                send_error=serialize_exception(exc),
                 **payload,
             )
             return {"sent": False, "recipients": recipients, "subject": subject, "reason": "send_error"}
@@ -95,6 +95,9 @@ class SyncSummaryMixin:
             "",
             f"Erreur: {type(error).__name__}",
             f"Message: {error}",
+            "",
+            "Traceback:",
+            serialize_exception(error)["traceback"],
         ]
         return "\n".join(lines)
 
@@ -198,13 +201,13 @@ class SyncSummaryMixin:
         try:
             email_service.send(subject, body, recipients)
         except Exception as exc:  # noqa: BLE001 - log and continue
-            _LOGGER.warning("Échec de l'envoi de la synthèse du run %s: %s", run.id, exc)
+            _LOGGER.warning("Échec de l'envoi de la synthèse du run %s: %s", run.id, exc, exc_info=True)
             log_event(
                 "sync.summary.email.error",
                 run_id=str(run.id),
                 scope_key=run.scope_key,
                 reason="send_error",
-                error={"type": type(exc).__name__, "message": str(exc)},
+                error=serialize_exception(exc),
             )
             return {"sent": False, "recipients": recipients, "subject": subject, "reason": "send_error"}
 

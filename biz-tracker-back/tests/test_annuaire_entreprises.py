@@ -55,6 +55,36 @@ class TestParseBirthDate:
 # ---------------------------------------------------------------------------
 
 class TestExtractDirectors:
+
+    def test_siren_truncated_to_9_chars(self):
+        """Bug 2026-03-10: siren longer than 9 chars overflowed varchar(9)."""
+        dirigeants = [
+            {
+                "siren": "12345678901234",  # SIRET-length value
+                "denomination": "CORP X",
+                "type_dirigeant": "personne morale",
+            },
+        ]
+        directors = _extract_directors(dirigeants)
+        assert len(directors) == 1
+        assert directors[0].siren == "123456789"
+        assert len(directors[0].siren) <= 9
+
+    def test_null_item_in_dirigeants_list_is_skipped(self):
+        """Bug: null item in the dirigeants list should not crash."""
+        dirigeants = [
+            None,
+            {
+                "nom": "DUPONT",
+                "prenoms": "Jean",
+                "date_de_naissance": "1990-01",
+                "type_dirigeant": "personne physique",
+            },
+        ]
+        directors = _extract_directors(dirigeants)
+        assert len(directors) == 1
+        assert directors[0].last_name == "DUPONT"
+
     def test_extracts_all_directors(self):
         dirigeants = [
             {
@@ -230,6 +260,39 @@ class TestParseResponse:
         result = client._parse_response("123456789", response)
         assert result.success is False
         assert "invalid JSON" in result.error
+
+    def test_json_null_body(self):
+        """Bug 2026-03-09: response.json() returns None → NoneType .get() crash."""
+        client = self._make_client()
+        response = MagicMock()
+        response.json.return_value = None
+        result = client._parse_response("123456789", response)
+        assert result.success is False
+        assert result.directors == []
+
+    def test_null_entry_in_results_list(self):
+        """API returns [null] in results list → NoneType .get() crash."""
+        client = self._make_client()
+        response = MagicMock()
+        response.json.return_value = {"results": [None]}
+        result = client._parse_response("123456789", response)
+        assert result.success is False
+        assert result.directors == []
+
+
+# ---------------------------------------------------------------------------
+# AnnuaireEntreprisesClient constructor
+# ---------------------------------------------------------------------------
+
+class TestAnnuaireClientInit:
+    def test_falls_back_to_disabled_settings_when_env_is_missing(self):
+        with patch("app.clients.annuaire_entreprises_client.get_settings") as mock_get_settings:
+            mock_get_settings.side_effect = RuntimeError("missing settings")
+
+            client = AnnuaireEntreprisesClient()
+
+        assert client.enabled is False
+        client.close()
 
 
 # ---------------------------------------------------------------------------

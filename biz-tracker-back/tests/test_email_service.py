@@ -32,6 +32,15 @@ def test_email_service_detects_configuration(monkeypatch):
     assert service.is_configured()
 
 
+def test_email_service_falls_back_to_disabled_settings_when_env_is_missing(monkeypatch):
+    monkeypatch.setattr(email_service, "get_settings", lambda: (_ for _ in ()).throw(RuntimeError("missing settings")))
+    service = email_service.EmailService()
+
+    assert service.provider == "custom"
+    assert not service.is_enabled()
+    assert not service.is_configured()
+
+
 def test_email_service_send_skips_when_before_ready(monkeypatch):
     monkeypatch.setattr(email_service, "get_settings", lambda: SimpleNamespace(email=_settings(enabled=False)))
     service = email_service.EmailService()
@@ -44,6 +53,13 @@ def test_email_service_send_skips_when_before_ready(monkeypatch):
     monkeypatch.setattr(email_service, "get_settings", lambda: SimpleNamespace(email=_settings()))
     service = email_service.EmailService()
     service.send("subject", "body", [])
+
+
+def test_email_service_send_skips_when_settings_are_unavailable(monkeypatch):
+    monkeypatch.setattr(email_service, "get_settings", lambda: (_ for _ in ()).throw(RuntimeError("missing settings")))
+    service = email_service.EmailService()
+
+    service.send("subject", "body", ["ops@example.com"])
 
 
 def test_email_service_send_uses_smtp(monkeypatch):

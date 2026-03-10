@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import models
-from app.observability import log_event
+from app.observability import log_event, serialize_exception
 from app.services.website_scraper.scraper_service import WebsiteScrapingResult, scrape_website
 from app.services.google_business.google_business_service import _persist_scraped_contacts
 from app.utils.dates import utcnow
@@ -114,13 +114,14 @@ def collect_website_scrape_only(
                     establishment.siret,
                     website_url,
                     exc,
+                    exc_info=True,
                 )
                 log_event(
                     "sync.website_scrape.error",
                     run_id=str(run.id),
                     siret=establishment.siret,
                     website_url=website_url,
-                    error={"type": type(exc).__name__, "message": str(exc)},
+                    error=serialize_exception(exc),
                 )
                 continue
 

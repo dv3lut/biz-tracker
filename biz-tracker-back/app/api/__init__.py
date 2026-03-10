@@ -9,27 +9,29 @@ import logging
 
 from app.config import get_settings
 from app.logging_config import configure_logging
-from app.services.sync_scheduler import SyncScheduler
-
-from .middlewares.rate_limit_middleware import RateLimitMiddleware, RateLimitPolicy
-from .middlewares.access_log_middleware import AccessLogMiddleware
-
-from .routers import admin_router, health_router, public_router
-
-_SYNC_SCHEDULER = SyncScheduler()
 
 
-@asynccontextmanager
-async def _lifespan(_: FastAPI):
-    _SYNC_SCHEDULER.start()
-    try:
-        yield
-    finally:
-        _SYNC_SCHEDULER.stop()
+def _build_lifespan():
+    @asynccontextmanager
+    async def _lifespan(_: FastAPI):
+        from app.services.sync_scheduler import SyncScheduler
+
+        sync_scheduler = SyncScheduler()
+        sync_scheduler.start()
+        try:
+            yield
+        finally:
+            sync_scheduler.stop()
+
+    return _lifespan
 
 
 def create_app() -> FastAPI:
     """Instantiate the FastAPI application with all routers."""
+
+    from .middlewares.access_log_middleware import AccessLogMiddleware
+    from .middlewares.rate_limit_middleware import RateLimitMiddleware, RateLimitPolicy
+    from .routers import admin_router, health_router, public_router
 
     settings = get_settings()
     logger = logging.getLogger(__name__)
@@ -44,7 +46,7 @@ def create_app() -> FastAPI:
         docs_url=docs_url,
         redoc_url=redoc_url,
         openapi_url="/openapi.json" if settings.api.docs_enabled else None,
-        lifespan=_lifespan,
+        lifespan=_build_lifespan(),
     )
 
     if settings.api.allowed_origins:
@@ -70,6 +72,3 @@ def create_app() -> FastAPI:
     app.include_router(public_router.router)
 
     return app
-
-
-app = create_app()

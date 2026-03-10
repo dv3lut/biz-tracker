@@ -6,7 +6,7 @@ import smtplib
 from email.message import EmailMessage
 from typing import Iterable, Sequence
 
-from app.config import get_settings
+from app.config import EmailSettings, get_settings
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -15,20 +15,31 @@ class EmailService:
     """Send email alerts if SMTP is configured."""
 
     def __init__(self) -> None:
-        self._settings = get_settings().email
+        self._settings: EmailSettings | None = None
+
+    @property
+    def settings(self) -> EmailSettings:
+        if self._settings is None:
+            try:
+                self._settings = get_settings().email
+            except Exception as exc:  # pragma: no cover - defensive fallback
+                _LOGGER.debug("Falling back to disabled email settings: %s", exc)
+                self._settings = EmailSettings()
+        return self._settings
 
     @property
     def provider(self) -> str:
-        return self._settings.provider
+        return self.settings.provider
 
     def is_enabled(self) -> bool:
-        return bool(self._settings.enabled)
+        return bool(self.settings.enabled)
 
     def is_configured(self) -> bool:
+        settings = self.settings
         return bool(
-            self._settings.enabled
-            and self._settings.smtp_host
-            and self._settings.from_address
+            settings.enabled
+            and settings.smtp_host
+            and settings.from_address
         )
 
     def send(
@@ -41,7 +52,7 @@ class EmailService:
         reply_to: str | None = None,
         attachments: Sequence[tuple[str, bytes, str]] | None = None,
     ) -> None:
-        settings = self._settings
+        settings = self.settings
         recipient_list = [addr for addr in recipients if addr]
         if not settings.enabled:
             _LOGGER.info("Email service disabled; skipping send (subject=%r)", subject)

@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.clients.google_places_client import GooglePlacesClient, GooglePlacesError
 from app.config import get_settings
 from app.db import models
-from app.observability import log_event, serialize_establishment_for_logging
+from app.observability import log_event, serialize_establishment_for_logging, serialize_exception
 from app.services.google_business.google_constants import (
     PLACE_DETAILS_FIELDS,
     PROGRESS_BATCH_SIZE,
@@ -708,15 +708,15 @@ class GoogleBusinessService:
                 establishment.siret,
                 website_url,
                 exc,
+                exc_info=True,
             )
             log_event(
                 "sync.google.website_scrape.error",
                 establishment=self._serialize_establishment(establishment),
                 website_url=website_url,
-                error={"type": type(exc).__name__, "message": str(exc)},
+                error=serialize_exception(exc),
             )
             return False
-
         # Persist legacy pipe-separated columns (used by stats queries).
         establishment.website_scraped_at = now
         establishment.website_scraped_mobile_phones = result.mobile_phones_str
@@ -844,7 +844,7 @@ class GoogleBusinessService:
         except Exception as exc:  # noqa: BLE001 - log and continue
             log_event(
                 "sync.google.api_error.email.error",
-                error={"type": type(exc).__name__, "message": str(exc)},
+                error=serialize_exception(exc),
                 **payload,
             )
             return
@@ -1094,7 +1094,7 @@ class GoogleBusinessService:
         log_event(
             "sync.google.error",
             establishment=self._serialize_establishment(establishment),
-            error={"type": type(error).__name__, "message": str(error)},
+            error=serialize_exception(error),
         )
 
     def _log_retry_schedule(self, run: models.SyncRun, schedule: dict[str, object]) -> None:

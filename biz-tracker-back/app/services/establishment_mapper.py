@@ -31,10 +31,10 @@ def _parse_int(value: Optional[str]) -> Optional[int]:
 
 
 def extract_name(payload: dict[str, Any]) -> str | None:
-    unite_legale = payload.get("uniteLegale", {})
-    periods_etablissement = payload.get("periodesEtablissement", [])
+    unite_legale = payload.get("uniteLegale") or {}
+    periods_etablissement = payload.get("periodesEtablissement") or []
     current_period = _select_current_period(periods_etablissement)
-    periods_unite_legale = unite_legale.get("periodesUniteLegale", [])
+    periods_unite_legale = unite_legale.get("periodesUniteLegale") or []
     current_unite_legale_period = _select_current_unite_legale_period(periods_unite_legale)
 
     candidates = [
@@ -66,12 +66,12 @@ def extract_name(payload: dict[str, Any]) -> str | None:
 
 
 def extract_fields(payload: dict[str, Any]) -> Dict[str, Any]:
-    unite_legale = payload.get("uniteLegale", {})
-    periods_etablissement = payload.get("periodesEtablissement", [])
+    unite_legale = payload.get("uniteLegale") or {}
+    periods_etablissement = payload.get("periodesEtablissement") or []
     current_period = _select_current_period(periods_etablissement)
-    periods_unite_legale = unite_legale.get("periodesUniteLegale", [])
+    periods_unite_legale = unite_legale.get("periodesUniteLegale") or []
     current_unite_legale_period = _select_current_unite_legale_period(periods_unite_legale)
-    adresse = payload.get("adresseEtablissement", payload)
+    adresse = payload.get("adresseEtablissement") or payload
 
     return {
         "siret": payload.get("siret"),

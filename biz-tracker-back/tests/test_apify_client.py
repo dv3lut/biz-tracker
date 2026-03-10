@@ -11,6 +11,14 @@ from app.clients.apify_client import ApifyClient, LinkedInSearchInput
 
 class ApifyClientTests(TestCase):
     @patch("app.clients.apify_client.get_settings")
+    def test_constructor_falls_back_to_disabled_settings_when_env_is_missing(self, mock_get_settings) -> None:
+        mock_get_settings.side_effect = RuntimeError("missing settings")
+
+        client = ApifyClient()
+
+        self.assertFalse(client.enabled)
+
+    @patch("app.clients.apify_client.get_settings")
     def test_search_returns_error_when_disabled(self, mock_get_settings) -> None:
         mock_get_settings.return_value = SimpleNamespace(
             apify=SimpleNamespace(

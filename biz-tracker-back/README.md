@@ -100,6 +100,24 @@ Des cibles `Makefile` équivalentes existent (`make init-db`, `make sync`, `make
 
 Un workflow GitHub Actions (`.github/workflows/backend-tests.yml`) exécute ces étapes à chaque `push` / `pull request` impactant le dossier backend et bloque les déploiements sous le seuil requis.
 
+## Git : amender le dernier commit et déplacer automatiquement le dernier tag
+
+Après avoir préparé les fichiers avec `git add`, la commande suivante :
+- amende le dernier commit sans changer son message ;
+- force-push la branche courante avec `--force-with-lease` ;
+- récupère automatiquement le tag le plus récent pointant sur le commit courant avant amend ;
+- supprime ce tag en local et sur le remote ;
+- recrée le même tag sur le commit amendé puis le repush.
+
+```bash
+latest_deploy_amend_and_retag(){ tag="$(git tag --points-at HEAD --sort=-creatordate | head -n1)"; branch="$(git branch --show-current)"; git commit --amend --no-edit && git push --force-with-lease origin "$branch" && if [ -n "$tag" ]; then git tag -d "$tag" && git push origin ":refs/tags/$tag" && git tag "$tag" && git push origin "refs/tags/$tag"; fi; }; latest_deploy_amend_and_retag
+```
+
+Notes :
+- si aucun tag ne pointe sur `HEAD`, la commande fait simplement l’amend + le force-push ;
+- si plusieurs tags pointent sur `HEAD`, seul le plus récent est déplacé ;
+- la branche et le nom du tag ne sont pas hardcodés.
+
 ## Pipeline de synchronisation
 
 1. **Préparation du run** (`SyncService.prepare_sync_run`) : création d'un `sync_run` en statut `pending`, calcul du checksum de requête, option de vérification du service `informations` pour éviter un déclenchement inutile.

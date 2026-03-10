@@ -483,6 +483,20 @@ class LinkedInLookupServiceTests(TestCase):
         # 1 director with profile
         self.assertEqual(total.directors_with_profiles, ["d1"])
 
+    @patch("app.services.linkedin.linkedin_lookup_service.ApifyClient")
+    @patch("app.services.linkedin.linkedin_lookup_service.get_settings")
+    def test_constructor_injects_apify_settings_into_client(
+        self,
+        mock_get_settings,
+        mock_apify_client,
+    ) -> None:
+        apify_settings = SimpleNamespace(enabled=True, api_token="test-token")
+        mock_get_settings.return_value = SimpleNamespace(apify=apify_settings)
+
+        LinkedInLookupService(MagicMock())
+
+        mock_apify_client.assert_called_once_with(settings=apify_settings)
+
     @patch("app.services.linkedin.linkedin_lookup_service.utcnow")
     @patch("app.services.linkedin.linkedin_lookup_service.ApifyClient")
     @patch("app.services.linkedin.linkedin_lookup_service.get_settings")

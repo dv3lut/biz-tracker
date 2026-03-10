@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.clients.google_places_client import GooglePlacesClient, GooglePlacesError
 from app.db import models
-from app.observability import log_event, serialize_establishment_for_logging
+from app.observability import log_event, serialize_establishment_for_logging, serialize_exception
 from app.services.google_business.google_constants import (
     PLACE_DETAILS_FIELDS,
     PLACEHOLDER_TOKENS,
@@ -85,12 +85,12 @@ class GoogleLookupEngine:
             candidates = self._client.find_place(query, fields="place_id,name,formatted_address,geometry")
         except GooglePlacesError as exc:
             self._record_api_error("find_place", exc)
-            _LOGGER.warning("Recherche Google Places échouée pour %s: %s", establishment.siret, exc)
+            _LOGGER.warning("Recherche Google Places échouée pour %s: %s", establishment.siret, exc, exc_info=True)
             log_event(
                 "sync.google.find_place.error",
                 establishment=establishment_payload,
                 query=query,
-                error={"type": type(exc).__name__, "message": str(exc)},
+                error=serialize_exception(exc),
             )
             return None
 
@@ -192,12 +192,13 @@ class GoogleLookupEngine:
                     establishment.siret,
                     place_id,
                     exc,
+                    exc_info=True,
                 )
                 log_event(
                     "sync.google.place_details.error",
                     establishment=establishment_payload,
                     candidate=candidate_payload,
-                    error={"type": type(exc).__name__, "message": str(exc)},
+                    error=serialize_exception(exc),
                 )
                 continue
             if not details:

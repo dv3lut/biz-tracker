@@ -24,6 +24,13 @@ jobs:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
 
+      - name: Compute Docker image tag
+        id: image_tag
+        run: |
+          RAW_TAG="${GITHUB_REF_NAME}"
+          SAFE_TAG="${RAW_TAG//\//-}"
+          echo "value=${SAFE_TAG}" >> "$GITHUB_OUTPUT"
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
@@ -31,10 +38,10 @@ jobs:
           file: ./biz-tracker-landing-page/Dockerfile
           push: true
           tags: |
-            ${{ secrets.DOCKER_HUB_USERNAME }}/biz-tracker-landing-page:${{ github.ref_name }}
+            ${{ secrets.DOCKER_HUB_USERNAME }}/biz-tracker-landing-page:${{ steps.image_tag.outputs.value }}
             ${{ secrets.DOCKER_HUB_USERNAME }}/biz-tracker-landing-page:latest
           build-args: |
-            VITE_APP_API_BASE_URL=${{ secrets.VITE_APP_API_BASE_URL }}
+            VITE_APP_API_BASE_URL=${{ vars.VITE_APP_API_BASE_URL }}
 
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v0.1.10

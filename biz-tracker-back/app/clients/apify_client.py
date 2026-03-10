@@ -7,7 +7,7 @@ from typing import Any
 
 import requests
 
-from app.config import get_settings
+from app.config import ApifySettings, get_settings
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -40,8 +40,15 @@ class ApifyClientError(Exception):
 class ApifyClient:
     """Client for interacting with Apify actors."""
 
-    def __init__(self) -> None:
-        self._settings = get_settings().apify
+    def __init__(self, settings: ApifySettings | Any | None = None) -> None:
+        if settings is not None:
+            self._settings = settings
+        else:
+            try:
+                self._settings = get_settings().apify
+            except Exception as exc:  # pragma: no cover - defensive fallback
+                _LOGGER.debug("Falling back to disabled Apify settings: %s", exc)
+                self._settings = ApifySettings()
         self._session = requests.Session()
         if self._settings.api_token:
             self._session.headers["Authorization"] = f"Bearer {self._settings.api_token}"
