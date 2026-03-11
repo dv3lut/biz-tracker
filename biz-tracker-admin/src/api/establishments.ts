@@ -51,6 +51,7 @@ export interface EstablishmentResponse {
   website_scraped_at: string | null;
   website_scraped_mobile_phones: string | null;
   website_scraped_national_phones: string | null;
+  website_scraped_international_phones: string | null;
   website_scraped_emails: string | null;
   website_scraped_facebook: string | null;
   website_scraped_instagram: string | null;
@@ -66,7 +67,6 @@ export interface ScrapedContactResponse {
   id: string;
   contact_type: string;
   value: string;
-  label: string | null;
 }
 
 export interface EstablishmentDetailResponse extends EstablishmentResponse {
@@ -132,7 +132,6 @@ const mapScrapedContact = (payload: ScrapedContactResponse): ScrapedContact => (
   id: payload.id,
   contactType: payload.contact_type,
   value: payload.value,
-  label: payload.label,
 });
 
 export const mapEstablishment = (payload: EstablishmentResponse): Establishment => ({
@@ -166,6 +165,7 @@ export const mapEstablishment = (payload: EstablishmentResponse): Establishment 
   websiteScrapedAt: payload.website_scraped_at,
   websiteScrapedMobilePhones: payload.website_scraped_mobile_phones,
   websiteScrapedNationalPhones: payload.website_scraped_national_phones,
+  websiteScrapedInternationalPhones: payload.website_scraped_international_phones,
   websiteScrapedEmails: payload.website_scraped_emails,
   websiteScrapedFacebook: payload.website_scraped_facebook,
   websiteScrapedInstagram: payload.website_scraped_instagram,

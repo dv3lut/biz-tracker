@@ -18,6 +18,13 @@ from app.services.google_business.google_constants import (
     RECENT_NO_CONTACT_STATUS,
     TYPE_MISMATCH_STATUS,
 )
+from app.services.google_business.field_sanitizer import (
+    MAX_EMAIL_LENGTH,
+    MAX_PHONE_LENGTH,
+    MAX_SCRAPED_CONTACT_VALUE_LENGTH,
+    MAX_URL_LENGTH,
+    clamp_optional_varchar,
+)
 from app.services.google_business.google_keywords import build_naf_keyword_map
 from app.services.google_business.google_lookup_engine import GoogleLookupEngine
 from app.services.google_business.google_matching import matches_expected_google_category
@@ -52,13 +59,15 @@ def _persist_scraped_contacts(
         models.ScrapedContact.establishment_siret == siret,
     ).delete(synchronize_session="fetch")
 
-    for contact_type, value, label in result.all_contacts:
+    for contact_type, value in result.all_contacts:
+        safe_value = clamp_optional_varchar(value, MAX_SCRAPED_CONTACT_VALUE_LENGTH)
+        if not safe_value:
+            continue
         session.add(
             models.ScrapedContact(
                 establishment_siret=siret,
                 contact_type=contact_type,
-                value=value,
-                label=label,
+                value=safe_value,
                 created_at=now,
             )
         )
@@ -447,6 +456,9 @@ class GoogleBusinessService:
                 )
                 continue
             contact_phone, contact_email, contact_website = self._extract_contact_details(details)
+            contact_phone = clamp_optional_varchar(contact_phone, MAX_PHONE_LENGTH)
+            contact_email = clamp_optional_varchar(contact_email, MAX_EMAIL_LENGTH)
+            contact_website = clamp_optional_varchar(contact_website, MAX_URL_LENGTH)
             establishment.google_last_checked_at = now
             if not any([contact_phone, contact_email, contact_website]):
                 continue
@@ -460,6 +472,8 @@ class GoogleBusinessService:
                 establishment.google_listing_age_status = "recent_creation"
             place_url = details.get("url") or contact_website
             if isinstance(place_url, str) and place_url:
+                place_url = clamp_optional_varchar(place_url, MAX_URL_LENGTH)
+            if place_url:
                 if not establishment.google_place_url:
                     establishment.google_place_url = place_url
                 if establishment.google_last_found_at is None:
@@ -528,6 +542,9 @@ class GoogleBusinessService:
                 )
                 continue
             contact_phone, contact_email, contact_website = self._extract_contact_details(details)
+            contact_phone = clamp_optional_varchar(contact_phone, MAX_PHONE_LENGTH)
+            contact_email = clamp_optional_varchar(contact_email, MAX_EMAIL_LENGTH)
+            contact_website = clamp_optional_varchar(contact_website, MAX_URL_LENGTH)
             establishment.google_last_checked_at = now
 
             # Update any contact info that appeared
@@ -678,6 +695,7 @@ class GoogleBusinessService:
         establishment.website_scraped_at = None
         establishment.website_scraped_mobile_phones = None
         establishment.website_scraped_national_phones = None
+        establishment.website_scraped_international_phones = None
         establishment.website_scraped_emails = None
         establishment.website_scraped_facebook = None
         establishment.website_scraped_instagram = None
@@ -721,11 +739,12 @@ class GoogleBusinessService:
         establishment.website_scraped_at = now
         establishment.website_scraped_mobile_phones = result.mobile_phones_str
         establishment.website_scraped_national_phones = result.national_phones_str
+        establishment.website_scraped_international_phones = result.international_phones_str
         establishment.website_scraped_emails = result.emails_str
-        establishment.website_scraped_facebook = result.facebook
-        establishment.website_scraped_instagram = result.instagram
-        establishment.website_scraped_twitter = result.twitter
-        establishment.website_scraped_linkedin = result.linkedin
+        establishment.website_scraped_facebook = clamp_optional_varchar(result.facebook, MAX_URL_LENGTH)
+        establishment.website_scraped_instagram = clamp_optional_varchar(result.instagram, MAX_URL_LENGTH)
+        establishment.website_scraped_twitter = clamp_optional_varchar(result.twitter, MAX_URL_LENGTH)
+        establishment.website_scraped_linkedin = clamp_optional_varchar(result.linkedin, MAX_URL_LENGTH)
 
         # Persist structured contacts to the dedicated table.
         _persist_scraped_contacts(self._session, establishment.siret, result, now)
@@ -738,14 +757,12 @@ class GoogleBusinessService:
             scraped={
                 "mobile_phones_count": len(result.mobile_phones),
                 "national_phones_count": len(result.national_phones),
+                "international_phones_count": len(result.international_phones),
                 "emails_count": len(result.emails),
                 "facebook": result.facebook is not None,
                 "instagram": result.instagram is not None,
                 "twitter": result.twitter is not None,
                 "linkedin": result.linkedin is not None,
-                "labels_found": sum(
-                    1 for _, _, lbl in result.all_contacts if lbl
-                ),
             },
         )
         return result.has_data

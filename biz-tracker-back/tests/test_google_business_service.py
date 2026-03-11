@@ -558,5 +558,114 @@ class GoogleBacklogCountingTests(unittest.TestCase):
         self.assertEqual(len(newly_found), 1)
         self.assertIs(newly_found[0], establishment)
 
+
+class GoogleFieldLengthGuardsTests(unittest.TestCase):
+    def test_apply_lookup_result_truncates_bounded_google_fields(self) -> None:
+        engine = GoogleLookupEngine(
+            Mock(),
+            client=Mock(),
+            rate_limiter=SimpleNamespace(acquire=lambda: None),
+            settings=SimpleNamespace(),
+            naf_keyword_map={},
+            neutral_google_types={"point_of_interest", "establishment"},
+            category_similarity_threshold=0.72,
+            api_call_hook=lambda: None,
+        )
+        engine._session.flush = Mock()
+
+        establishment = SimpleNamespace(
+            siret="12345678901234",
+            google_place_id=None,
+            google_place_url=None,
+            google_check_status="pending",
+            google_last_checked_at=None,
+            google_last_found_at=None,
+            google_listing_origin_at=None,
+            google_listing_origin_source="unknown",
+            google_listing_age_status="unknown",
+            google_match_confidence=None,
+            google_category_match_confidence=None,
+            google_contact_phone=None,
+            google_contact_email=None,
+            google_contact_website=None,
+        )
+
+        match = SimpleNamespace(
+            place_id="p" * 300,
+            place_url="https://example.com/" + ("u" * 900),
+            confidence=0.91,
+            category_confidence=0.88,
+            listing_origin_at=None,
+            listing_origin_source="reviews",
+            listing_age_status="recent_creation",
+            status_override=None,
+            contact_phone="+33" + ("1" * 120),
+            contact_email=("a" * 300) + "@example.com",
+            contact_website="https://site.example/" + ("w" * 900),
+        )
+
+        engine.apply_lookup_result(establishment, match, datetime(2026, 3, 12, 1, 0, 0))
+
+        self.assertEqual(len(establishment.google_place_id), 128)
+        self.assertEqual(len(establishment.google_place_url), 512)
+        self.assertEqual(len(establishment.google_contact_phone), 64)
+        self.assertEqual(len(establishment.google_contact_email), 255)
+        self.assertEqual(len(establishment.google_contact_website), 512)
+
+    def test_scrape_establishment_website_truncates_all_social_links(self) -> None:
+        service = GoogleBusinessService.__new__(GoogleBusinessService)
+        service._session = Mock()
+        service._session.flush = Mock()
+
+        establishment = SimpleNamespace(
+            siret="12345678901234",
+            name="Test Biz",
+            website_scraped_at=None,
+            website_scraped_mobile_phones=None,
+            website_scraped_national_phones=None,
+            website_scraped_international_phones=None,
+            website_scraped_emails=None,
+            website_scraped_facebook=None,
+            website_scraped_instagram=None,
+            website_scraped_twitter=None,
+            website_scraped_linkedin=None,
+        )
+
+        long_url = "https://social.example/" + ("x" * 900)
+        scrape_result = SimpleNamespace(
+            mobile_phones_str=None,
+            national_phones_str=None,
+            international_phones_str=None,
+            emails_str=None,
+            facebook=long_url,
+            instagram=long_url,
+            twitter=long_url,
+            linkedin=long_url,
+            mobile_phones=[],
+            national_phones=[],
+            international_phones=[],
+            emails=[],
+            has_data=True,
+        )
+
+        with patch(
+            "app.services.google_business.google_business_service.scrape_website",
+            return_value=scrape_result,
+        ), patch(
+            "app.services.google_business.google_business_service._persist_scraped_contacts"
+        ):
+            success = GoogleBusinessService._scrape_establishment_website(
+                service,
+                establishment,
+                "https://example.com",
+                datetime(2026, 3, 12, 1, 0, 0),
+            )
+
+        self.assertTrue(success)
+        self.assertEqual(len(establishment.website_scraped_facebook), 512)
+        self.assertEqual(len(establishment.website_scraped_instagram), 512)
+        self.assertEqual(len(establishment.website_scraped_twitter), 512)
+        self.assertEqual(len(establishment.website_scraped_linkedin), 512)
+
 if __name__ == "__main__":
     unittest.main()

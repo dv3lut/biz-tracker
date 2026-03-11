@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.db import models
 from app.observability import log_event, serialize_exception
+from app.services.google_business.field_sanitizer import MAX_URL_LENGTH, clamp_optional_varchar
 from app.services.website_scraper.scraper_service import WebsiteScrapingResult, scrape_website
 from app.services.google_business.google_business_service import _persist_scraped_contacts
 from app.utils.dates import utcnow
@@ -128,11 +129,12 @@ def collect_website_scrape_only(
             establishment.website_scraped_at = now
             establishment.website_scraped_mobile_phones = result.mobile_phones_str
             establishment.website_scraped_national_phones = result.national_phones_str
+            establishment.website_scraped_international_phones = result.international_phones_str
             establishment.website_scraped_emails = result.emails_str
-            establishment.website_scraped_facebook = result.facebook
-            establishment.website_scraped_instagram = result.instagram
-            establishment.website_scraped_twitter = result.twitter
-            establishment.website_scraped_linkedin = result.linkedin
+            establishment.website_scraped_facebook = clamp_optional_varchar(result.facebook, MAX_URL_LENGTH)
+            establishment.website_scraped_instagram = clamp_optional_varchar(result.instagram, MAX_URL_LENGTH)
+            establishment.website_scraped_twitter = clamp_optional_varchar(result.twitter, MAX_URL_LENGTH)
+            establishment.website_scraped_linkedin = clamp_optional_varchar(result.linkedin, MAX_URL_LENGTH)
 
             # Persist structured contacts to the dedicated table.
             _persist_scraped_contacts(session, establishment.siret, result, now)
@@ -140,6 +142,7 @@ def collect_website_scrape_only(
             has_data = bool(
                 result.mobile_phones
                 or result.national_phones
+                or result.international_phones
                 or result.emails
                 or result.facebook
                 or result.instagram

@@ -33,7 +33,6 @@ class ScrapedContactOut(BaseModel):
     id: UUID
     contact_type: str
     value: str
-    label: str | None = None
 
 
 class EstablishmentOut(BaseModel):
@@ -71,6 +70,7 @@ class EstablishmentOut(BaseModel):
     website_scraped_at: datetime | None = None
     website_scraped_mobile_phones: str | None = None
     website_scraped_national_phones: str | None = None
+    website_scraped_international_phones: str | None = None
     website_scraped_emails: str | None = None
     website_scraped_facebook: str | None = None
     website_scraped_instagram: str | None = None

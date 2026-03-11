@@ -13,8 +13,8 @@ from requests.adapters import HTTPAdapter, Retry
 
 from app.services.website_scraper.browser_pool import browser_pool, is_playwright_available
 from app.services.website_scraper.extractors import (
-    extract_emails_with_labels,
-    extract_phones_with_labels,
+    extract_emails,
+    extract_phones,
     extract_social_links,
     needs_browser_rendering,
 )
@@ -30,6 +30,7 @@ _LOGGER = logging.getLogger(__name__)
 _EMPTY_RESULT: Dict = {
     "mobile_phones": [],
     "national_phones": [],
+    "international_phones": [],
     "emails": [],
     "facebook": None,
     "instagram": None,
@@ -37,19 +38,10 @@ _EMPTY_RESULT: Dict = {
     "linkedin": None,
 }
 
-# Type alias — (value, label | None)
-_ContactPair = tuple[str, str | None]
+def _merge_contacts(target: set[str], items: list[str]) -> None:
+    """Merge *items* into *target* (set-based deduplication)."""
 
-
-def _merge_contacts(
-    target: Dict[str, str | None],
-    items: list[_ContactPair],
-) -> None:
-    """Merge *items* into *target*, preferring entries that carry a label."""
-
-    for value, label in items:
-        if value not in target or (label and not target[value]):
-            target[value] = label
+    target.update(items)
 
 
 # ---------------------------------------------------------------------------
@@ -106,9 +98,10 @@ async def crawl_with_browser(
 
     _LOGGER.info("[%s] Démarrage du crawl Playwright pour %s", label, url)
 
-    all_mobiles: Dict[str, str | None] = {}
-    all_nationals: Dict[str, str | None] = {}
-    all_emails: Dict[str, str | None] = {}
+    all_mobiles: set[str] = set()
+    all_nationals: set[str] = set()
+    all_internationals: set[str] = set()
+    all_emails: set[str] = set()
     social_links = {"facebook": None, "instagram": None, "twitter": None, "linkedin": None}
     visited_urls: Set[str] = set()
     counter = 0
@@ -167,12 +160,13 @@ async def crawl_with_browser(
                         page_content = await page.content()
                         page_text = await page.evaluate("() => document.body.innerText")
 
-                        mobiles, nationals = extract_phones_with_labels(page_text)
-                        emails = extract_emails_with_labels(page_text)
+                        mobiles, nationals, internationals = extract_phones(page_text)
+                        emails = extract_emails(page_text)
                         socials = extract_social_links(page_content)
 
                         _merge_contacts(all_mobiles, mobiles)
                         _merge_contacts(all_nationals, nationals)
+                        _merge_contacts(all_internationals, internationals)
                         _merge_contacts(all_emails, emails)
                         for network, link in socials.items():
                             if link and not social_links[network]:
@@ -202,9 +196,10 @@ async def crawl_with_browser(
         _LOGGER.error("[%s] Erreur Playwright générale: %s", label, exc)
 
     return {
-        "mobile_phones": list(all_mobiles.items()),
-        "national_phones": list(all_nationals.items()),
-        "emails": list(all_emails.items()),
+        "mobile_phones": sorted(all_mobiles),
+        "national_phones": sorted(all_nationals),
+        "international_phones": sorted(all_internationals),
+        "emails": sorted(all_emails),
         **social_links,
     }
 
@@ -232,9 +227,10 @@ def crawl_website(
     to_visit: list = [(get_url_priority(start_url), counter, start_url, 0)]
     heapq.heapify(to_visit)
 
-    all_mobiles: Dict[str, str | None] = {}
-    all_nationals: Dict[str, str | None] = {}
-    all_emails: Dict[str, str | None] = {}
+    all_mobiles: set[str] = set()
+    all_nationals: set[str] = set()
+    all_internationals: set[str] = set()
+    all_emails: set[str] = set()
     social_links = {"facebook": None, "instagram": None, "twitter": None, "linkedin": None}
 
     page_count = 0
@@ -262,12 +258,13 @@ def crawl_website(
             page_text = soup.get_text()
             page_html = str(soup)
 
-            mobiles, nationals = extract_phones_with_labels(page_text)
-            emails = extract_emails_with_labels(page_text)
+            mobiles, nationals, internationals = extract_phones(page_text)
+            emails = extract_emails(page_text)
             socials = extract_social_links(page_html)
 
             _merge_contacts(all_mobiles, mobiles)
             _merge_contacts(all_nationals, nationals)
+            _merge_contacts(all_internationals, internationals)
             _merge_contacts(all_emails, emails)
             for network, link in socials.items():
                 if link and not social_links[network]:
@@ -291,9 +288,10 @@ def crawl_website(
     )
 
     return {
-        "mobile_phones": list(all_mobiles.items()),
-        "national_phones": list(all_nationals.items()),
-        "emails": list(all_emails.items()),
+        "mobile_phones": sorted(all_mobiles),
+        "national_phones": sorted(all_nationals),
+        "international_phones": sorted(all_internationals),
+        "emails": sorted(all_emails),
         **social_links,
     }
 

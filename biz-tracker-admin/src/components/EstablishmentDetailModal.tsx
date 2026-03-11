@@ -93,6 +93,7 @@ const computeWebsiteScrapeStatus = (establishment: EstablishmentDetail | null): 
   const hasLegacyInfo = [
     establishment.websiteScrapedMobilePhones,
     establishment.websiteScrapedNationalPhones,
+    establishment.websiteScrapedInternationalPhones,
     establishment.websiteScrapedEmails,
     establishment.websiteScrapedFacebook,
     establishment.websiteScrapedInstagram,
@@ -480,8 +481,13 @@ export const EstablishmentDetailModal = ({
                 const contacts = establishment.scrapedContacts ?? [];
                 const mobilePhones = contacts.filter((c: ScrapedContact) => c.contactType === "mobile_phone");
                 const nationalPhones = contacts.filter((c: ScrapedContact) => c.contactType === "national_phone");
+                const internationalPhones = contacts.filter((c: ScrapedContact) => c.contactType === "international_phone");
                 const emails = contacts.filter((c: ScrapedContact) => c.contactType === "email");
-                const hasContacts = mobilePhones.length > 0 || nationalPhones.length > 0 || emails.length > 0;
+                const hasContacts =
+                  mobilePhones.length > 0 ||
+                  nationalPhones.length > 0 ||
+                  internationalPhones.length > 0 ||
+                  emails.length > 0;
                 const hasSocials = Boolean(
                   establishment.websiteScrapedFacebook ||
                   establishment.websiteScrapedInstagram ||
@@ -502,12 +508,11 @@ export const EstablishmentDetailModal = ({
                         <h4 style={{ margin: "8px 0 4px" }}>Téléphones mobiles</h4>
                         <div className="table-wrapper">
                           <table className="data-table">
-                            <thead><tr><th>Numéro</th><th>Libellé</th></tr></thead>
+                            <thead><tr><th>Numéro</th></tr></thead>
                             <tbody>
                               {mobilePhones.map((c: ScrapedContact) => (
                                 <tr key={c.id}>
                                   <td><a href={`tel:${c.value}`}>{c.value}</a></td>
-                                  <td>{c.label || "—"}</td>
                                 </tr>
                               ))}
                             </tbody>
@@ -520,12 +525,11 @@ export const EstablishmentDetailModal = ({
                         <h4 style={{ margin: "8px 0 4px" }}>Téléphones fixes</h4>
                         <div className="table-wrapper">
                           <table className="data-table">
-                            <thead><tr><th>Numéro</th><th>Libellé</th></tr></thead>
+                            <thead><tr><th>Numéro</th></tr></thead>
                             <tbody>
                               {nationalPhones.map((c: ScrapedContact) => (
                                 <tr key={c.id}>
                                   <td><a href={`tel:${c.value}`}>{c.value}</a></td>
-                                  <td>{c.label || "—"}</td>
                                 </tr>
                               ))}
                             </tbody>
@@ -538,12 +542,28 @@ export const EstablishmentDetailModal = ({
                         <h4 style={{ margin: "8px 0 4px" }}>Emails</h4>
                         <div className="table-wrapper">
                           <table className="data-table">
-                            <thead><tr><th>Email</th><th>Libellé</th></tr></thead>
+                            <thead><tr><th>Email</th></tr></thead>
                             <tbody>
                               {emails.map((c: ScrapedContact) => (
                                 <tr key={c.id}>
                                   <td><a href={`mailto:${c.value}`}>{c.value}</a></td>
-                                  <td>{c.label || "—"}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </>
+                    )}
+                    {internationalPhones.length > 0 && (
+                      <>
+                        <h4 style={{ margin: "8px 0 4px" }}>Téléphones internationaux</h4>
+                        <div className="table-wrapper">
+                          <table className="data-table">
+                            <thead><tr><th>Numéro</th></tr></thead>
+                            <tbody>
+                              {internationalPhones.map((c: ScrapedContact) => (
+                                <tr key={c.id}>
+                                  <td><a href={`tel:${c.value}`}>{c.value}</a></td>
                                 </tr>
                               ))}
                             </tbody>

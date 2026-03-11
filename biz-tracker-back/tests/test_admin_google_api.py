@@ -99,6 +99,7 @@ class ManualGoogleCheckRouteTests(TestCase):
         establishment.website_scraped_at = None
         establishment.website_scraped_mobile_phones = None
         establishment.website_scraped_national_phones = None
+        establishment.website_scraped_international_phones = None
         establishment.website_scraped_emails = None
         establishment.website_scraped_facebook = None
         establishment.website_scraped_instagram = None
@@ -359,6 +360,7 @@ class ManualWebsiteScrapeRouteTests(TestCase):
             website_scraped_at=now,
             website_scraped_mobile_phones="06 11 22 33 44",
             website_scraped_national_phones=None,
+            website_scraped_international_phones=None,
             website_scraped_emails=None,
             website_scraped_facebook=None,
             website_scraped_instagram=None,

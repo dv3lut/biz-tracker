@@ -352,6 +352,7 @@ export interface Establishment {
   websiteScrapedAt: string | null;
   websiteScrapedMobilePhones: string | null;
   websiteScrapedNationalPhones: string | null;
+  websiteScrapedInternationalPhones: string | null;
   websiteScrapedEmails: string | null;
   websiteScrapedFacebook: string | null;
   websiteScrapedInstagram: string | null;
@@ -367,7 +368,6 @@ export interface ScrapedContact {
   id: string;
   contactType: string;
   value: string;
-  label: string | null;
 }
 
 export interface EstablishmentDetail extends Establishment {

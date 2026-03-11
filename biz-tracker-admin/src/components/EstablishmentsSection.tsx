@@ -283,6 +283,7 @@ export const EstablishmentsSection = ({
     const hasLegacyInfo = [
       establishment.websiteScrapedMobilePhones,
       establishment.websiteScrapedNationalPhones,
+      establishment.websiteScrapedInternationalPhones,
       establishment.websiteScrapedEmails,
       establishment.websiteScrapedFacebook,
       establishment.websiteScrapedInstagram,

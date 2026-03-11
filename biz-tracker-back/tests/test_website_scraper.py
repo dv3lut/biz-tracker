@@ -26,40 +26,89 @@ from app.services.website_scraper.url_utils import (
 class TestExtractPhones:
     def test_extracts_mobile_phones(self) -> None:
         text = "Appelez-nous au 06 12 34 56 78 ou au 07.98.76.54.32."
-        mobiles, nationals = extract_phones(text)
+        mobiles, nationals, internationals = extract_phones(text)
         assert len(mobiles) == 2
         assert "+33612345678" in mobiles
         assert "+33798765432" in mobiles
         assert nationals == []
+        assert internationals == []
 
     def test_extracts_national_phones(self) -> None:
         text = "Standard : 01 23 45 67 89"
-        mobiles, nationals = extract_phones(text)
+        mobiles, nationals, internationals = extract_phones(text)
         assert mobiles == []
         assert len(nationals) == 1
         assert "+33123456789" in nationals
+        assert internationals == []
 
     def test_international_format(self) -> None:
         text = "Tél : +33 6 12 34 56 78"
-        mobiles, _ = extract_phones(text)
+        mobiles, _, internationals = extract_phones(text)
         assert "+33612345678" in mobiles
+        assert internationals == []
 
     def test_dedup(self) -> None:
         text = "06 12 34 56 78 et aussi 06 12 34 56 78"
-        mobiles, _ = extract_phones(text)
+        mobiles, _, _ = extract_phones(text)
         assert len(mobiles) == 1
 
     def test_national_excluded_when_also_mobile(self) -> None:
         # A number that somehow matches both patterns should not appear in both.
         text = "06 12 34 56 78"
-        mobiles, nationals = extract_phones(text)
+        mobiles, nationals, internationals = extract_phones(text)
         assert "+33612345678" in mobiles
         assert "+33612345678" not in nationals
+        assert internationals == []
 
     def test_empty_text(self) -> None:
-        mobiles, nationals = extract_phones("")
+        mobiles, nationals, internationals = extract_phones("")
         assert mobiles == []
         assert nationals == []
+        assert internationals == []
+
+    def test_hyphen_separators(self) -> None:
+        text = "Mobile: 06-12-34-56-78 / Fixe: 01-23-45-67-89"
+        mobiles, nationals, internationals = extract_phones(text)
+        assert "+33612345678" in mobiles
+        assert "+33123456789" in nationals
+        assert internationals == []
+
+    def test_mixed_separators(self) -> None:
+        text = "06.12-34 56.78"
+        mobiles, _, _ = extract_phones(text)
+        assert mobiles == ["+33612345678"]
+
+    def test_ignores_incomplete_numbers(self) -> None:
+        text = "Appelez le 06 12 34 56"
+        mobiles, nationals, internationals = extract_phones(text)
+        assert mobiles == []
+        assert nationals == []
+        assert internationals == []
+
+    def test_extracts_non_fr_international_numbers(self) -> None:
+        text = "International: +44 20 1234 5678"
+        mobiles, nationals, internationals = extract_phones(text)
+        assert mobiles == []
+        assert nationals == []
+        assert internationals == ["+442012345678"]
+
+    def test_extracts_multiple_lines(self) -> None:
+        text = """\
+Contact 1: 06 11 22 33 44
+Contact 2: 07 55 66 77 88
+Standard: 03 44 55 66 77
+"""
+        mobiles, nationals, internationals = extract_phones(text)
+        assert set(mobiles) == {"+33611223344", "+33755667788"}
+        assert nationals == ["+33344556677"]
+        assert internationals == []
+
+    def test_extracts_multiple_international_numbers(self) -> None:
+        text = "US: +1 202 555 0182 / PT: +351 21 123 45 67"
+        mobiles, nationals, internationals = extract_phones(text)
+        assert mobiles == []
+        assert nationals == []
+        assert set(internationals) == {"+12025550182", "+351211234567"}
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -79,6 +128,60 @@ class TestExtractEmails:
 
     def test_no_emails(self) -> None:
         assert extract_emails("pas d'adresse ici") == []
+
+    def test_trims_glued_suffix_after_common_tld(self) -> None:
+        text = "pizzagourmande38@gmail.comcookies et pizzagourmande38@gmail.comdirecteur"
+        emails = extract_emails(text)
+        assert emails == ["pizzagourmande38@gmail.com"]
+
+    def test_trims_glued_suffix_after_fr_tld(self) -> None:
+        text = "contact@restaurant.frreservation"
+        emails = extract_emails(text)
+        assert emails == ["contact@restaurant.fr"]
+
+    def test_keeps_long_tlds(self) -> None:
+        text = "hello@startup.technology et ops@infra.solutions"
+        emails = extract_emails(text)
+        assert set(emails) == {"hello@startup.technology", "ops@infra.solutions"}
+
+    def test_handles_common_punctuation_around_email(self) -> None:
+        text = "(contact@acme.fr), [support@acme.com];"
+        emails = extract_emails(text)
+        assert set(emails) == {"contact@acme.fr", "support@acme.com"}
+
+    def test_lowercases_output(self) -> None:
+        text = "SALES@ACME.FR"
+        emails = extract_emails(text)
+        assert emails == ["sales@acme.fr"]
+
+    def test_rejects_missing_tld(self) -> None:
+        text = "admin@localhost"
+        assert extract_emails(text) == []
+
+    def test_extracts_subdomain_email(self) -> None:
+        text = "admin@mail.ops.example.com"
+        emails = extract_emails(text)
+        assert emails == ["admin@mail.ops.example.com"]
+
+    def test_extracts_multi_level_tld(self) -> None:
+        text = "team@example.co.uk"
+        emails = extract_emails(text)
+        assert emails == ["team@example.co.uk"]
+
+    def test_trims_glued_suffix_after_net_tld(self) -> None:
+        text = "owner@business.netpromo"
+        emails = extract_emails(text)
+        assert emails == ["owner@business.net"]
+
+    def test_trims_glued_suffix_after_org_tld(self) -> None:
+        text = "association@domain.orgbureau"
+        emails = extract_emails(text)
+        assert emails == ["association@domain.org"]
+
+    def test_returns_unique_results_even_when_found_twice(self) -> None:
+        text = "x@y.comcookies puis x@y.com"
+        emails = extract_emails(text)
+        assert emails == ["x@y.com"]
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -118,6 +221,14 @@ class TestExtractSocialLinks:
         html = '<a href="https://www.linkedin.com/company/mybiz">LI</a>'
         result = extract_social_links(html)
         assert result["linkedin"] is not None
+
+    def test_linkedin_strips_encoded_trailing_blob(self) -> None:
+        html = (
+            "https://www.linkedin.com/in/alice-pouyet-facchinetti-4035231b5/&quot;"
+            "}]]],&quot;mobile&quot;:[0,{&quot;top&quot;:[0,344]}"
+        )
+        result = extract_social_links(html)
+        assert result["linkedin"] == "https://www.linkedin.com/in/alice-pouyet-facchinetti-4035231b5/"
 
     def test_no_links(self) -> None:
         result = extract_social_links("nothing here")

@@ -357,6 +357,7 @@ interface EstablishmentResponse {
   website_scraped_at: string | null;
   website_scraped_mobile_phones: string | null;
   website_scraped_national_phones: string | null;
+  website_scraped_international_phones: string | null;
   website_scraped_emails: string | null;
   website_scraped_facebook: string | null;
   website_scraped_instagram: string | null;
@@ -379,7 +380,6 @@ interface ScrapedContactResponse {
   id: string;
   contact_type: string;
   value: string;
-  label: string | null;
 }
 
 interface EstablishmentDetailResponse extends EstablishmentResponse {
@@ -774,6 +774,7 @@ const toEstablishment = (payload: EstablishmentResponse): Establishment => ({
   websiteScrapedAt: payload.website_scraped_at,
   websiteScrapedMobilePhones: payload.website_scraped_mobile_phones,
   websiteScrapedNationalPhones: payload.website_scraped_national_phones,
+  websiteScrapedInternationalPhones: payload.website_scraped_international_phones,
   websiteScrapedEmails: payload.website_scraped_emails,
   websiteScrapedFacebook: payload.website_scraped_facebook,
   websiteScrapedInstagram: payload.website_scraped_instagram,
@@ -801,7 +802,6 @@ const toEstablishment = (payload: EstablishmentResponse): Establishment => ({
     id: c.id,
     contactType: c.contact_type,
     value: c.value,
-    label: c.label,
   })),
 });
 

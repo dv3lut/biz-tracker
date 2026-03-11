@@ -108,6 +108,7 @@ class Establishment(Base):
     website_scraped_at: Mapped[datetime | None] = mapped_column(DateTime)
     website_scraped_mobile_phones: Mapped[str | None] = mapped_column(Text)
     website_scraped_national_phones: Mapped[str | None] = mapped_column(Text)
+    website_scraped_international_phones: Mapped[str | None] = mapped_column(Text)
     website_scraped_emails: Mapped[str | None] = mapped_column(Text)
     website_scraped_facebook: Mapped[str | None] = mapped_column(String(512))
     website_scraped_instagram: Mapped[str | None] = mapped_column(String(512))
@@ -190,7 +191,7 @@ class Director(Base):
 
 
 class ScrapedContact(Base):
-    """Phone number or email address extracted from a website, with optional label."""
+    """Phone number or email address extracted from a website."""
 
     __tablename__ = "scraped_contacts"
 
@@ -203,7 +204,6 @@ class ScrapedContact(Base):
     )
     contact_type: Mapped[str] = mapped_column(String(32), nullable=False)
     value: Mapped[str] = mapped_column(String(512), nullable=False)
-    label: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
 
     establishment: Mapped[Establishment] = relationship("Establishment", back_populates="scraped_contacts")

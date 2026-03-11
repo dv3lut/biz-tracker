@@ -24,6 +24,13 @@ from app.services.google_business.google_listing import (
 from app.services.google_business.google_match_rules import evaluate_candidate_match, haversine_distance_m
 from app.services.google_business.google_matching import build_place_query, matches_expected_google_category
 from app.services.google_business.google_types import GoogleMatch
+from app.services.google_business.field_sanitizer import (
+    MAX_EMAIL_LENGTH,
+    MAX_PHONE_LENGTH,
+    MAX_PLACE_ID_LENGTH,
+    MAX_URL_LENGTH,
+    clamp_optional_varchar,
+)
 from app.services.rate_limiter import RateLimiter
 from app.utils.dates import utcnow
 
@@ -205,6 +212,7 @@ class GoogleLookupEngine:
                 continue
             contact_phone, contact_email, contact_website = self._extract_contact_details(details)
             url = details.get("url") or contact_website
+            url = clamp_optional_varchar(url if isinstance(url, str) else None, MAX_URL_LENGTH)
             if not url:
                 _LOGGER.debug("Place %s trouvée mais sans URL exploitable.", place_id)
                 url = None
@@ -390,9 +398,9 @@ class GoogleLookupEngine:
                 establishment.google_check_status = "not_found"
             return None
 
-        establishment.google_place_id = result.place_id
+        establishment.google_place_id = clamp_optional_varchar(result.place_id, MAX_PLACE_ID_LENGTH)
         if result.place_url:
-            establishment.google_place_url = result.place_url
+            establishment.google_place_url = clamp_optional_varchar(result.place_url, MAX_URL_LENGTH)
             establishment.google_last_found_at = now
         else:
             _LOGGER.debug("Résultat Google Places trouvé sans URL exploitable pour %s", establishment.siret)
@@ -408,9 +416,9 @@ class GoogleLookupEngine:
         establishment.google_listing_age_status = result.listing_age_status
         establishment.google_match_confidence = result.confidence
         establishment.google_category_match_confidence = result.category_confidence
-        establishment.google_contact_phone = result.contact_phone
-        establishment.google_contact_email = result.contact_email
-        establishment.google_contact_website = result.contact_website
+        establishment.google_contact_phone = clamp_optional_varchar(result.contact_phone, MAX_PHONE_LENGTH)
+        establishment.google_contact_email = clamp_optional_varchar(result.contact_email, MAX_EMAIL_LENGTH)
+        establishment.google_contact_website = clamp_optional_varchar(result.contact_website, MAX_URL_LENGTH)
         establishment.google_last_checked_at = now
         if result.place_url:
             establishment.google_last_found_at = now
@@ -451,9 +459,11 @@ class GoogleLookupEngine:
         phone = details.get("formatted_phone_number") or details.get("international_phone_number")
         if phone and not isinstance(phone, str):
             phone = None
+        phone = clamp_optional_varchar(phone, MAX_PHONE_LENGTH)
         website = details.get("website")
         if website and not isinstance(website, str):
             website = None
+        website = clamp_optional_varchar(website, MAX_URL_LENGTH)
         email = None
         return phone, email, website
 

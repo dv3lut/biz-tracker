@@ -651,6 +651,10 @@ def run_schema_upgrades(engine: Engine) -> None:
         """,
         """
         ALTER TABLE establishments
+        ADD COLUMN IF NOT EXISTS website_scraped_international_phones TEXT
+        """,
+        """
+        ALTER TABLE establishments
         ADD COLUMN IF NOT EXISTS website_scraped_emails TEXT
         """,
         """
@@ -696,9 +700,12 @@ def run_schema_upgrades(engine: Engine) -> None:
                 REFERENCES establishments(siret) ON DELETE CASCADE,
             contact_type VARCHAR(32) NOT NULL,
             value VARCHAR(512) NOT NULL,
-            label VARCHAR(255),
             created_at TIMESTAMP NOT NULL DEFAULT NOW()
         )
+        """,
+        """
+        ALTER TABLE scraped_contacts
+        DROP COLUMN IF EXISTS label
         """,
         """
         CREATE INDEX IF NOT EXISTS ix_scraped_contacts_siret
@@ -766,6 +773,25 @@ def run_schema_upgrades(engine: Engine) -> None:
                 AND sc.value = trim(email)
           )
         """,
+                """
+                INSERT INTO scraped_contacts (id, establishment_siret, contact_type, value, created_at)
+                SELECT
+                        gen_random_uuid(),
+                        e.siret,
+                        'international_phone',
+                        trim(phone),
+                        COALESCE(e.website_scraped_at, NOW())
+                FROM establishments e,
+                         unnest(string_to_array(e.website_scraped_international_phones, '|')) AS phone
+                WHERE e.website_scraped_international_phones IS NOT NULL
+                    AND e.website_scraped_international_phones != ''
+                    AND NOT EXISTS (
+                            SELECT 1 FROM scraped_contacts sc
+                            WHERE sc.establishment_siret = e.siret
+                                AND sc.contact_type = 'international_phone'
+                                AND sc.value = trim(phone)
+                    )
+                """,
     ]
 
     with engine.begin() as connection:
