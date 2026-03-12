@@ -94,9 +94,13 @@ def test_build_google_places_workbook_admin_mode_includes_google_scraping_and_na
     assert "Téléphone Google" in headers
     assert "Email Google" in headers
     assert "Site web Google" in headers
+    assert "Téléphone mobile (site)" in headers
     assert "Téléphones mobiles (site)" in headers
+    assert "Téléphone fixe (site)" in headers
     assert "Téléphones fixes (site)" in headers
+    assert "Téléphone international (site)" in headers
     assert "Téléphones internationaux (site)" in headers
+    assert "Email (site)" in headers
     assert "Emails (site)" in headers
     assert "Catégorie NAF" in headers
     assert "Sous-catégorie NAF" in headers
@@ -104,9 +108,13 @@ def test_build_google_places_workbook_admin_mode_includes_google_scraping_and_na
     assert value_by_header["Téléphone Google"] == "+33102030405"
     assert value_by_header["Email Google"] == "contact@chez-test.fr"
     assert value_by_header["Site web Google"] == "https://chez-test.fr"
+    assert value_by_header["Téléphone mobile (site)"] == "+33601020304"
     assert value_by_header["Téléphones mobiles (site)"] == "+33601020304, +33605060708"
+    assert value_by_header["Téléphone fixe (site)"] == "+33111223344"
     assert value_by_header["Téléphones fixes (site)"] == "+33111223344, +33955667788"
+    assert value_by_header["Téléphone international (site)"] == "+442079460958"
     assert value_by_header["Téléphones internationaux (site)"] == "+442079460958"
+    assert value_by_header["Email (site)"] == "hello@chez-test.fr"
     assert value_by_header["Emails (site)"] == "hello@chez-test.fr, booking@chez-test.fr"
     assert value_by_header["Facebook (site)"] == "https://facebook.com/cheztest"
     assert value_by_header["Instagram (site)"] == "https://instagram.com/cheztest"
@@ -265,6 +273,9 @@ def test_export_helpers_normalize_values():
     lookup = {"5610A": ("Restauration", "Bistrot")}
     assert export_service._resolve_category_columns("5610A", "Fallback", lookup) == ("Restauration", "Bistrot")
     assert export_service._resolve_category_columns(None, "Fallback", None) == ("Fallback", None)
+    assert export_service._first_pipe_separated_value("alpha|beta|gamma") == "alpha"
+    assert export_service._first_pipe_separated_value(" alpha | alpha | beta ") == "alpha"
+    assert export_service._first_pipe_separated_value("   |   ") is None
 
 
 def test_compose_full_address_handles_missing_segments():

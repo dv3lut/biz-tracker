@@ -4,6 +4,7 @@ from __future__ import annotations
 import html
 import re
 from typing import Dict, List, Optional, Tuple
+from urllib.parse import unquote
 
 from bs4 import BeautifulSoup
 
@@ -138,8 +139,9 @@ def extract_mailto_emails(html_content: str) -> List[str]:
         if not href.lower().startswith("mailto:"):
             continue
         # Strip mailto: prefix and optional query string (?subject=…)
-        raw = href[7:].split("?", maxsplit=1)[0].strip()
-        candidate = raw.lower()
+        raw = href[7:].split("?", maxsplit=1)[0]
+        decoded = html.unescape(unquote(raw))
+        candidate = decoded.strip().lower()
         if _email_re.match(candidate):
             emails.add(candidate)
 

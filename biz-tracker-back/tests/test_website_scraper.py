@@ -237,6 +237,11 @@ class TestExtractMailtoEmails:
         emails = extract_mailto_emails(html)
         assert emails == ["info@acme.fr"]
 
+    def test_decodes_urlencoded_prefix_spaces(self) -> None:
+        html = '<a href="mailto:%20adoguet@cpcassocies.com">Email</a>'
+        emails = extract_mailto_emails(html)
+        assert emails == ["adoguet@cpcassocies.com"]
+
     def test_multiple_mailto_dedup(self) -> None:
         html = (
             '<a href="mailto:a@b.com">A</a> '

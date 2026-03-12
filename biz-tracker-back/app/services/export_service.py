@@ -70,6 +70,19 @@ def _format_pipe_separated_values(value: str | None) -> str | None:
     return ", ".join(cleaned)
 
 
+def _first_pipe_separated_value(value: str | None) -> str | None:
+    if not value:
+        return None
+    seen: set[str] = set()
+    for token in value.split("|"):
+        normalized = token.strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        return normalized
+    return None
+
+
 def _resolve_category_columns(
     naf_code: str | None,
     naf_label: str | None,
@@ -140,9 +153,13 @@ def build_google_places_workbook(
             "Origine fiche Google",
             "Statut fiche Google",
             "Dernier scraping site",
+            "Téléphone mobile (site)",
             "Téléphones mobiles (site)",
+            "Téléphone fixe (site)",
             "Téléphones fixes (site)",
+            "Téléphone international (site)",
             "Téléphones internationaux (site)",
+            "Email (site)",
             "Emails (site)",
             "Facebook (site)",
             "Instagram (site)",
@@ -211,9 +228,13 @@ def build_google_places_workbook(
             _format_datetime(establishment.google_listing_origin_at),
             describe_listing_age_status(establishment.google_listing_age_status),
             _format_datetime(establishment.website_scraped_at),
+            _first_pipe_separated_value(establishment.website_scraped_mobile_phones),
             _format_pipe_separated_values(establishment.website_scraped_mobile_phones),
+            _first_pipe_separated_value(establishment.website_scraped_national_phones),
             _format_pipe_separated_values(establishment.website_scraped_national_phones),
+            _first_pipe_separated_value(establishment.website_scraped_international_phones),
             _format_pipe_separated_values(establishment.website_scraped_international_phones),
+            _first_pipe_separated_value(establishment.website_scraped_emails),
             _format_pipe_separated_values(establishment.website_scraped_emails),
             establishment.website_scraped_facebook,
             establishment.website_scraped_instagram,
