@@ -44,6 +44,25 @@ def _merge_contacts(target: set[str], items: list[str]) -> None:
     target.update(items)
 
 
+def _merge_crawl_results(primary: Dict, secondary: Dict) -> Dict:
+    """Return a union of crawl results.
+
+    - contact lists are deduplicated (set union)
+    - social links keep primary value, fallback to secondary when missing
+    """
+
+    merged = dict(_EMPTY_RESULT)
+    for key in ("mobile_phones", "national_phones", "international_phones", "emails"):
+        first = primary.get(key) or []
+        second = secondary.get(key) or []
+        merged[key] = sorted(set(first) | set(second))
+
+    for key in ("facebook", "instagram", "twitter", "linkedin"):
+        merged[key] = primary.get(key) or secondary.get(key)
+
+    return merged
+
+
 # ---------------------------------------------------------------------------
 # HTTP helpers
 # ---------------------------------------------------------------------------
@@ -306,7 +325,11 @@ async def crawl_website_async(
     max_depth: int = 1,
     label: str = "Inconnu",
 ) -> Dict:
-    """Try a plain GET; fall back to Playwright only if JS rendering is detected."""
+    """Try HTTP first.
+
+    If JS rendering is detected and Playwright is available, run both Playwright and
+    HTTP crawlers and merge their outputs so we keep the union of discovered data.
+    """
 
     if not is_valid_url(start_url):
         return dict(_EMPTY_RESULT)
@@ -326,7 +349,9 @@ async def crawl_website_async(
         return dict(_EMPTY_RESULT)
 
     if is_playwright_available():
-        return await crawl_with_browser(start_url, max_pages, max_depth, label)
+        browser_result = await crawl_with_browser(start_url, max_pages, max_depth, label)
+        http_result = crawl_website(start_url, max_pages, max_depth, label)
+        return _merge_crawl_results(browser_result, http_result)
 
     _LOGGER.info("[%s] Playwright non disponible, fallback HTTP pour %s", label, start_url)
     return crawl_website(start_url, max_pages, max_depth, label)

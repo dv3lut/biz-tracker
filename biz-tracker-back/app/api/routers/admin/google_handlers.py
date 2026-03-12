@@ -493,7 +493,7 @@ def build_google_places_export_response(
         for est in establishments
         if normalize_listing_age_status(est.google_listing_age_status) in allowed_statuses
     ]
-    subcategory_lookup = _load_subcategory_lookup(session) if mode == "client" else None
+    subcategory_lookup = _load_subcategory_lookup(session)
     workbook_stream = build_google_places_workbook(
         establishments,
         mode=mode,

@@ -1,6 +1,9 @@
 """Tests for the website_scraper extractors and url_utils modules."""
 from __future__ import annotations
 
+import asyncio
+from types import SimpleNamespace
+
 import pytest
 
 from app.services.website_scraper.extractors import (
@@ -16,6 +19,7 @@ from app.services.website_scraper.url_utils import (
     is_valid_url,
     normalize_url,
 )
+from app.services.website_scraper import crawlers
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -317,6 +321,58 @@ class TestNormalizeUrl:
 
     def test_mailto_ignored(self) -> None:
         assert normalize_url("https://example.com", "mailto:a@b.com") is None
+
+
+class TestCrawlerDispatcher:
+    def test_js_rendering_merges_playwright_and_http_results(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        response = SimpleNamespace(ok=True, headers={"Content-Type": "text/html"}, text="<html>js</html>")
+
+        monkeypatch.setattr(crawlers, "_get_requests_session", lambda: object())
+        monkeypatch.setattr(crawlers, "_safe_get", lambda _session, _url, timeout=20: response)
+        monkeypatch.setattr(crawlers, "needs_browser_rendering", lambda _html: True)
+        monkeypatch.setattr(crawlers, "is_playwright_available", lambda: True)
+        monkeypatch.setattr(
+            crawlers,
+            "crawl_with_browser",
+            lambda *_args, **_kwargs: _async_result(
+                {
+                    "mobile_phones": ["+33612345678"],
+                    "national_phones": [],
+                    "international_phones": [],
+                    "emails": [],
+                    "facebook": None,
+                    "instagram": None,
+                    "twitter": None,
+                    "linkedin": "https://linkedin.com/company/acme",
+                }
+            ),
+        )
+        monkeypatch.setattr(
+            crawlers,
+            "crawl_website",
+            lambda *_args, **_kwargs: {
+                "mobile_phones": [],
+                "national_phones": ["+33123456789"],
+                "international_phones": [],
+                "emails": ["contact@acme.fr"],
+                "facebook": "https://facebook.com/acme",
+                "instagram": None,
+                "twitter": None,
+                "linkedin": None,
+            },
+        )
+
+        result = asyncio.run(crawlers.crawl_website_async("https://example.com", label="ACME"))
+
+        assert result["mobile_phones"] == ["+33612345678"]
+        assert result["national_phones"] == ["+33123456789"]
+        assert result["emails"] == ["contact@acme.fr"]
+        assert result["facebook"] == "https://facebook.com/acme"
+        assert result["linkedin"] == "https://linkedin.com/company/acme"
+
+
+async def _async_result(value):
+    return value
 
     def test_tel_ignored(self) -> None:
         assert normalize_url("https://example.com", "tel:+33612345678") is None

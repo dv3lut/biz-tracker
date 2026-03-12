@@ -54,6 +54,22 @@ def _format_date(value: object | None) -> str | None:
     return str(value)
 
 
+def _format_pipe_separated_values(value: str | None) -> str | None:
+    if not value:
+        return None
+    seen: set[str] = set()
+    cleaned: list[str] = []
+    for token in value.split("|"):
+        normalized = token.strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        cleaned.append(normalized)
+    if not cleaned:
+        return None
+    return ", ".join(cleaned)
+
+
 def _resolve_category_columns(
     naf_code: str | None,
     naf_label: str | None,
@@ -108,14 +124,30 @@ def build_google_places_workbook(
             "Code postal",
             "Commune",
             "Pays",
+            "NAF",
+            "Libellé NAF",
+            "Catégorie NAF",
+            "Sous-catégorie NAF",
             "Google Place ID",
             "Google Place URL",
             "Score correspondance",
             "Statut Google",
+            "Téléphone Google",
+            "Email Google",
+            "Site web Google",
             "Dernière vérification",
             "Dernière détection",
             "Origine fiche Google",
             "Statut fiche Google",
+            "Dernier scraping site",
+            "Téléphones mobiles (site)",
+            "Téléphones fixes (site)",
+            "Téléphones internationaux (site)",
+            "Emails (site)",
+            "Facebook (site)",
+            "Instagram (site)",
+            "Twitter/X (site)",
+            "LinkedIn (site)",
             "Run de création",
             "Run le plus récent",
             "Vu en premier",
@@ -125,21 +157,23 @@ def build_google_places_workbook(
 
     if mode == "client":
         link_column_index = headers.index("Lien Google") + 1
+        siret_column_index = None
     else:
-        link_column_index = None
+        link_column_index = headers.index("Google Place URL") + 1
+        siret_column_index = headers.index("SIRET") + 1
 
     for establishment in establishments:
         creation_date = _format_date(establishment.date_creation)
         address = _compose_address(establishment)
         commune = establishment.libelle_commune or establishment.libelle_commune_etranger
         google_url = establishment.google_place_url
+        category_name, subcategory_name = _resolve_category_columns(
+            establishment.naf_code,
+            establishment.naf_libelle,
+            subcategory_lookup,
+        )
         if mode == "client":
             full_address = _compose_full_address(establishment)
-            category_name, _subcategory_name = _resolve_category_columns(
-                establishment.naf_code,
-                establishment.naf_libelle,
-                subcategory_lookup,
-            )
             row = [
                 establishment.name,
                 full_address,
@@ -153,32 +187,46 @@ def build_google_places_workbook(
             _apply_hyperlink(sheet, sheet.max_row, link_column_index, google_url)
             continue
 
-        sheet.append(
-            [
-                creation_date,
-                establishment.siret,
-                establishment.name,
-                address,
-                establishment.code_postal,
-                commune,
-                establishment.code_pays,
-                establishment.google_place_id,
-                google_url,
-                round(establishment.google_match_confidence, 3) if establishment.google_match_confidence is not None else None,
-                establishment.google_check_status,
-                _format_datetime(establishment.google_last_checked_at),
-                _format_datetime(establishment.google_last_found_at),
-                _format_datetime(establishment.google_listing_origin_at),
-                describe_listing_age_status(establishment.google_listing_age_status),
-                str(establishment.created_run_id) if establishment.created_run_id else None,
-                str(establishment.last_run_id) if establishment.last_run_id else None,
-                _format_datetime(establishment.first_seen_at),
-                _format_datetime(establishment.last_seen_at),
-            ]
-        )
-    row_idx = sheet.max_row
-    _apply_hyperlink(sheet, row_idx, 2, build_annuaire_etablissement_url(establishment.siret))
-    _apply_hyperlink(sheet, row_idx, 10, google_url)
+        row = [
+            creation_date,
+            establishment.siret,
+            establishment.name,
+            address,
+            establishment.code_postal,
+            commune,
+            establishment.code_pays,
+            establishment.naf_code,
+            establishment.naf_libelle,
+            category_name,
+            subcategory_name,
+            establishment.google_place_id,
+            google_url,
+            round(establishment.google_match_confidence, 3) if establishment.google_match_confidence is not None else None,
+            establishment.google_check_status,
+            establishment.google_contact_phone,
+            establishment.google_contact_email,
+            establishment.google_contact_website,
+            _format_datetime(establishment.google_last_checked_at),
+            _format_datetime(establishment.google_last_found_at),
+            _format_datetime(establishment.google_listing_origin_at),
+            describe_listing_age_status(establishment.google_listing_age_status),
+            _format_datetime(establishment.website_scraped_at),
+            _format_pipe_separated_values(establishment.website_scraped_mobile_phones),
+            _format_pipe_separated_values(establishment.website_scraped_national_phones),
+            _format_pipe_separated_values(establishment.website_scraped_international_phones),
+            _format_pipe_separated_values(establishment.website_scraped_emails),
+            establishment.website_scraped_facebook,
+            establishment.website_scraped_instagram,
+            establishment.website_scraped_twitter,
+            establishment.website_scraped_linkedin,
+            str(establishment.created_run_id) if establishment.created_run_id else None,
+            str(establishment.last_run_id) if establishment.last_run_id else None,
+            _format_datetime(establishment.first_seen_at),
+            _format_datetime(establishment.last_seen_at),
+        ]
+        sheet.append(row)
+        _apply_hyperlink(sheet, sheet.max_row, siret_column_index, build_annuaire_etablissement_url(establishment.siret))
+        _apply_hyperlink(sheet, sheet.max_row, link_column_index, google_url)
 
     sheet.freeze_panes = "A2"
 

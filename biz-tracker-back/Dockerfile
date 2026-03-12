@@ -13,7 +13,8 @@ RUN apt-get update \
 
 COPY requirements.txt /app/requirements.txt
 RUN pip install --upgrade pip \
-    && pip install -r requirements.txt
+    && pip install -r requirements.txt \
+    && python -m playwright install --with-deps chromium
 
 COPY app /app/app
 COPY scripts /app/scripts

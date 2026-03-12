@@ -42,9 +42,18 @@ def _make_establishment(**overrides):
         google_listing_origin_at=datetime(2024, 1, 1, 9, 0, 0),
         google_listing_origin_source="google",
         google_listing_age_status="recent_creation",
-        google_contact_phone=None,
-        google_contact_email=None,
-        google_contact_website=None,
+        google_contact_phone="+33102030405",
+        google_contact_email="contact@chez-test.fr",
+        google_contact_website="https://chez-test.fr",
+        website_scraped_at=datetime(2024, 1, 2, 12, 0, 0),
+        website_scraped_mobile_phones="+33601020304|+33605060708",
+        website_scraped_national_phones="+33111223344|+33955667788",
+        website_scraped_international_phones="+442079460958",
+        website_scraped_emails="hello@chez-test.fr|booking@chez-test.fr",
+        website_scraped_facebook="https://facebook.com/cheztest",
+        website_scraped_instagram="https://instagram.com/cheztest",
+        website_scraped_twitter="https://x.com/cheztest",
+        website_scraped_linkedin="https://linkedin.com/company/cheztest",
         created_run_id=uuid4(),
         last_run_id=uuid4(),
         first_seen_at=datetime(2024, 1, 1, 8, 0, 0),
@@ -61,10 +70,50 @@ def test_build_google_places_workbook_admin_mode_sets_hyperlinks():
 
     assert sheet.title == "Google Places (admin)"
     assert len(rows) == 2
-    siret_cell = sheet.cell(row=2, column=2)
+    siret_col = rows[0].index("SIRET") + 1
+    google_col = rows[0].index("Google Place URL") + 1
+    siret_cell = sheet.cell(row=2, column=siret_col)
     assert siret_cell.hyperlink and siret_cell.hyperlink.target.endswith("12345678901234")
-    google_cell = sheet.cell(row=2, column=10)
+    google_cell = sheet.cell(row=2, column=google_col)
     assert google_cell.hyperlink and "maps.google.com" in google_cell.hyperlink.target
+
+
+def test_build_google_places_workbook_admin_mode_includes_google_scraping_and_naf_columns():
+    establishment = _make_establishment(naf_code="5610A", naf_libelle="Restauration")
+    lookup = {"5610A": ("Restauration commerciale", "Restauration traditionnelle")}
+
+    buffer = export_service.build_google_places_workbook(
+        [establishment],
+        mode="admin",
+        subcategory_lookup=lookup,
+    )
+    _, rows = _load_rows(buffer)
+
+    headers = rows[0]
+    values = rows[1]
+    assert "Téléphone Google" in headers
+    assert "Email Google" in headers
+    assert "Site web Google" in headers
+    assert "Téléphones mobiles (site)" in headers
+    assert "Téléphones fixes (site)" in headers
+    assert "Téléphones internationaux (site)" in headers
+    assert "Emails (site)" in headers
+    assert "Catégorie NAF" in headers
+    assert "Sous-catégorie NAF" in headers
+    value_by_header = dict(zip(headers, values))
+    assert value_by_header["Téléphone Google"] == "+33102030405"
+    assert value_by_header["Email Google"] == "contact@chez-test.fr"
+    assert value_by_header["Site web Google"] == "https://chez-test.fr"
+    assert value_by_header["Téléphones mobiles (site)"] == "+33601020304, +33605060708"
+    assert value_by_header["Téléphones fixes (site)"] == "+33111223344, +33955667788"
+    assert value_by_header["Téléphones internationaux (site)"] == "+442079460958"
+    assert value_by_header["Emails (site)"] == "hello@chez-test.fr, booking@chez-test.fr"
+    assert value_by_header["Facebook (site)"] == "https://facebook.com/cheztest"
+    assert value_by_header["Instagram (site)"] == "https://instagram.com/cheztest"
+    assert value_by_header["Twitter/X (site)"] == "https://x.com/cheztest"
+    assert value_by_header["LinkedIn (site)"] == "https://linkedin.com/company/cheztest"
+    assert value_by_header["Catégorie NAF"] == "Restauration commerciale"
+    assert value_by_header["Sous-catégorie NAF"] == "Restauration traditionnelle"
 
 
 def test_build_google_places_workbook_client_mode_uses_lookup():
@@ -114,7 +163,7 @@ def test_client_export_hides_status_when_single_filter():
         establishment.naf_libelle,
         establishment.google_place_url,
     )
-    assert rows[1][4] is None
+    assert len(rows[1]) == 4
 
 
 def test_build_alerts_workbook_includes_payload_and_links():
@@ -253,7 +302,9 @@ def test_apply_hyperlink_skips_none_url():
     buffer = export_service.build_google_places_workbook([establishment])
     sheet, rows = _load_rows(buffer)
     # La ligne doit exister mais sans hyperlien sur la colonne URL
-    assert rows[1][8] is None
+    google_col = rows[0].index("Google Place URL") + 1
+    assert rows[1][google_col - 1] is None
+    assert sheet.cell(row=2, column=google_col).hyperlink is None
 
 
 def test_build_alerts_workbook_skips_alert_without_establishment():
