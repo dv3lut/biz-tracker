@@ -223,9 +223,9 @@ class SyncRequestSchemaTests(unittest.TestCase):
     def test_website_statuses_normalized_and_deduped(self) -> None:
         payload = SyncRequest(
             mode=SyncMode.FULL,
-            website_statuses=[" scraped ", "NOT_SCRAPED", "scraped", ""],
+            website_statuses=[" scraped ", "NOT_SCRAPED", "found", "NO_INFO", "scraped", ""],
         )
-        self.assertEqual(payload.website_statuses, ["scraped", "not_scraped"])
+        self.assertEqual(payload.website_statuses, ["scraped", "not_scraped", "found", "no_info"])
 
     def test_website_statuses_invalid_rejected(self) -> None:
         with self.assertRaises(ValidationError):

@@ -109,6 +109,8 @@ const GOOGLE_STATUS_LABELS: Record<string, string> = {
 const WEBSITE_STATUS_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "not_scraped", label: "Non scrapé" },
   { value: "scraped", label: "Déjà scrapé" },
+  { value: "found", label: "Données trouvées" },
+  { value: "no_info", label: "Aucune donnée trouvée" },
 ];
 
 const buildGoogleStatusOptions = (

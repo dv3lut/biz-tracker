@@ -34,6 +34,8 @@ def load_website_scrape_targets(
     *website_statuses* accepted values:
     - ``"not_scraped"`` – establishments where ``website_scraped_at IS NULL``
     - ``"scraped"`` – establishments where ``website_scraped_at IS NOT NULL``
+    - ``"found"`` – establishments scraped with at least one contact/social info found
+    - ``"no_info"`` – establishments scraped but with no contact/social info found
     If empty or ``None``, defaults to ``["not_scraped"]`` (only unscrapped sites).
     """
 
@@ -48,19 +50,43 @@ def load_website_scrape_targets(
     if not cleaned_statuses:
         cleaned_statuses = ["not_scraped"]
 
-    has_scraped = "scraped" in cleaned_statuses
-    has_not_scraped = "not_scraped" in cleaned_statuses
-
-    if has_scraped and not has_not_scraped:
-        stmt = stmt.where(models.Establishment.website_scraped_at.is_not(None))
-    elif has_not_scraped and not has_scraped:
-        stmt = stmt.where(models.Establishment.website_scraped_at.is_(None))
-    # If both statuses are selected, no additional filter needed (all with a website).
-
     if target_naf_codes:
         stmt = stmt.where(models.Establishment.naf_code.in_(target_naf_codes))
 
-    return session.execute(stmt).scalars().all()
+    establishments = session.execute(stmt).scalars().all()
+
+    selected_statuses = set(cleaned_statuses)
+
+    def _has_scraped_info(establishment: models.Establishment) -> bool:
+        values = [
+            establishment.website_scraped_mobile_phones,
+            establishment.website_scraped_national_phones,
+            establishment.website_scraped_international_phones,
+            establishment.website_scraped_emails,
+            establishment.website_scraped_facebook,
+            establishment.website_scraped_instagram,
+            establishment.website_scraped_twitter,
+            establishment.website_scraped_linkedin,
+        ]
+        return any(isinstance(value, str) and value.strip() for value in values)
+
+    def _compute_scrape_status(establishment: models.Establishment) -> str:
+        if establishment.website_scraped_at is None:
+            return "not_scraped"
+        if _has_scraped_info(establishment):
+            return "found"
+        return "no_info"
+
+    filtered: list[models.Establishment] = []
+    for establishment in establishments:
+        status = _compute_scrape_status(establishment)
+        if status in selected_statuses:
+            filtered.append(establishment)
+            continue
+        if "scraped" in selected_statuses and status in {"found", "no_info"}:
+            filtered.append(establishment)
+
+    return filtered
 
 
 def collect_website_scrape_only(

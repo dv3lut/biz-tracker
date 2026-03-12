@@ -202,7 +202,7 @@ class SyncRequest(BaseModel):
     website_statuses: list[str] | None = Field(
         default=None,
         description=(
-            "Statuts de scraping site web à cibler (scraped, not_scraped). "
+            "Statuts de scraping site web à cibler (scraped, not_scraped, found, no_info). "
             "Mode 'website_scrape' uniquement."
         ),
     )
@@ -273,7 +273,7 @@ class SyncRequest(BaseModel):
     def validate_website_statuses(cls, value: list[str] | None) -> list[str] | None:
         if not value:
             return None
-        allowed = {"scraped", "not_scraped"}
+        allowed = {"scraped", "not_scraped", "found", "no_info"}
         normalized: list[str] = []
         seen: set[str] = set()
         for raw in value:
@@ -281,7 +281,7 @@ class SyncRequest(BaseModel):
             if not candidate:
                 continue
             if candidate not in allowed:
-                raise ValueError("Statuts site web acceptés: scraped, not_scraped.")
+                raise ValueError("Statuts site web acceptés: scraped, not_scraped, found, no_info.")
             if candidate in seen:
                 continue
             seen.add(candidate)
