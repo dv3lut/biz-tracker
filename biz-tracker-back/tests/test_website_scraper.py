@@ -41,6 +41,13 @@ class TestExtractPhones:
         assert "+33123456789" in nationals
         assert internationals == []
 
+    def test_extracts_plus33_optional_zero_national(self) -> None:
+        text = "Tél: +33 (0)2 35 59 83 63"
+        mobiles, nationals, internationals = extract_phones(text)
+        assert mobiles == []
+        assert "+33235598363" in nationals
+        assert internationals == []
+
     def test_international_format(self) -> None:
         text = "Tél : +33 6 12 34 56 78"
         mobiles, _, internationals = extract_phones(text)

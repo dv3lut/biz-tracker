@@ -105,7 +105,7 @@ class GoogleCategoryMatchingTests(unittest.TestCase):
     def setUp(self) -> None:
         self.service = GoogleBusinessService.__new__(GoogleBusinessService)
         self.service._category_similarity_threshold = 0.72
-        self.service._neutral_google_types = {"point_of_interest", "establishment", "store", "food"}
+        self.service._neutral_google_types = {"point_of_interest"}
 
     def test_rejects_unrelated_google_categories(self) -> None:
         keywords = {"restaurant", "restauration"}
@@ -133,7 +133,7 @@ class GoogleConfidencePersistenceTests(unittest.TestCase):
         self.session = Mock()
         self.session.flush = Mock()
         self.rate_limiter = SimpleNamespace(acquire=lambda: None)
-        self.neutral_google_types = {"point_of_interest", "establishment", "store", "food"}
+        self.neutral_google_types = {"point_of_interest"}
 
     def _establishment(self) -> SimpleNamespace:
         return SimpleNamespace(
@@ -505,7 +505,7 @@ class GoogleBacklogCountingTests(unittest.TestCase):
             rate_limiter=SimpleNamespace(acquire=lambda: None),
             settings=SimpleNamespace(),
             naf_keyword_map={},
-            neutral_google_types={"point_of_interest", "establishment"},
+            neutral_google_types={"point_of_interest"},
             category_similarity_threshold=0.72,
             api_call_hook=lambda: None,
         )
@@ -567,7 +567,7 @@ class GoogleFieldLengthGuardsTests(unittest.TestCase):
             rate_limiter=SimpleNamespace(acquire=lambda: None),
             settings=SimpleNamespace(),
             naf_keyword_map={},
-            neutral_google_types={"point_of_interest", "establishment"},
+            neutral_google_types={"point_of_interest"},
             category_similarity_threshold=0.72,
             api_call_hook=lambda: None,
         )

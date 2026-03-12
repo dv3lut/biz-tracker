@@ -20,8 +20,8 @@ def extract_phones(text: str) -> Tuple[List[str], List[str], List[str]]:
     excluded automatically.
     """
 
-    mobile_pattern = r'(?:\+33[\s.\-]?[67]|0[67])(?:[\s.\-]?\d{2}){4}'
-    national_pattern = r'(?:\+33[\s.\-]?[1-59]|0[1-59])(?:[\s.\-]?\d{2}){4}'
+    mobile_pattern = r'(?:\+33(?:\s*\(0\))?[\s.\-]?[67]|0[67])(?:[\s.\-]?\d{2}){4}'
+    national_pattern = r'(?:\+33(?:\s*\(0\))?[\s.\-]?[1-59]|0[1-59])(?:[\s.\-]?\d{2}){4}'
     international_pattern = r'\+(?:\d[\s.\-]?){7,15}\d'
 
     mobile_matches = re.findall(mobile_pattern, text)
@@ -29,7 +29,9 @@ def extract_phones(text: str) -> Tuple[List[str], List[str], List[str]]:
     international_matches = re.findall(international_pattern, text)
 
     def _clean(phone: str) -> str:
-        phone = re.sub(r'[\s.\-]', '', phone)
+        phone = re.sub(r'[\s.\-\(\)]', '', phone)
+        if phone.startswith('+330'):
+            return '+33' + phone[4:]
         if phone.startswith('+33'):
             return phone
         if phone.startswith('0'):
