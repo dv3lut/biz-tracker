@@ -14,6 +14,7 @@ from requests.adapters import HTTPAdapter, Retry
 from app.services.website_scraper.browser_pool import browser_pool, is_playwright_available
 from app.services.website_scraper.extractors import (
     extract_emails,
+    extract_mailto_emails,
     extract_phones,
     extract_social_links,
     needs_browser_rendering,
@@ -181,12 +182,14 @@ async def crawl_with_browser(
 
                         mobiles, nationals, internationals = extract_phones(page_text)
                         emails = extract_emails(page_text)
+                        mailto_emails = extract_mailto_emails(page_content)
                         socials = extract_social_links(page_content)
 
                         _merge_contacts(all_mobiles, mobiles)
                         _merge_contacts(all_nationals, nationals)
                         _merge_contacts(all_internationals, internationals)
                         _merge_contacts(all_emails, emails)
+                        _merge_contacts(all_emails, mailto_emails)
                         for network, link in socials.items():
                             if link and not social_links[network]:
                                 social_links[network] = link
@@ -274,17 +277,19 @@ def crawl_website(
                 continue
 
             soup = BeautifulSoup(response.text, "html.parser")
-            page_text = soup.get_text()
+            page_text = soup.get_text(separator="\n")
             page_html = str(soup)
 
             mobiles, nationals, internationals = extract_phones(page_text)
             emails = extract_emails(page_text)
+            mailto_emails = extract_mailto_emails(page_html)
             socials = extract_social_links(page_html)
 
             _merge_contacts(all_mobiles, mobiles)
             _merge_contacts(all_nationals, nationals)
             _merge_contacts(all_internationals, internationals)
             _merge_contacts(all_emails, emails)
+            _merge_contacts(all_emails, mailto_emails)
             for network, link in socials.items():
                 if link and not social_links[network]:
                     social_links[network] = link

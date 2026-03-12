@@ -289,7 +289,7 @@ export const DashboardSection = ({ onUnauthorized }: Props) => {
     setGoogleExportListingStatuses([...DEFAULT_LISTING_STATUSES]);
   }, []);
 
-  const handleConfirmGoogleExport = useCallback(async () => {
+  const handleConfirmGoogleExport = useCallback(async (nafCodes?: string[]) => {
     if (googleExportListingStatuses.length === 0) {
       setErrorMessage("Merci de sélectionner au moins un statut de fiche Google.");
       setFeedbackMessage(null);
@@ -302,6 +302,7 @@ export const DashboardSection = ({ onUnauthorized }: Props) => {
         endDate: googleExportEndDate,
         mode: googleExportMode,
         listingStatuses: googleExportListingStatuses,
+        nafCodes: nafCodes && nafCodes.length > 0 ? nafCodes : undefined,
       });
       const url = window.URL.createObjectURL(blob);
       const anchor = document.createElement("a");
@@ -457,6 +458,7 @@ export const DashboardSection = ({ onUnauthorized }: Props) => {
         endDate={googleExportEndDate}
         mode={googleExportMode}
         listingStatuses={googleExportListingStatuses}
+        nafCategories={dashboardQuery.data?.nafCategoryBreakdown ?? []}
         isSubmitting={isExportingGooglePlaces}
         onClose={handleCloseGoogleExportModal}
         onStartDateChange={setGoogleExportStartDate}

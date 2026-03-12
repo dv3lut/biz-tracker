@@ -747,6 +747,7 @@ class SyncCollectorMixin(SyncPersistenceMixin):
             website_statuses=website_statuses,
         )
         target_count = len(targets)
+        run.max_records = target_count or None
         if target_count:
             run.notes = f"{run.notes + ' | ' if run.notes else ''}website_scrape_targets: {target_count}"
 

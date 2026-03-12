@@ -108,6 +108,10 @@ def export_google_places(
         None,
         description="Liste de statuts de fiche Google à inclure dans l'export.",
     ),
+    naf_codes: list[str] | None = Query(
+        None,
+        description="Filtrer par codes NAF (ex: 5610A). Si vide, tous les codes sont inclus.",
+    ),
     session: Session = Depends(get_db_session),
 ) -> StreamingResponse:
     return build_google_places_export_response(
@@ -115,6 +119,7 @@ def export_google_places(
         end_date=end_date,
         mode=mode,
         listing_statuses=listing_statuses,
+        naf_codes=naf_codes,
         session=session,
     )
 

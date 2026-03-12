@@ -14,7 +14,15 @@ def compute_run_metrics(
     run: models.SyncRun,
     state: models.SyncState | None,
 ) -> tuple[int | None, float | None, float | None, datetime | None]:
-    target_raw = state.last_total if state and state.last_total is not None else run.max_records
+    try:
+        mode = SyncMode(run.mode)
+    except ValueError:
+        mode = DEFAULT_SYNC_MODE
+
+    if mode is SyncMode.WEBSITE_SCRAPE:
+        target_raw = run.max_records
+    else:
+        target_raw = state.last_total if state and state.last_total is not None else run.max_records
     total_expected: int | None
     try:
         total_candidate = int(target_raw) if target_raw is not None else None
@@ -23,18 +31,19 @@ def compute_run_metrics(
     total_expected = total_candidate if total_candidate and total_candidate > 0 else None
 
     progress: float | None = None
+    processed_records = run.website_scrape_count if mode is SyncMode.WEBSITE_SCRAPE else run.fetched_records
     if total_expected:
-        progress = min(run.fetched_records / total_expected, 1.0)
+        progress = min(processed_records / total_expected, 1.0)
 
     estimated_remaining_seconds: float | None = None
     estimated_completion_at: datetime | None = None
-    if run.status == "running" and total_expected and run.fetched_records > 0:
+    if run.status == "running" and total_expected and processed_records > 0:
         now = utcnow()
         elapsed_seconds = max((now - run.started_at).total_seconds(), 0.0)
         if elapsed_seconds > 0:
-            rate = run.fetched_records / elapsed_seconds
+            rate = processed_records / elapsed_seconds
             if rate > 0:
-                remaining = max(total_expected - run.fetched_records, 0)
+                remaining = max(total_expected - processed_records, 0)
                 estimated_remaining_seconds = remaining / rate if remaining > 0 else 0.0
                 estimated_completion_at = now + timedelta(seconds=estimated_remaining_seconds)
 
@@ -54,7 +63,7 @@ def serialize_run(run: models.SyncRun | None, *, state: models.SyncState | None 
         mode = SyncMode(enriched.mode)
     except ValueError:
         mode = DEFAULT_SYNC_MODE
-    if not mode.requires_sirene_fetch:
+    if not mode.requires_sirene_fetch and mode is not SyncMode.WEBSITE_SCRAPE:
         enriched.total_expected_records = None
         enriched.progress = None
         enriched.estimated_remaining_seconds = None

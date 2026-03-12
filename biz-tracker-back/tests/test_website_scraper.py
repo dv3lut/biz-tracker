@@ -8,6 +8,7 @@ import pytest
 
 from app.services.website_scraper.extractors import (
     extract_emails,
+    extract_mailto_emails,
     extract_phones,
     extract_social_links,
     needs_browser_rendering,
@@ -193,6 +194,62 @@ class TestExtractEmails:
         text = "x@y.comcookies puis x@y.com"
         emails = extract_emails(text)
         assert emails == ["x@y.com"]
+
+    def test_strips_phone_prefix_two_digits(self) -> None:
+        text = "94contact@restaurant.fr"
+        emails = extract_emails(text)
+        assert emails == ["contact@restaurant.fr"]
+
+    def test_strips_phone_prefix_three_digits(self) -> None:
+        text = "007info@example.com"
+        emails = extract_emails(text)
+        assert emails == ["info@example.com"]
+
+    def test_phone_number_concatenated_with_email(self) -> None:
+        text = "06 12 34 56 78contact@boulangerie.fr"
+        emails = extract_emails(text)
+        assert emails == ["contact@boulangerie.fr"]
+
+    def test_preserves_numeric_email_with_dot_separator(self) -> None:
+        text = "42.info@example.com"
+        emails = extract_emails(text)
+        assert emails == ["42.info@example.com"]
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# extract_mailto_emails
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+class TestExtractMailtoEmails:
+    def test_extracts_mailto_link(self) -> None:
+        html = '<a href="mailto:contact@boulangerie.fr">Nous contacter</a>'
+        emails = extract_mailto_emails(html)
+        assert emails == ["contact@boulangerie.fr"]
+
+    def test_ignores_non_mailto_links(self) -> None:
+        html = '<a href="https://example.com">Site</a>'
+        emails = extract_mailto_emails(html)
+        assert emails == []
+
+    def test_strips_query_params(self) -> None:
+        html = '<a href="mailto:info@acme.fr?subject=Devis">Devis</a>'
+        emails = extract_mailto_emails(html)
+        assert emails == ["info@acme.fr"]
+
+    def test_multiple_mailto_dedup(self) -> None:
+        html = (
+            '<a href="mailto:a@b.com">A</a> '
+            '<a href="mailto:a@b.com">A2</a> '
+            '<a href="mailto:c@d.fr">C</a>'
+        )
+        emails = extract_mailto_emails(html)
+        assert set(emails) == {"a@b.com", "c@d.fr"}
+
+    def test_rejects_invalid_mailto(self) -> None:
+        html = '<a href="mailto:not-an-email">Bad</a>'
+        emails = extract_mailto_emails(html)
+        assert emails == []
 
 
 # ──────────────────────────────────────────────────────────────────────────────

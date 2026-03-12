@@ -15,6 +15,7 @@ type GooglePlacesExportParams = {
   endDate: string;
   mode?: "admin" | "client";
   listingStatuses?: ListingStatus[];
+  nafCodes?: string[];
 };
 
 type ManualGoogleCheckOptions = {
@@ -161,6 +162,11 @@ export const googleApi = {
     if (params.listingStatuses && params.listingStatuses.length > 0) {
       params.listingStatuses.forEach((status) => {
         url.searchParams.append("listing_statuses", status);
+      });
+    }
+    if (params.nafCodes && params.nafCodes.length > 0) {
+      params.nafCodes.forEach((code) => {
+        url.searchParams.append("naf_codes", code);
       });
     }
 

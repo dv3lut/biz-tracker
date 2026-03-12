@@ -76,6 +76,10 @@ def extract_emails(text: str) -> List[str]:
     Handles both normal cases (clear separator after the address) and common
     scraping artifacts where a word is glued right after a short TLD, e.g.
     ``name@example.comcookies``.
+
+    Also strips leading digit fragments (telephone suffixes) that get
+    concatenated to e-mail local parts when text is extracted from the DOM
+    without proper whitespace separation.
     """
 
     common_short_tlds = ("com", "net", "org", "edu", "gov", "mil", "int", "info", "biz", "fr")
@@ -87,6 +91,10 @@ def extract_emails(text: str) -> List[str]:
         r'(?<![\w.+-])([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.(?:com|net|org|edu|gov|mil|int|info|biz|fr))[a-z]{2,}(?=$|[^a-zA-Z])',
         re.IGNORECASE,
     )
+
+    # Detect phone-number digits glued before the real local-part.
+    # Matches 1-10 leading digits immediately followed by a letter.
+    _phone_prefix_re = re.compile(r'^(\d{1,10})([a-zA-Z])')
 
     emails: set[str] = set()
     for match in strict_pattern.finditer(text):
@@ -100,6 +108,41 @@ def extract_emails(text: str) -> List[str]:
             emails.add(candidate)
 
     emails.update(match.group(1).lower() for match in glued_suffix_pattern.finditer(text))
+
+    # Sanitise: strip leading digit fragments (phone-number suffixes).
+    cleaned: set[str] = set()
+    for email in emails:
+        local, at_domain = email.split("@", maxsplit=1)
+        prefix_match = _phone_prefix_re.match(local)
+        if prefix_match:
+            stripped_local = local[len(prefix_match.group(1)):]
+            if stripped_local and "." not in prefix_match.group(1):
+                email = f"{stripped_local}@{at_domain}"
+        cleaned.add(email)
+    return list(cleaned)
+
+
+def extract_mailto_emails(html_content: str) -> List[str]:
+    """Extract email addresses from ``mailto:`` links in *html_content*.
+
+    These are considered high-confidence because the site author explicitly
+    marked them as emails in an ``<a href="mailto:...">`` tag.
+    """
+
+    soup = BeautifulSoup(html_content, "html.parser")
+    emails: set[str] = set()
+    _email_re = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+
+    for anchor in soup.find_all("a", href=True):
+        href: str = anchor["href"]
+        if not href.lower().startswith("mailto:"):
+            continue
+        # Strip mailto: prefix and optional query string (?subject=…)
+        raw = href[7:].split("?", maxsplit=1)[0].strip()
+        candidate = raw.lower()
+        if _email_re.match(candidate):
+            emails.add(candidate)
+
     return list(emails)
 
 

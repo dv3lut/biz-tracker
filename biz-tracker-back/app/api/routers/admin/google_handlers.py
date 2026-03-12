@@ -39,6 +39,7 @@ from app.services.export_service import build_google_places_workbook
 from app.services.google_business.google_business_service import GoogleBusinessService
 from app.utils.dates import utcnow
 from app.utils.google_listing import normalize_listing_age_status, normalize_listing_status_filters
+from app.utils.naf import normalize_naf_code
 
 from .common import format_establishment_summary
 
@@ -437,6 +438,7 @@ def build_google_places_export_response(
     end_date: date | None,
     mode: Literal["admin", "client"],
     listing_statuses: list[ListingStatus] | QueryInfo | None,
+    naf_codes: list[str] | QueryInfo | None = None,
     session: Session,
 ) -> StreamingResponse:
     """Build the Google Places export and wrap it in a streaming response."""
@@ -484,6 +486,20 @@ def build_google_places_export_response(
     if end_date:
         stmt = stmt.where(models.Establishment.date_creation <= end_date)
 
+    # Normalise NAF codes filter.
+    allowed_naf_codes: set[str] | None = None
+    raw_naf_codes = naf_codes.default if isinstance(naf_codes, QueryInfo) else naf_codes
+    if raw_naf_codes:
+        normalized = {normalize_naf_code(c) for c in raw_naf_codes if c and c.strip()}
+        normalized.discard(None)
+        if normalized:
+            allowed_naf_codes = {c for c in normalized if c is not None}
+
+    if allowed_naf_codes:
+        stmt = stmt.where(
+            models.Establishment.naf_code.in_(allowed_naf_codes),
+        )
+
     establishments = session.execute(stmt).scalars().all()
     establishments = [
         est for est in establishments if (est.google_check_status or "").lower() == "found"
@@ -511,6 +527,7 @@ def build_google_places_export_response(
         end_date=end_date.isoformat() if end_date else None,
         mode=mode,
         listing_statuses=selected_statuses,
+        naf_codes=sorted(allowed_naf_codes) if allowed_naf_codes else None,
     )
 
     headers = {"Content-Disposition": f'attachment; filename="{filename}"'}

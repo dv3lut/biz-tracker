@@ -32,6 +32,8 @@ def _make_sync_run(*, mode: SyncMode = SyncMode.FULL, status: str = "running") -
         google_pending_count=0,
         google_immediate_matched_count=0,
         google_late_matched_count=0,
+        website_scrape_count=0,
+        website_scrape_success_count=0,
         updated_records=0,
         summary=None,
         last_cursor=None,
@@ -87,6 +89,32 @@ def test_serialize_run_resets_progress_for_google_only_modes():
     assert enriched.progress is None
     assert enriched.total_expected_records is None
     assert enriched.estimated_completion_at is None
+
+
+def test_compute_run_metrics_uses_website_scrape_counters():
+    run = _make_sync_run(mode=SyncMode.WEBSITE_SCRAPE)
+    run.max_records = 10
+    run.website_scrape_count = 4
+    run.fetched_records = 0
+
+    total_expected, progress, remaining, eta = common.compute_run_metrics(run, state=None)
+
+    assert total_expected == 10
+    assert progress == pytest.approx(0.4)
+    assert remaining is not None and remaining >= 0
+    assert eta is not None
+
+
+def test_serialize_run_keeps_progress_for_website_scrape_mode():
+    run = _make_sync_run(mode=SyncMode.WEBSITE_SCRAPE)
+    run.max_records = 12
+    run.website_scrape_count = 6
+
+    enriched = common.serialize_run(run, state=None)
+
+    assert enriched is not None
+    assert enriched.total_expected_records == 12
+    assert enriched.progress == pytest.approx(0.5)
 
 
 def test_format_establishment_summary_includes_google_fields():

@@ -2,13 +2,14 @@ import { ChangeEvent } from "react";
 
 import { SyncRun } from "../types";
 import { formatDateTime, formatNumber, formatDuration } from "../utils/format";
-import { computeGoogleProgress, computeSireneProgress } from "../utils/progress";
+import { computeGoogleProgress, computeSireneProgress, computeWebsiteScrapeProgress } from "../utils/progress";
 import { ProgressBar } from "./ProgressBar";
 import { RunModeBadges } from "./RunModeBadges";
 import {
   describeDayReplayReference,
   describeSyncMode,
   formatNafCodesPreview,
+  syncModeIsWebsiteScrapeOnly,
   syncModeSupportsSirene,
 } from "../utils/sync";
 
@@ -106,9 +107,11 @@ export const SyncRunsTable = ({
               {runs.map((run) => {
                 const sirene = computeSireneProgress(run);
                 const google = computeGoogleProgress(run);
+                const website = computeWebsiteScrapeProgress(run);
                 const showGoogle =
                   run.googleEnabled && (google.total !== null || run.googleQueueCount > 0 || run.googleEligibleCount > 0);
                 const sireneEnabled = syncModeSupportsSirene(run.mode);
+                const websiteScrapeOnly = syncModeIsWebsiteScrapeOnly(run.mode);
 
                 return (
                   <tr key={run.id}>
@@ -152,7 +155,14 @@ export const SyncRunsTable = ({
                     <td>
                       <span className={`badge status-${run.status}`}>{run.status}</span>
                       <div className="table-progress">
-                        {sireneEnabled ? (
+                        {websiteScrapeOnly ? (
+                          <ProgressBar
+                            label="Sites web"
+                            tone="info"
+                            value={website.value}
+                            details={`Traités: ${formatNumber(website.processed)}${website.total ? ` / ${formatNumber(website.total)}` : ""} • Avec données: ${formatNumber(website.success)}`}
+                          />
+                        ) : sireneEnabled ? (
                           <ProgressBar label="Sirene" value={sirene.value} />
                         ) : (
                           <span className="small muted">Google uniquement</span>
@@ -168,6 +178,14 @@ export const SyncRunsTable = ({
                       <span className="small muted">Nouveaux: {formatNumber(run.createdRecords)}</span>
                       <br />
                       <span className="small muted">Total attendu: {formatNumber(run.totalExpectedRecords)}</span>
+                      {websiteScrapeOnly ? (
+                        <>
+                          <br />
+                          <span className="small muted">Websites traités: {formatNumber(run.websiteScrapeCount)}</span>
+                          <br />
+                          <span className="small muted">Websites avec données: {formatNumber(run.websiteScrapeSuccessCount)}</span>
+                        </>
+                      ) : null}
                     </td>
                     <td>
                       <span className="small muted">Restant: {formatDuration(run.estimatedRemainingSeconds)}</span>

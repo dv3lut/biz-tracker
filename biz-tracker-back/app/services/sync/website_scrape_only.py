@@ -105,6 +105,7 @@ def collect_website_scrape_only(
             if not website_url:
                 continue
             scrape_count += 1
+            run.website_scrape_count = scrape_count
             label = establishment.name or establishment.siret or "Inconnu"
 
             try:
@@ -124,6 +125,7 @@ def collect_website_scrape_only(
                     website_url=website_url,
                     error=serialize_exception(exc),
                 )
+                session.commit()
                 continue
 
             establishment.website_scraped_at = now
@@ -151,6 +153,7 @@ def collect_website_scrape_only(
             )
             if has_data:
                 scrape_success_count += 1
+            run.website_scrape_success_count = scrape_success_count
 
             log_event(
                 "sync.website_scrape.done",
@@ -159,6 +162,7 @@ def collect_website_scrape_only(
                 website_url=website_url,
                 has_data=has_data,
             )
+            session.commit()
 
         run.website_scrape_count = scrape_count
         run.website_scrape_success_count = scrape_success_count

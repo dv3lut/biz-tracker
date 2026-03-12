@@ -95,3 +95,26 @@ export const computeLinkedInProgress = (run: SyncRun): LinkedInProgress => {
     error: run.linkedinErrorCount,
   };
 };
+
+export interface WebsiteScrapeProgress {
+  value: number | null;
+  processed: number;
+  total: number | null;
+  success: number;
+}
+
+export const computeWebsiteScrapeProgress = (run: SyncRun): WebsiteScrapeProgress => {
+  const total = typeof run.totalExpectedRecords === "number" && run.totalExpectedRecords > 0
+    ? run.totalExpectedRecords
+    : null;
+  const processed = Math.max(run.websiteScrapeCount, 0);
+  const success = Math.max(run.websiteScrapeSuccessCount, 0);
+  const value = total ? clamp(processed / total) : null;
+
+  return {
+    value,
+    processed,
+    total,
+    success,
+  };
+};
