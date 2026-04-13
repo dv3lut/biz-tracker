@@ -623,25 +623,34 @@ const Upgrade = () => {
                                 return (
                                   <label
                                     key={category.id}
-                                    className={`flex items-start gap-3 rounded-md border p-3 ${
+                                    className={`flex items-center gap-3 rounded-md border p-3 ${
                                       isDisabled ? "opacity-60" : "cursor-pointer"
                                     }`}
                                   >
                                     <input
                                       type="checkbox"
-                                      className="mt-1"
+                                      className="shrink-0"
                                       checked={isSelected}
                                       disabled={isDisabled}
                                       onChange={() => handleToggleCategory(category.id)}
                                     />
-                                    <div>
-                                      <p className="font-medium">{category.name}</p>
+                                    <span className="flex items-center gap-1.5 font-medium min-w-0">
+                                      <span className="truncate">{category.name}</span>
                                       {category.description ? (
-                                        <p className="text-sm text-muted-foreground">
-                                          {category.description}
-                                        </p>
+                                        <span
+                                          className="relative shrink-0 group"
+                                          onClick={(e) => e.preventDefault()}
+                                        >
+                                          <span className="flex h-4 w-4 items-center justify-center rounded-full border border-muted-foreground/50 text-[10px] text-muted-foreground cursor-default select-none">
+                                            i
+                                          </span>
+                                          <span className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-2 hidden w-64 -translate-x-1/2 rounded-md bg-slate-800 px-3 py-2 text-xs font-normal text-white shadow-lg group-hover:block">
+                                            {category.description}
+                                            <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800" />
+                                          </span>
+                                        </span>
                                       ) : null}
-                                    </div>
+                                    </span>
                                   </label>
                                 );
                               })}

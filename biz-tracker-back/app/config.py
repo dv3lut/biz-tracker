@@ -133,6 +133,13 @@ class GoogleSettings(BaseModel):
         le=1.0,
         description="Seuil de similarité minimale entre les mots-clés NAF et les types Google retournés par Google Places.",
     )
+    website_scrape_enabled: bool = Field(
+        default=True,
+        description=(
+            "Active le scraping des sites web découverts via Google Places. "
+            "Mettre à false pour désactiver le scraping tout en conservant l'enrichissement Google."
+        ),
+    )
 
     @property
     def enabled(self) -> bool:

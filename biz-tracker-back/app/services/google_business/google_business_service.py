@@ -263,7 +263,7 @@ class GoogleBusinessService:
                 newly_found=newly_found,
             )
             # Website scraping — when a Google profile with a website was found.
-            if result and result.contact_website and not establishment.website_scraped_at:
+            if result and result.contact_website and not establishment.website_scraped_at and self._settings.website_scrape_enabled:
                 ws_ok = self._scrape_establishment_website(establishment, result.contact_website, now)
                 website_scrape_count += 1
                 if ws_ok:
@@ -279,15 +279,29 @@ class GoogleBusinessService:
 
         self._session.flush()
         if include_backlog:
-            (
-                missing_contact_checked,
-                missing_contact_updated,
-                missing_contact_age_buckets,
-            ) = self._refresh_missing_contact_listings(now, allowed_departments=allowed_departments)
-            (
-                no_website_checked,
-                no_website_updated,
-            ) = self._refresh_no_website_listings(now, allowed_departments=allowed_departments)
+            try:
+                (
+                    missing_contact_checked,
+                    missing_contact_updated,
+                    missing_contact_age_buckets,
+                ) = self._refresh_missing_contact_listings(now, allowed_departments=allowed_departments)
+            except Exception as exc:  # noqa: BLE001
+                _LOGGER.warning("_refresh_missing_contact_listings échouée : %s", exc, exc_info=True)
+                log_event(
+                    "sync.google.missing_contact_refresh.fatal_error",
+                    error=serialize_exception(exc),
+                )
+            try:
+                (
+                    no_website_checked,
+                    no_website_updated,
+                ) = self._refresh_no_website_listings(now, allowed_departments=allowed_departments)
+            except Exception as exc:  # noqa: BLE001
+                _LOGGER.warning("_refresh_no_website_listings échouée : %s", exc, exc_info=True)
+                log_event(
+                    "sync.google.no_website_refresh.fatal_error",
+                    error=serialize_exception(exc),
+                )
         remaining = max(queue_count - processed_count, 0)
         self._notify_google_api_errors(run)
         return GoogleEnrichmentResult(
@@ -455,30 +469,45 @@ class GoogleBusinessService:
                     exc,
                 )
                 continue
-            contact_phone, contact_email, contact_website = self._extract_contact_details(details)
-            contact_phone = clamp_optional_varchar(contact_phone, MAX_PHONE_LENGTH)
-            contact_email = clamp_optional_varchar(contact_email, MAX_EMAIL_LENGTH)
-            contact_website = clamp_optional_varchar(contact_website, MAX_URL_LENGTH)
-            establishment.google_last_checked_at = now
-            if not any([contact_phone, contact_email, contact_website]):
-                continue
-            establishment.google_contact_phone = contact_phone
-            establishment.google_contact_email = contact_email
-            establishment.google_contact_website = contact_website
-            # Website scraping — scrape the website if it just appeared and we haven't scraped yet.
-            if contact_website and not establishment.website_scraped_at:
-                self._scrape_establishment_website(establishment, contact_website, now)
-            if normalize_listing_age_status(establishment.google_listing_age_status) == RECENT_NO_CONTACT_STATUS:
-                establishment.google_listing_age_status = "recent_creation"
-            place_url = details.get("url") or contact_website
-            if isinstance(place_url, str) and place_url:
-                place_url = clamp_optional_varchar(place_url, MAX_URL_LENGTH)
-            if place_url:
-                if not establishment.google_place_url:
-                    establishment.google_place_url = place_url
-                if establishment.google_last_found_at is None:
-                    establishment.google_last_found_at = now
-            updated_count += 1
+            try:
+                contact_phone, contact_email, contact_website = self._extract_contact_details(details)
+                contact_phone = clamp_optional_varchar(contact_phone, MAX_PHONE_LENGTH)
+                contact_email = clamp_optional_varchar(contact_email, MAX_EMAIL_LENGTH)
+                contact_website = clamp_optional_varchar(contact_website, MAX_URL_LENGTH)
+                establishment.google_last_checked_at = now
+                if not any([contact_phone, contact_email, contact_website]):
+                    continue
+                establishment.google_contact_phone = contact_phone
+                establishment.google_contact_email = contact_email
+                establishment.google_contact_website = contact_website
+                # Website scraping — uniquement si activé dans la config.
+                if contact_website and not establishment.website_scraped_at and self._settings.website_scrape_enabled:
+                    self._scrape_establishment_website(establishment, contact_website, now)
+                if normalize_listing_age_status(establishment.google_listing_age_status) == RECENT_NO_CONTACT_STATUS:
+                    establishment.google_listing_age_status = "recent_creation"
+                place_url = (details.get("url") if details else None) or contact_website
+                if isinstance(place_url, str) and place_url:
+                    place_url = clamp_optional_varchar(place_url, MAX_URL_LENGTH)
+                if place_url:
+                    if not establishment.google_place_url:
+                        establishment.google_place_url = place_url
+                    if establishment.google_last_found_at is None:
+                        establishment.google_last_found_at = now
+                updated_count += 1
+            except Exception as exc:  # noqa: BLE001
+                _LOGGER.warning(
+                    "Traitement des contacts échoué pour %s (place=%s): %s",
+                    establishment.siret,
+                    place_id,
+                    exc,
+                    exc_info=True,
+                )
+                log_event(
+                    "sync.google.missing_contact_refresh.error",
+                    siret=establishment.siret,
+                    place_id=place_id,
+                    error=serialize_exception(exc),
+                )
 
         if checked_count:
             self._session.flush()
@@ -554,8 +583,8 @@ class GoogleBusinessService:
                 establishment.google_contact_email = contact_email
             if contact_website:
                 establishment.google_contact_website = contact_website
-                # Website just appeared — scrape it
-                if not establishment.website_scraped_at:
+                # Website just appeared — scrape it si le scraping est activé.
+                if not establishment.website_scraped_at and self._settings.website_scrape_enabled:
                     self._scrape_establishment_website(establishment, contact_website, now)
                 updated_count += 1
                 log_event(
@@ -615,7 +644,9 @@ class GoogleBusinessService:
         return details_fetcher(place_id, fields=PLACE_DETAILS_FIELDS)
 
     @staticmethod
-    def _extract_contact_details(details: dict[str, object]) -> tuple[str | None, str | None, str | None]:
+    def _extract_contact_details(details: dict[str, object] | None) -> tuple[str | None, str | None, str | None]:
+        if not details:
+            return None, None, None
         phone = details.get("formatted_phone_number") or details.get("international_phone_number")
         if phone and not isinstance(phone, str):
             phone = None
