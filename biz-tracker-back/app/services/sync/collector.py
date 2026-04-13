@@ -133,6 +133,54 @@ class SyncCollectorMixin(SyncPersistenceMixin):
                 scope_key=context.run.scope_key,
                 target_naf_codes=context.target_naf_codes,
             )
+        elif context.run.run_type == "sync_auto":
+            naf_codes = self._load_subscribed_naf_codes(context.session)
+            if not naf_codes:
+                log_event(
+                    "sync.collection.skipped",
+                    run_id=str(context.run.id),
+                    scope_key=context.run.scope_key,
+                    reason="no_subscribed_naf_codes",
+                )
+                append_run_note(context.run, "Aucune sous-catégorie NAF active n'a de client abonné — sync auto ignorée.")
+                return SyncResult(
+                    mode=context.mode,
+                    last_treated=None,
+                    new_establishments=[],
+                    new_establishment_payloads=[],
+                    updated_establishments=[],
+                    updated_payloads=[],
+                    google_immediate_matches=[],
+                    google_late_matches=[],
+                    google_match_payloads=[],
+                    alerts=[],
+                    alert_payloads=[],
+                    page_count=0,
+                    duration_seconds=0.0,
+                    max_creation_date=None,
+                    google_queue_count=0,
+                    google_eligible_count=0,
+                    google_matched_count=0,
+                    google_pending_count=0,
+                    google_api_call_count=0,
+                    google_api_error_count=0,
+                    alerts_sent_count=0,
+                )
+            all_active = self._load_active_naf_codes(context.session)
+            skipped = sorted(set(all_active) - set(naf_codes))
+            if skipped:
+                log_event(
+                    "sync.collection.naf_unsubscribed_skipped",
+                    run_id=str(context.run.id),
+                    scope_key=context.run.scope_key,
+                    skipped_naf_codes=skipped,
+                    active_count=len(all_active),
+                    subscribed_count=len(naf_codes),
+                )
+                append_run_note(
+                    context.run,
+                    f"Sync auto : {len(skipped)} sous-catégorie(s) NAF active(s) ignorée(s) (aucun abonné) : {', '.join(skipped)}",
+                )
         else:
             naf_codes = self._load_active_naf_codes(context.session)
         query = self._build_restaurant_query(

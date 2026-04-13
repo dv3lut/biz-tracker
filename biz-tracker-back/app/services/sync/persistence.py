@@ -89,6 +89,29 @@ class SyncPersistenceMixin:
         self._naf_code_cache = naf_codes
         return naf_codes
 
+    def _load_subscribed_naf_codes(self, session: Session) -> list[str]:
+        """Load active NAF codes that have at least one client subscription.
+
+        Used by automatic sync runs to avoid consuming API credits on
+        subcategories no client is subscribed to.
+        """
+
+        rows = (
+            session.execute(
+                select(models.NafSubCategory.naf_code)
+                .where(models.NafSubCategory.is_active.is_(True))
+                .where(
+                    models.NafSubCategory.id.in_(
+                        select(models.ClientSubscription.subcategory_id)
+                    )
+                )
+                .order_by(models.NafSubCategory.naf_code.asc())
+            )
+            .scalars()
+            .all()
+        )
+        return [code for code in rows if code]
+
     def _build_fields_parameter(self) -> str:
         fields = {
             "identificationStandardEtablissement",
