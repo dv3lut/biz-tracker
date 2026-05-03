@@ -24,6 +24,9 @@ type Props = {
   deletingRunId: string | null;
   isDeletingRun: boolean;
   isRefreshing: boolean;
+  onCancelRun: (runId: string) => void;
+  cancellingRunId: string | null;
+  isCancellingRun: boolean;
 };
 
 const truncate = (value: string | null, length = 16): string => {
@@ -47,6 +50,9 @@ export const SyncRunsTable = ({
   deletingRunId,
   isDeletingRun,
   isRefreshing,
+  onCancelRun,
+  cancellingRunId,
+  isCancellingRun,
 }: Props) => {
   const handleLimitChange = (event: ChangeEvent<HTMLSelectElement>) => {
     onLimitChange(Number(event.target.value));
@@ -212,6 +218,17 @@ export const SyncRunsTable = ({
                       <span className="small muted">NAF ciblées: {formatNafCodesPreview(run.targetNafCodes, 5)}</span>
                     </td>
                     <td>
+                      {(run.status === "running" || run.status === "pending") && (
+                        <button
+                          type="button"
+                          className="danger"
+                          style={{ marginBottom: "0.5rem", display: "block" }}
+                          onClick={() => onCancelRun(run.id)}
+                          disabled={isCancellingRun && cancellingRunId === run.id}
+                        >
+                          {isCancellingRun && cancellingRunId === run.id ? "Annulation..." : "⏹ Stopper"}
+                        </button>
+                      )}
                       <button
                         type="button"
                         className="ghost"

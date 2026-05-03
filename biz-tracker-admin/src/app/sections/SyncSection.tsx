@@ -48,11 +48,27 @@ export const SyncSection = ({ onUnauthorized }: Props) => {
     onError: showError,
   });
 
+  const cancelRunMutation = useMutation({
+    mutationFn: (runId: string) => syncApi.cancelRun(runId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sync-runs"] });
+      queryClient.invalidateQueries({ queryKey: ["sync-state"] });
+    },
+    onError: showError,
+  });
+
   const handleDeleteRun = useCallback(
     (runId: string) => {
       deleteRunMutation.mutate(runId);
     },
     [deleteRunMutation],
+  );
+
+  const handleCancelRun = useCallback(
+    (runId: string) => {
+      cancelRunMutation.mutate(runId);
+    },
+    [cancelRunMutation],
   );
 
   const runsIsRefreshing = useRefreshIndicator(syncRunsQuery.isFetching && !syncRunsQuery.isLoading);
@@ -64,6 +80,13 @@ export const SyncSection = ({ onUnauthorized }: Props) => {
     }
     return (deleteRunMutation.variables as string | undefined) ?? null;
   }, [deleteRunMutation.isPending, deleteRunMutation.variables]);
+
+  const cancellingRunId = useMemo(() => {
+    if (!cancelRunMutation.isPending) {
+      return null;
+    }
+    return (cancelRunMutation.variables as string | undefined) ?? null;
+  }, [cancelRunMutation.isPending, cancelRunMutation.variables]);
 
   const runsError = syncRunsQuery.error instanceof Error ? syncRunsQuery.error : null;
   const statesError = syncStateQuery.error instanceof Error ? syncStateQuery.error : null;
@@ -80,6 +103,9 @@ export const SyncSection = ({ onUnauthorized }: Props) => {
       deletingRunId={deletingRunId}
       isDeletingRun={deleteRunMutation.isPending}
       isRunsRefreshing={runsIsRefreshing}
+      onCancelRun={handleCancelRun}
+      cancellingRunId={cancellingRunId}
+      isCancellingRun={cancelRunMutation.isPending}
       states={syncStateQuery.data}
       isStatesLoading={syncStateQuery.isLoading}
       statesError={statesError}

@@ -369,4 +369,11 @@ export const syncApi = {
     });
     return data;
   },
+
+  async cancelRun(runId: string): Promise<SyncRunResponse> {
+    const { data } = await request<SyncRunResponse>(`/admin/sync-runs/${encodeURIComponent(runId)}/cancel`, {
+      method: "POST",
+    });
+    return data;
+  },
 };

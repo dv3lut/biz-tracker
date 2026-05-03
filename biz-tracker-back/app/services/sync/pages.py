@@ -14,6 +14,7 @@ from app.services.client_service import get_admin_emails
 from app.services.email_service import EmailService
 from app.utils.dates import utcnow
 
+from .cancellation import SyncCancellationError, is_cancel_requested
 from .context import SyncContext, UpdatedEstablishmentInfo
 
 if TYPE_CHECKING:  # pragma: no cover - used for type checking only
@@ -285,6 +286,15 @@ def collect_pages(
     max_creation_date: date | None = state.last_creation_date if persist_state else None
 
     while True:
+        if is_cancel_requested(str(context.run.id)):
+            log_event(
+                "sync.run.cancellation_detected",
+                run_id=str(context.run.id),
+                scope_key=context.run.scope_key,
+                page=page_count,
+            )
+            raise SyncCancellationError(f"Cancellation requested for run {context.run.id}")
+
         page_size = collector._settings.sirene.page_size
         page_count += 1
         page_started = time.perf_counter()

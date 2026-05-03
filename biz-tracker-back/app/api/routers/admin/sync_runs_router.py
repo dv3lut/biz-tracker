@@ -11,6 +11,7 @@ from app.api.dependencies import get_db_session
 from app.api.schemas import DeleteRunResult, SyncRequest, SyncRunOut, SyncStateOut
 from app.db import models
 from app.observability import log_event
+from app.services.sync.cancellation import request_cancel
 from app.services.sync.mode import SyncMode
 from app.services.sync_service import SyncService
 
@@ -174,3 +175,30 @@ def delete_sync_run(
         runs_updated=runs_updated,
         sync_run_deleted=True,
     )
+
+
+@router.post(
+    "/sync-runs/{run_id}/cancel",
+    response_model=SyncRunOut,
+    summary="Annuler un run en cours",
+)
+def cancel_sync_run(
+    run_id: UUID,
+    session: Session = Depends(get_db_session),
+) -> SyncRunOut:
+    run = session.get(models.SyncRun, run_id)
+    if run is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run introuvable.")
+    if run.status not in ("running", "pending"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Le run n'est pas en cours (statut : {run.status}).",
+        )
+    request_cancel(str(run_id))
+    log_event(
+        "sync.run.cancel_requested",
+        run_id=str(run_id),
+        scope_key=run.scope_key,
+    )
+    state = session.get(models.SyncState, run.scope_key)
+    return serialize_run(run, state=state)

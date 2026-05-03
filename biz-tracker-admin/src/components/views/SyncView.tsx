@@ -13,6 +13,9 @@ type Props = {
   deletingRunId: string | null;
   isDeletingRun: boolean;
   isRunsRefreshing: boolean;
+  onCancelRun: (runId: string) => void;
+  cancellingRunId: string | null;
+  isCancellingRun: boolean;
   states: SyncState[] | undefined;
   isStatesLoading: boolean;
   statesError: Error | null;
@@ -31,6 +34,9 @@ export const SyncView = ({
   deletingRunId,
   isDeletingRun,
   isRunsRefreshing,
+  onCancelRun,
+  cancellingRunId,
+  isCancellingRun,
   states,
   isStatesLoading,
   statesError,
@@ -57,6 +63,9 @@ export const SyncView = ({
           deletingRunId={deletingRunId}
           isDeletingRun={isDeletingRun}
           isRefreshing={isRunsRefreshing}
+          onCancelRun={onCancelRun}
+          cancellingRunId={cancellingRunId}
+          isCancellingRun={isCancellingRun}
         />
         <SyncStateTable
           states={states}

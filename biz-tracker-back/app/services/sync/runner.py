@@ -16,6 +16,7 @@ from app.services.sync.context import SyncContext, SyncResult
 from app.services.sync.mode import DEFAULT_SYNC_MODE, SyncMode
 from app.utils.dates import utcnow
 
+from .cancellation import SyncCancellationError, clear_cancel
 from .preparation import SyncRunPreparationMixin
 from .utils import log_and_print
 
@@ -147,6 +148,19 @@ class SyncRunnerMixin(SyncRunPreparationMixin):
                             run.id,
                             run.created_records,
                         )
+                    except SyncCancellationError:
+                        session.rollback()
+                        run.status = "cancelled"
+                        run.finished_at = utcnow()
+                        session.commit()
+                        log_event(
+                            "sync.run.cancelled",
+                            run_id=str(run.id),
+                            scope_key=run.scope_key,
+                            triggered_by=triggered_by,
+                            run=serialize_sync_run(run),
+                        )
+                        log_and_print(logging.INFO, "Synchronisation annulée (run=%s)", run.id)
                     except Exception as exc:
                         session.rollback()
                         run.status = "failed"
@@ -164,6 +178,7 @@ class SyncRunnerMixin(SyncRunPreparationMixin):
                         self._send_run_failure_email(session, run, exc, triggered_by=triggered_by)
                         raise
                     finally:
+                        clear_cancel(str(run.id))
                         context.client.close()
             except Exception:
                 _LOGGER.exception("Synchronisation asynchrone échouée (run=%s)", run_id)
