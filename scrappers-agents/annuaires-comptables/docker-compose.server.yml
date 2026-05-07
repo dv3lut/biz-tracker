@@ -1,0 +1,27 @@
+services:
+  annuaires-comptables:
+    image: dv3lut/annuaires-comptables:latest
+    container_name: annuaires-comptables
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - HEADLESS=1
+      - CHROME_BIN=/usr/bin/chromium
+      - CHROMEDRIVER=/usr/bin/chromedriver
+      - CSV_PATH=/data/cabinets_oec.csv
+      # TZ pour que la fenêtre 09:30–12:30 soit en heure locale FR
+      - TZ=${TZ:-Europe/Paris}
+    # Le CSV (état "contacted") + logs éventuels sont persistés via bind-mount.
+    # Le dossier ./data est dans le repo de déploiement sur le VPS, donc survit
+    # aux suppressions de container ET aux redéploiements de l'image.
+    volumes:
+      - ./data:/data
+    # Selenium/Chromium consomment de la mémoire partagée — augmenter /dev/shm
+    # évite les crashs aléatoires "session deleted as the browser has closed".
+    shm_size: "1gb"
+    # Override possible du nombre de cabinets/jour via la variable CABINETS_PER_DAY
+    # dans .env (sinon défaut 100 du Dockerfile).
+    command:
+      - python
+      - contact_expert_comptable.py
+      - "${CABINETS_PER_DAY:-100}"

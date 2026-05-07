@@ -1,0 +1,100 @@
+name: Deploy scrappers-agents/annuaires-comptables to VPS
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'scrappers-agents/annuaires-comptables/**'
+      - '.github/workflows/scrappers-deploy.yml'
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Tag Docker à déployer (vide = latest)'
+        required: false
+        default: 'latest'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+
+      - name: Compute Docker image tag
+        id: image_tag
+        run: |
+          SHORT_SHA="${GITHUB_SHA::7}"
+          RAW_TAG="${GITHUB_REF_NAME}-${SHORT_SHA}"
+          SAFE_TAG="${RAW_TAG//\//-}"
+          echo "value=${SAFE_TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./scrappers-agents/annuaires-comptables
+          file: ./scrappers-agents/annuaires-comptables/Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.DOCKER_HUB_USERNAME }}/annuaires-comptables:${{ steps.image_tag.outputs.value }}
+            ${{ secrets.DOCKER_HUB_USERNAME }}/annuaires-comptables:latest
+
+      # Copie le docker-compose.server.yml sur le VPS (le code applicatif est dans l'image)
+      - name: Upload compose file to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          passphrase: ${{ secrets.SSH_PASSPHRASE }}
+          source: "scrappers-agents/annuaires-comptables/docker-compose.server.yml,scrappers-agents/annuaires-comptables/.env.example"
+          target: "~/"
+          strip_components: 0
+          overwrite: true
+
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          passphrase: ${{ secrets.SSH_PASSPHRASE }}
+          script: |
+            set -euo pipefail
+            APP_DIR="$HOME/scrappers-agents/annuaires-comptables"
+            mkdir -p "$APP_DIR/data"
+
+            if ! [ -x "$(command -v docker-compose)" ]; then
+              sudo curl -L "https://github.com/docker/compose/releases/download/v2.29.6/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+              sudo chmod +x /usr/local/bin/docker-compose
+            fi
+
+            cd "$APP_DIR"
+
+            IMAGE_TAG="${{ github.event.inputs.image_tag }}"
+            if [ -n "$IMAGE_TAG" ] && [ "$IMAGE_TAG" != "latest" ]; then
+              docker pull dv3lut/annuaires-comptables:"$IMAGE_TAG"
+              docker tag dv3lut/annuaires-comptables:"$IMAGE_TAG" dv3lut/annuaires-comptables:latest
+            fi
+
+            # Bloque le déploiement si .env absent (l'admin doit le créer une fois)
+            if [ ! -f .env ]; then
+              echo "❌ Fichier .env manquant dans $APP_DIR"
+              echo "   Crée-le à partir de .env.example puis renvoie le déploiement."
+              exit 1
+            fi
+
+            docker-compose -f docker-compose.server.yml pull
+            docker-compose -f docker-compose.server.yml up -d
+            docker-compose -f docker-compose.server.yml ps

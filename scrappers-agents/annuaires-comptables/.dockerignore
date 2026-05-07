@@ -1,0 +1,12 @@
+.env
+.env.*
+!.env.example
+data/
+progress_*.json
+scraper_oec.log
+daemon.log
+__pycache__/
+*.pyc
+.venv/
+.git/
+README.md
