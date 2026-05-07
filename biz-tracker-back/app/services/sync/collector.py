@@ -135,6 +135,9 @@ class SyncCollectorMixin(SyncPersistenceMixin):
             )
         elif context.run.run_type == "sync_auto":
             naf_codes = self._load_subscribed_naf_codes(context.session)
+            context.subscribed_naf_department_pairs = (
+                self._load_subscribed_naf_department_pairs(context.session)
+            )
             if not naf_codes:
                 log_event(
                     "sync.collection.skipped",

@@ -197,7 +197,7 @@ def _seed_naf(session):
     return subcategory
 
 
-def _seed_client(session, subcategory):
+def _seed_client(session, subcategory, *, department_codes: list[str] | None = None):
     client = models.Client(
         name="Client A",
         start_date=date.today(),
@@ -210,6 +210,12 @@ def _seed_client(session, subcategory):
     session.add(recipient)
     subscription = models.ClientSubscription(client_id=client.id, subcategory_id=subcategory.id)
     session.add(subscription)
+    if department_codes:
+        departments = list_departments(session)
+        by_code = {department.code: department for department in departments}
+        for code in department_codes:
+            department = by_code[code]
+            session.add(models.ClientDepartment(client_id=client.id, department_id=department.id))
     session.flush()
     return client
 
@@ -226,7 +232,14 @@ def _seed_google_retry_config(session):
     session.flush()
 
 
-def _make_establishment_payload(*, siret: str, name: str, naf_code: str):
+def _make_establishment_payload(
+    *,
+    siret: str,
+    name: str,
+    naf_code: str,
+    code_postal: str = "75001",
+    libelle_commune: str = "Paris",
+):
     return {
         "siret": siret,
         "siren": siret[:9],
@@ -251,10 +264,28 @@ def _make_establishment_payload(*, siret: str, name: str, naf_code: str):
             "numeroVoieEtablissement": "1",
             "typeVoieEtablissement": "Rue",
             "libelleVoieEtablissement": "de Test",
-            "codePostalEtablissement": "75001",
-            "libelleCommuneEtablissement": "Paris",
+            "codePostalEtablissement": code_postal,
+            "libelleCommuneEtablissement": libelle_commune,
         },
     }
+
+
+def _capture_annuaire_calls(monkeypatch) -> list[list[str]]:
+    """Patch annuaire enrichment to record SIRETs passed for enrichment."""
+    import app.services.sync.collector as collector_module
+
+    captured: list[list[str]] = []
+
+    def _fake_annuaire(session, establishments, *, run_id=None):
+        captured.append([est.siret for est in establishments if est.siret])
+        return {"skipped": True, "reason": "captured_in_test"}
+
+    monkeypatch.setattr(
+        collector_module,
+        "enrich_establishments_from_annuaire",
+        _fake_annuaire,
+    )
+    return captured
 
 
 def test_full_sync_flow_with_google_and_alerts(monkeypatch):
@@ -1193,6 +1224,307 @@ def test_day_replay_insertion_date_reference_includes_linkedin(monkeypatch):
         assert admin_mails
         html_body = admin_mails[0]["html_body"] or ""
         assert "https://linkedin.com/in/alice-durand" in html_body
+
+
+def test_sync_auto_full_filters_establishments_outside_subscribed_departments(monkeypatch):
+    """sync_auto: an establishment whose département has no subscriber for the NAF
+    must be filtered out before persistence, annuaire enrichment, Google enrichment,
+    and alerts.
+    """
+    settings = _make_settings(google_enabled=True)
+    _patch_settings(monkeypatch, settings)
+    _patch_google_stack(monkeypatch)
+    captured_annuaire = _capture_annuaire_calls(monkeypatch)
+
+    with _session_scope() as session:
+        subcategory = _seed_naf(session)
+        # Client is subscribed to the NAF but only for département 75 (Paris).
+        _seed_client(session, subcategory, department_codes=["75"])
+        _seed_google_retry_config(session)
+
+        page = {
+            "header": {"curseur": "*", "curseurSuivant": None, "total": 2},
+            "etablissements": [
+                _make_establishment_payload(
+                    siret="11111111111111",
+                    name="Paris Bistro",
+                    naf_code="56.10A",
+                    code_postal="75001",
+                    libelle_commune="Paris",
+                ),
+                _make_establishment_payload(
+                    siret="22222222222222",
+                    name="Lyon Bistro",
+                    naf_code="56.10A",
+                    code_postal="69001",
+                    libelle_commune="Lyon",
+                ),
+            ],
+        }
+        _patch_sirene_client(monkeypatch, [page])
+
+        service = SyncService()
+        run = service._start_run(
+            session,
+            scope_key=settings.sync.scope_key,
+            run_type="sync_auto",
+            initial_status="running",
+            mode=SyncMode.FULL,
+        )
+        state = service._get_or_create_state(session, settings.sync.scope_key)
+        run.started_at = utcnow()
+        session.commit()
+
+        context = service._build_context(session, run, state)
+        result = service._collect_sync(context)
+        service._finish_run(
+            run,
+            state,
+            last_treated_max=result.last_treated,
+            last_creation_date=result.max_creation_date,
+            mode=result.mode,
+        )
+        session.commit()
+
+        assert run.status == "success"
+        # Sirene returned both establishments...
+        assert run.fetched_records == 2
+        # ...but only the Paris one was actually persisted.
+        assert run.created_records == 1
+
+        persisted_sirets = {
+            est.siret for est in session.execute(select(models.Establishment)).scalars()
+        }
+        assert persisted_sirets == {"11111111111111"}
+
+        # Annuaire enrichment was only invoked on the kept establishment.
+        flat_sirets = [siret for batch in captured_annuaire for siret in batch]
+        assert flat_sirets == ["11111111111111"]
+
+        # Google enrichment & alert restricted to the Paris one.
+        alerts = session.execute(select(models.Alert).where(models.Alert.run_id == run.id)).scalars().all()
+        assert {alert.siret for alert in alerts} == {"11111111111111"}
+        assert run.google_matched_count == 1
+
+
+def test_sync_auto_full_keeps_all_when_subscriber_has_no_department_restriction(monkeypatch):
+    """sync_auto: when a subscriber has no département configured, every département
+    is implicitly covered and every fetched establishment must be kept.
+    """
+    settings = _make_settings(google_enabled=True)
+    _patch_settings(monkeypatch, settings)
+    _patch_google_stack(monkeypatch)
+    captured_annuaire = _capture_annuaire_calls(monkeypatch)
+
+    with _session_scope() as session:
+        subcategory = _seed_naf(session)
+        _seed_client(session, subcategory)  # no department restriction
+        _seed_google_retry_config(session)
+
+        page = {
+            "header": {"curseur": "*", "curseurSuivant": None, "total": 2},
+            "etablissements": [
+                _make_establishment_payload(
+                    siret="11111111111111",
+                    name="Paris Bistro",
+                    naf_code="56.10A",
+                    code_postal="75001",
+                    libelle_commune="Paris",
+                ),
+                _make_establishment_payload(
+                    siret="22222222222222",
+                    name="Lyon Bistro",
+                    naf_code="56.10A",
+                    code_postal="69001",
+                    libelle_commune="Lyon",
+                ),
+            ],
+        }
+        _patch_sirene_client(monkeypatch, [page])
+
+        service = SyncService()
+        run = service._start_run(
+            session,
+            scope_key=settings.sync.scope_key,
+            run_type="sync_auto",
+            initial_status="running",
+            mode=SyncMode.FULL,
+        )
+        state = service._get_or_create_state(session, settings.sync.scope_key)
+        run.started_at = utcnow()
+        session.commit()
+
+        context = service._build_context(session, run, state)
+        result = service._collect_sync(context)
+        service._finish_run(
+            run,
+            state,
+            last_treated_max=result.last_treated,
+            last_creation_date=result.max_creation_date,
+            mode=result.mode,
+        )
+        session.commit()
+
+        assert run.status == "success"
+        assert run.fetched_records == 2
+        assert run.created_records == 2
+
+        persisted_sirets = {
+            est.siret for est in session.execute(select(models.Establishment)).scalars()
+        }
+        assert persisted_sirets == {"11111111111111", "22222222222222"}
+
+        flat_sirets = sorted(siret for batch in captured_annuaire for siret in batch)
+        assert flat_sirets == ["11111111111111", "22222222222222"]
+
+
+def test_sync_auto_full_aggregates_departments_across_subscribers(monkeypatch):
+    """sync_auto: the union of subscribed departments is what counts; an establishment
+    must be kept if any active client subscribes to its (NAF, département)."""
+    settings = _make_settings(google_enabled=True)
+    _patch_settings(monkeypatch, settings)
+    _patch_google_stack(monkeypatch)
+    _capture_annuaire_calls(monkeypatch)
+
+    with _session_scope() as session:
+        subcategory = _seed_naf(session)
+        # Client A subscribes only to dept 75, client B subscribes only to dept 69.
+        client_a = models.Client(
+            name="Client A",
+            start_date=date.today(),
+            listing_statuses=["recent_creation"],
+        )
+        session.add(client_a)
+        session.flush()
+        session.add(models.ClientRecipient(client_id=client_a.id, email="a@example.com"))
+        session.add(models.ClientSubscription(client_id=client_a.id, subcategory_id=subcategory.id))
+
+        client_b = models.Client(
+            name="Client B",
+            start_date=date.today(),
+            listing_statuses=["recent_creation"],
+        )
+        session.add(client_b)
+        session.flush()
+        session.add(models.ClientRecipient(client_id=client_b.id, email="b@example.com"))
+        session.add(models.ClientSubscription(client_id=client_b.id, subcategory_id=subcategory.id))
+
+        departments = list_departments(session)
+        by_code = {department.code: department for department in departments}
+        session.add(models.ClientDepartment(client_id=client_a.id, department_id=by_code["75"].id))
+        session.add(models.ClientDepartment(client_id=client_b.id, department_id=by_code["69"].id))
+        _seed_google_retry_config(session)
+        session.commit()
+
+        page = {
+            "header": {"curseur": "*", "curseurSuivant": None, "total": 3},
+            "etablissements": [
+                _make_establishment_payload(
+                    siret="11111111111111",
+                    name="Paris Bistro",
+                    naf_code="56.10A",
+                    code_postal="75001",
+                    libelle_commune="Paris",
+                ),
+                _make_establishment_payload(
+                    siret="22222222222222",
+                    name="Lyon Bistro",
+                    naf_code="56.10A",
+                    code_postal="69001",
+                    libelle_commune="Lyon",
+                ),
+                _make_establishment_payload(
+                    siret="33333333333333",
+                    name="Marseille Bistro",
+                    naf_code="56.10A",
+                    code_postal="13001",
+                    libelle_commune="Marseille",
+                ),
+            ],
+        }
+        _patch_sirene_client(monkeypatch, [page])
+
+        service = SyncService()
+        run = service._start_run(
+            session,
+            scope_key=settings.sync.scope_key,
+            run_type="sync_auto",
+            initial_status="running",
+            mode=SyncMode.FULL,
+        )
+        state = service._get_or_create_state(session, settings.sync.scope_key)
+        run.started_at = utcnow()
+        session.commit()
+
+        context = service._build_context(session, run, state)
+        result = service._collect_sync(context)
+        service._finish_run(
+            run,
+            state,
+            last_treated_max=result.last_treated,
+            last_creation_date=result.max_creation_date,
+            mode=result.mode,
+        )
+        session.commit()
+
+        assert run.status == "success"
+        assert run.fetched_records == 3
+        # Paris (75) + Lyon (69) covered by union of subscribers; Marseille (13) dropped.
+        assert run.created_records == 2
+
+        persisted_sirets = {
+            est.siret for est in session.execute(select(models.Establishment)).scalars()
+        }
+        assert persisted_sirets == {"11111111111111", "22222222222222"}
+
+
+def test_full_sync_manual_does_not_apply_department_filter(monkeypatch):
+    """Manual sync runs (run_type='sync') ignore (NAF, département) subscription gating."""
+    settings = _make_settings(google_enabled=True)
+    _patch_settings(monkeypatch, settings)
+    _patch_google_stack(monkeypatch)
+    captured_annuaire = _capture_annuaire_calls(monkeypatch)
+
+    with _session_scope() as session:
+        subcategory = _seed_naf(session)
+        # Subscriber is restricted to département 75 — but we run a *manual* sync.
+        _seed_client(session, subcategory, department_codes=["75"])
+        _seed_google_retry_config(session)
+
+        page = {
+            "header": {"curseur": "*", "curseurSuivant": None, "total": 2},
+            "etablissements": [
+                _make_establishment_payload(
+                    siret="11111111111111",
+                    name="Paris Bistro",
+                    naf_code="56.10A",
+                    code_postal="75001",
+                    libelle_commune="Paris",
+                ),
+                _make_establishment_payload(
+                    siret="22222222222222",
+                    name="Lyon Bistro",
+                    naf_code="56.10A",
+                    code_postal="69001",
+                    libelle_commune="Lyon",
+                ),
+            ],
+        }
+        _patch_sirene_client(monkeypatch, [page])
+
+        service = SyncService()
+        run = service.run_sync(session)
+
+        assert run.status == "success"
+        assert run.created_records == 2
+
+        persisted_sirets = {
+            est.siret for est in session.execute(select(models.Establishment)).scalars()
+        }
+        assert persisted_sirets == {"11111111111111", "22222222222222"}
+
+        flat_sirets = sorted(siret for batch in captured_annuaire for siret in batch)
+        assert flat_sirets == ["11111111111111", "22222222222222"]
 
 
 if __name__ == "__main__":  # pragma: no cover

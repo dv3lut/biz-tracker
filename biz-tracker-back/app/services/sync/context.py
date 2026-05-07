@@ -38,6 +38,7 @@ class SyncContext:
     google_reset_state: bool = False
     replay_reference: DayReplayReference = DEFAULT_DAY_REPLAY_REFERENCE
     months_back: int | None = None
+    subscribed_naf_department_pairs: dict[str, set[str] | None] | None = None
 
 
 @dataclass

@@ -13,8 +13,33 @@ from app.observability import log_event
 from app.services.establishment_mapper import extract_fields
 from app.utils.dates import utcnow
 from app.utils.naf import normalize_naf_code
+from app.utils.regions import resolve_department_code
 
 from .context import UpdatedEstablishmentInfo
+
+
+def _matches_subscribed_naf_department(
+    naf_code_raw: str | None,
+    code_commune: str | None,
+    code_postal: str | None,
+    subscribed_pairs: dict[str, set[str] | None],
+) -> bool:
+    """Return True when the (NAF, département) combo has at least one active subscriber."""
+
+    naf_code = normalize_naf_code(naf_code_raw)
+    if not naf_code or naf_code not in subscribed_pairs:
+        return False
+    allowed_departments = subscribed_pairs[naf_code]
+    if allowed_departments is None:
+        return True
+    if not allowed_departments:
+        return False
+    department_code = resolve_department_code(code_commune, code_postal)
+    if not department_code:
+        return False
+    if department_code == "20" and ("2A" in allowed_departments or "2B" in allowed_departments):
+        return True
+    return department_code in allowed_departments
 
 
 class SyncPersistenceMixin:
@@ -112,6 +137,54 @@ class SyncPersistenceMixin:
         )
         return [code for code in rows if code]
 
+    def _load_subscribed_naf_department_pairs(
+        self,
+        session: Session,
+    ) -> dict[str, set[str] | None]:
+        """Map each subscribed NAF code to the set of department codes targeted by active subscribers.
+
+        A value of ``None`` means at least one active subscriber for that NAF has no
+        department restriction (i.e. is configured to be alerted on every department).
+        A NAF missing from the returned dict has no active subscriber and should be
+        skipped entirely.
+
+        Used by automatic sync runs to filter out establishments whose
+        (NAF, département) combination has no client subscriber, so we avoid
+        persisting them and triggering downstream Google / annuaire enrichments.
+        """
+
+        from app.services.client_service import get_all_clients, is_client_active
+
+        clients = get_all_clients(session)
+        today = date.today()
+        pairs: dict[str, set[str] | None] = {}
+        for client in clients:
+            if not is_client_active(client, on_date=today):
+                continue
+            client_dept_codes: set[str] | None = {
+                department.code
+                for department in getattr(client, "departments", []) or []
+                if getattr(department, "code", None)
+            }
+            if not client_dept_codes:
+                client_dept_codes = None
+            for subscription in getattr(client, "subscriptions", []) or []:
+                subcategory = getattr(subscription, "subcategory", None)
+                if not subcategory or not getattr(subcategory, "is_active", True):
+                    continue
+                naf_code = normalize_naf_code(getattr(subcategory, "naf_code", None))
+                if not naf_code:
+                    continue
+                existing = pairs.get(naf_code, set())
+                if existing is None:
+                    continue
+                if client_dept_codes is None:
+                    pairs[naf_code] = None
+                else:
+                    existing.update(client_dept_codes)
+                    pairs[naf_code] = existing
+        return pairs
+
     def _build_fields_parameter(self) -> str:
         fields = {
             "identificationStandardEtablissement",
@@ -138,6 +211,7 @@ class SyncPersistenceMixin:
         etablissements: Sequence[dict[str, object]],
         run_id: UUID,
         scope_key: str | None,
+        subscribed_pairs: dict[str, set[str] | None] | None = None,
     ) -> tuple[
         list[models.Establishment],
         list[UpdatedEstablishmentInfo],
@@ -163,6 +237,23 @@ class SyncPersistenceMixin:
                     source_last_treatment=source_last_treatment,
                     source_last_treatment_raw=source_last_treatment_raw,
                     source_creation_date=source_creation_date,
+                )
+                continue
+            if subscribed_pairs is not None and not _matches_subscribed_naf_department(
+                fields.get("naf_code"),
+                fields.get("code_commune"),
+                fields.get("code_postal"),
+                subscribed_pairs,
+            ):
+                log_event(
+                    "sync.debug.exit.008_unsubscribed_naf_department",
+                    run_id=str(run_id),
+                    scope_key=scope_key,
+                    siret=siret,
+                    naf_code=fields.get("naf_code"),
+                    code_postal=fields.get("code_postal"),
+                    code_commune=fields.get("code_commune"),
+                    reason="no_subscriber_for_naf_department",
                 )
                 continue
             if fields.get("etat_administratif") != "A":

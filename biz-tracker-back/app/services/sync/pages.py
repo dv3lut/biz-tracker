@@ -365,6 +365,7 @@ def collect_pages(
             etablissements,
             context.run.id,
             context.run.scope_key,
+            subscribed_pairs=context.subscribed_naf_department_pairs,
         )
         context.run.created_records += len(new_entities)
         context.run.updated_records += len(updated_batch)

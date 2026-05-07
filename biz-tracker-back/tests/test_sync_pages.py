@@ -17,7 +17,7 @@ class _DummyCollector:
         self._logger = logging.getLogger("tests.sync.pages")
         self.last_upsert_payload: list[dict[str, object]] | None = None
 
-    def _upsert_establishments(self, _session, etablissements, *_args):
+    def _upsert_establishments(self, _session, etablissements, *_args, **_kwargs):
         self.last_upsert_payload = list(etablissements)
         return [], [], []
 
@@ -35,7 +35,13 @@ def _build_context(payload: object) -> SimpleNamespace:
     state = SimpleNamespace(last_creation_date=None, last_cursor=None, last_total=None, last_synced_at=None, cursor_completed=False)
     session = SimpleNamespace(flush=lambda: None, commit=lambda: None)
     client = SimpleNamespace(search_establishments=lambda **_kwargs: payload)
-    return SimpleNamespace(state=state, run=run, session=session, client=client)
+    return SimpleNamespace(
+        state=state,
+        run=run,
+        session=session,
+        client=client,
+        subscribed_naf_department_pairs=None,
+    )
 
 
 def _stub_email(monkeypatch: pytest.MonkeyPatch) -> Mock:
