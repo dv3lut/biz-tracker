@@ -11,7 +11,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Check } from "lucide-react";
+import { Calendar, Check, Sparkles, Target, Zap } from "lucide-react";
+
+const CALENDLY_URL = "https://calendly.com/julien-businesstracker/30min";
 
 type PlanKey = "starter" | "business";
 
@@ -56,6 +58,8 @@ const Pricing = ({ trialPeriodDays = 14 }: Props) => {
   const [portalSuccess, setPortalSuccess] = useState<string | null>(null);
   const [isPortalLoading, setIsPortalLoading] = useState(false);
 
+  const [isCalendlyOpen, setIsCalendlyOpen] = useState(false);
+
 
   const plans = [
     {
@@ -90,17 +94,18 @@ const Pricing = ({ trialPeriodDays = 14 }: Props) => {
     },
     {
       key: null,
-      name: "Enterprise",
-      price: "Sur devis",
+      name: "Prospection IA",
+      price: "Sur mesure",
       period: "",
-      description: "Pour couvrir tous les secteurs",
+      description: "Votre pipeline en pilote automatique",
       features: [
-        "Alertes quotidiennes par email",
-        "Secteurs illimités",
-        "Historique 4 mois (sur vos secteurs)",
+        "Ciblage IA sur-mesure pour votre activité",
+        "Prospection multi-canal entièrement automatisée",
+        "Pipeline d'opportunités livré clé en main",
       ],
-      cta: "Nous contacter",
+      cta: "Réserver un appel",
       highlighted: false,
+      isCalendly: true,
     },
   ];
 
@@ -325,37 +330,55 @@ const Pricing = ({ trialPeriodDays = 14 }: Props) => {
         </div>
 
         <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
-          {plans.map((plan, index) => (
+          {plans.map((plan, index) => {
+            const isCalendly = "isCalendly" in plan && plan.isCalendly;
+            return (
             <Card
               key={index}
               className={`relative p-8 flex flex-col ${
                 plan.highlighted
                   ? "border-2 border-secondary shadow-lg scale-105"
+                  : isCalendly
+                  ? "border border-secondary/40"
                   : "border"
               }`}
             >
+              {isCalendly && (
+                <>
+                  <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-lg">
+                    <div className="absolute -top-16 -right-16 h-40 w-40 rounded-full bg-secondary/15 blur-3xl animate-pulse-glow" />
+                    <div className="absolute -bottom-16 -left-16 h-40 w-40 rounded-full bg-primary/10 blur-3xl animate-pulse-glow [animation-delay:1.2s]" />
+                  </div>
+                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-gradient-to-r from-primary to-secondary text-primary-foreground px-4 py-1 rounded-full text-sm font-semibold shadow-md whitespace-nowrap">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    Nouveau
+                  </div>
+                </>
+              )}
               {plan.highlighted && (
                 <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-secondary text-secondary-foreground px-4 py-1 rounded-full text-sm font-semibold">
                   Recommandé
                 </div>
               )}
 
-              <div className="text-center mb-6">
+              <div className="relative text-center mb-6">
                 <h3 className="text-2xl font-bold mb-2">{plan.name}</h3>
                 <p className="text-sm text-muted-foreground mb-4">
                   {plan.description}
                 </p>
                 <div className="flex items-end justify-center gap-2">
-                  {plan.price !== "Sur devis" && plan.originalPrice && (
+                  {!isCalendly && plan.originalPrice && (
                     <span className="text-xl text-muted-foreground line-through">
                       {plan.originalPrice}€
                     </span>
                   )}
-                  {plan.price !== "Sur devis" && (
+                  {!isCalendly && (
                     <span className="text-4xl font-bold">{plan.price}€</span>
                   )}
-                  {plan.price === "Sur devis" && (
-                    <span className="text-3xl font-bold">{plan.price}</span>
+                  {isCalendly && (
+                    <span className="text-3xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+                      {plan.price}
+                    </span>
                   )}
                   {plan.period && (
                     <span className="text-muted-foreground mb-1">
@@ -365,31 +388,43 @@ const Pricing = ({ trialPeriodDays = 14 }: Props) => {
                 </div>
               </div>
 
-              <ul className="space-y-3 mb-8 flex-grow">
+              <ul className="relative space-y-3 mb-8 flex-grow">
                 {plan.features.map((feature, idx) => (
                   <li key={idx} className="flex items-start gap-2">
-                    <Check className="w-5 h-5 text-secondary flex-shrink-0 mt-0.5" />
+                    {isCalendly ? (
+                      <Target className="w-5 h-5 text-secondary flex-shrink-0 mt-0.5" />
+                    ) : (
+                      <Check className="w-5 h-5 text-secondary flex-shrink-0 mt-0.5" />
+                    )}
                     <span className="text-sm">{feature}</span>
                   </li>
                 ))}
               </ul>
 
               <Button
-                variant={plan.highlighted ? "default" : "outline"}
+                variant={plan.highlighted || isCalendly ? "default" : "outline"}
                 size="lg"
-                className="w-full"
+                className={`relative w-full ${
+                  isCalendly
+                    ? "bg-gradient-to-r from-primary to-secondary hover:opacity-90 transition-opacity"
+                    : ""
+                }`}
                 onClick={() => {
-                  if (plan.key) {
+                  if (isCalendly) {
+                    setIsCalendlyOpen(true);
+                  } else if (plan.key) {
                     handleOpenCheckout(plan.key);
                   } else {
                     scrollToContact();
                   }
                 }}
               >
+                {isCalendly && <Calendar className="w-4 h-4 mr-2" />}
                 {plan.cta}
               </Button>
             </Card>
-          ))}
+            );
+          })}
         </div>
 
         <div className="mt-12 text-center">
@@ -546,6 +581,65 @@ const Pricing = ({ trialPeriodDays = 14 }: Props) => {
             </Button>
             <Button onClick={handleCheckoutSubmit} disabled={isCheckoutLoading}>
               {isCheckoutLoading ? "Redirection…" : "Continuer"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isCalendlyOpen} onOpenChange={setIsCalendlyOpen}>
+        <DialogContent className="sm:max-w-md overflow-hidden">
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-secondary/10" />
+          <DialogHeader className="relative">
+            <DialogTitle className="text-center text-2xl">
+              Laissez l'IA prospecter pour vous
+            </DialogTitle>
+            <DialogDescription className="text-center">
+              Échangeons 30 minutes pour cadrer votre cible idéale et lancer votre prospection automatisée.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="relative flex flex-col items-center gap-6 py-6">
+            <div className="relative flex h-28 w-28 items-center justify-center">
+              <div className="absolute inset-0 rounded-full bg-secondary/30 blur-2xl animate-pulse-glow" />
+              <div className="absolute inset-2 rounded-full bg-gradient-to-br from-primary to-secondary opacity-90" />
+              <Calendar className="relative h-12 w-12 text-primary-foreground animate-float" strokeWidth={2.2} />
+              <Sparkles className="absolute -top-1 -right-1 h-6 w-6 text-secondary animate-sparkle" />
+              <Sparkles className="absolute -bottom-1 -left-2 h-5 w-5 text-primary animate-sparkle [animation-delay:0.8s]" />
+            </div>
+
+            <div className="flex flex-col gap-2.5 w-full text-sm">
+              <div className="flex items-center gap-3 rounded-lg border border-secondary/20 bg-background/50 px-3 py-2.5">
+                <Target className="w-5 h-5 text-secondary flex-shrink-0" />
+                <span>Ciblage IA sur-mesure pour votre activité</span>
+              </div>
+              <div className="flex items-center gap-3 rounded-lg border border-secondary/20 bg-background/50 px-3 py-2.5">
+                <Zap className="w-5 h-5 text-secondary flex-shrink-0" />
+                <span>Prospection multi-canal 100 % automatisée</span>
+              </div>
+              <div className="flex items-center gap-3 rounded-lg border border-secondary/20 bg-background/50 px-3 py-2.5">
+                <Calendar className="w-5 h-5 text-secondary flex-shrink-0" />
+                <span>30 minutes pour tout configurer ensemble</span>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="relative sm:justify-center gap-2">
+            <Button variant="outline" onClick={() => setIsCalendlyOpen(false)}>
+              Annuler
+            </Button>
+            <Button
+              asChild
+              className="bg-gradient-to-r from-primary to-secondary hover:opacity-90 transition-opacity"
+            >
+              <a
+                href={CALENDLY_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setIsCalendlyOpen(false)}
+              >
+                <Calendar className="w-4 h-4 mr-2" />
+                Ouvrir Calendly
+              </a>
             </Button>
           </DialogFooter>
         </DialogContent>
