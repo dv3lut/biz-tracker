@@ -8,6 +8,7 @@ from io import StringIO
 from typing import Iterable, Literal, Mapping, Sequence
 
 from openpyxl import Workbook
+from openpyxl.cell.cell import WriteOnlyCell
 from openpyxl.utils import get_column_letter
 
 from app.db import models
@@ -112,11 +113,13 @@ def build_google_places_workbook(
     subcategory_lookup: Mapping[str, tuple[str | None, str | None]] | None = None,
     listing_statuses: Sequence[str] | None = None,
 ) -> BytesIO:
-    """Generate an Excel workbook listing establishments enriched with Google Places."""
+    """Generate an Excel workbook listing establishments enriched with Google Places.
 
-    workbook = Workbook()
-    sheet = workbook.active
-    sheet.title = "Google Places (clients)" if mode == "client" else "Google Places (admin)"
+    Uses openpyxl's ``write_only`` mode and tracks column widths incrementally so the
+    export scales to thousands of rows without the costly full-sheet width scan that the
+    classic (read-write) workbook required.
+    """
+
     if mode == "client":
         selected_statuses = list(listing_statuses or [])
         include_listing_status = len(selected_statuses) != 1
@@ -128,6 +131,8 @@ def build_google_places_workbook(
         ]
         if include_listing_status:
             headers.append("Statut fiche Google")
+        link_column_index = headers.index("Lien Google")
+        siret_column_index = None
     else:
         headers = [
             "Date création",
@@ -170,97 +175,118 @@ def build_google_places_workbook(
             "Vu en premier",
             "Vu en dernier",
         ]
-    sheet.append(headers)
+        link_column_index = headers.index("Google Place URL")
+        siret_column_index = headers.index("SIRET")
 
-    if mode == "client":
-        link_column_index = headers.index("Lien Google") + 1
-        siret_column_index = None
-    else:
-        link_column_index = headers.index("Google Place URL") + 1
-        siret_column_index = headers.index("SIRET") + 1
+    # Column index -> hyperlink URL, computed per row. ``None`` keeps the cell plain.
+    column_widths = [len(header) for header in headers]
 
+    def _track_widths(row: Sequence[object | None]) -> None:
+        for index, value in enumerate(row):
+            if value is None:
+                continue
+            length = len(str(value))
+            if length > column_widths[index]:
+                column_widths[index] = length
+
+    rows: list[tuple[list[object | None], dict[int, str]]] = []
     for establishment in establishments:
-        creation_date = _format_date(establishment.date_creation)
-        address = _compose_address(establishment)
-        commune = establishment.libelle_commune or establishment.libelle_commune_etranger
         google_url = establishment.google_place_url
         category_name, subcategory_name = _resolve_category_columns(
             establishment.naf_code,
             establishment.naf_libelle,
             subcategory_lookup,
         )
+        links: dict[int, str] = {}
         if mode == "client":
-            full_address = _compose_full_address(establishment)
             row = [
                 establishment.name,
-                full_address,
+                _compose_full_address(establishment),
                 category_name,
                 google_url,
             ]
             if include_listing_status:
                 # Utiliser le label client pour les exports clients
                 row.append(get_client_listing_status_label(establishment.google_listing_age_status))
-            sheet.append(row)
-            _apply_hyperlink(sheet, sheet.max_row, link_column_index, google_url)
-            continue
+            if google_url:
+                links[link_column_index] = google_url
+        else:
+            row = [
+                _format_date(establishment.date_creation),
+                establishment.siret,
+                establishment.name,
+                _compose_address(establishment),
+                establishment.code_postal,
+                establishment.libelle_commune or establishment.libelle_commune_etranger,
+                establishment.code_pays,
+                establishment.naf_code,
+                establishment.naf_libelle,
+                category_name,
+                subcategory_name,
+                establishment.google_place_id,
+                google_url,
+                round(establishment.google_match_confidence, 3) if establishment.google_match_confidence is not None else None,
+                establishment.google_check_status,
+                establishment.google_contact_phone,
+                establishment.google_contact_email,
+                establishment.google_contact_website,
+                _format_datetime(establishment.google_last_checked_at),
+                _format_datetime(establishment.google_last_found_at),
+                _format_datetime(establishment.google_listing_origin_at),
+                describe_listing_age_status(establishment.google_listing_age_status),
+                _format_datetime(establishment.website_scraped_at),
+                _first_pipe_separated_value(establishment.website_scraped_mobile_phones),
+                _format_pipe_separated_values(establishment.website_scraped_mobile_phones),
+                _first_pipe_separated_value(establishment.website_scraped_national_phones),
+                _format_pipe_separated_values(establishment.website_scraped_national_phones),
+                _first_pipe_separated_value(establishment.website_scraped_international_phones),
+                _format_pipe_separated_values(establishment.website_scraped_international_phones),
+                _first_pipe_separated_value(establishment.website_scraped_emails),
+                _format_pipe_separated_values(establishment.website_scraped_emails),
+                establishment.website_scraped_facebook,
+                establishment.website_scraped_instagram,
+                establishment.website_scraped_twitter,
+                establishment.website_scraped_linkedin,
+                str(establishment.created_run_id) if establishment.created_run_id else None,
+                str(establishment.last_run_id) if establishment.last_run_id else None,
+                _format_datetime(establishment.first_seen_at),
+                _format_datetime(establishment.last_seen_at),
+            ]
+            siret_url = build_annuaire_etablissement_url(establishment.siret)
+            if siret_url and siret_column_index is not None:
+                links[siret_column_index] = siret_url
+            if google_url:
+                links[link_column_index] = google_url
 
-        row = [
-            creation_date,
-            establishment.siret,
-            establishment.name,
-            address,
-            establishment.code_postal,
-            commune,
-            establishment.code_pays,
-            establishment.naf_code,
-            establishment.naf_libelle,
-            category_name,
-            subcategory_name,
-            establishment.google_place_id,
-            google_url,
-            round(establishment.google_match_confidence, 3) if establishment.google_match_confidence is not None else None,
-            establishment.google_check_status,
-            establishment.google_contact_phone,
-            establishment.google_contact_email,
-            establishment.google_contact_website,
-            _format_datetime(establishment.google_last_checked_at),
-            _format_datetime(establishment.google_last_found_at),
-            _format_datetime(establishment.google_listing_origin_at),
-            describe_listing_age_status(establishment.google_listing_age_status),
-            _format_datetime(establishment.website_scraped_at),
-            _first_pipe_separated_value(establishment.website_scraped_mobile_phones),
-            _format_pipe_separated_values(establishment.website_scraped_mobile_phones),
-            _first_pipe_separated_value(establishment.website_scraped_national_phones),
-            _format_pipe_separated_values(establishment.website_scraped_national_phones),
-            _first_pipe_separated_value(establishment.website_scraped_international_phones),
-            _format_pipe_separated_values(establishment.website_scraped_international_phones),
-            _first_pipe_separated_value(establishment.website_scraped_emails),
-            _format_pipe_separated_values(establishment.website_scraped_emails),
-            establishment.website_scraped_facebook,
-            establishment.website_scraped_instagram,
-            establishment.website_scraped_twitter,
-            establishment.website_scraped_linkedin,
-            str(establishment.created_run_id) if establishment.created_run_id else None,
-            str(establishment.last_run_id) if establishment.last_run_id else None,
-            _format_datetime(establishment.first_seen_at),
-            _format_datetime(establishment.last_seen_at),
-        ]
-        sheet.append(row)
-        _apply_hyperlink(sheet, sheet.max_row, siret_column_index, build_annuaire_etablissement_url(establishment.siret))
-        _apply_hyperlink(sheet, sheet.max_row, link_column_index, google_url)
+        _track_widths(row)
+        rows.append((row, links))
 
+    workbook = Workbook(write_only=True)
+    sheet = workbook.create_sheet(
+        title="Google Places (clients)" if mode == "client" else "Google Places (admin)"
+    )
+
+    # In write_only mode freeze panes and column widths must be set before appending rows.
     sheet.freeze_panes = "A2"
+    for index, width in enumerate(column_widths, start=1):
+        sheet.column_dimensions[get_column_letter(index)].width = min(max(width + 2, 12), 60)
 
-    for column in sheet.columns:
-        max_length = 0
-        column_letter = column[0].column_letter
-        for cell in column:
-            try:
-                value_length = len(str(cell.value)) if cell.value is not None else 0
-            except Exception:  # pragma: no cover - defensive
-                value_length = 0
-            max_length = max(max_length, value_length)
-        sheet.column_dimensions[column_letter].width = min(max(max_length + 2, 12), 60)
+    sheet.append(headers)
+    for row, links in rows:
+        if not links:
+            sheet.append(row)
+            continue
+        cells: list[object] = []
+        for index, value in enumerate(row):
+            url = links.get(index)
+            if url is None:
+                cells.append(value)
+                continue
+            cell = WriteOnlyCell(sheet, value=value)
+            cell.hyperlink = url
+            cell.style = "Hyperlink"
+            cells.append(cell)
+        sheet.append(cells)
 
     buffer = BytesIO()
     workbook.save(buffer)
