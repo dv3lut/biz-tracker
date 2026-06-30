@@ -194,6 +194,28 @@ export interface RunSummary {
   stats: RunSummaryStats;
   samples: RunSummarySamples;
   email?: RunEmailSummary;
+  autoEmail?: RunAutoEmailSummary;
+}
+
+export interface RunAutoEmailSummaryItem {
+  siret: string;
+  name: string | null;
+  nafCode: string | null;
+  subcategoryId: string;
+  subcategoryName: string;
+  recipients: string[];
+  sent: boolean;
+  reason: string | null;
+}
+
+export interface RunAutoEmailSummary {
+  enabledNafCodes: string[];
+  attemptedCount: number;
+  sentCount: number;
+  skippedCount: number;
+  failedCount: number;
+  items: RunAutoEmailSummaryItem[];
+  reason: string | null;
 }
 
 export interface RunSummaryMeta {
@@ -434,6 +456,9 @@ export interface NafSubCategory {
   priceCents: number;
   priceEur: number;
   isActive: boolean;
+  autoEmailEnabled: boolean;
+  autoEmailSubject: string | null;
+  autoEmailBody: string | null;
   createdAt: string;
   updatedAt: string;
   googleDepartmentCount: number;

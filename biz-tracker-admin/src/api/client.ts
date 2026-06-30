@@ -91,6 +91,28 @@ interface RunSummaryResponse {
   stats: RunSummaryStatsResponse;
   samples: RunSummarySamplesResponse;
   email?: RunEmailSummaryResponse | null;
+  auto_email?: RunAutoEmailSummaryResponse | null;
+}
+
+interface RunAutoEmailSummaryItemResponse {
+  siret: string;
+  name: string | null;
+  naf_code: string | null;
+  subcategory_id: string;
+  subcategory_name: string;
+  recipients?: string[] | null;
+  sent: boolean;
+  reason: string | null;
+}
+
+interface RunAutoEmailSummaryResponse {
+  enabled_naf_codes?: string[] | null;
+  attempted_count?: number | null;
+  sent_count?: number | null;
+  skipped_count?: number | null;
+  failed_count?: number | null;
+  items?: RunAutoEmailSummaryItemResponse[] | null;
+  reason?: string | null;
 }
 
 interface RunSummaryMetaResponse {
@@ -537,6 +559,26 @@ const toRunSummary = (payload: RunSummaryResponse): RunSummary => ({
         recipients: payload.email.recipients ?? [],
         subject: payload.email.subject ?? null,
         reason: payload.email.reason ?? null,
+      }
+    : undefined,
+  autoEmail: payload.auto_email
+    ? {
+        enabledNafCodes: payload.auto_email.enabled_naf_codes ?? [],
+        attemptedCount: payload.auto_email.attempted_count ?? 0,
+        sentCount: payload.auto_email.sent_count ?? 0,
+        skippedCount: payload.auto_email.skipped_count ?? 0,
+        failedCount: payload.auto_email.failed_count ?? 0,
+        reason: payload.auto_email.reason ?? null,
+        items: (payload.auto_email.items ?? []).map((item) => ({
+          siret: item.siret,
+          name: item.name ?? null,
+          nafCode: item.naf_code ?? null,
+          subcategoryId: item.subcategory_id,
+          subcategoryName: item.subcategory_name,
+          recipients: item.recipients ?? [],
+          sent: item.sent,
+          reason: item.reason ?? null,
+        })),
       }
     : undefined,
 });

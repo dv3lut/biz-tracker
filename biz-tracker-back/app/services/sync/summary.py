@@ -317,4 +317,29 @@ class SyncSummaryMixin:
             for sample in immediate_samples:
                 lines.append(format_sample(sample))
 
+        auto_email = summary.get("auto_email") or {}
+        lines.append("")
+        lines.append("Emails automatiques aux nouveaux établissements:")
+        attempted = int(auto_email.get("attempted_count") or 0)
+        sent = int(auto_email.get("sent_count") or 0)
+        skipped = int(auto_email.get("skipped_count") or 0)
+        failed = int(auto_email.get("failed_count") or 0)
+        enabled_codes = auto_email.get("enabled_naf_codes") or []
+        if not enabled_codes and auto_email.get("reason"):
+            lines.append(f"- Désactivé ({auto_email.get('reason')})")
+        else:
+            lines.append(f"- NAF concernés: {', '.join(enabled_codes) if enabled_codes else 'aucun'}")
+            lines.append(f"- Tentés: {attempted} | Envoyés: {sent} | Sans email: {skipped} | Échecs: {failed}")
+
+        sent_items = [item for item in auto_email.get("items") or [] if item.get("sent")]
+        if sent_items:
+            lines.append("")
+            lines.append(f"Détail des envois ({len(sent_items)}):")
+            for item in sent_items:
+                recipients = ", ".join(item.get("recipients") or [])
+                name = item.get("name") or "(nom indisponible)"
+                siret = item.get("siret") or "N/A"
+                naf_code = item.get("naf_code") or "?"
+                lines.append(f"- {name} — {siret} [NAF {naf_code}] -> {recipients}")
+
         return "\n".join(lines).strip()

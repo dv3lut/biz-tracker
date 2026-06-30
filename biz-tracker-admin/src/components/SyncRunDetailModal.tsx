@@ -344,6 +344,46 @@ export const SyncRunDetailModal = ({
                         <p className="muted small">Pas de correspondances tardives sur l'échantillon.</p>
                       )}
                     </section>
+
+                    <section className="run-samples-section">
+                      <h3>Emails automatiques envoyés</h3>
+                      {summary?.autoEmail ? (
+                        <>
+                          <p className="muted small">
+                            NAF concernés: {summary.autoEmail.enabledNafCodes.length
+                              ? summary.autoEmail.enabledNafCodes.join(", ")
+                              : "aucun"}
+                            {" "}· Tentés: {summary.autoEmail.attemptedCount}
+                            {" "}· Envoyés: {summary.autoEmail.sentCount}
+                            {" "}· Sans email: {summary.autoEmail.skippedCount}
+                            {" "}· Échecs: {summary.autoEmail.failedCount}
+                            {summary.autoEmail.reason ? ` (${summary.autoEmail.reason})` : ""}
+                          </p>
+                          {summary.autoEmail.items.filter((item) => item.sent).length > 0 ? (
+                            <ul className="run-sample-list">
+                              {summary.autoEmail.items
+                                .filter((item) => item.sent)
+                                .map((item) => (
+                                  <li key={`${item.siret}-autoemail`}>
+                                    <div className="run-sample-main">
+                                      <strong>{item.name ?? "Nom indisponible"}</strong>
+                                      <SiretLink value={item.siret} className="muted small" />
+                                    </div>
+                                    <div className="run-sample-meta">
+                                      <span className="muted small">NAF {item.nafCode ?? "?"}</span>
+                                      <span>{item.recipients.join(", ")}</span>
+                                    </div>
+                                  </li>
+                                ))}
+                            </ul>
+                          ) : (
+                            <p className="muted small">Aucun envoi automatique sur ce run.</p>
+                          )}
+                        </>
+                      ) : (
+                        <p className="muted small">Auto-emails non disponibles pour ce run.</p>
+                      )}
+                    </section>
                   </div>
                 ) : null}
               </>

@@ -245,6 +245,15 @@ export const NafCategoriesSection = ({
                               <span className={`badge status-${subcategory.isActive ? "success" : "error"}`}>
                                 {subcategory.isActive ? "Active" : "Inactive"}
                               </span>
+                              {subcategory.autoEmailEnabled ? (
+                                <span
+                                  className="badge"
+                                  title="Email automatique activé en fin de sync"
+                                  style={{ marginLeft: 4 }}
+                                >
+                                  ✉ auto
+                                </span>
+                              ) : null}
                             </td>
                             <td style={{ whiteSpace: "nowrap" }}>
                               <div className="naf-department-count">

@@ -9,6 +9,9 @@ export type NafSubCategoryResponse = {
   price_cents: number;
   price_eur: number;
   is_active: boolean;
+  auto_email_enabled?: boolean;
+  auto_email_subject?: string | null;
+  auto_email_body?: string | null;
   created_at: string;
   updated_at: string;
   google_department_count?: number;
@@ -47,6 +50,9 @@ export interface NafSubCategoryCreatePayload {
   description?: string | null;
   priceEur?: number;
   isActive?: boolean;
+  autoEmailEnabled?: boolean;
+  autoEmailSubject?: string | null;
+  autoEmailBody?: string | null;
 }
 
 export interface NafSubCategoryUpdatePayload {
@@ -55,6 +61,9 @@ export interface NafSubCategoryUpdatePayload {
   description?: string | null;
   priceEur?: number;
   isActive?: boolean;
+  autoEmailEnabled?: boolean;
+  autoEmailSubject?: string | null;
+  autoEmailBody?: string | null;
 }
 
 const mapDepartmentResponse = (department: DepartmentResponse): Department => ({
@@ -73,6 +82,9 @@ export const mapNafSubCategoryResponse = (subcategory: NafSubCategoryResponse): 
   priceCents: subcategory.price_cents,
   priceEur: subcategory.price_eur,
   isActive: subcategory.is_active,
+  autoEmailEnabled: subcategory.auto_email_enabled ?? false,
+  autoEmailSubject: subcategory.auto_email_subject ?? null,
+  autoEmailBody: subcategory.auto_email_body ?? null,
   createdAt: subcategory.created_at,
   updatedAt: subcategory.updated_at,
   googleDepartmentCount: subcategory.google_department_count ?? 0,
@@ -103,6 +115,9 @@ const serializeSubCategoryCreatePayload = (payload: NafSubCategoryCreatePayload)
     naf_code: payload.nafCode,
     description: payload.description ?? null,
     is_active: payload.isActive ?? true,
+    auto_email_enabled: payload.autoEmailEnabled ?? false,
+    auto_email_subject: payload.autoEmailSubject ?? null,
+    auto_email_body: payload.autoEmailBody ?? null,
   };
   if (payload.priceEur !== undefined) {
     body.price_eur = payload.priceEur;
@@ -126,6 +141,15 @@ const serializeSubCategoryUpdatePayload = (payload: NafSubCategoryUpdatePayload)
   }
   if (payload.isActive !== undefined) {
     body.is_active = payload.isActive;
+  }
+  if (payload.autoEmailEnabled !== undefined) {
+    body.auto_email_enabled = payload.autoEmailEnabled;
+  }
+  if (payload.autoEmailSubject !== undefined) {
+    body.auto_email_subject = payload.autoEmailSubject ?? "";
+  }
+  if (payload.autoEmailBody !== undefined) {
+    body.auto_email_body = payload.autoEmailBody ?? "";
   }
   return body;
 };

@@ -462,6 +462,18 @@ def run_schema_upgrades(engine: Engine) -> None:
         WHERE keywords IS NULL
         """,
         """
+        ALTER TABLE IF EXISTS naf_subcategories
+        ADD COLUMN IF NOT EXISTS auto_email_enabled BOOLEAN NOT NULL DEFAULT FALSE
+        """,
+        """
+        ALTER TABLE IF EXISTS naf_subcategories
+        ADD COLUMN IF NOT EXISTS auto_email_subject TEXT
+        """,
+        """
+        ALTER TABLE IF EXISTS naf_subcategories
+        ADD COLUMN IF NOT EXISTS auto_email_body TEXT
+        """,
+        """
         CREATE TABLE IF NOT EXISTS google_retry_config (
             id SERIAL PRIMARY KEY,
             retry_weekdays JSONB NOT NULL DEFAULT '[]'::jsonb,

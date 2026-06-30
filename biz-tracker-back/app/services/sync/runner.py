@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.db import models
 from app.db.session import session_scope
 from app.observability import log_event, run_context, serialize_exception, serialize_sync_run
+from app.services.sync.auto_email import dispatch_auto_emails
 from app.services.sync.context import SyncContext, SyncResult
 from app.services.sync.mode import DEFAULT_SYNC_MODE, SyncMode
 from app.utils.dates import utcnow
@@ -51,7 +52,9 @@ class SyncRunnerMixin(SyncRunPreparationMixin):
                     last_creation_date=result.max_creation_date,
                     mode=result.mode,
                 )
+                auto_email_summary = dispatch_auto_emails(session, run, result.new_establishments)
                 summary_payload = self._build_run_summary_payload(run, result)
+                summary_payload["auto_email"] = auto_email_summary
                 email_summary = self._send_run_summary_email(session, run, summary_payload)
                 summary_payload["email"] = email_summary
                 run.summary = summary_payload
@@ -125,7 +128,9 @@ class SyncRunnerMixin(SyncRunPreparationMixin):
                             last_creation_date=result.max_creation_date,
                             mode=result.mode,
                         )
+                        auto_email_summary = dispatch_auto_emails(session, run, result.new_establishments)
                         summary_payload = self._build_run_summary_payload(run, result)
+                        summary_payload["auto_email"] = auto_email_summary
                         email_summary = self._send_run_summary_email(session, run, summary_payload)
                         summary_payload["email"] = email_summary
                         run.summary = summary_payload

@@ -554,6 +554,9 @@ class NafSubCategory(Base):
     naf_code: Mapped[str] = mapped_column(String(10), nullable=False, index=True)
     price_cents: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    auto_email_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    auto_email_subject: Mapped[str | None] = mapped_column(Text, nullable=True)
+    auto_email_body: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
 

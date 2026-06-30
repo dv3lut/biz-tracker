@@ -1,6 +1,6 @@
 import { type FormEvent, useMemo, useState, useEffect } from "react";
 import type { ListingStatus, NafCategoryStat } from "../types";
-import { normalizeNafCode, denormalizeNafCode, canonicalizeNafCode, MAX_TARGET_NAF_CODES } from "../utils/sync";
+import { normalizeNafCode, denormalizeNafCode, canonicalizeNafCode } from "../utils/sync";
 import { DEFAULT_LISTING_STATUSES, LISTING_STATUS_OPTIONS } from "../constants/listingStatuses";
 
 type NormalizedSubcategory = NafCategoryStat["subcategories"][number] & {
@@ -105,9 +105,7 @@ export const GoogleExportModal = ({
       const currentSet = new Set(current);
       const unique = normalized.filter((code) => !currentSet.has(code));
       if (unique.length === 0) return current;
-      const slots = MAX_TARGET_NAF_CODES - current.length;
-      if (slots <= 0) return current;
-      return [...current, ...unique.slice(0, slots)];
+      return [...current, ...unique];
     });
   };
 

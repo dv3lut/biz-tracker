@@ -245,12 +245,25 @@ def create_naf_subcategory(payload: NafSubCategoryCreate, session: Session = Dep
 
     price_cents = euros_to_cents(payload.price_eur or 0)
     description = (payload.description.strip() or None) if payload.description is not None else None
+    auto_email_subject = (
+        (payload.auto_email_subject.strip() or None)
+        if payload.auto_email_subject is not None
+        else None
+    )
+    auto_email_body = (
+        (payload.auto_email_body.strip() or None)
+        if payload.auto_email_body is not None
+        else None
+    )
     subcategory = models.NafSubCategory(
         name=name,
         description=description,
         naf_code=naf_code,
         price_cents=price_cents,
         is_active=payload.is_active,
+        auto_email_enabled=payload.auto_email_enabled,
+        auto_email_subject=auto_email_subject,
+        auto_email_body=auto_email_body,
     )
     session.add(subcategory)
     session.add(
@@ -297,6 +310,12 @@ def update_naf_subcategory(
         subcategory.is_active = payload.is_active
     if payload.description is not None:
         subcategory.description = payload.description.strip() or None
+    if payload.auto_email_enabled is not None:
+        subcategory.auto_email_enabled = payload.auto_email_enabled
+    if payload.auto_email_subject is not None:
+        subcategory.auto_email_subject = payload.auto_email_subject.strip() or None
+    if payload.auto_email_body is not None:
+        subcategory.auto_email_body = payload.auto_email_body.strip() or None
 
     try:
         session.flush()

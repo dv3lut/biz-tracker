@@ -11,6 +11,9 @@ export type NafSubCategoryFormPayload = {
   nafCode: string;
   priceEur?: number;
   isActive: boolean;
+  autoEmailEnabled: boolean;
+  autoEmailSubject: string | null;
+  autoEmailBody: string | null;
 };
 
 type FormState = {
@@ -22,6 +25,9 @@ type FormState = {
   nafCode: string;
   priceEur: string;
   isActive: boolean;
+  autoEmailEnabled: boolean;
+  autoEmailSubject: string;
+  autoEmailBody: string;
 };
 
 type Props = {
@@ -36,7 +42,20 @@ type Props = {
   isProcessing: boolean;
 };
 
-type TextField = Exclude<keyof FormState, "isActive">;
+type TextField = Exclude<keyof FormState, "isActive" | "autoEmailEnabled">;
+
+const DEFAULT_AUTO_EMAIL_SUBJECT = "Félicitations pour la création de {name}";
+const DEFAULT_AUTO_EMAIL_BODY = [
+  "Bonjour,",
+  "",
+  "Nous avons remarqué la récente création de votre entreprise {name} (SIRET {siret})",
+  "à {commune} {code_postal}.",
+  "",
+  "[Personnalisez ce message ici.]",
+  "",
+  "Cordialement,",
+  "L'équipe Business tracker",
+].join("\n");
 
 const EMPTY_STATE: FormState = {
   categoryId: "",
@@ -47,6 +66,9 @@ const EMPTY_STATE: FormState = {
   nafCode: "",
   priceEur: "",
   isActive: true,
+  autoEmailEnabled: false,
+  autoEmailSubject: "",
+  autoEmailBody: "",
 };
 
 export const NafSubCategoryModal = ({
@@ -77,6 +99,9 @@ export const NafSubCategoryModal = ({
         nafCode: subcategory.nafCode,
         priceEur: subcategory.priceEur.toString(),
         isActive: subcategory.isActive,
+        autoEmailEnabled: subcategory.autoEmailEnabled,
+        autoEmailSubject: subcategory.autoEmailSubject ?? "",
+        autoEmailBody: subcategory.autoEmailBody ?? "",
       });
     } else {
       const defaultCategoryId = initialCategoryId ?? categories[0]?.id ?? "";
@@ -102,17 +127,28 @@ export const NafSubCategoryModal = ({
       nafCode: selected.nafCode,
       priceEur: selected.priceEur.toString(),
       isActive: selected.isActive,
+      autoEmailEnabled: selected.autoEmailEnabled,
+      autoEmailSubject: selected.autoEmailSubject ?? "",
+      autoEmailBody: selected.autoEmailBody ?? "",
     }));
   }, [mode, formState.mode, formState.existingSubcategoryId, existingSubcategories]);
 
   const isValid = useMemo(() => {
-    if (mode === "edit") {
-      return Boolean(formState.name.trim() && formState.nafCode.trim());
+    const baseValid =
+      mode === "edit"
+        ? Boolean(formState.name.trim() && formState.nafCode.trim())
+        : formState.mode === "attach"
+          ? Boolean(formState.categoryId && formState.existingSubcategoryId)
+          : Boolean(formState.categoryId && formState.name.trim() && formState.nafCode.trim());
+    if (!baseValid) {
+      return false;
     }
-    if (formState.mode === "attach") {
-      return Boolean(formState.categoryId && formState.existingSubcategoryId);
+    if (formState.autoEmailEnabled) {
+      if (!formState.autoEmailSubject.trim() || !formState.autoEmailBody.trim()) {
+        return false;
+      }
     }
-    return Boolean(formState.categoryId && formState.name.trim() && formState.nafCode.trim());
+    return true;
   }, [formState, mode]);
 
   const handleChange = (field: TextField) =>
@@ -134,6 +170,9 @@ export const NafSubCategoryModal = ({
       nafCode: formState.nafCode.trim(),
       priceEur: formState.priceEur.trim() ? Number(formState.priceEur) : undefined,
       isActive: formState.isActive,
+      autoEmailEnabled: formState.autoEmailEnabled,
+      autoEmailSubject: formState.autoEmailSubject.trim() ? formState.autoEmailSubject : null,
+      autoEmailBody: formState.autoEmailBody.trim() ? formState.autoEmailBody : null,
     };
     onSubmit(payload);
   };
@@ -277,6 +316,65 @@ export const NafSubCategoryModal = ({
                 <span>Activer la sous-catégorie</span>
               </label>
             </div>
+          </section>
+
+          <section>
+            <h3>Email automatique en fin de synchronisation</h3>
+            <p className="muted small">
+              Lorsqu'une synchronisation détecte un nouvel établissement avec une adresse email,
+              un message ciblé peut lui être envoyé automatiquement. Le Reply-To est positionné sur
+              l'adresse expéditrice pour récupérer les réponses.
+            </p>
+            <label className="form-checkbox">
+              <input
+                type="checkbox"
+                checked={formState.autoEmailEnabled}
+                onChange={(event) => {
+                  const enabled = event.target.checked;
+                  setFormState((current) => ({
+                    ...current,
+                    autoEmailEnabled: enabled,
+                    autoEmailSubject:
+                      enabled && !current.autoEmailSubject.trim()
+                        ? DEFAULT_AUTO_EMAIL_SUBJECT
+                        : current.autoEmailSubject,
+                    autoEmailBody:
+                      enabled && !current.autoEmailBody.trim()
+                        ? DEFAULT_AUTO_EMAIL_BODY
+                        : current.autoEmailBody,
+                  }));
+                }}
+                disabled={mode === "create" && formState.mode === "attach"}
+              />
+              <span>Envoyer un email automatique aux nouveaux établissements de ce NAF</span>
+            </label>
+            <div className="form-grid">
+              <div className="form-field">
+                <span className="input-label">Sujet du mail</span>
+                <input
+                  type="text"
+                  value={formState.autoEmailSubject}
+                  onChange={handleChange("autoEmailSubject")}
+                  placeholder="Ex : Félicitations pour la création de {name}"
+                  disabled={!formState.autoEmailEnabled || (mode === "create" && formState.mode === "attach")}
+                />
+              </div>
+              <div className="form-field">
+                <span className="input-label">Corps du mail</span>
+                <textarea
+                  value={formState.autoEmailBody}
+                  onChange={handleChange("autoEmailBody")}
+                  rows={10}
+                  placeholder="Bonjour, ..."
+                  disabled={!formState.autoEmailEnabled || (mode === "create" && formState.mode === "attach")}
+                />
+              </div>
+            </div>
+            <p className="muted small">
+              Variables disponibles : {"{name}"}, {"{siret}"}, {"{naf_code}"}, {"{commune}"},
+              {" "}{"{code_postal}"}, {"{email}"}, {"{leader_name}"}, {"{google_place_url}"},
+              {" "}{"{legal_unit_name}"}.
+            </p>
           </section>
 
           <section className="card-actions">

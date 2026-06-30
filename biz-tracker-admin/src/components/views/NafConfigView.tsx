@@ -288,6 +288,9 @@ export const NafConfigView = ({
         nafCode: payload.nafCode,
         priceEur: payload.priceEur,
         isActive: payload.isActive,
+        autoEmailEnabled: payload.autoEmailEnabled,
+        autoEmailSubject: payload.autoEmailSubject,
+        autoEmailBody: payload.autoEmailBody,
       };
       if (basePayload.priceEur === undefined) {
         delete basePayload.priceEur;
@@ -299,6 +302,9 @@ export const NafConfigView = ({
           nafCode: basePayload.nafCode,
           priceEur: basePayload.priceEur,
           isActive: basePayload.isActive,
+          autoEmailEnabled: basePayload.autoEmailEnabled,
+          autoEmailSubject: basePayload.autoEmailSubject,
+          autoEmailBody: basePayload.autoEmailBody,
         };
         updateSubCategoryMutation.mutate({ subcategoryId: subcategoryModalState.subcategory.id, payload: updatePayload });
       } else {

@@ -60,6 +60,18 @@ class NafSubCategoryOut(BaseModel):
     naf_code: str
     price_cents: int
     is_active: bool
+    auto_email_enabled: bool = Field(
+        default=False,
+        description="Active l'envoi automatique d'un email aux nouveaux établissements à la fin du run.",
+    )
+    auto_email_subject: str | None = Field(
+        default=None,
+        description="Sujet du template d'email auto (supporte les variables {name}, {siret}, etc.).",
+    )
+    auto_email_body: str | None = Field(
+        default=None,
+        description="Corps du template d'email auto (supporte les variables {name}, {siret}, etc.).",
+    )
     created_at: datetime
     updated_at: datetime
     google_department_count: int = Field(
@@ -112,6 +124,9 @@ class NafSubCategoryCreate(BaseModel):
     description: str | None = None
     price_eur: float | None = Field(default=None, ge=0, description="Tarif de référence en euros TTC.")
     is_active: bool = True
+    auto_email_enabled: bool = False
+    auto_email_subject: str | None = None
+    auto_email_body: str | None = None
 
 
 class NafSubCategoryUpdate(BaseModel):
@@ -120,6 +135,9 @@ class NafSubCategoryUpdate(BaseModel):
     description: str | None = None
     price_eur: float | None = Field(default=None, ge=0)
     is_active: bool | None = None
+    auto_email_enabled: bool | None = None
+    auto_email_subject: str | None = None
+    auto_email_body: str | None = None
 
 
 class NafCategorySubCategoryLink(BaseModel):
