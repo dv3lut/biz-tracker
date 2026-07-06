@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from types import SimpleNamespace
 from uuid import uuid4
@@ -444,3 +445,127 @@ def test_build_alerts_client_csv_director_name_variants():
     assert "Sophie" in row
     assert "Associé" in row
     assert "Corp SA" not in row  # personne morale exclue
+
+
+# ---------------------------------------------------------------------------
+# Colonne "Dirigeants (JSON)" de l'export admin
+# ---------------------------------------------------------------------------
+
+
+def test_format_director_birth_variants():
+    """_format_director_birth : année seule, année+mois, ou None si pas d'année."""
+    assert export_service._format_director_birth(None, None) is None
+    assert export_service._format_director_birth(None, 5) is None
+    assert export_service._format_director_birth(1980, None) == "1980"
+    assert export_service._format_director_birth(1980, 3) == "1980-03"
+
+
+def test_compose_directors_json_serializes_structured_fields():
+    """Chaque dirigeant est sérialisé avec ses seuls champs renseignés."""
+    establishment = _make_establishment()
+    establishment.directors = [
+        SimpleNamespace(
+            type_dirigeant="Personne physique",
+            last_name="Dupont",
+            first_names="Jean",
+            quality="Gérant",
+            birth_year=1980,
+            birth_month=3,
+            nationality="Française",
+            denomination=None,
+            siren=None,
+        ),
+        SimpleNamespace(
+            type_dirigeant="Personne morale",
+            last_name=None,
+            first_names=None,
+            quality="Président",
+            birth_year=None,
+            birth_month=None,
+            nationality=None,
+            denomination="Holding SAS",
+            siren="123456789",
+        ),
+    ]
+
+    parsed = json.loads(export_service._compose_directors_json(establishment))
+
+    assert parsed == [
+        {
+            "type": "Personne physique",
+            "nom": "Dupont",
+            "prenoms": "Jean",
+            "qualite": "Gérant",
+            "naissance": "1980-03",
+            "nationalite": "Française",
+        },
+        {
+            "type": "Personne morale",
+            "qualite": "Président",
+            "denomination": "Holding SAS",
+            "siren": "123456789",
+        },
+    ]
+
+
+def test_compose_directors_json_none_when_empty_or_missing():
+    """Renvoie None sans dirigeants, avec une liste vide, ou pour des champs tous vides."""
+    # Aucun attribut `directors` sur l'établissement
+    assert export_service._compose_directors_json(_make_establishment()) is None
+
+    # Liste vide
+    empty = _make_establishment()
+    empty.directors = []
+    assert export_service._compose_directors_json(empty) is None
+
+    # Dirigeant sans aucun champ exploitable -> ignoré, donc None au global
+    blank = _make_establishment()
+    blank.directors = [
+        SimpleNamespace(
+            type_dirigeant="  ",
+            last_name=None,
+            first_names="",
+            quality=None,
+            birth_year=None,
+            birth_month=None,
+            nationality="",
+            denomination=None,
+            siren=None,
+        )
+    ]
+    assert export_service._compose_directors_json(blank) is None
+
+
+def test_admin_workbook_includes_directors_json_column():
+    """L'export admin ajoute une colonne 'Dirigeants (JSON)' parsable."""
+    establishment = _make_establishment()
+    establishment.directors = [
+        SimpleNamespace(
+            type_dirigeant="Personne physique",
+            last_name="Martin",
+            first_names="Sophie",
+            quality="Directrice",
+            birth_year=1975,
+            birth_month=None,
+            nationality="Française",
+            denomination=None,
+            siren=None,
+        )
+    ]
+
+    buffer = export_service.build_google_places_workbook([establishment], mode="admin")
+    _, rows = _load_rows(buffer)
+
+    headers = rows[0]
+    value_by_header = dict(zip(headers, rows[1]))
+    assert "Dirigeants (JSON)" in headers
+    assert json.loads(value_by_header["Dirigeants (JSON)"]) == [
+        {
+            "type": "Personne physique",
+            "nom": "Martin",
+            "prenoms": "Sophie",
+            "qualite": "Directrice",
+            "naissance": "1975",
+            "nationalite": "Française",
+        }
+    ]

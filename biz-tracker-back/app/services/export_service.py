@@ -84,6 +84,53 @@ def _first_pipe_separated_value(value: str | None) -> str | None:
     return None
 
 
+def _format_director_birth(birth_year: int | None, birth_month: int | None) -> str | None:
+    """Return a machine-parseable partial birth date (``YYYY-MM`` or ``YYYY``)."""
+    if not birth_year:
+        return None
+    if birth_month:
+        return f"{birth_year:04d}-{birth_month:02d}"
+    return f"{birth_year:04d}"
+
+
+def _compose_directors_json(establishment: models.Establishment) -> str | None:
+    """Serialize an establishment's directors as a compact JSON array.
+
+    The admin export favours a single machine-exploitable column over free text so
+    downstream automated systems can parse each director's structured fields (type,
+    identity, quality, birth date, nationality) without heuristics. Empty fields are
+    omitted to keep the payload compact; the whole cell is ``None`` when there are no
+    directors.
+    """
+    directors = getattr(establishment, "directors", None) or []
+    items: list[dict[str, object]] = []
+    for director in directors:
+        entry: dict[str, object] = {}
+        type_dirigeant = (getattr(director, "type_dirigeant", None) or "").strip()
+        if type_dirigeant:
+            entry["type"] = type_dirigeant
+        optional_fields = {
+            "nom": (getattr(director, "last_name", None) or "").strip(),
+            "prenoms": (getattr(director, "first_names", None) or "").strip(),
+            "qualite": (getattr(director, "quality", None) or "").strip(),
+            "naissance": _format_director_birth(
+                getattr(director, "birth_year", None),
+                getattr(director, "birth_month", None),
+            ),
+            "nationalite": (getattr(director, "nationality", None) or "").strip(),
+            "denomination": (getattr(director, "denomination", None) or "").strip(),
+            "siren": (getattr(director, "siren", None) or "").strip(),
+        }
+        for key, value in optional_fields.items():
+            if value:
+                entry[key] = value
+        if entry:
+            items.append(entry)
+    if not items:
+        return None
+    return json.dumps(items, ensure_ascii=False)
+
+
 def _resolve_category_columns(
     naf_code: str | None,
     naf_label: str | None,
@@ -174,6 +221,7 @@ def build_google_places_workbook(
             "Run le plus récent",
             "Vu en premier",
             "Vu en dernier",
+            "Dirigeants (JSON)",
         ]
         link_column_index = headers.index("Google Place URL")
         siret_column_index = headers.index("SIRET")
@@ -251,6 +299,7 @@ def build_google_places_workbook(
                 str(establishment.last_run_id) if establishment.last_run_id else None,
                 _format_datetime(establishment.first_seen_at),
                 _format_datetime(establishment.last_seen_at),
+                _compose_directors_json(establishment),
             ]
             siret_url = build_annuaire_etablissement_url(establishment.siret)
             if siret_url and siret_column_index is not None:

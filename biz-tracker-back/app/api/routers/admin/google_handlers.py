@@ -8,7 +8,7 @@ from fastapi import HTTPException, status
 from fastapi.params import Query as QueryInfo
 from fastapi.responses import StreamingResponse
 from sqlalchemy import or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.api.schemas import (
     EstablishmentOut,
@@ -480,6 +480,11 @@ def build_google_places_export_response(
             models.Establishment.name.asc().nullslast(),
         )
     )
+
+    # The admin export serializes directors into a dedicated column; eager-load them
+    # to avoid an N+1 lazy-load while building rows. Client exports don't use them.
+    if mode == "admin":
+        stmt = stmt.options(selectinload(models.Establishment.directors))
 
     if start_date:
         stmt = stmt.where(models.Establishment.date_creation >= start_date)
