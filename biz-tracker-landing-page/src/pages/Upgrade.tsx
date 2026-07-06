@@ -3,7 +3,9 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { Sparkles } from "lucide-react";
 
+const CALENDLY_URL = "https://calendly.com/julien-businesstracker/30min";
 
 type PlanKey = "starter" | "business";
 
@@ -677,6 +679,26 @@ const Upgrade = () => {
                 </div>
               </Card>
             </section>
+
+            <div className="lg:col-span-2 rounded-lg border border-secondary/40 bg-gradient-to-r from-primary/5 to-secondary/10 p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div>
+                <p className="font-semibold text-foreground flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-secondary" />
+                  Prospection IA incluse dans votre plan
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Réservez un appel gratuit de 30 min pour qu'on configure votre ciblage IA avec vous.
+                </p>
+              </div>
+              <Button
+                asChild
+                className="bg-gradient-to-r from-primary to-secondary hover:opacity-90 transition-opacity shrink-0"
+              >
+                <a href={CALENDLY_URL} target="_blank" rel="noopener noreferrer">
+                  Réserver un appel
+                </a>
+              </Button>
+            </div>
           </div>
         ) : (
           <section id="upgrade">

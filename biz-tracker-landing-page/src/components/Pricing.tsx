@@ -61,6 +61,8 @@ const Pricing = ({ trialPeriodDays = 14 }: Props) => {
   const [isCalendlyOpen, setIsCalendlyOpen] = useState(false);
 
 
+  const AI_PROSPECTION_HIGHLIGHT = "Prospection IA incluse";
+
   const plans = [
     {
       key: "starter" as PlanKey,
@@ -74,6 +76,7 @@ const Pricing = ({ trialPeriodDays = 14 }: Props) => {
         "1 secteur sélectionné (sur le catalogue complet)",
         "Nouvelles entreprises détectées en France",
       ],
+      aiHighlight: AI_PROSPECTION_HIGHLIGHT,
       cta: "Démarrer maintenant",
       highlighted: false,
     },
@@ -89,23 +92,9 @@ const Pricing = ({ trialPeriodDays = 14 }: Props) => {
         "5 secteurs sélectionnés (sur le catalogue complet)",
         "Historique 2 mois (sur vos secteurs)",
       ],
+      aiHighlight: AI_PROSPECTION_HIGHLIGHT,
       cta: "Démarrer maintenant",
       highlighted: true,
-    },
-    {
-      key: null,
-      name: "Prospection IA",
-      price: "Sur mesure",
-      period: "",
-      description: "Votre pipeline en pilote automatique",
-      features: [
-        "Ciblage IA sur-mesure pour votre activité",
-        "Prospection multi-canal entièrement automatisée",
-        "Pipeline d'opportunités livré clé en main",
-      ],
-      cta: "Réserver un appel",
-      highlighted: false,
-      isCalendly: true,
     },
   ];
 
@@ -329,57 +318,32 @@ const Pricing = ({ trialPeriodDays = 14 }: Props) => {
           </p>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
-          {plans.map((plan, index) => {
-            const isCalendly = "isCalendly" in plan && plan.isCalendly;
-            return (
+        <div className="grid md:grid-cols-2 gap-8 max-w-3xl mx-auto">
+          {plans.map((plan, index) => (
             <Card
               key={index}
               className={`relative p-8 flex flex-col ${
-                plan.highlighted
-                  ? "border-2 border-secondary shadow-lg scale-105"
-                  : isCalendly
-                  ? "border border-secondary/40"
-                  : "border"
+                plan.highlighted ? "border-2 border-secondary shadow-lg scale-105" : "border"
               }`}
             >
-              {isCalendly && (
-                <>
-                  <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-lg">
-                    <div className="absolute -top-16 -right-16 h-40 w-40 rounded-full bg-secondary/15 blur-3xl animate-pulse-glow" />
-                    <div className="absolute -bottom-16 -left-16 h-40 w-40 rounded-full bg-primary/10 blur-3xl animate-pulse-glow [animation-delay:1.2s]" />
-                  </div>
-                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-gradient-to-r from-primary to-secondary text-primary-foreground px-4 py-1 rounded-full text-sm font-semibold shadow-md whitespace-nowrap">
-                    <Sparkles className="w-3.5 h-3.5" />
-                    Nouveau
-                  </div>
-                </>
-              )}
               {plan.highlighted && (
                 <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-secondary text-secondary-foreground px-4 py-1 rounded-full text-sm font-semibold">
                   Recommandé
                 </div>
               )}
 
-              <div className="relative text-center mb-6">
+              <div className="text-center mb-6">
                 <h3 className="text-2xl font-bold mb-2">{plan.name}</h3>
                 <p className="text-sm text-muted-foreground mb-4">
                   {plan.description}
                 </p>
                 <div className="flex items-end justify-center gap-2">
-                  {!isCalendly && plan.originalPrice && (
+                  {plan.originalPrice && (
                     <span className="text-xl text-muted-foreground line-through">
                       {plan.originalPrice}€
                     </span>
                   )}
-                  {!isCalendly && (
-                    <span className="text-4xl font-bold">{plan.price}€</span>
-                  )}
-                  {isCalendly && (
-                    <span className="text-3xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                      {plan.price}
-                    </span>
-                  )}
+                  <span className="text-4xl font-bold">{plan.price}€</span>
                   {plan.period && (
                     <span className="text-muted-foreground mb-1">
                       /{plan.period}
@@ -388,43 +352,55 @@ const Pricing = ({ trialPeriodDays = 14 }: Props) => {
                 </div>
               </div>
 
-              <ul className="relative space-y-3 mb-8 flex-grow">
+              <ul className="space-y-3 mb-4 flex-grow">
                 {plan.features.map((feature, idx) => (
                   <li key={idx} className="flex items-start gap-2">
-                    {isCalendly ? (
-                      <Target className="w-5 h-5 text-secondary flex-shrink-0 mt-0.5" />
-                    ) : (
-                      <Check className="w-5 h-5 text-secondary flex-shrink-0 mt-0.5" />
-                    )}
+                    <Check className="w-5 h-5 text-secondary flex-shrink-0 mt-0.5" />
                     <span className="text-sm">{feature}</span>
                   </li>
                 ))}
               </ul>
 
+              <p className="flex items-center justify-center gap-1.5 text-xs font-medium text-secondary text-center mb-6">
+                <Sparkles className="w-3.5 h-3.5 flex-shrink-0" />
+                {plan.aiHighlight}
+              </p>
+
               <Button
-                variant={plan.highlighted || isCalendly ? "default" : "outline"}
+                variant={plan.highlighted ? "default" : "outline"}
                 size="lg"
-                className={`relative w-full ${
-                  isCalendly
-                    ? "bg-gradient-to-r from-primary to-secondary hover:opacity-90 transition-opacity"
-                    : ""
-                }`}
+                className="w-full"
                 onClick={() => {
-                  if (isCalendly) {
-                    setIsCalendlyOpen(true);
-                  } else if (plan.key) {
+                  if (plan.key) {
                     handleOpenCheckout(plan.key);
                   } else {
                     scrollToContact();
                   }
                 }}
               >
-                {isCalendly && <Calendar className="w-4 h-4 mr-2" />}
                 {plan.cta}
               </Button>
             </Card>
-            );
-          })}
+          ))}
+        </div>
+
+        <div className="mt-10 max-w-3xl mx-auto rounded-lg border border-secondary/40 bg-gradient-to-r from-primary/5 to-secondary/10 p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div>
+            <p className="font-semibold text-foreground flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-secondary" />
+              Prospection IA incluse dans votre plan
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Réservez un appel gratuit de 30 min pour qu'on configure votre ciblage IA avec vous.
+            </p>
+          </div>
+          <Button
+            className="bg-gradient-to-r from-primary to-secondary hover:opacity-90 transition-opacity shrink-0"
+            onClick={() => setIsCalendlyOpen(true)}
+          >
+            <Calendar className="w-4 h-4 mr-2" />
+            Réserver un appel
+          </Button>
         </div>
 
         <div className="mt-12 text-center">
@@ -591,10 +567,10 @@ const Pricing = ({ trialPeriodDays = 14 }: Props) => {
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-secondary/10" />
           <DialogHeader className="relative">
             <DialogTitle className="text-center text-2xl">
-              Laissez l'IA prospecter pour vous
+              Configurons votre prospection IA
             </DialogTitle>
             <DialogDescription className="text-center">
-              Échangeons 30 minutes pour cadrer votre cible idéale et lancer votre prospection automatisée.
+              Incluse dans votre abonnement : 30 minutes gratuites pour cadrer votre cible idéale et activer votre prospection automatisée.
             </DialogDescription>
           </DialogHeader>
 
@@ -618,7 +594,7 @@ const Pricing = ({ trialPeriodDays = 14 }: Props) => {
               </div>
               <div className="flex items-center gap-3 rounded-lg border border-secondary/20 bg-background/50 px-3 py-2.5">
                 <Calendar className="w-5 h-5 text-secondary flex-shrink-0" />
-                <span>30 minutes pour tout configurer ensemble</span>
+                <span>30 minutes pour tout configurer ensemble, sans frais supplémentaire</span>
               </div>
             </div>
           </div>
