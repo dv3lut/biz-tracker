@@ -16,6 +16,7 @@ type GooglePlacesExportParams = {
   mode?: "admin" | "client";
   listingStatuses?: ListingStatus[];
   nafCodes?: string[];
+  includeNoListing?: boolean;
 };
 
 type ManualGoogleCheckOptions = {
@@ -168,6 +169,9 @@ export const googleApi = {
       params.nafCodes.forEach((code) => {
         url.searchParams.append("naf_codes", code);
       });
+    }
+    if (params.includeNoListing) {
+      url.searchParams.set("include_no_listing", "true");
     }
 
     const response = await fetch(url.toString(), { headers });

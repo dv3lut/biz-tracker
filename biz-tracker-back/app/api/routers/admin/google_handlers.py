@@ -7,7 +7,7 @@ from typing import Literal
 from fastapi import HTTPException, status
 from fastapi.params import Query as QueryInfo
 from fastapi.responses import StreamingResponse
-from sqlalchemy import or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.schemas import (
@@ -439,10 +439,18 @@ def build_google_places_export_response(
     mode: Literal["admin", "client"],
     listing_statuses: list[ListingStatus] | QueryInfo | None,
     naf_codes: list[str] | QueryInfo | None = None,
+    include_no_listing: bool | QueryInfo = False,
     session: Session,
 ) -> StreamingResponse:
     """Build the Google Places export and wrap it in a streaming response."""
 
+    if isinstance(include_no_listing, QueryInfo):
+        include_no_listing = bool(include_no_listing.default)
+    if include_no_listing and mode != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="L'inclusion des établissements sans fiche Google n'est disponible que pour l'export admin.",
+        )
     if (start_date and not end_date) or (end_date and not start_date):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -466,15 +474,27 @@ def build_google_places_export_response(
         )
     allowed_statuses = set(selected_statuses)
 
+    listing_found_clause = and_(
+        or_(
+            models.Establishment.google_place_url.is_not(None),
+            models.Establishment.google_place_id.is_not(None),
+        ),
+        models.Establishment.google_check_status == "found",
+    )
+    if include_no_listing:
+        # Admin export may also cover establishments without a detected Google
+        # listing (not_found, pending, insufficient…) so directors can be worked on.
+        where_clause = or_(
+            listing_found_clause,
+            models.Establishment.google_check_status.is_(None),
+            func.lower(func.trim(models.Establishment.google_check_status)) != "found",
+        )
+    else:
+        where_clause = listing_found_clause
+
     stmt = (
         select(models.Establishment)
-        .where(
-            or_(
-                models.Establishment.google_place_url.is_not(None),
-                models.Establishment.google_place_id.is_not(None),
-            ),
-            models.Establishment.google_check_status == "found",
-        )
+        .where(where_clause)
         .order_by(
             models.Establishment.date_creation.asc().nullslast(),
             models.Establishment.name.asc().nullslast(),
@@ -505,14 +525,20 @@ def build_google_places_export_response(
             models.Establishment.naf_code.in_(allowed_naf_codes),
         )
 
+    def _has_found_listing(est: models.Establishment) -> bool:
+        return (est.google_check_status or "").strip().lower() == "found"
+
     establishments = session.execute(stmt).scalars().all()
-    establishments = [
-        est for est in establishments if (est.google_check_status or "").lower() == "found"
-    ]
+    # Listing-status filters only apply to establishments with a found listing;
+    # the ones without a listing are kept as-is when include_no_listing is set.
     establishments = [
         est
         for est in establishments
-        if normalize_listing_age_status(est.google_listing_age_status) in allowed_statuses
+        if (
+            normalize_listing_age_status(est.google_listing_age_status) in allowed_statuses
+            if _has_found_listing(est)
+            else include_no_listing
+        )
     ]
     subcategory_lookup = _load_subcategory_lookup(session)
     workbook_stream = build_google_places_workbook(
@@ -533,6 +559,7 @@ def build_google_places_export_response(
         mode=mode,
         listing_statuses=selected_statuses,
         naf_codes=sorted(allowed_naf_codes) if allowed_naf_codes else None,
+        include_no_listing=include_no_listing,
     )
 
     headers = {"Content-Disposition": f'attachment; filename="{filename}"'}

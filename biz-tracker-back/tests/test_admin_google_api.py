@@ -199,6 +199,62 @@ class GoogleExportRouteTests(TestCase):
         mock_build_workbook.assert_called_once()
         mock_log_event.assert_called_once()
 
+    @patch("app.api.routers.admin.google_handlers.build_google_places_workbook")
+    @patch("app.api.routers.admin.google_handlers.log_event")
+    def test_export_includes_no_listing_when_requested(self, mock_log_event, mock_build_workbook) -> None:
+        not_found = SimpleNamespace(
+            google_check_status="not_found",
+            google_listing_age_status=None,
+        )
+        pending = SimpleNamespace(
+            google_check_status=None,
+            google_listing_age_status=None,
+        )
+        found_recent = SimpleNamespace(
+            google_check_status="found",
+            google_listing_age_status="recent_creation",
+        )
+        found_legacy = SimpleNamespace(
+            google_check_status="found",
+            google_listing_age_status="not_recent_creation",
+        )
+
+        scalars = MagicMock()
+        scalars.all.return_value = [not_found, pending, found_recent, found_legacy]
+        execution = MagicMock()
+        execution.scalars.return_value = scalars
+        session = MagicMock()
+        session.execute.return_value = execution
+
+        mock_build_workbook.return_value = BytesIO(b"test")
+
+        response = export_google_places(
+            mode="admin",
+            listing_statuses=["recent_creation"],
+            include_no_listing=True,
+            session=session,
+        )
+
+        self.assertIsNotNone(response)
+        exported = mock_build_workbook.call_args[0][0]
+        # No-listing rows are kept regardless of listing statuses; found rows keep the filter.
+        self.assertEqual(exported, [not_found, pending, found_recent])
+        mock_log_event.assert_called_once()
+        self.assertTrue(mock_log_event.call_args.kwargs.get("include_no_listing"))
+
+    def test_export_no_listing_rejected_in_client_mode(self) -> None:
+        session = MagicMock()
+
+        with self.assertRaises(HTTPException) as ctx:
+            export_google_places(
+                mode="client",
+                include_no_listing=True,
+                session=session,
+            )
+
+        self.assertEqual(ctx.exception.status_code, 422)
+        self.assertIn("admin", ctx.exception.detail)
+
 
 class GoogleFindPlaceDebugRouteTests(TestCase):
     @patch("app.api.routers.admin.google_handlers.get_settings")

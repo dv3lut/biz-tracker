@@ -49,6 +49,7 @@ type Props = {
   endDate: string;
   mode: "admin" | "client";
   listingStatuses: ListingStatus[];
+  includeNoListing: boolean;
   nafCategories: NafCategoryStat[];
   isSubmitting: boolean;
   onClose: () => void;
@@ -56,6 +57,7 @@ type Props = {
   onEndDateChange: (value: string) => void;
   onModeChange: (mode: "admin" | "client") => void;
   onListingStatusesChange: (statuses: ListingStatus[]) => void;
+  onIncludeNoListingChange: (value: boolean) => void;
   onSubmit: (nafCodes: string[]) => void;
 };
 
@@ -65,6 +67,7 @@ export const GoogleExportModal = ({
   endDate,
   mode,
   listingStatuses,
+  includeNoListing,
   nafCategories,
   isSubmitting,
   onClose,
@@ -72,6 +75,7 @@ export const GoogleExportModal = ({
   onEndDateChange,
   onModeChange,
   onListingStatusesChange,
+  onIncludeNoListingChange,
   onSubmit,
 }: Props) => {
   const [selectedNafCodes, setSelectedNafCodes] = useState<string[]>([]);
@@ -236,6 +240,21 @@ export const GoogleExportModal = ({
                   </div>
                 </label>
               ))}
+              {mode === "admin" ? (
+                <label className="listing-status-option">
+                  <input
+                    type="checkbox"
+                    checked={includeNoListing}
+                    onChange={() => onIncludeNoListingChange(!includeNoListing)}
+                  />
+                  <div>
+                    <strong>Sans fiche Google</strong>
+                    <div className="muted small">
+                      Inclut aussi les établissements sans fiche Google détectée (non trouvée, en attente…).
+                    </div>
+                  </div>
+                </label>
+              ) : null}
             </div>
             <div className="card-actions" style={{ justifyContent: "flex-start", marginTop: "0.5rem" }}>
               <button type="button" className="ghost" onClick={handleSelectAllStatuses}>

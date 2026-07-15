@@ -73,6 +73,7 @@ export const DashboardSection = ({ onUnauthorized }: Props) => {
   const [googleExportEndDate, setGoogleExportEndDate] = useState(initialExportRange.end);
   const [googleExportMode, setGoogleExportMode] = useState<"admin" | "client">("client");
   const [googleExportListingStatuses, setGoogleExportListingStatuses] = useState(() => [...DEFAULT_LISTING_STATUSES]);
+  const [googleExportIncludeNoListing, setGoogleExportIncludeNoListing] = useState(false);
   const [isExportingGooglePlaces, setIsExportingGooglePlaces] = useState(false);
   const [manualGoogleSiret, setManualGoogleSiret] = useState("");
   const [manualGoogleNotify, setManualGoogleNotify] = useState(false);
@@ -287,6 +288,7 @@ export const DashboardSection = ({ onUnauthorized }: Props) => {
     setGoogleExportStartDate(start);
     setGoogleExportEndDate(end);
     setGoogleExportListingStatuses([...DEFAULT_LISTING_STATUSES]);
+    setGoogleExportIncludeNoListing(false);
   }, []);
 
   const handleConfirmGoogleExport = useCallback(async (nafCodes?: string[]) => {
@@ -303,6 +305,7 @@ export const DashboardSection = ({ onUnauthorized }: Props) => {
         mode: googleExportMode,
         listingStatuses: googleExportListingStatuses,
         nafCodes: nafCodes && nafCodes.length > 0 ? nafCodes : undefined,
+        includeNoListing: googleExportMode === "admin" && googleExportIncludeNoListing,
       });
       const url = window.URL.createObjectURL(blob);
       const anchor = document.createElement("a");
@@ -326,6 +329,7 @@ export const DashboardSection = ({ onUnauthorized }: Props) => {
     googleExportEndDate,
     googleExportMode,
     googleExportListingStatuses,
+    googleExportIncludeNoListing,
     showError,
   ]);
 
@@ -458,6 +462,7 @@ export const DashboardSection = ({ onUnauthorized }: Props) => {
         endDate={googleExportEndDate}
         mode={googleExportMode}
         listingStatuses={googleExportListingStatuses}
+        includeNoListing={googleExportIncludeNoListing}
         nafCategories={dashboardQuery.data?.nafCategoryBreakdown ?? []}
         isSubmitting={isExportingGooglePlaces}
         onClose={handleCloseGoogleExportModal}
@@ -465,6 +470,7 @@ export const DashboardSection = ({ onUnauthorized }: Props) => {
         onEndDateChange={setGoogleExportEndDate}
         onModeChange={setGoogleExportMode}
         onListingStatusesChange={setGoogleExportListingStatuses}
+        onIncludeNoListingChange={setGoogleExportIncludeNoListing}
         onSubmit={handleConfirmGoogleExport}
       />
     </>
